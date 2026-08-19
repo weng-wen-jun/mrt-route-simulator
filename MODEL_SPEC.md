@@ -1,11 +1,11 @@
-# MRT Route Simulation Engine - Model Specification V1.0
+# MRT Route Simulation Engine - Model Specification V2.0
 
 ## 1. 核心原則
 
 - Engine 與 WPF UI 完全分離，Engine 不參考 HTML、CSS、DOM、Canvas、WPF 或瀏覽器時間。
 - 解析模型直接計算每個區間的精確旅行時間；Simulation Engine 以固定 `dt = 0.1 s` 推進顯示時間，並使用同一組解析相位求當下位置與速度。
 - 核心單位只有公尺、秒、m/s、m/s²。km、km/h、分鐘及時鐘字串只出現在輸入轉換或輸出格式化。
-- V1.0 僅處理單一直線路線與性能相同的多列車，不加入號誌、閉塞、追蹤或乘客模型。
+- V1.0 解析 API 保持相容；V2.0 以獨立的有狀態 `SimulationWorld` 加入實際營運軌跡、里程速限、移動閉塞與事件，不改寫 V1.0 的任意時間解析查詢。
 
 ## 2. 資料結構
 
@@ -217,7 +217,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ## 8. 自動化測試
 
-測試執行器包含 24 項案例：
+測試執行器包含 41 項案例，其中前 24 項為 V1.0 相容性測試：
 
 - 無限制性能、零距離及非法性能。
 - 5000 m 長距離梯形速度曲線。
@@ -227,19 +227,142 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 - 0.1 秒 Tick、加速、抵達、折返、上行 position 遞減。
 - 多組距離／速度的時間與距離守恆。
 - 0 停站、負停站、重複 position、單站及重複站號。
+- V2 固定子步進、Jerk、惰行、平順抵站及提前速限煞車。
+- 速限重疊、方向、輸入精度與範圍。
+- 相鄰列車配對、反應時間、安全距離、移動閉塞控制及碰撞防護。
+- 障礙物急停、排程、煞車模式切換與車輛／車次身分。
+- CSV 跨日、軌跡降採樣、首班發車與路線邊界。
 
 最新結果記錄於 `QA_REPORT.md`。
 
-## 9. 已知限制
+## 9. V2.0 資料結構
 
-- 沒有號誌、閉塞、列車追蹤、超車、故障或臨時限速。
-- 沒有坡度、曲線阻力、不同車種或乘客上下車時間模型。
-- 多列車只依班距獨立運行，不判斷衝突，因此班距是理論值。
-- 只處理單一路線；UI 的路線圖是抽象直線，不是地理地圖。
+### SpeedLimitSegment
 
-## 10. 未來擴充建議（不屬於 V1.0）
+| 欄位 | 單位 | 定義 |
+|---|---|---|
+| `StartPositionMeters` | m | 累積里程起點，10 m 精度 |
+| `EndPositionMeters` | m | 累積里程終點，不含終點邊界 |
+| `LimitMetersPerSecond` | m/s | 有限正速限 |
+| `Direction` | - | `Both`、`Outbound` 或 `Inbound` |
+| `Note` | - | 使用者備註 |
 
-- 保持現有 Engine API，相鄰增加號誌／閉塞層，不修改基礎物理公式。
-- 以方向別 TrainParameters 支援上下行不同性能。
-- 加入營運緩衝、最小班距、延誤傳播及實際時刻資料。
-- 另建資料匯入與地理視覺層，避免把地圖或檔案格式混入 Engine。
+同一位置同方向有多筆速限時取最低值；沒有有效速限時回傳列車最高速度。`GetPermittedSpeedMetersPerSecond()` 會向前檢查較低速限，依可用減速度與 Jerk 餘裕計算提前煞車曲線。
+
+### OperationalParameters
+
+包含 Jerk、惰行比例、進站控制距離／速度、牽引力遞減比例、車長、營運／緊急煞車減速度、控制反應時間、煞車建立時間、定位誤差、安全餘裕與絕對最小淨距。緊急煞車減速度不得小於營運煞車減速度。
+
+### WorldTrainState
+
+位置明確定義為車頭累積里程，車尾依方向與車長計算。狀態同時保存：
+
+- `VehicleId`：實體車輛，折返後不變。
+- `ServiceRunId`：方向別運行車次，折返後更新。
+- `Direction` 與 `TrackId`：預設下行 `DOWN`、上行 `UP`，不同軌道不互相配對。
+- 車頭／車尾位置、速度、加速度、相位、目前站、下一站、活動狀態與模擬時間。
+
+### TrajectorySample、SafetyObservation、SimulationEvent
+
+- 軌跡取樣保留車輛、車次、方向、軌道、位置、速度、加速度、相位與計畫／實際標記。
+- 安全觀測保存前後車端點、車頭間距、淨距、時間間隔、動態安全距離、障礙煞車需求、預估停止里程、安全裕度及預測侵入量。
+- 事件涵蓋發車、抵達、停站、折返、安全狀態變更、控制煞車、障礙急停、預測碰撞、實際碰撞及煞車模式切換。
+
+## 10. V2.0 實際營運軌跡
+
+`OperationalTrajectoryPlanner` 使用固定 `dt = 0.1 s` 逐步積分，依目前目標速度把加速度以最大 Jerk 漸變，並套用：
+
+1. 列車最高速度。
+2. 隨速度遞減的牽引能力。
+3. 使用者設定的惰行比例。
+4. 進站控制速度與分段煞車。
+5. 現在及前方里程速限。
+
+每一步先限制加速度變化，再更新速度與位置。正常運行的速度、加速度與位置保持連續；抵達時位置夾在車站里程且速度為 0。障礙物急停是明確事件，可瞬間把指定前車速度設為 0，不納入正常連續性要求。
+
+## 11. SimulationWorld
+
+```csharp
+new SimulationWorld(
+    route,
+    trainParameters,
+    operationalParameters,
+    speedLimits,
+    trainCount,
+    headwaySeconds,
+    profileMode,
+    movingBlockMode)
+
+SimulationWorld.Tick()
+SimulationWorld.AdvanceTo(targetTimeSeconds)
+SimulationWorld.GetSnapshot()
+SimulationWorld.SetMovingBlockMode(mode)
+SimulationWorld.SetBrakingEstimationMode(mode)
+SimulationWorld.TriggerObstacleEmergencyStop(vehicleId)
+SimulationWorld.ScheduleObstacleEmergencyStop(vehicleId, triggerTimeSeconds)
+SimulationWorld.Reset()
+```
+
+`Tick()` 必定只前進 `0.1 s`。`AdvanceTo()` 也會依序呼叫每個子步進，不能以播放倍率跳過控制或事件。尚未發車、退出營運、不在指定軌道或方向不同的列車不參與相鄰配對。
+
+## 12. 移動閉塞與安全包絡線
+
+同方向、同軌道列車先依行駛方向排序，形成不重複的相鄰前後車配對。
+
+```text
+actual_gap = leader_rear_position - follower_front_position（依方向取正向距離）
+head_to_head = 前後車頭沿行駛方向距離
+time_gap = actual_gap / follower_speed
+
+reaction_distance = follower_speed × reaction_time
+build_up_distance = follower_speed × brake_build_up_time
+braking_distance = follower_speed² / (2 × selected_braking_rate)
+
+dynamic_safety_distance = max(
+    absolute_minimum_gap,
+    reaction_distance + build_up_distance + braking_distance
+    + positioning_error + safety_margin)
+
+safety_margin_value = actual_gap - dynamic_safety_distance
+```
+
+安全狀態依裕度分為 `Safe`、`Caution`、`BrakingRequired`、`EnvelopeIntrusion`。監視模式只觀測與記錄；控制模式另計算允許速度，與列車性能及里程速限取最低值。即使監視模式不介入正常控制，最終碰撞防護仍會阻止列車穿越、負淨距或順序互換，並留下碰撞事件。
+
+營運／緊急煞車按鈕只切換估算比較使用的制動率；實際侵入安全距離時，保護控制可套用最高優先級煞車。
+
+## 13. 障礙物急停情境
+
+指定前車可立即或在指定模擬時間被標記為固定障礙。前車當下速度直接變為 0，位置與車身占用區間固定。後車每 Tick 重算反應距離、建立距離、制動距離、總需求、預估停止里程、安全裕度與預測侵入量；若到達障礙邊界則停止並記錄撞擊速度，不允許穿越。
+
+此情境是比正常緊急煞車更保守的概念測試，不代表真實前車物理減速。
+
+## 14. 運行圖與匯出
+
+- 橫軸為連續模擬時間，縱軸為全線累積里程；時間格式支援跨日 `+N 日`。
+- 計畫／理論軌跡由無干擾基準 `SimulationWorld` 產生；模擬實際軌跡套用選定速限、控制與事件。
+- 視覺降採樣會強制保留各車次端點、相位轉折與事件節點。
+- CSV 由 Engine 軌跡及事件直接產生，不重新估算位置或速度。
+- PNG 使用 WPF 原生點陣輸出；PDF 使用程式內建的離線 PDF writer，可選 A4／A3 橫向與分頁，不需執行時下載套件。
+
+## 15. 輸入驗證與邊界
+
+| 輸入／情境 | V2.0 行為 |
+|---|---|
+| 速限起點大於等於終點 | validation error |
+| 速限超過全線或不是 10 m 精度 | validation error |
+| 重疊速限 | 合法，採最低值 |
+| Jerk、車長、煞車率非正有限值 | validation error |
+| 比例不在 0～1 | validation error |
+| 緊急煞車率小於營運煞車率 | validation error |
+| 反應時間、建立時間、誤差或餘裕為負 | validation error |
+| 首班車發車時間為世界起點 | 第一個 Tick 立即啟用，不延遲 0.1 s |
+| 極短班距或障礙範圍被侵入 | 夾在合法路線邊界、停止並記錄碰撞 |
+
+## 16. 已知限制與後續擴充
+
+- 僅支援抽象單一直線；不是地理地圖。
+- 預設上下行不同軌道，尚未建立單線共用、交叉渡線、道岔與聯鎖。
+- 尚未納入坡度、曲線阻力、超高、黏著變化、不同車種及乘客上下車模型。
+- 未以真實路線資料校準；人工輸入結果不能宣稱重現特定捷運路線。
+- 移動閉塞為概念模型，未涵蓋通訊失效、列車完整性、ATP／ATO／ATS 或安全完整性認證。
+- 後續可增加設定檔匯入／匯出、站間通過間隔分析、進階圖層篩選、真實資料校準與效能基準。

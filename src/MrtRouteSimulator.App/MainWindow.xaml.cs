@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         StationRows.Add(new StationInputRow { StationId = "O04", StationName = "中央站", DistanceFromPreviousKm = 1.65, DwellTimeSeconds = 35 });
         StationRows.Add(new StationInputRow { StationId = "O05", StationName = "科園站", DistanceFromPreviousKm = 1.1, DwellTimeSeconds = 30 });
         StationRows.Add(new StationInputRow { StationId = "O06", StationName = "山景站", DistanceFromPreviousKm = 1.45, DwellTimeSeconds = 0 });
+        LoadSampleV2Data();
 
         ClearResults();
         HideValidation();
@@ -211,14 +212,18 @@ public partial class MainWindow : Window
                 trainCount,
                 specifiedHeadwaySeconds,
                 0.1);
+            ConfigureV2World(trainCount, specifiedHeadwaySeconds);
 
-            _playbackDurationSeconds = _simulationEngine.CycleTimeSeconds
-                + (_simulationEngine.TrainCount - 1) * _simulationEngine.HeadwaySeconds;
+            if (!_v2Enabled)
+            {
+                _playbackDurationSeconds = _simulationEngine.CycleTimeSeconds
+                    + (_simulationEngine.TrainCount - 1) * _simulationEngine.HeadwaySeconds;
+            }
             _playbackTimeSeconds = 0;
             PopulateResults();
             UpdatePlaybackView();
             PlayButton.IsEnabled = true;
-            StatusTextBlock.Text = $"模擬建立完成：{trainCount} 列車、{_route.Stations.Count} 站、固定 Tick 0.1 秒。";
+            StatusTextBlock.Text = $"{(_v2Enabled ? "V2 實際營運" : "V1 基礎物理")}模擬建立完成：{trainCount} 列車、{_route.Stations.Count} 站、固定 Tick 0.1 秒。";
             PlaybackStatusText.Text = "模擬已就緒，按「播放」查看列車運行。";
         }
         catch (SimulationValidationException exception)
@@ -288,6 +293,7 @@ public partial class MainWindow : Window
 
         DrawRoute();
         DrawSpeedProfile();
+        PopulateV2Results();
     }
 
     private void Play_Click(object sender, RoutedEventArgs e)
@@ -324,6 +330,7 @@ public partial class MainWindow : Window
         if (_simulationEngine is not null)
         {
             _simulationEngine.Reset();
+            ResetV2Playback();
             UpdatePlaybackView();
             PlaybackStatusText.Text = "已回到首班列車發車時刻。";
             StatusTextBlock.Text = "播放進度已重設。";
@@ -357,6 +364,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_v2Enabled)
+        {
+            UpdateV2PlaybackView();
+            return;
+        }
+
         _simulationEngine.SetCurrentTime(_playbackTimeSeconds);
         var states = _simulationEngine.GetTrainStates();
         CurrentTrainRows.Clear();
@@ -380,6 +393,12 @@ public partial class MainWindow : Window
 
     private void DrawRoute(IReadOnlyList<TrainState>? states = null)
     {
+        if (_v2Enabled)
+        {
+            DrawV2Route();
+            return;
+        }
+
         RouteCanvas.Children.Clear();
         var width = RouteCanvas.ActualWidth;
         var height = RouteCanvas.ActualHeight;
@@ -491,6 +510,12 @@ public partial class MainWindow : Window
 
     private void DrawSpeedProfile()
     {
+        if (_v2Enabled)
+        {
+            DrawV2SpeedProfile();
+            return;
+        }
+
         SpeedCanvas.Children.Clear();
         var width = SpeedCanvas.ActualWidth;
         var height = SpeedCanvas.ActualHeight;
@@ -580,6 +605,7 @@ public partial class MainWindow : Window
         _cycle = null;
         _multipleTrainResult = null;
         _simulationEngine = null;
+        ClearV2Results();
         _playbackTimeSeconds = 0;
         _playbackDurationSeconds = 0;
         TimetableRows.Clear();
