@@ -1,0 +1,311 @@
+<Window x:Class="MrtRouteSimulator.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MRT 路線進出站時間模擬器 V1.0"
+        Width="1440" Height="900"
+        MinWidth="1180" MinHeight="720"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="78" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="34" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                    <GradientStop Color="#182238" Offset="0" />
+                    <GradientStop Color="#293A59" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <Grid Margin="24,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="MRT 路線進出站時間模擬器" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Text="V1.0 · 單一直線路線 · 解析模型與 0.1 秒 Simulation Engine" Foreground="#C8D0DF" FontSize="12" Margin="0,4,0,0" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="#24324C" BorderBrush="#53617A" BorderThickness="1" CornerRadius="18" Padding="13,7" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="8" Height="8" Fill="#35C78A" Margin="0,0,8,0" />
+                        <TextBlock Text="完全離線" Foreground="White" FontSize="12" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="410" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="#F8F9FB" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Margin="18,16,18,22">
+                        <TextBlock Text="路線設定" Style="{StaticResource SectionTitle}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="95" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="路線編號" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="RouteIdTextBox" Text="O" AutomationProperties.Name="路線編號" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="路線名稱" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="RouteNameTextBox" Text="橘色示範線" AutomationProperties.Name="路線名稱" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="車站與站間距離" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                        <DataGrid x:Name="StationDataGrid" Height="228" ItemsSource="{Binding StationRows}" RowHeaderWidth="0" AutomationProperties.Name="車站編輯表">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="編號" Binding="{Binding StationId, UpdateSourceTrigger=PropertyChanged}" Width="64" />
+                                <DataGridTextColumn Header="站名" Binding="{Binding StationName, UpdateSourceTrigger=PropertyChanged}" Width="*" />
+                                <DataGridTextColumn Header="前站 km" Binding="{Binding DistanceFromPreviousKm, UpdateSourceTrigger=PropertyChanged, StringFormat=0.###}" Width="74" />
+                                <DataGridTextColumn Header="停站 s" Binding="{Binding DwellTimeSeconds, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="68" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button Content="新增" Style="{StaticResource SecondaryButton}" Click="AddStation_Click" Margin="0,0,6,6" />
+                            <Button Content="刪除" Style="{StaticResource SecondaryButton}" Click="RemoveStation_Click" Margin="0,0,6,6" />
+                            <Button Content="上移" Style="{StaticResource SecondaryButton}" Click="MoveStationUp_Click" Margin="0,0,6,6" />
+                            <Button Content="下移" Style="{StaticResource SecondaryButton}" Click="MoveStationDown_Click" Margin="0,0,6,6" />
+                            <Button Content="載入示範" Style="{StaticResource SecondaryButton}" Click="LoadSample_Click" Margin="0,0,0,6" />
+                        </WrapPanel>
+
+                        <Separator Margin="0,12" Background="{StaticResource BorderBrush}" />
+                        <TextBlock Text="列車性能" Style="{StaticResource SectionTitle}" />
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="最高速度（km/h）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="MaxSpeedTextBox" Text="80" AutomationProperties.Name="最高速度" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="加速度（m/s²）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="AccelerationTextBox" Text="1.0" AutomationProperties.Name="加速度" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="減速度（m/s²）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="DecelerationTextBox" Text="1.0" AutomationProperties.Name="減速度" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="預設停站（秒）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="DefaultDwellTextBox" Text="30" AutomationProperties.Name="預設停站時間" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="起點折返（分鐘）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="OriginTurnaroundTextBox" Text="3" AutomationProperties.Name="起點折返時間" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="終點折返（分鐘）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="TerminalTurnaroundTextBox" Text="6" AutomationProperties.Name="終點折返時間" />
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
+                        <TextBlock Text="模擬設定" Style="{StaticResource SectionTitle}" />
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="列車數量" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="TrainCountTextBox" Text="6" AutomationProperties.Name="列車數量" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="指定班距（分鐘，可空白）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="HeadwayTextBox" Text="" AutomationProperties.Name="指定班距" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="首班發車時間" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="StartTimeTextBox" Text="06:00:00" AutomationProperties.Name="首班發車時間" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="播放倍率" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="PlaybackSpeedComboBox" SelectedIndex="2" AutomationProperties.Name="播放倍率">
+                                    <ComboBoxItem Content="1×" Tag="1" />
+                                    <ComboBoxItem Content="5×" Tag="5" />
+                                    <ComboBoxItem Content="20×" Tag="20" />
+                                    <ComboBoxItem Content="60×" Tag="60" />
+                                    <ComboBoxItem Content="120×" Tag="120" />
+                                </ComboBox>
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <Button x:Name="RunButton" Content="計算並建立模擬" Style="{StaticResource PrimaryButton}" Click="RunSimulation_Click" Margin="0,4,0,0" AutomationProperties.Name="計算並建立模擬" />
+                        <Border x:Name="ValidationBorder" Background="#FFF1EC" BorderBrush="#F4A47D" BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,10,0,0" Visibility="Collapsed">
+                            <TextBlock x:Name="ValidationTextBlock" Foreground="#A83812" TextWrapping="Wrap" FontSize="12" />
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Grid Grid.Column="1" Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="100" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <UniformGrid Grid.Row="0" Columns="5">
+                    <Border Style="{StaticResource SummaryCard}">
+                        <StackPanel>
+                            <TextBlock Text="車站 / 路線長度" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                            <TextBlock x:Name="RouteSummaryText" Text="—" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SummaryCard}">
+                        <StackPanel>
+                            <TextBlock Text="單程運行時間" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                            <TextBlock x:Name="OneWaySummaryText" Text="—" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SummaryCard}">
+                        <StackPanel>
+                            <TextBlock Text="完整循環時間" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                            <TextBlock x:Name="CycleSummaryText" Text="—" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SummaryCard}">
+                        <StackPanel>
+                            <TextBlock Text="理論班距" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                            <TextBlock x:Name="HeadwaySummaryText" Text="—" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                    <Border Style="{StaticResource SummaryCard}">
+                        <StackPanel>
+                            <TextBlock Text="最高／峰值速度" Foreground="{StaticResource MutedBrush}" FontSize="11" />
+                            <TextBlock x:Name="SpeedSummaryText" Text="—" FontSize="18" FontWeight="SemiBold" Margin="0,8,0,0" />
+                        </StackPanel>
+                    </Border>
+                </UniformGrid>
+
+                <TabControl Grid.Row="1" Margin="5,8,5,5" Background="White" BorderBrush="{StaticResource BorderBrush}">
+                    <TabItem Header="模擬動畫">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="260" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="18" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Button x:Name="PlayButton" Content="▶ 播放" Style="{StaticResource PrimaryButton}" Click="Play_Click" IsEnabled="False" Margin="0,0,8,8" />
+                                <Button Grid.Column="1" Content="Ⅱ 暫停" Style="{StaticResource SecondaryButton}" Click="Pause_Click" IsEnabled="True" Margin="0,0,8,8" />
+                                <Button Grid.Column="2" Content="↺ 重設" Style="{StaticResource SecondaryButton}" Click="ResetPlayback_Click" Margin="0,0,0,8" />
+                                <TextBlock Grid.Column="4" x:Name="PlaybackStatusText" Text="請先建立模擬" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                                <Border Grid.Column="5" Background="#EEF8F5" CornerRadius="7" Padding="12,7" Margin="0,0,0,8">
+                                    <TextBlock x:Name="SimulationClockText" Text="--:--:--" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold" FontSize="15" />
+                                </Border>
+                            </Grid>
+                            <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
+                                <Canvas x:Name="RouteCanvas" SizeChanged="RouteCanvas_SizeChanged" AutomationProperties.Name="列車路線動畫" />
+                            </Border>
+                            <Grid Grid.Row="2" Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.05*" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="0.95*" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="即時列車狀態" Style="{StaticResource SectionTitle}" />
+                                    <DataGrid x:Name="CurrentTrainDataGrid" ItemsSource="{Binding CurrentTrainRows}" IsReadOnly="True" RowHeaderWidth="0">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="75" />
+                                            <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
+                                            <DataGridTextColumn Header="狀態" Binding="{Binding State}" Width="72" />
+                                            <DataGridTextColumn Header="位置 km" Binding="{Binding PositionKm}" Width="70" />
+                                            <DataGridTextColumn Header="速度 km/h" Binding="{Binding SpeedKmh}" Width="80" />
+                                            <DataGridTextColumn Header="下一站" Binding="{Binding NextStation}" Width="*" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="下行單程速度曲線" Style="{StaticResource SectionTitle}" />
+                                    <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
+                                        <Canvas x:Name="SpeedCanvas" Height="230" SizeChanged="SpeedCanvas_SizeChanged" AutomationProperties.Name="速度時間曲線" />
+                                    </Border>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="進出站時刻表">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="多列車下行時刻" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="　核心以秒計算，表格僅在輸出階段格式化" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" x:Name="TimetableDataGrid" ItemsSource="{Binding TimetableRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="82" />
+                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="62" />
+                                    <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="68" />
+                                    <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="120" />
+                                    <DataGridTextColumn Header="到站" Binding="{Binding ArrivalTime}" Width="95" />
+                                    <DataGridTextColumn Header="出站" Binding="{Binding DepartureTime}" Width="95" />
+                                    <DataGridTextColumn Header="停站" Binding="{Binding DwellTime}" Width="72" />
+                                    <DataGridTextColumn Header="累積 km" Binding="{Binding PositionKm}" Width="82" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="區間物理明細">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                <TextBlock Text="各站間解析模型" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock Text="　自動判斷梯形或三角速度曲線" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" x:Name="SegmentDataGrid" ItemsSource="{Binding SegmentRows}" IsReadOnly="True" RowHeaderWidth="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="區間" Binding="{Binding Segment}" Width="*" MinWidth="160" />
+                                    <DataGridTextColumn Header="距離 km" Binding="{Binding DistanceKm}" Width="84" />
+                                    <DataGridTextColumn Header="曲線" Binding="{Binding Profile}" Width="74" />
+                                    <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeedKmh}" Width="94" />
+                                    <DataGridTextColumn Header="旅行時間" Binding="{Binding TravelTime}" Width="90" />
+                                    <DataGridTextColumn Header="加速" Binding="{Binding AccelerationTime}" Width="78" />
+                                    <DataGridTextColumn Header="巡航" Binding="{Binding CruisingTime}" Width="78" />
+                                    <DataGridTextColumn Header="減速" Binding="{Binding DecelerationTime}" Width="78" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <Border Grid.Row="2" Background="#F4F6FA" CornerRadius="7" Padding="10" Margin="0,10,0,0">
+                                <TextBlock Text="V1.0 理論模型不包含號誌、閉塞、追蹤限制、故障、坡度、曲線與乘客上下車差異；理論班距不是實際營運最小班距。" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                            </Border>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#202C43">
+            <Grid Margin="18,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusTextBlock" Text="就緒。請調整參數後建立模擬。" Foreground="#DCE2ED" VerticalAlignment="Center" FontSize="12" />
+                <TextBlock Grid.Column="1" Text="核心單位：m · s · m/s · m/s²" Foreground="#9EAABE" VerticalAlignment="Center" FontSize="11" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/MrtRouteSimulator.Engine/MrtRouteSimulator.Engine.csproj" />
+  <Project Path="src/MrtRouteSimulator.App/MrtRouteSimulator.App.csproj" />
+  <Project Path="tests/MrtRouteSimulator.Tests/MrtRouteSimulator.Tests.csproj" />
+</Solution>

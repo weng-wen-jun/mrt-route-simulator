@@ -1,0 +1,20 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# Local release packages are uploaded as GitHub Release assets
+release/
+
+# IDE and test artifacts
+.vs/
+*.user
+*.suo
+TestResults/
+
+# NuGet packages
+*.nupkg
+packages/
+
+# OS files
+Thumbs.db
+.DS_Store
