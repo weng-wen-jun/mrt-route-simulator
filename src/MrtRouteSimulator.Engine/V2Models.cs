@@ -26,6 +26,12 @@ public enum BrakingEstimationMode
     Emergency
 }
 
+public enum StationServiceMode
+{
+    Stop,
+    Pass
+}
+
 public enum OperationalPhase
 {
     Pending,
@@ -62,7 +68,9 @@ public enum SimulationEventType
     ObstacleEmergencyStop,
     PredictedCollision,
     Collision,
-    BrakingModeChanged
+    BrakingModeChanged,
+    StationPassed,
+    StationStopViolation
 }
 
 public sealed record SpeedLimitSegment(
@@ -71,6 +79,23 @@ public sealed record SpeedLimitSegment(
     double LimitMetersPerSecond,
     SpeedLimitDirection Direction = SpeedLimitDirection.Both,
     string Note = "");
+
+public sealed record StationServiceInstruction(
+    string StationId,
+    StationServiceMode Mode,
+    double? SpeedLimitMetersPerSecond = null);
+
+public sealed record ServicePattern(
+    string PatternId,
+    string PatternName,
+    IReadOnlyList<StationServiceInstruction> Instructions);
+
+public sealed record ServiceRunPlan(
+    string VehicleId,
+    int ServiceNumber,
+    TrainDirection Direction,
+    string ServiceClassId,
+    string PatternId);
 
 public sealed class OperationalParameters
 {
@@ -135,7 +160,7 @@ public sealed class OperationalParameters
         jerkMetersPerSecondCubed: 0.65,
         coastingRatio: 0.15,
         approachDistanceMeters: 180,
-        approachSpeedMetersPerSecond: 8.3333333333,
+        approachSpeedMetersPerSecond: 0,
         tractionFadeRatio: 0.45,
         trainLengthMeters: 92,
         serviceBrakingMetersPerSecondSquared: 0.9,
@@ -150,6 +175,8 @@ public sealed class OperationalParameters
 public sealed record WorldTrainState(
     string VehicleId,
     string ServiceRunId,
+    string ServiceClassId,
+    string ServicePatternId,
     TrainDirection Direction,
     string TrackId,
     double FrontPositionMeters,
@@ -186,6 +213,8 @@ public sealed record TrajectorySample(
     double SimulationTimeSeconds,
     string VehicleId,
     string ServiceRunId,
+    string ServiceClassId,
+    string ServicePatternId,
     TrainDirection Direction,
     string TrackId,
     double PositionMeters,

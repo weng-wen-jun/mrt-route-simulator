@@ -53,6 +53,32 @@ public sealed class SpeedLimitInputRow
     public string Note { get; set; } = string.Empty;
 }
 
+public sealed class ServicePatternInputRow
+{
+    public string PatternId { get; set; } = "EXPRESS";
+
+    public string PatternName { get; set; } = "快速車";
+
+    public string StationId { get; set; } = string.Empty;
+
+    public string Mode { get; set; } = "跨站";
+
+    public double? SpeedLimitKmh { get; set; }
+}
+
+public sealed class ServiceRunInputRow
+{
+    public string VehicleId { get; set; } = "Vehicle 01";
+
+    public int ServiceNumber { get; set; } = 1;
+
+    public string Direction { get; set; } = "下行";
+
+    public string ServiceClassId { get; set; } = "普通車";
+
+    public string PatternId { get; set; } = "ALL_STOP";
+}
+
 public sealed record SafetyRow(
     string Pair,
     string Track,

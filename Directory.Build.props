@@ -1,0 +1,14 @@
+<Project>
+  <PropertyGroup>
+    <!-- This is the single source of truth for the software version. -->
+    <MrtVersion>2.1.0</MrtVersion>
+    <MrtDisplayVersion>V$(MrtVersion)</MrtDisplayVersion>
+    <Version>$(MrtVersion)</Version>
+    <VersionPrefix>$(MrtVersion)</VersionPrefix>
+    <AssemblyVersion>$(MrtVersion).0</AssemblyVersion>
+    <FileVersion>$(MrtVersion).0</FileVersion>
+    <InformationalVersion>$(MrtDisplayVersion)</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Product>MRT 路線進出站時間模擬器</Product>
+  </PropertyGroup>
+</Project>

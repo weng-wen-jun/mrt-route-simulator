@@ -37,6 +37,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
+        VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";
         DataContext = this;
         _playbackTimer = new DispatcherTimer(DispatcherPriority.Render)
         {
@@ -60,6 +62,12 @@ public partial class MainWindow : Window
     public ObservableCollection<CurrentTrainRow> CurrentTrainRows { get; } = [];
 
     private void LoadSample_Click(object sender, RoutedEventArgs e) => LoadSampleData();
+
+    private void FocusV2Settings_Click(object sender, RoutedEventArgs e)
+    {
+        V2SettingsHeading.BringIntoView();
+        V2SettingsHeading.Focus();
+    }
 
     private void LoadSampleData()
     {

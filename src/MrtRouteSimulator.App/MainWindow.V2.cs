@@ -18,6 +18,10 @@ public partial class MainWindow
 
     public ObservableCollection<SpeedLimitInputRow> SpeedLimitRows { get; } = [];
 
+    public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
+
+    public ObservableCollection<ServiceRunInputRow> ServiceRunRows { get; } = [];
+
     public ObservableCollection<SafetyRow> SafetyRows { get; } = [];
 
     public ObservableCollection<EventRow> EventRows { get; } = [];
@@ -27,6 +31,8 @@ public partial class MainWindow
     private void LoadSampleV2Data()
     {
         SpeedLimitRows.Clear();
+        ServicePatternRows.Clear();
+        ServiceRunRows.Clear();
         SpeedLimitRows.Add(new SpeedLimitInputRow
         {
             StartKm = 1.25,
@@ -46,11 +52,14 @@ public partial class MainWindow
         JerkTextBox.Text = "0.65";
         CoastingRatioTextBox.Text = "0.15";
         ApproachDistanceTextBox.Text = "180";
-        ApproachSpeedTextBox.Text = "30";
+        ApproachSpeedTextBox.Text = "0";
         TrainLengthTextBox.Text = "92";
         ReactionTimeTextBox.Text = "1.5";
         ServiceBrakeTextBox.Text = "0.9";
         EmergencyBrakeTextBox.Text = "1.3";
+        OperationModeComboBox.SelectedIndex = 1;
+        MovingBlockModeComboBox.SelectedIndex = 2;
+        BrakingModeComboBox.SelectedIndex = 0;
         SpeedLimitWarningText.Text = string.Empty;
     }
 
@@ -73,6 +82,10 @@ public partial class MainWindow
 
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
+        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
         var operational = new OperationalParameters(
             ParsePositive(JerkTextBox, "Jerk"),
             ParseNonNegative(CoastingRatioTextBox, "惰行比例"),
@@ -103,6 +116,8 @@ public partial class MainWindow
                 ParseSpeedLimitDirection(row.Direction, index + 1),
                 row.Note?.Trim() ?? string.Empty);
         }).ToArray();
+        var servicePatterns = BuildServicePatterns();
+        var serviceRuns = BuildServiceRunPlans();
         var movingBlockMode = ParseMovingBlockMode();
         _v2World = new SimulationWorld(
             _route,
@@ -112,7 +127,15 @@ public partial class MainWindow
             specifiedHeadwaySeconds,
             limits,
             OperationProfileMode.RealisticOperations,
-            movingBlockMode);
+            movingBlockMode,
+            servicePatterns,
+            serviceRuns);
+        var brakingMode = ParseBrakingEstimationMode();
+        if (brakingMode != BrakingEstimationMode.Service)
+        {
+            _v2World.SetBrakingEstimationMode(brakingMode);
+        }
+
         _plannedWorld = new SimulationWorld(
             _route,
             _parameters,
@@ -121,7 +144,9 @@ public partial class MainWindow
             specifiedHeadwaySeconds,
             speedLimits: null,
             OperationProfileMode.BasicPhysics,
-            MovingBlockMode.Independent);
+            MovingBlockMode.Independent,
+            servicePatterns,
+            serviceRuns);
         _playbackDurationSeconds = _v2World.BaselineCycleTimeSeconds * 1.5
             + (trainCount - 1) * _v2World.HeadwaySeconds;
         ObstacleStopButton.IsEnabled = true;
@@ -158,7 +183,7 @@ public partial class MainWindow
         foreach (var state in snapshot.Trains)
         {
             CurrentTrainRows.Add(new CurrentTrainRow(
-                state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal),
+                state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
                 state.IsActive ? DirectionToChinese(state.Direction) : "—",
                 state.IsActive ? PhaseToChinese(state.Phase) : "待發",
                 $"{state.FrontPositionMeters / 1000:0.00}",
@@ -256,6 +281,132 @@ public partial class MainWindow
         SpeedLimitRows.RemoveAt(index);
         HideValidation();
     }
+
+    private void AddServicePatternRow_Click(object sender, RoutedEventArgs e)
+    {
+        var stationId = StationRows.Count > 2 ? StationRows[1].StationId : string.Empty;
+        ServicePatternRows.Add(new ServicePatternInputRow
+        {
+            StationId = stationId
+        });
+        ServicePatternDataGrid.SelectedIndex = ServicePatternRows.Count - 1;
+        ServicePatternDataGrid.ScrollIntoView(ServicePatternRows[^1]);
+    }
+
+    private void RemoveServicePatternRow_Click(object sender, RoutedEventArgs e)
+    {
+        var index = ServicePatternDataGrid.SelectedIndex;
+        if (index < 0)
+        {
+            ShowValidation(["請先選取要刪除的服務模式列。"]);
+            return;
+        }
+
+        ServicePatternRows.RemoveAt(index);
+        HideValidation();
+    }
+
+    private void AddServiceRun_Click(object sender, RoutedEventArgs e)
+    {
+        ServiceRunRows.Add(new ServiceRunInputRow());
+        ServiceRunDataGrid.SelectedIndex = ServiceRunRows.Count - 1;
+        ServiceRunDataGrid.ScrollIntoView(ServiceRunRows[^1]);
+    }
+
+    private void RemoveServiceRun_Click(object sender, RoutedEventArgs e)
+    {
+        var index = ServiceRunDataGrid.SelectedIndex;
+        if (index < 0)
+        {
+            ShowValidation(["請先選取要刪除的車次服務計畫。"]);
+            return;
+        }
+
+        ServiceRunRows.RemoveAt(index);
+        HideValidation();
+    }
+
+    private ServicePattern[] BuildServicePatterns() => ServicePatternRows
+        .Select((row, index) => new
+        {
+            Row = row,
+            Index = index + 1,
+            PatternId = row.PatternId?.Trim() ?? string.Empty,
+            PatternName = row.PatternName?.Trim() ?? string.Empty
+        })
+        .GroupBy(item => item.PatternId, StringComparer.Ordinal)
+        .Select(group =>
+        {
+            if (string.IsNullOrWhiteSpace(group.Key))
+            {
+                throw new InvalidOperationException("服務模式 ID 不得空白。");
+            }
+
+            var names = group.Select(item => item.PatternName).Distinct(StringComparer.Ordinal).ToArray();
+            if (names.Length != 1 || string.IsNullOrWhiteSpace(names[0]))
+            {
+                throw new InvalidOperationException($"服務模式 {group.Key} 的名稱必須一致且不得空白。");
+            }
+
+            var instructions = group.Select(item =>
+            {
+                var stationId = item.Row.StationId?.Trim() ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(stationId))
+                {
+                    throw new InvalidOperationException($"服務模式第 {item.Index} 列車站編號不得空白。");
+                }
+
+                if (item.Row.SpeedLimitKmh is { } speed
+                    && (!double.IsFinite(speed) || speed <= 0))
+                {
+                    throw new InvalidOperationException($"服務模式第 {item.Index} 列速度上限必須大於 0，或留空使用自動值。");
+                }
+
+                var mode = item.Row.Mode?.Trim() switch
+                {
+                    "停站" => StationServiceMode.Stop,
+                    "跨站" => StationServiceMode.Pass,
+                    _ => throw new InvalidOperationException($"服務模式第 {item.Index} 列請填寫「停站」或「跨站」。")
+                };
+                return new StationServiceInstruction(
+                    stationId,
+                    mode,
+                    item.Row.SpeedLimitKmh / 3.6);
+            }).ToArray();
+            return new ServicePattern(group.Key, names[0], instructions);
+        })
+        .ToArray();
+
+    private ServiceRunPlan[] BuildServiceRunPlans() => ServiceRunRows
+        .Select((row, index) =>
+        {
+            var rowNumber = index + 1;
+            if (string.IsNullOrWhiteSpace(row.VehicleId)
+                || string.IsNullOrWhiteSpace(row.ServiceClassId)
+                || string.IsNullOrWhiteSpace(row.PatternId))
+            {
+                throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列不得有空白欄位。");
+            }
+
+            if (row.ServiceNumber <= 0)
+            {
+                throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列序號必須大於 0。");
+            }
+
+            var direction = row.Direction?.Trim() switch
+            {
+                "下行" => TrainDirection.Outbound,
+                "上行" => TrainDirection.Inbound,
+                _ => throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列方向請填寫「下行」或「上行」。")
+            };
+            return new ServiceRunPlan(
+                row.VehicleId.Trim(),
+                row.ServiceNumber,
+                direction,
+                row.ServiceClassId.Trim(),
+                row.PatternId.Trim());
+        })
+        .ToArray();
 
     private void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -556,7 +707,8 @@ public partial class MainWindow
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 },
-                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n{DirectionToChinese(state.Direction)} {state.TrackId}\n"
+                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}｜{state.ServiceClassId}｜{state.ServicePatternId}\n"
+                    + $"{DirectionToChinese(state.Direction)} {state.TrackId}\n"
                     + $"車頭 {state.FrontPositionMeters / 1000:0.00} km｜車尾 {state.RearPositionMeters / 1000:0.00} km\n"
                     + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
             };
@@ -1034,6 +1186,8 @@ public partial class MainWindow
         SimulationEventType.ObstacleEmergencyStop => "障礙物急停",
         SimulationEventType.PredictedCollision => "預測碰撞",
         SimulationEventType.Collision => "實際碰撞",
+        SimulationEventType.StationPassed => "跨站通過",
+        SimulationEventType.StationStopViolation => "停車超限",
         _ => "煞車模式切換"
     };
 

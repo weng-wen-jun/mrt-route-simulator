@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using MrtRouteSimulator.Engine;
 
 var tests = new (string Name, Action Run)[]
@@ -34,7 +35,7 @@ var tests = new (string Name, Action Run)[]
     ("列車進入低速區前已提前煞車", TestAdvanceBrakingForSpeedLimit),
     ("多列車依同方向同軌形成相鄰配對", TestAdjacentTrainPairing),
     ("反應時間增加會放大安全距離", TestSafetyDistanceRespondsToReactionTime),
-    ("移動閉塞控制不高於監視模式速度", TestMovingBlockControl),
+    ("移動閉塞控制主動制動並維持安全距離", TestMovingBlockControl),
     ("障礙物急停留下事件且列車不穿越", TestObstacleStopAndCollisionProtection),
     ("緊急煞車估算距離不大於營運煞車", TestBrakingModeSwitch),
     ("車輛 ID 與折返後車次 ID 分離", TestVehicleAndServiceRunIdentity),
@@ -42,14 +43,26 @@ var tests = new (string Name, Action Run)[]
     ("軌跡降採樣保留端點與相位轉折", TestTrajectoryDecimation),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
-    ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop)
+    ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
+    ("終點長折返時控制模式不發生追撞", TestTerminalOccupancyProtection),
+    ("控制模式在起點未淨空時延後發車", TestDepartureClearanceProtection),
+    ("同一追撞只記錄一次碰撞事件", TestCollisionEventRecordedOnce),
+    ("動態煞車包絡線使到站前速度接近零", TestDynamicStationBrakingContinuity),
+    ("移動閉塞控制不再把高速列車瞬間歸零", TestMovingBlockControlDoesNotHardStop),
+    ("跨站車不套用固定進站速度或停站", TestExpressServicePassesStation),
+    ("跨站車仍遵守車站通過速限", TestPassingServiceHonorsStationLimit),
+    ("折返後可套用不同停站模式", TestTurnaroundLoadsDifferentServicePattern),
+    ("專案存檔 JSON 可完整往返", TestSimulationProjectRoundTrip),
+    ("舊版存檔可升級為全停站模式", TestLegacyProjectUpgrade),
+    ("專案存檔拒絕未知版本與破損 JSON", TestSimulationProjectValidation),
+    ("軟體版本符合三段式規則且與組件一致", TestProductVersionMetadata)
 };
 
 var passed = 0;
 var failures = new List<string>();
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
-Console.WriteLine("MRT 路線進出站時間模擬器 V2.0 - 自動化測試");
+Console.WriteLine($"MRT 路線進出站時間模擬器 {ProductVersion.Current} - 自動化測試");
 Console.WriteLine(new string('=', 58));
 
 foreach (var test in tests)
@@ -77,6 +90,23 @@ if (failures.Count > 0)
 }
 
 return;
+
+static void TestProductVersionMetadata()
+{
+    var displayVersion = ProductVersion.Current;
+    True(displayVersion.StartsWith('V'), "顯示版本必須以大寫 V 開頭。");
+
+    var segments = displayVersion[1..].Split('.');
+    Equal(3, segments.Length);
+    True(
+        segments.All(segment => int.TryParse(segment, out _)),
+        "版本號必須是 V主版本.次版本.修訂版本，且三段皆為非負整數。");
+
+    var assemblyVersion = typeof(ProductVersion).Assembly.GetName().Version
+        ?? throw new InvalidOperationException("找不到 Engine 組件版本。");
+    var assemblySemanticVersion = $"{assemblyVersion.Major}.{assemblyVersion.Minor}.{assemblyVersion.Build}";
+    Equal(displayVersion[1..], assemblySemanticVersion);
+}
 
 static void TestUnlimitedPerformance()
 {
@@ -419,8 +449,8 @@ static void TestAdvanceBrakingForSpeedLimit()
 
 static void TestAdjacentTrainPairing()
 {
-    var world = CreateWorld(trainCount: 3, headwaySeconds: 12);
-    world.AdvanceTo(40);
+    var world = CreateWorld(trainCount: 3, headwaySeconds: 30, movingBlockMode: MovingBlockMode.Control);
+    world.AdvanceTo(100);
     var snapshot = world.GetSnapshot();
     Equal(3, snapshot.Trains.Count(train => train.IsActive));
     Equal(2, snapshot.SafetyObservations.Count);
@@ -440,13 +470,13 @@ static void TestSafetyDistanceRespondsToReactionTime()
 
 static void TestMovingBlockControl()
 {
-    var monitor = CreateWorld(trainCount: 2, headwaySeconds: 6, movingBlockMode: MovingBlockMode.Monitoring);
-    var control = CreateWorld(trainCount: 2, headwaySeconds: 6, movingBlockMode: MovingBlockMode.Control);
-    monitor.AdvanceTo(40);
-    control.AdvanceTo(40);
-    var monitorFollower = monitor.GetSnapshot().Trains.Single(train => train.VehicleId == "Vehicle 02");
-    var controlFollower = control.GetSnapshot().Trains.Single(train => train.VehicleId == "Vehicle 02");
-    True(controlFollower.SpeedMetersPerSecond <= monitorFollower.SpeedMetersPerSecond + 0.01, "控制模式後車速度不應高於監視模式。");
+    var world = CreateWorld(trainCount: 2, headwaySeconds: 20, movingBlockMode: MovingBlockMode.Control);
+    world.AdvanceTo(80);
+    True(world.Events.Any(item => item.EventType == SimulationEventType.ControlBraking), "控制模式應在安全包絡不足時主動制動。");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision), "控制模式不應發生追撞。");
+    True(
+        world.SafetyHistory.All(item => item.ActualGapMeters >= item.DynamicSafetyDistanceMeters - 1e-6),
+        "控制模式必須維持完整動態安全距離。");
 }
 
 static void TestObstacleStopAndCollisionProtection()
@@ -535,6 +565,271 @@ static void TestScheduledObstacleStop()
     True(!world.Events.Any(item => item.EventType == SimulationEventType.ObstacleEmergencyStop), "排程時間前不得觸發。");
     world.AdvanceTo(20);
     True(world.Events.Any(item => item.EventType == SimulationEventType.ObstacleEmergencyStop && item.VehicleId == "Vehicle 01"), "指定列車應在排程時間觸發。");
+}
+
+static void TestTerminalOccupancyProtection()
+{
+    var route = RouteFactory.FromSegmentDistances(
+        "E",
+        "終點占用測試線",
+        [new StationInput("E01", "起點", 0, 0), new StationInput("E02", "終點", 1000, 0)],
+        0);
+    var parameters = new TrainParameters(20, 1, 1, 0, 30, 180);
+    var world = new SimulationWorld(
+        route,
+        parameters,
+        OperationalParameters.CreateDefault(),
+        trainCount: 3,
+        initialDepartureIntervalSeconds: 25,
+        movingBlockMode: MovingBlockMode.Control);
+
+    world.AdvanceTo(240);
+
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision), "控制模式在終點長折返占用期間不應發生追撞。");
+    var minimumMargin = world.SafetyHistory.MinBy(item => item.ActualGapMeters - item.DynamicSafetyDistanceMeters)!;
+    True(
+        world.SafetyHistory.All(item => item.ActualGapMeters >= item.DynamicSafetyDistanceMeters - 1e-6),
+        $"控制模式必須維持完整動態安全距離；最低裕度 {minimumMargin.ActualGapMeters - minimumMargin.DynamicSafetyDistanceMeters:0.###} m，時間 {minimumMargin.SimulationTimeSeconds:0.0} s。");
+}
+
+static void TestDepartureClearanceProtection()
+{
+    var world = CreateWorld(trainCount: 3, headwaySeconds: 3, movingBlockMode: MovingBlockMode.Control);
+    world.AdvanceTo(30);
+
+    var secondDeparture = world.Events.Single(item =>
+        item.EventType == SimulationEventType.Departure
+        && item.VehicleId == "Vehicle 02");
+    True(secondDeparture.SimulationTimeSeconds > 3, "起點未淨空時，第二列車不得照原排定時間強制發車。");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision), "延後發車後不得在起點追撞。");
+    True(
+        world.SafetyHistory.All(item => item.ActualGapMeters >= item.DynamicSafetyDistanceMeters - 1e-6),
+        "起點發車也必須維持完整動態安全距離。");
+}
+
+static void TestCollisionEventRecordedOnce()
+{
+    var world = CreateWorld(trainCount: 2, headwaySeconds: 3, movingBlockMode: MovingBlockMode.Monitoring);
+    world.AdvanceTo(20);
+
+    var collisions = world.Events.Count(item =>
+        item.EventType == SimulationEventType.Collision
+        && item.VehicleId == "Vehicle 02");
+    Equal(1, collisions);
+}
+
+static void TestDynamicStationBrakingContinuity()
+{
+    var route = CreateThreeStationRoute();
+    var result = OperationalTrajectoryPlanner.GenerateOutboundTrip(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault());
+    var arrivals = result.Events.Where(item => item.EventType == SimulationEventType.Arrival).ToArray();
+    Equal(2, arrivals.Length);
+    foreach (var arrival in arrivals)
+    {
+        var prior = result.Samples.Last(sample => sample.SimulationTimeSeconds < arrival.SimulationTimeSeconds);
+        True(prior.SpeedMetersPerSecond <= 1 / 3.6 + 1e-9,
+            $"{arrival.PositionMeters:0.#} m 到站前速度仍過高：{prior.SpeedMetersPerSecond * 3.6:0.##} km/h。");
+        True(Math.Abs(arrival.PositionMeters - prior.PositionMeters) <= 0.5 + 1e-7,
+            "到站前一個 Tick 必須已位於停車點容許範圍。");
+    }
+
+    True(result.Events.All(item => item.EventType != SimulationEventType.StationStopViolation),
+        "預設參數不得產生停車超限事件。");
+    var envelope = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+        80 / 3.6,
+        1,
+        0.9,
+        0.65,
+        0.1,
+        jerkLimited: true);
+    True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestMovingBlockControlDoesNotHardStop()
+{
+    var world = CreateWorld(trainCount: 2, headwaySeconds: 15, movingBlockMode: MovingBlockMode.Control);
+    world.AdvanceTo(800);
+    var stationPositions = CreateFiveStationRoute().Stations.Select(station => station.PositionMeters).ToArray();
+
+    foreach (var group in world.Trajectory.GroupBy(sample => sample.VehicleId))
+    {
+        var samples = group.ToArray();
+        for (var index = 1; index < samples.Length; index++)
+        {
+            var previous = samples[index - 1];
+            var current = samples[index];
+            var nearStation = stationPositions.Any(position => Math.Abs(position - current.PositionMeters) <= 0.6);
+            True(previous.SpeedMetersPerSecond <= 5
+                    || current.SpeedMetersPerSecond > 0.01
+                    || nearStation,
+                $"{current.VehicleId} 在 {current.SimulationTimeSeconds:0.0} s 被移動閉塞由 "
+                    + $"{previous.SpeedMetersPerSecond * 3.6:0.##} km/h 瞬間歸零。");
+        }
+    }
+
+    True(world.Events.All(item => item.EventType != SimulationEventType.Collision), "控制模式不得產生碰撞事件。");
+}
+
+static void TestExpressServicePassesStation()
+{
+    var world = CreateServicePatternWorld(passingSpeedKmh: null, inboundAllStop: false);
+    world.AdvanceTo(300);
+
+    var pass = world.Events.Single(item => item.EventType == SimulationEventType.StationPassed
+        && item.Direction == TrainDirection.Outbound
+        && Math.Abs(item.PositionMeters - 1000) < 0.01);
+    True(pass.SpeedMetersPerSecond * 3.6 > 30, "未指定通過速限時不得被固定 30 km/h 進站值限制。");
+    True(world.Events.All(item => item.EventType != SimulationEventType.Arrival
+        || item.Direction != TrainDirection.Outbound
+        || Math.Abs(item.PositionMeters - 1000) > 0.01), "跨站車不得在跨站車站產生抵達事件。");
+}
+
+static void TestPassingServiceHonorsStationLimit()
+{
+    var world = CreateServicePatternWorld(passingSpeedKmh: 40, inboundAllStop: false);
+    world.AdvanceTo(300);
+
+    var pass = world.Events.Single(item => item.EventType == SimulationEventType.StationPassed
+        && item.Direction == TrainDirection.Outbound
+        && Math.Abs(item.PositionMeters - 1000) < 0.01);
+    True(pass.SpeedMetersPerSecond * 3.6 <= 40.6,
+        $"跨站速度超過 40 km/h 上限：{pass.SpeedMetersPerSecond * 3.6:0.##} km/h。");
+}
+
+static void TestTurnaroundLoadsDifferentServicePattern()
+{
+    var world = CreateServicePatternWorld(passingSpeedKmh: null, inboundAllStop: true);
+    world.AdvanceTo(700);
+
+    True(world.Events.Any(item => item.EventType == SimulationEventType.StationPassed
+        && item.Direction == TrainDirection.Outbound
+        && Math.Abs(item.PositionMeters - 1000) < 0.01), "下行快速車應跨越中間站。");
+    True(world.Events.Any(item => item.EventType == SimulationEventType.Arrival
+        && item.Direction == TrainDirection.Inbound
+        && Math.Abs(item.PositionMeters - 1000) < 0.01), "折返後上行普通車應停靠中間站。");
+}
+
+static SimulationWorld CreateServicePatternWorld(double? passingSpeedKmh, bool inboundAllStop)
+{
+    var patterns = new[]
+    {
+        new ServicePattern(
+            "EXPRESS",
+            "快速車",
+            [new StationServiceInstruction("O02", StationServiceMode.Pass, passingSpeedKmh / 3.6)])
+    };
+    var plans = new List<ServiceRunPlan>
+    {
+        new("Vehicle 01", 1, TrainDirection.Outbound, "快速車", "EXPRESS")
+    };
+    if (inboundAllStop)
+    {
+        plans.Add(new ServiceRunPlan("Vehicle 01", 2, TrainDirection.Inbound, "普通車", "ALL_STOP"));
+    }
+
+    return new SimulationWorld(
+        CreateThreeStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        1,
+        movingBlockMode: MovingBlockMode.Independent,
+        servicePatterns: patterns,
+        serviceRunPlans: plans);
+}
+
+static void TestSimulationProjectRoundTrip()
+{
+    var source = CreateProjectDocument();
+    var json = SimulationProjectFormat.Serialize(source);
+    var restored = SimulationProjectFormat.Deserialize(json);
+
+    Equal(SimulationProjectFormat.CurrentSchemaVersion, restored.SchemaVersion);
+    Equal("測試專案線", restored.RouteName);
+    Equal(3, restored.Stations.Length);
+    Equal(2, restored.SpeedLimits.Length);
+    Equal(MovingBlockMode.Control, restored.Simulation.MovingBlockMode);
+    Equal(BrakingEstimationMode.Emergency, restored.Simulation.BrakingEstimationMode);
+    NearlyEqual(45 / 3.6, restored.SpeedLimits[0].LimitMetersPerSecond, 1e-9);
+    Equal(1, restored.ServicePatterns!.Length);
+    Equal(1, restored.ServiceRuns!.Length);
+    Equal(StationServiceMode.Pass, restored.ServicePatterns[0].Instructions[0].Mode);
+    True(json.Contains("\"schemaVersion\": 2", StringComparison.Ordinal), "存檔必須包含版本欄位。");
+}
+
+static void TestLegacyProjectUpgrade()
+{
+    var root = JsonNode.Parse(SimulationProjectFormat.Serialize(CreateProjectDocument()))!.AsObject();
+    root["schemaVersion"] = 1;
+    root.Remove("servicePatterns");
+    root.Remove("serviceRuns");
+    var restored = SimulationProjectFormat.Deserialize(root.ToJsonString());
+
+    Equal(SimulationProjectFormat.CurrentSchemaVersion, restored.SchemaVersion);
+    Equal(0, restored.ServicePatterns!.Length);
+    Equal(0, restored.ServiceRuns!.Length);
+}
+
+static void TestSimulationProjectValidation()
+{
+    var json = SimulationProjectFormat.Serialize(CreateProjectDocument());
+    var unknownVersion = json.Replace("\"schemaVersion\": 2", "\"schemaVersion\": 999", StringComparison.Ordinal);
+    Throws<SimulationValidationException>(
+        () => SimulationProjectFormat.Deserialize(unknownVersion),
+        "不支援存檔版本");
+    Throws<SimulationValidationException>(
+        () => SimulationProjectFormat.Deserialize("{ invalid json"),
+        "JSON 格式無效");
+}
+
+static SimulationProjectDocument CreateProjectDocument()
+{
+    var defaults = OperationalParameters.CreateDefault();
+    return new SimulationProjectDocument(
+        SimulationProjectFormat.CurrentSchemaVersion,
+        "P",
+        "測試專案線",
+        [
+            new ProjectStation("P01", "起點", 0, 0),
+            new ProjectStation("P02", "中央", 1200, 30),
+            new ProjectStation("P03", "終點", 800, 0)
+        ],
+        new ProjectTrainSettings(80 / 3.6, 1, 1, 30, 180, 360),
+        new ProjectOperationalSettings(
+            defaults.JerkMetersPerSecondCubed,
+            defaults.CoastingRatio,
+            defaults.ApproachDistanceMeters,
+            defaults.ApproachSpeedMetersPerSecond,
+            defaults.TractionFadeRatio,
+            defaults.TrainLengthMeters,
+            defaults.ServiceBrakingMetersPerSecondSquared,
+            defaults.EmergencyBrakingMetersPerSecondSquared,
+            defaults.ControlReactionTimeSeconds,
+            defaults.BrakeBuildUpTimeSeconds,
+            defaults.PositioningErrorMeters,
+            defaults.SafetyMarginMeters,
+            defaults.AbsoluteMinimumGapMeters),
+        [
+            new ProjectSpeedLimit(250, 600, 45 / 3.6, SpeedLimitDirection.Both, "彎道"),
+            new ProjectSpeedLimit(1200, 1500, 35 / 3.6, SpeedLimitDirection.Outbound, "進站")
+        ],
+        new ProjectRunSettings(
+            4,
+            90,
+            6 * 3600,
+            20,
+            OperationProfileMode.RealisticOperations,
+            MovingBlockMode.Control,
+            BrakingEstimationMode.Emergency),
+        [
+            new ProjectServicePattern(
+                "EXPRESS",
+                "快速車",
+                [new ProjectStationServiceInstruction("P02", StationServiceMode.Pass, 45 / 3.6)])
+        ],
+        [new ProjectServiceRunPlan("Vehicle 01", 1, TrainDirection.Outbound, "快速車", "EXPRESS")]);
 }
 
 static SimulationWorld CreateWorld(
