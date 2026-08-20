@@ -5,6 +5,12 @@ public sealed class SimulationWorld
     public const double FixedTimeStepSeconds = 0.1;
 
     private const double NumericalTolerance = 1e-7;
+    private const double ArrivalPositionToleranceMeters = 0.5;
+    private const double ArrivalSpeedToleranceMetersPerSecond = 0.15;
+    private const double StationBrakingLookAheadMeters = 0.05;
+    private const double MovingBlockControlLookAheadSeconds = 0.5;
+    private const string DefaultPatternId = "ALL_STOP";
+    private const string DefaultServiceClassId = "普通車";
     private readonly List<MutableTrain> _trains = [];
     private readonly List<TrajectorySample> _trajectory = [];
     private readonly List<SafetyObservation> _safetyHistory = [];
@@ -13,6 +19,8 @@ public sealed class SimulationWorld
     private readonly List<ScheduledObstacle> _scheduledObstacles = [];
     private readonly Dictionary<string, SafetyStatus> _lastSafetyStatuses = new(StringComparer.Ordinal);
     private readonly HashSet<string> _controlBrakingActive = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, ServicePattern> _servicePatterns = new(StringComparer.Ordinal);
+    private readonly Dictionary<ServiceRunPlanKey, ServiceRunPlan> _serviceRunPlans = [];
     private IReadOnlyList<SafetyObservation> _currentSafety = [];
     private int _nextEventIndex;
 
@@ -24,7 +32,9 @@ public sealed class SimulationWorld
         double? initialDepartureIntervalSeconds = null,
         IEnumerable<SpeedLimitSegment>? speedLimits = null,
         OperationProfileMode profileMode = OperationProfileMode.RealisticOperations,
-        MovingBlockMode movingBlockMode = MovingBlockMode.Monitoring)
+        MovingBlockMode movingBlockMode = MovingBlockMode.Control,
+        IEnumerable<ServicePattern>? servicePatterns = null,
+        IEnumerable<ServiceRunPlan>? serviceRunPlans = null)
     {
         if (trainCount <= 0)
         {
@@ -38,6 +48,7 @@ public sealed class SimulationWorld
         ProfileMode = profileMode;
         MovingBlockMode = movingBlockMode;
         BrakingEstimationMode = BrakingEstimationMode.Service;
+        InitializeServicePlans(trainCount, servicePatterns, serviceRunPlans);
 
         var baseline = TripSimulator.SimulateMultipleTrains(
             route,
@@ -77,6 +88,10 @@ public sealed class SimulationWorld
     public IReadOnlyList<SafetyObservation> SafetyHistory => _safetyHistory;
 
     public IReadOnlyList<SimulationEvent> Events => _events;
+
+    public IReadOnlyCollection<ServicePattern> ServicePatterns => _servicePatterns.Values;
+
+    public IReadOnlyCollection<ServiceRunPlan> ServiceRunPlans => _serviceRunPlans.Values;
 
     public SimulationSnapshot GetSnapshot() => new(
         CurrentTimeSeconds,
@@ -193,10 +208,16 @@ public sealed class SimulationWorld
         var controlLimits = MovingBlockMode == MovingBlockMode.Control
             ? CalculateMovingBlockSpeedLimits(observationsBeforeMove)
             : new Dictionary<string, double>(StringComparer.Ordinal);
+        var protectionLeaders = MovingBlockMode == MovingBlockMode.Control
+            ? observationsBeforeMove.ToDictionary(
+                observation => observation.FollowerVehicleId,
+                observation => observation.LeaderVehicleId,
+                StringComparer.Ordinal)
+            : new Dictionary<string, string>(StringComparer.Ordinal);
 
         foreach (var train in _trains)
         {
-            UpdateTrain(train, controlLimits);
+            UpdateTrain(train, controlLimits, protectionLeaders);
         }
 
         ApplyCollisionProtection();
@@ -230,12 +251,188 @@ public sealed class SimulationWorld
         ActivateDueTrains();
     }
 
+    private void InitializeServicePlans(
+        int trainCount,
+        IEnumerable<ServicePattern>? servicePatterns,
+        IEnumerable<ServiceRunPlan>? serviceRunPlans)
+    {
+        _servicePatterns.Clear();
+        _serviceRunPlans.Clear();
+        var stationIds = Route.Stations.Select(station => station.StationId).ToHashSet(StringComparer.Ordinal);
+        var endpointIds = new HashSet<string>(StringComparer.Ordinal)
+        {
+            Route.Stations[0].StationId,
+            Route.Stations[^1].StationId
+        };
+        var errors = new List<string>();
+
+        foreach (var pattern in servicePatterns ?? [])
+        {
+            if (pattern is null || string.IsNullOrWhiteSpace(pattern.PatternId))
+            {
+                errors.Add("服務模式編號不得空白。");
+                continue;
+            }
+
+            var patternId = pattern.PatternId.Trim();
+            if (string.Equals(patternId, DefaultPatternId, StringComparison.Ordinal))
+            {
+                errors.Add($"服務模式編號 {DefaultPatternId} 為系統保留值。");
+                continue;
+            }
+
+            if (_servicePatterns.ContainsKey(patternId))
+            {
+                errors.Add($"服務模式編號重複：{patternId}。");
+                continue;
+            }
+
+            var instructions = pattern.Instructions ?? [];
+            var duplicateStations = instructions
+                .Where(instruction => instruction is not null)
+                .GroupBy(instruction => instruction.StationId?.Trim() ?? string.Empty, StringComparer.Ordinal)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key)
+                .ToArray();
+            foreach (var stationId in duplicateStations)
+            {
+                errors.Add($"服務模式 {patternId} 的車站指令重複：{stationId}。");
+            }
+
+            foreach (var instruction in instructions)
+            {
+                if (instruction is null || string.IsNullOrWhiteSpace(instruction.StationId))
+                {
+                    errors.Add($"服務模式 {patternId} 包含空白車站編號。");
+                    continue;
+                }
+
+                var stationId = instruction.StationId.Trim();
+                if (!stationIds.Contains(stationId))
+                {
+                    errors.Add($"服務模式 {patternId} 找不到車站 {stationId}。");
+                }
+
+                if (!Enum.IsDefined(instruction.Mode))
+                {
+                    errors.Add($"服務模式 {patternId} 的 {stationId} 停站模式無效。");
+                }
+
+                if (instruction.Mode == StationServiceMode.Pass && endpointIds.Contains(stationId))
+                {
+                    errors.Add($"起終點站 {stationId} 不得設定為跨站。");
+                }
+
+                if (instruction.SpeedLimitMetersPerSecond is { } limit
+                    && (!double.IsFinite(limit) || limit <= 0))
+                {
+                    errors.Add($"服務模式 {patternId} 的 {stationId} 速度上限必須是有限正數。");
+                }
+            }
+
+            _servicePatterns.Add(patternId, pattern with
+            {
+                PatternId = patternId,
+                PatternName = string.IsNullOrWhiteSpace(pattern.PatternName) ? patternId : pattern.PatternName.Trim(),
+                Instructions = instructions.ToArray()
+            });
+        }
+
+        var validVehicleIds = Enumerable.Range(1, trainCount)
+            .Select(index => $"Vehicle {index:00}")
+            .ToHashSet(StringComparer.Ordinal);
+        foreach (var plan in serviceRunPlans ?? [])
+        {
+            if (plan is null)
+            {
+                errors.Add("車次服務計畫不得為空。");
+                continue;
+            }
+
+            var vehicleId = plan.VehicleId?.Trim() ?? string.Empty;
+            var patternId = plan.PatternId?.Trim() ?? string.Empty;
+            if (!validVehicleIds.Contains(vehicleId))
+            {
+                errors.Add($"車次服務計畫找不到車輛 {vehicleId}。");
+            }
+
+            if (plan.ServiceNumber <= 0)
+            {
+                errors.Add($"{vehicleId} 的車次序號必須大於 0。");
+            }
+
+            if (!Enum.IsDefined(plan.Direction))
+            {
+                errors.Add($"{vehicleId} 的車次方向無效。");
+            }
+
+            if (string.IsNullOrWhiteSpace(plan.ServiceClassId))
+            {
+                errors.Add($"{vehicleId} 的列車等級不得空白。");
+            }
+
+            if (!string.Equals(patternId, DefaultPatternId, StringComparison.Ordinal)
+                && !_servicePatterns.ContainsKey(patternId))
+            {
+                errors.Add($"{vehicleId} 的車次服務模式不存在：{patternId}。");
+            }
+
+            var key = new ServiceRunPlanKey(vehicleId, plan.ServiceNumber, plan.Direction);
+            if (_serviceRunPlans.ContainsKey(key))
+            {
+                errors.Add($"車次服務計畫重複：{vehicleId}／{plan.Direction}／{plan.ServiceNumber}。");
+                continue;
+            }
+
+            _serviceRunPlans.Add(key, plan with
+            {
+                VehicleId = vehicleId,
+                ServiceClassId = plan.ServiceClassId.Trim(),
+                PatternId = patternId
+            });
+        }
+
+        if (errors.Count > 0)
+        {
+            _servicePatterns.Clear();
+            _serviceRunPlans.Clear();
+            throw new SimulationValidationException(errors);
+        }
+    }
+
+    private void ApplyServicePlan(MutableTrain train)
+    {
+        var key = new ServiceRunPlanKey(train.VehicleId, train.ServiceNumber, train.Direction);
+        if (_serviceRunPlans.TryGetValue(key, out var plan))
+        {
+            train.ServiceClassId = plan.ServiceClassId;
+            train.PatternId = plan.PatternId;
+            return;
+        }
+
+        train.ServiceClassId = DefaultServiceClassId;
+        train.PatternId = DefaultPatternId;
+    }
+
+    private StationServiceInstruction GetStationInstruction(MutableTrain train, Station station)
+    {
+        if (string.Equals(train.PatternId, DefaultPatternId, StringComparison.Ordinal)
+            || !_servicePatterns.TryGetValue(train.PatternId, out var pattern))
+        {
+            return new StationServiceInstruction(station.StationId, StationServiceMode.Stop);
+        }
+
+        return pattern.Instructions.FirstOrDefault(instruction =>
+                string.Equals(instruction.StationId, station.StationId, StringComparison.Ordinal))
+            ?? new StationServiceInstruction(station.StationId, StationServiceMode.Stop);
+    }
+
     private void InitializeTrains(int trainCount)
     {
         _trains.Clear();
         for (var index = 0; index < trainCount; index++)
         {
-            _trains.Add(new MutableTrain
+            var train = new MutableTrain
             {
                 VehicleId = $"Vehicle {index + 1:00}",
                 ServiceNumber = 1,
@@ -246,7 +443,9 @@ public sealed class SimulationWorld
                 CurrentStationIndex = 0,
                 NextStationIndex = 1,
                 Phase = OperationalPhase.Pending
-            });
+            };
+            ApplyServicePlan(train);
+            _trains.Add(train);
         }
     }
 
@@ -266,15 +465,52 @@ public sealed class SimulationWorld
 
     private void ActivateDueTrains()
     {
-        foreach (var train in _trains.Where(train => !train.Active && CurrentTimeSeconds + NumericalTolerance >= train.StartTime))
+        foreach (var train in _trains
+            .Where(train => !train.Active && CurrentTimeSeconds + NumericalTolerance >= train.StartTime)
+            .OrderBy(train => train.StartTime))
         {
+            if (MovingBlockMode == MovingBlockMode.Control && !HasDepartureClearance(train))
+            {
+                continue;
+            }
+
             train.Active = true;
             train.Phase = OperationalPhase.Accelerating;
             AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0);
         }
     }
 
-    private void UpdateTrain(MutableTrain train, IReadOnlyDictionary<string, double> controlLimits)
+    private bool HasDepartureClearance(MutableTrain train)
+    {
+        var nearestLeader = _trains
+            .Where(other => other.Active
+                && other.Phase != OperationalPhase.OutOfService
+                && other.Direction == train.Direction
+                && other.TrackId == train.TrackId
+                && Progress(train.Direction, other.Position) >= Progress(train.Direction, train.Position))
+            .OrderBy(other => Math.Abs(other.Position - train.Position))
+            .FirstOrDefault();
+        if (nearestLeader is null)
+        {
+            return true;
+        }
+
+        var leaderRear = nearestLeader.Direction == TrainDirection.Outbound
+            ? nearestLeader.Position - OperationalParameters.TrainLengthMeters
+            : nearestLeader.Position + OperationalParameters.TrainLengthMeters;
+        var gap = nearestLeader.Direction == TrainDirection.Outbound
+            ? leaderRear - train.Position
+            : train.Position - leaderRear;
+        var stationarySafetyDistance = Math.Max(
+            OperationalParameters.AbsoluteMinimumGapMeters,
+            2 * OperationalParameters.PositioningErrorMeters + OperationalParameters.SafetyMarginMeters);
+        return gap >= stationarySafetyDistance - NumericalTolerance;
+    }
+
+    private void UpdateTrain(
+        MutableTrain train,
+        IReadOnlyDictionary<string, double> controlLimits,
+        IReadOnlyDictionary<string, string> protectionLeaders)
     {
         if (!train.Active || train.Phase == OperationalPhase.OutOfService || train.Collided || train.ObstacleStopped)
         {
@@ -311,15 +547,73 @@ public sealed class SimulationWorld
         }
 
         var nextStation = Route.Stations[train.NextStationIndex];
+        var stationInstruction = GetStationInstruction(train, nextStation);
+        var isScheduledStop = stationInstruction.Mode == StationServiceMode.Stop;
         var distanceToStation = ForwardDistance(train.Direction, train.Position, nextStation.PositionMeters);
+        if (isScheduledStop
+            && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && distanceToStation <= ArrivalPositionToleranceMeters)
+        {
+            ArriveAtStation(train, nextStation);
+            return;
+        }
+
+        var effectiveServiceBraking = Math.Min(
+            TrainParameters.DecelerationMetersPerSecondSquared,
+            OperationalParameters.ServiceBrakingMetersPerSecondSquared);
         var permitted = SpeedLimits.GetPermittedSpeedMetersPerSecond(
             train.Position,
             train.Direction,
             TrainParameters.MaxSpeedMetersPerSecond,
-            OperationalParameters.ServiceBrakingMetersPerSecondSquared,
+            effectiveServiceBraking,
             OperationalParameters.JerkMetersPerSecondCubed,
-            train.Speed,
-            nextStation.PositionMeters);
+            train.Speed);
+
+        if (isScheduledStop)
+        {
+            var approachLimit = stationInstruction.SpeedLimitMetersPerSecond
+                ?? (OperationalParameters.ApproachSpeedMetersPerSecond > 0
+                    ? OperationalParameters.ApproachSpeedMetersPerSecond
+                    : null);
+            if (approachLimit is { } stopApproachLimit)
+            {
+                var approachBoundary = nextStation.PositionMeters
+                    - (int)train.Direction * OperationalParameters.ApproachDistanceMeters;
+                var distanceToBoundary = ForwardDistance(train.Direction, train.Position, approachBoundary);
+                if (distanceToBoundary >= -NumericalTolerance)
+                {
+                    permitted = Math.Min(
+                        permitted,
+                        SpeedLimits.GetPermittedSpeedMetersPerSecond(
+                            train.Position,
+                            train.Direction,
+                            TrainParameters.MaxSpeedMetersPerSecond,
+                            effectiveServiceBraking,
+                            OperationalParameters.JerkMetersPerSecondCubed,
+                            train.Speed,
+                            approachBoundary,
+                            stopApproachLimit));
+                }
+                else
+                {
+                    permitted = Math.Min(permitted, stopApproachLimit);
+                }
+            }
+        }
+        else if (stationInstruction.SpeedLimitMetersPerSecond is { } passingLimit)
+        {
+            permitted = Math.Min(
+                permitted,
+                SpeedLimits.GetPermittedSpeedMetersPerSecond(
+                    train.Position,
+                    train.Direction,
+                    TrainParameters.MaxSpeedMetersPerSecond,
+                    effectiveServiceBraking,
+                    OperationalParameters.JerkMetersPerSecondCubed,
+                    train.Speed,
+                    nextStation.PositionMeters,
+                    passingLimit));
+        }
 
         var obstacleDistance = GetObstacleDistanceAhead(train);
         if (obstacleDistance is not null)
@@ -354,14 +648,44 @@ public sealed class SimulationWorld
             _controlBrakingActive.Remove(train.VehicleId);
         }
 
-        var desiredAcceleration = CalculateDesiredAcceleration(train, permitted, distanceToStation);
+        if (train.StationBrakingActive
+            && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && distanceToStation > ArrivalPositionToleranceMeters)
+        {
+            train.StationBrakingActive = false;
+        }
+
+        var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
+        if (isScheduledStop
+            && (train.StationBrakingActive
+                || ShouldBeginStationBraking(
+                    train,
+                    distanceToStation,
+                    desiredAcceleration,
+                    effectiveServiceBraking)))
+        {
+            train.StationBrakingActive = true;
+            desiredAcceleration = -effectiveServiceBraking;
+        }
+        else if (!isScheduledStop)
+        {
+            train.StationBrakingActive = false;
+            train.StationStopViolationRecorded = false;
+        }
+
+        if (controlLimits.TryGetValue(train.VehicleId, out var protectionLimit)
+            && train.Speed > protectionLimit + 0.03)
+        {
+            desiredAcceleration = -effectiveServiceBraking;
+        }
+
         if (ProfileMode == OperationProfileMode.RealisticOperations)
         {
             var maximumChange = OperationalParameters.JerkMetersPerSecondCubed * FixedTimeStepSeconds;
-            train.Acceleration = Math.Clamp(
+            train.Acceleration = BrakingEnvelopeCalculator.MoveToward(
+                train.Acceleration,
                 desiredAcceleration,
-                train.Acceleration - maximumChange,
-                train.Acceleration + maximumChange);
+                maximumChange);
         }
         else
         {
@@ -377,9 +701,58 @@ public sealed class SimulationWorld
         newSpeed = Math.Min(newSpeed, hardCurrentLimit + 0.02);
         var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
 
-        if (traveled >= distanceToStation - 1e-5)
+        if (TryCalculateMovementAuthority(
+                train,
+                newSpeed,
+                train.Acceleration,
+                protectionLeaders,
+                out var movementAuthority)
+            && traveled > movementAuthority + NumericalTolerance)
+        {
+            train.Position += Math.Max(0, movementAuthority) * (int)train.Direction;
+            train.Speed = 0;
+            train.Acceleration = 0;
+            train.Phase = OperationalPhase.Braking;
+            return;
+        }
+
+        var remainingAfterMove = distanceToStation - traveled;
+        if (isScheduledStop
+            && newSpeed <= ArrivalSpeedToleranceMetersPerSecond
+            && remainingAfterMove <= ArrivalPositionToleranceMeters)
         {
             ArriveAtStation(train, nextStation);
+            return;
+        }
+
+        if (isScheduledStop && traveled >= distanceToStation - NumericalTolerance)
+        {
+            if (!train.StationStopViolationRecorded)
+            {
+                train.StationStopViolationRecorded = true;
+                AddEvent(
+                    SimulationEventType.StationStopViolation,
+                    train,
+                    null,
+                    $"{train.ServiceRunId} 抵達 {nextStation.StationId} 停車點時仍有 {newSpeed * 3.6:0.##} km/h；"
+                        + "已啟動持續煞車，未將速度直接歸零。",
+                    nextStation.PositionMeters,
+                    newSpeed);
+            }
+
+            train.Position = nextStation.PositionMeters - (int)train.Direction * NumericalTolerance;
+            train.Speed = newSpeed;
+            train.Phase = OperationalPhase.ApproachBraking;
+            train.StationBrakingActive = true;
+            return;
+        }
+
+        if (!isScheduledStop && traveled >= distanceToStation - NumericalTolerance)
+        {
+            train.Position += traveled * (int)train.Direction;
+            train.Speed = newSpeed;
+            PassStation(train, nextStation);
+            train.Phase = ClassifyPhase(train, desiredAcceleration, permitted, double.PositiveInfinity);
             return;
         }
 
@@ -388,22 +761,92 @@ public sealed class SimulationWorld
         train.Phase = ClassifyPhase(train, desiredAcceleration, permitted, distanceToStation);
     }
 
-    private double CalculateDesiredAcceleration(MutableTrain train, double permittedSpeed, double distanceToStation)
+    private bool TryCalculateMovementAuthority(
+        MutableTrain follower,
+        double prospectiveSpeed,
+        double prospectiveAcceleration,
+        IReadOnlyDictionary<string, string> protectionLeaders,
+        out double movementAuthority)
     {
-        var speedError = permittedSpeed - train.Speed;
-        var approach = distanceToStation <= OperationalParameters.ApproachDistanceMeters + NumericalTolerance;
-        if (speedError < -0.03)
+        movementAuthority = double.PositiveInfinity;
+        if (!protectionLeaders.TryGetValue(follower.VehicleId, out var leaderVehicleId))
         {
-            var braking = approach
-                ? Math.Min(TrainParameters.DecelerationMetersPerSecondSquared,
-                    OperationalParameters.ServiceBrakingMetersPerSecondSquared * 0.72)
-                : OperationalParameters.ServiceBrakingMetersPerSecondSquared;
-            return -braking;
+            return false;
         }
 
-        if (approach && train.Speed > OperationalParameters.ApproachSpeedMetersPerSecond + 0.1)
+        var leader = _trains.First(train => train.VehicleId == leaderVehicleId);
+        if (!leader.Active
+            || leader.Phase == OperationalPhase.OutOfService
+            || leader.Direction != follower.Direction
+            || leader.TrackId != follower.TrackId)
         {
-            return -OperationalParameters.ServiceBrakingMetersPerSecondSquared * 0.62;
+            return false;
+        }
+
+        var leaderRear = leader.Direction == TrainDirection.Outbound
+            ? leader.Position - OperationalParameters.TrainLengthMeters
+            : leader.Position + OperationalParameters.TrainLengthMeters;
+        var actualGap = leader.Direction == TrainDirection.Outbound
+            ? leaderRear - follower.Position
+            : follower.Position - leaderRear;
+        var requiredGap = CalculateDynamicSafetyDistance(
+            prospectiveSpeed,
+            prospectiveAcceleration,
+            leader.Speed);
+        movementAuthority = Math.Max(0, actualGap - requiredGap);
+        return true;
+    }
+
+    private bool ShouldBeginStationBraking(
+        MutableTrain train,
+        double distanceToStation,
+        double desiredAccelerationIfWaiting,
+        double effectiveBraking)
+    {
+        if (distanceToStation <= StationBrakingLookAheadMeters)
+        {
+            return true;
+        }
+
+        var jerkLimited = ProfileMode == OperationProfileMode.RealisticOperations;
+        var stoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            train.Speed,
+            train.Acceleration,
+            effectiveBraking,
+            OperationalParameters.JerkMetersPerSecondCubed,
+            FixedTimeStepSeconds,
+            jerkLimited).DistanceMeters;
+        if (stoppingDistance + StationBrakingLookAheadMeters >= distanceToStation)
+        {
+            return true;
+        }
+
+        var previewAcceleration = jerkLimited
+            ? BrakingEnvelopeCalculator.MoveToward(
+                train.Acceleration,
+                desiredAccelerationIfWaiting,
+                OperationalParameters.JerkMetersPerSecondCubed * FixedTimeStepSeconds)
+            : desiredAccelerationIfWaiting;
+        var previewSpeed = Math.Max(0, train.Speed + previewAcceleration * FixedTimeStepSeconds);
+        var previewTravel = Math.Max(0, (train.Speed + previewSpeed) * 0.5 * FixedTimeStepSeconds);
+        var previewStoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            previewSpeed,
+            previewAcceleration,
+            effectiveBraking,
+            OperationalParameters.JerkMetersPerSecondCubed,
+            FixedTimeStepSeconds,
+            jerkLimited).DistanceMeters;
+        return previewTravel + previewStoppingDistance + StationBrakingLookAheadMeters >= distanceToStation;
+    }
+
+    private double CalculateDesiredAcceleration(MutableTrain train, double permittedSpeed)
+    {
+        var speedError = permittedSpeed - train.Speed;
+        if (speedError < -0.03)
+        {
+            return -Math.Min(
+                TrainParameters.DecelerationMetersPerSecondSquared,
+                OperationalParameters.ServiceBrakingMetersPerSecondSquared);
         }
 
         if (speedError <= 0.12)
@@ -459,6 +902,8 @@ public sealed class SimulationWorld
     {
         train.Position = station.PositionMeters;
         train.Speed = 0;
+        train.StationBrakingActive = false;
+        train.StationStopViolationRecorded = false;
         train.CurrentStationIndex = train.NextStationIndex;
         train.Phase = OperationalPhase.Arriving;
         AddEvent(SimulationEventType.Arrival, train, null, $"{train.ServiceRunId} 抵達 {station.StationId}。", train.Position, 0);
@@ -496,6 +941,19 @@ public sealed class SimulationWorld
         }
     }
 
+    private void PassStation(MutableTrain train, Station station)
+    {
+        train.CurrentStationIndex = train.NextStationIndex;
+        train.NextStationIndex += (int)train.Direction;
+        AddEvent(
+            SimulationEventType.StationPassed,
+            train,
+            null,
+            $"{train.ServiceRunId}（{train.ServiceClassId}）通過 {station.StationId}，速度 {train.Speed * 3.6:0.##} km/h。",
+            station.PositionMeters,
+            train.Speed);
+    }
+
     private void CompleteTurnaround(MutableTrain train)
     {
         train.Direction = train.Direction == TrainDirection.Outbound
@@ -503,7 +961,10 @@ public sealed class SimulationWorld
             : TrainDirection.Outbound;
         train.TrackId = train.Direction == TrainDirection.Outbound ? "DOWN" : "UP";
         train.ServiceNumber++;
+        ApplyServicePlan(train);
         train.NextStationIndex = train.CurrentStationIndex + (int)train.Direction;
+        train.StationBrakingActive = false;
+        train.StationStopViolationRecorded = false;
         train.Phase = OperationalPhase.Accelerating;
         AddEvent(
             SimulationEventType.DirectionChanged,
@@ -533,6 +994,11 @@ public sealed class SimulationWorld
             {
                 var leader = ordered[index];
                 var follower = ordered[index + 1];
+                if (follower.Collided)
+                {
+                    continue;
+                }
+
                 var observation = CalculateSafetyObservation(follower, leader);
                 result.Add(observation);
 
@@ -559,21 +1025,19 @@ public sealed class SimulationWorld
 
         var reactionDistance = follower.Speed * OperationalParameters.ControlReactionTimeSeconds;
         var buildDistance = follower.Speed * OperationalParameters.BrakeBuildUpTimeSeconds;
-        var followerBraking = follower.Speed * follower.Speed
-            / (2 * OperationalParameters.ServiceBrakingMetersPerSecondSquared);
-        var leaderBraking = leader.Speed * leader.Speed
-            / (2 * OperationalParameters.EmergencyBrakingMetersPerSecondSquared);
-        var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
-            + OperationalParameters.SafetyMarginMeters;
-        var dynamicSafety = Math.Max(
-            OperationalParameters.AbsoluteMinimumGapMeters,
-            reactionDistance + buildDistance + Math.Max(0, followerBraking - leaderBraking) + fixedAllowance);
+        var dynamicSafety = CalculateDynamicSafetyDistance(
+            follower.Speed,
+            follower.Acceleration,
+            leader.Speed);
 
         var selectedBraking = BrakingEstimationMode == BrakingEstimationMode.Service
             ? OperationalParameters.ServiceBrakingMetersPerSecondSquared
             : OperationalParameters.EmergencyBrakingMetersPerSecondSquared;
-        var pureBraking = follower.Speed * follower.Speed / (2 * selectedBraking);
-        var obstacleDemand = reactionDistance + buildDistance + pureBraking
+        var dynamicBraking = CalculateDynamicBrakingDistance(
+            follower.Speed,
+            follower.Acceleration,
+            selectedBraking);
+        var obstacleDemand = reactionDistance + buildDistance + dynamicBraking
             + OperationalParameters.PositioningErrorMeters
             + OperationalParameters.SafetyMarginMeters;
         var predictedStop = follower.Direction == TrainDirection.Outbound
@@ -613,26 +1077,54 @@ public sealed class SimulationWorld
             BrakingEstimationMode);
     }
 
+    private double CalculateDynamicSafetyDistance(
+        double followerSpeed,
+        double followerAcceleration,
+        double leaderSpeed)
+    {
+        var reactionDistance = followerSpeed * OperationalParameters.ControlReactionTimeSeconds;
+        var buildDistance = followerSpeed * OperationalParameters.BrakeBuildUpTimeSeconds;
+        var followerBraking = CalculateDynamicBrakingDistance(
+            followerSpeed,
+            followerAcceleration,
+            Math.Min(
+                TrainParameters.DecelerationMetersPerSecondSquared,
+                OperationalParameters.ServiceBrakingMetersPerSecondSquared));
+        var leaderBraking = leaderSpeed * leaderSpeed
+            / (2 * OperationalParameters.EmergencyBrakingMetersPerSecondSquared);
+        var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
+            + OperationalParameters.SafetyMarginMeters;
+        return Math.Max(
+            OperationalParameters.AbsoluteMinimumGapMeters,
+            reactionDistance + buildDistance
+                + Math.Max(0, followerBraking - leaderBraking) + fixedAllowance);
+    }
+
     private Dictionary<string, double> CalculateMovingBlockSpeedLimits(IEnumerable<SafetyObservation> observations)
     {
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var observation in observations)
         {
             var leader = _trains.First(train => train.VehicleId == observation.LeaderVehicleId);
+            var follower = _trains.First(train => train.VehicleId == observation.FollowerVehicleId);
             var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
                 + OperationalParameters.SafetyMarginMeters;
             var leaderStopDistance = leader.Speed * leader.Speed
                 / (2 * OperationalParameters.EmergencyBrakingMetersPerSecondSquared);
-            var available = observation.ActualGapMeters - fixedAllowance + leaderStopDistance;
+            var controlReserve = Math.Max(
+                1,
+                follower.Speed * MovingBlockControlLookAheadSeconds);
+            var available = observation.ActualGapMeters - fixedAllowance + leaderStopDistance - controlReserve;
             var reaction = OperationalParameters.ControlReactionTimeSeconds
                 + OperationalParameters.BrakeBuildUpTimeSeconds;
-            var braking = observation.Status == SafetyStatus.EnvelopeIntrusion
-                ? OperationalParameters.EmergencyBrakingMetersPerSecondSquared
-                : OperationalParameters.ServiceBrakingMetersPerSecondSquared;
-            var allowed = available <= 0
-                ? 0
-                : -braking * reaction
-                    + Math.Sqrt(braking * braking * reaction * reaction + 2 * braking * available);
+            var braking = Math.Min(
+                TrainParameters.DecelerationMetersPerSecondSquared,
+                OperationalParameters.ServiceBrakingMetersPerSecondSquared);
+            var allowed = CalculateMovingBlockPermittedSpeed(
+                Math.Max(0, available),
+                reaction,
+                follower.Acceleration,
+                braking);
             result[observation.FollowerVehicleId] = Math.Clamp(
                 allowed,
                 0,
@@ -641,6 +1133,41 @@ public sealed class SimulationWorld
 
         return result;
     }
+
+    private double CalculateMovingBlockPermittedSpeed(
+        double availableDistance,
+        double reactionSeconds,
+        double currentAcceleration,
+        double braking)
+    {
+        var lower = 0d;
+        var upper = TrainParameters.MaxSpeedMetersPerSecond;
+        for (var iteration = 0; iteration < 48; iteration++)
+        {
+            var candidate = (lower + upper) * 0.5;
+            var demand = candidate * reactionSeconds
+                + CalculateDynamicBrakingDistance(candidate, currentAcceleration, braking);
+            if (demand <= availableDistance)
+            {
+                lower = candidate;
+            }
+            else
+            {
+                upper = candidate;
+            }
+        }
+
+        return lower;
+    }
+
+    private double CalculateDynamicBrakingDistance(double speed, double acceleration, double braking) =>
+        BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            speed,
+            acceleration,
+            braking,
+            OperationalParameters.JerkMetersPerSecondCubed,
+            FixedTimeStepSeconds,
+            ProfileMode == OperationProfileMode.RealisticOperations).DistanceMeters;
 
     private void RecordSafetyTransition(
         MutableTrain follower,
@@ -686,6 +1213,11 @@ public sealed class SimulationWorld
             {
                 var leader = ordered[index];
                 var follower = ordered[index + 1];
+                if (follower.Collided)
+                {
+                    continue;
+                }
+
                 var leaderRear = leader.Direction == TrainDirection.Outbound
                     ? leader.Position - OperationalParameters.TrainLengthMeters
                     : leader.Position + OperationalParameters.TrainLengthMeters;
@@ -764,6 +1296,8 @@ public sealed class SimulationWorld
                 CurrentTimeSeconds,
                 train.VehicleId,
                 train.ServiceRunId,
+                train.ServiceClassId,
+                train.PatternId,
                 train.Direction,
                 train.TrackId,
                 train.Position,
@@ -786,6 +1320,8 @@ public sealed class SimulationWorld
         return new WorldTrainState(
             train.VehicleId,
             train.ServiceRunId,
+            train.ServiceClassId,
+            train.PatternId,
             train.Direction,
             train.TrackId,
             train.Position,
@@ -843,6 +1379,10 @@ public sealed class SimulationWorld
 
         public string TrackId { get; set; } = string.Empty;
 
+        public string ServiceClassId { get; set; } = DefaultServiceClassId;
+
+        public string PatternId { get; set; } = DefaultPatternId;
+
         public double Position { get; set; }
 
         public double Speed { get; set; }
@@ -864,7 +1404,16 @@ public sealed class SimulationWorld
         public bool ObstacleStopped { get; set; }
 
         public bool Collided { get; set; }
+
+        public bool StationBrakingActive { get; set; }
+
+        public bool StationStopViolationRecorded { get; set; }
     }
+
+    private readonly record struct ServiceRunPlanKey(
+        string VehicleId,
+        int ServiceNumber,
+        TrainDirection Direction);
 
     private sealed class ScheduledObstacle(string vehicleId, double triggerTimeSeconds)
     {

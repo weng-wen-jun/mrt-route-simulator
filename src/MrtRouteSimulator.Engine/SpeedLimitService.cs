@@ -37,13 +37,14 @@ public sealed class SpeedLimitService
         double brakingMetersPerSecondSquared,
         double jerkMetersPerSecondCubed,
         double currentSpeedMetersPerSecond,
-        double? mandatoryStopPositionMeters = null)
+        double? mandatoryTargetPositionMeters = null,
+        double mandatoryTargetSpeedMetersPerSecond = 0)
     {
         var permitted = GetCurrentLimitMetersPerSecond(positionMeters, direction, trainMaximumMetersPerSecond);
         var targets = GetUpcomingRestrictionTargets(positionMeters, direction, trainMaximumMetersPerSecond).ToList();
-        if (mandatoryStopPositionMeters is not null)
+        if (mandatoryTargetPositionMeters is not null)
         {
-            targets.Add((mandatoryStopPositionMeters.Value, 0));
+            targets.Add((mandatoryTargetPositionMeters.Value, Math.Max(0, mandatoryTargetSpeedMetersPerSecond)));
         }
 
         foreach (var (targetPosition, targetSpeed) in targets)
