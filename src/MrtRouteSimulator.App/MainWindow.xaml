@@ -44,6 +44,16 @@
                 <MenuItem Header="存檔" Click="SaveProject_Click" AutomationProperties.Name="儲存模擬專案" />
                 <MenuItem Header="讀取存檔" Click="LoadProject_Click" AutomationProperties.Name="讀取模擬專案" />
             </MenuItem>
+            <MenuItem Header="_輸入" AutomationProperties.Name="輸入選單">
+                <MenuItem Header="路線與車站" Click="FocusRouteInput_Click" />
+                <Separator />
+                <MenuItem Header="車型目錄…" Click="EditVehicleTypes_Click" />
+                <MenuItem Header="服務類型目錄…" Click="EditServiceTypes_Click" />
+                <MenuItem Header="停站模式" Click="FocusStopPatterns_Click" />
+                <MenuItem Header="發車計畫…" Click="EditDispatchPlan_Click" />
+                <MenuItem Header="空間參考點／折返站型式…" Click="EditSpatialReferencePoints_Click" />
+                <MenuItem Header="月台／股道／折返…" Click="EditInfrastructure_Click" />
+            </MenuItem>
             <MenuItem Header="_設定" AutomationProperties.Name="設定選單">
                 <MenuItem Header="前往 V2 營運參數" Click="FocusV2Settings_Click" AutomationProperties.Name="前往 V2 營運參數" />
             </MenuItem>
@@ -92,9 +102,10 @@
                             <Button Content="載入示範" Style="{StaticResource SecondaryButton}" Click="LoadSample_Click" Margin="0,0,6,6" />
                         </WrapPanel>
 
-                        <Separator Margin="0,12" Background="{StaticResource BorderBrush}" />
-                        <TextBlock Text="列車性能" Style="{StaticResource SectionTitle}" />
-                        <UniformGrid Columns="2">
+                        <StackPanel x:Name="V1TrainPerformancePanel">
+                            <Separator Margin="0,12" Background="{StaticResource BorderBrush}" />
+                            <TextBlock x:Name="LegacyTrainPerformanceHeading" Text="V1 基礎列車性能" Style="{StaticResource SectionTitle}" />
+                            <UniformGrid Columns="2">
                             <StackPanel Margin="0,0,7,10">
                                 <TextBlock Text="最高速度（km/h）" Style="{StaticResource FieldLabel}" />
                                 <TextBox x:Name="MaxSpeedTextBox" Text="80" AutomationProperties.Name="最高速度" />
@@ -119,17 +130,28 @@
                                 <TextBlock Text="終點折返（分鐘）" Style="{StaticResource FieldLabel}" />
                                 <TextBox x:Name="TerminalTurnaroundTextBox" Text="6" AutomationProperties.Name="終點折返時間" />
                             </StackPanel>
-                        </UniformGrid>
+                            </UniformGrid>
+                        </StackPanel>
+                        <TextBlock x:Name="VehiclePerformanceSourceHint"
+                                   Text="V2 的列車性能由上方「輸入 → 車型目錄」設定。"
+                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,0" />
 
                         <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
                         <TextBlock x:Name="V2SettingsHeading" Text="V2 營運物理" Style="{StaticResource SectionTitle}"
                                    Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="V2 營運參數" />
                         <UniformGrid Columns="2">
                             <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="速度曲線模式" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="OperationModeComboBox" SelectedIndex="1" AutomationProperties.Name="速度曲線模式">
-                                    <ComboBoxItem Content="基礎物理模式（V1）" Tag="Basic" />
-                                    <ComboBoxItem Content="實際營運模式（V2）" Tag="Realistic" />
+                                <TextBlock Text="模擬引擎" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="EngineModeComboBox" SelectedIndex="1" SelectionChanged="EngineMode_SelectionChanged" AutomationProperties.Name="模擬引擎">
+                                    <ComboBoxItem Content="V1 基礎物理" Tag="V1BasicPhysics" />
+                                    <ComboBoxItem Content="V2 實際營運" Tag="V2RealisticOperations" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="V2 軌跡曲線" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="OperationModeComboBox" SelectedIndex="1" AutomationProperties.Name="V2 軌跡曲線">
+                                    <ComboBoxItem Content="理想基準曲線" Tag="Basic" />
+                                    <ComboBoxItem Content="平順營運曲線" Tag="Realistic" />
                                 </ComboBox>
                             </StackPanel>
                             <StackPanel Margin="7,0,0,10">
@@ -180,7 +202,14 @@
                                 <DataGridTextColumn Header="起 km" Binding="{Binding StartKm, UpdateSourceTrigger=PropertyChanged, StringFormat=0.00}" Width="62" />
                                 <DataGridTextColumn Header="迄 km" Binding="{Binding EndKm, UpdateSourceTrigger=PropertyChanged, StringFormat=0.00}" Width="62" />
                                 <DataGridTextColumn Header="km/h" Binding="{Binding LimitKmh, UpdateSourceTrigger=PropertyChanged, StringFormat=0.#}" Width="60" />
-                                <DataGridTextColumn Header="方向" Binding="{Binding Direction, UpdateSourceTrigger=PropertyChanged}" Width="68" />
+                                <DataGridTemplateColumn Header="方向" Width="72">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <ComboBox ItemsSource="{Binding DataContext.SpeedLimitDirectionOptions, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                      SelectedItem="{Binding Direction, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="備註" Binding="{Binding Note, UpdateSourceTrigger=PropertyChanged}" Width="*" />
                             </DataGrid.Columns>
                         </DataGrid>
@@ -190,68 +219,37 @@
                             <TextBlock x:Name="SpeedLimitWarningText" Foreground="#A65A15" VerticalAlignment="Center" TextWrapping="Wrap" />
                         </WrapPanel>
 
-                        <TextBlock Text="停站／跨站服務模式" Style="{StaticResource FieldLabel}" Margin="0,10,0,5" />
-                        <TextBlock Text="未列出的車站預設停站；起終點不可跨站。速度空白代表停站時使用自動煞車、跨站時不另加速限。"
-                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,5" />
-                        <DataGrid x:Name="ServicePatternDataGrid" Height="145" ItemsSource="{Binding ServicePatternRows}" RowHeaderWidth="0"
-                                  AutomationProperties.Name="停站跨站服務模式表">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="模式 ID" Binding="{Binding PatternId, UpdateSourceTrigger=PropertyChanged}" Width="82" />
-                                <DataGridTextColumn Header="名稱" Binding="{Binding PatternName, UpdateSourceTrigger=PropertyChanged}" Width="70" />
-                                <DataGridTextColumn Header="車站" Binding="{Binding StationId, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                                <DataGridTextColumn Header="停／跨" Binding="{Binding Mode, UpdateSourceTrigger=PropertyChanged}" Width="58" />
-                                <DataGridTextColumn Header="上限 km/h" Binding="{Binding SpeedLimitKmh, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <WrapPanel Margin="0,8,0,0">
-                            <Button Content="新增模式列" Style="{StaticResource SecondaryButton}" Click="AddServicePatternRow_Click" Margin="0,0,6,6" />
-                            <Button Content="刪除模式列" Style="{StaticResource SecondaryButton}" Click="RemoveServicePatternRow_Click" Margin="0,0,6,6" />
-                        </WrapPanel>
-
-                        <TextBlock Text="車次套用模式" Style="{StaticResource FieldLabel}" Margin="0,6,0,5" />
-                        <TextBlock Text="未列出的車次採普通車、ALL_STOP；折返後可用不同車次序號指定另一種模式。"
-                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,0,0,5" />
-                        <DataGrid x:Name="ServiceRunDataGrid" Height="145" ItemsSource="{Binding ServiceRunRows}" RowHeaderWidth="0"
-                                  AutomationProperties.Name="車次服務模式表">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="車輛" Binding="{Binding VehicleId, UpdateSourceTrigger=PropertyChanged}" Width="86" />
-                                <DataGridTextColumn Header="序號" Binding="{Binding ServiceNumber, UpdateSourceTrigger=PropertyChanged}" Width="48" />
-                                <DataGridTextColumn Header="方向" Binding="{Binding Direction, UpdateSourceTrigger=PropertyChanged}" Width="50" />
-                                <DataGridTextColumn Header="等級" Binding="{Binding ServiceClassId, UpdateSourceTrigger=PropertyChanged}" Width="64" />
-                                <DataGridTextColumn Header="模式 ID" Binding="{Binding PatternId, UpdateSourceTrigger=PropertyChanged}" Width="*" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <WrapPanel Margin="0,8,0,0">
-                            <Button Content="新增車次" Style="{StaticResource SecondaryButton}" Click="AddServiceRun_Click" Margin="0,0,6,6" />
-                            <Button Content="刪除車次" Style="{StaticResource SecondaryButton}" Click="RemoveServiceRun_Click" Margin="0,0,6,6" />
-                        </WrapPanel>
-
+                        <TextBlock Text="車型、服務類型、停站模式與發車計畫請由上方「輸入」選單管理。"
+                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,4" />
                         <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
-                        <TextBlock Text="模擬設定" Style="{StaticResource SectionTitle}" />
-                        <UniformGrid Columns="2">
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="列車數量" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="TrainCountTextBox" Text="6" AutomationProperties.Name="列車數量" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="指定班距（分鐘，可空白）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="HeadwayTextBox" Text="" AutomationProperties.Name="指定班距" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="首班發車時間" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="StartTimeTextBox" Text="06:00:00" AutomationProperties.Name="首班發車時間" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="播放倍率" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="PlaybackSpeedComboBox" SelectedIndex="2" AutomationProperties.Name="播放倍率">
-                                    <ComboBoxItem Content="1×" Tag="1" />
-                                    <ComboBoxItem Content="5×" Tag="5" />
-                                    <ComboBoxItem Content="20×" Tag="20" />
-                                    <ComboBoxItem Content="60×" Tag="60" />
-                                    <ComboBoxItem Content="120×" Tag="120" />
-                                </ComboBox>
-                            </StackPanel>
-                        </UniformGrid>
+                        <StackPanel x:Name="V1ScheduleSettingsPanel">
+                            <TextBlock Text="V1 基礎物理排程（僅 V1 使用）" Style="{StaticResource SectionTitle}" />
+                            <UniformGrid Columns="2">
+                                <StackPanel Margin="0,0,7,10">
+                                    <TextBlock Text="列車數量" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="TrainCountTextBox" Text="6" AutomationProperties.Name="列車數量" />
+                                </StackPanel>
+                                <StackPanel Margin="7,0,0,10">
+                                    <TextBlock Text="指定班距（分鐘，可空白）" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="HeadwayTextBox" Text="" AutomationProperties.Name="指定班距" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,7,10">
+                                    <TextBlock Text="首班發車時間" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="StartTimeTextBox" Text="06:00:00" AutomationProperties.Name="首班發車時間" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                        <TextBlock Text="播放設定" Style="{StaticResource SectionTitle}" />
+                        <StackPanel Margin="0,0,0,10">
+                            <TextBlock Text="播放倍率" Style="{StaticResource FieldLabel}" />
+                            <ComboBox x:Name="PlaybackSpeedComboBox" SelectedIndex="2" AutomationProperties.Name="播放倍率">
+                                <ComboBoxItem Content="1×" Tag="1" />
+                                <ComboBoxItem Content="5×" Tag="5" />
+                                <ComboBoxItem Content="20×" Tag="20" />
+                                <ComboBoxItem Content="60×" Tag="60" />
+                                <ComboBoxItem Content="120×" Tag="120" />
+                            </ComboBox>
+                        </StackPanel>
 
                         <Button x:Name="RunButton" Content="計算並建立模擬" Style="{StaticResource PrimaryButton}" Click="RunSimulation_Click" Margin="0,4,0,0" AutomationProperties.Name="計算並建立模擬" />
                         <Border x:Name="ValidationBorder" Background="#FFF1EC" BorderBrush="#F4A47D" BorderThickness="1" CornerRadius="7" Padding="10" Margin="0,10,0,0" Visibility="Collapsed">
@@ -314,16 +312,18 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="18" />
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <Button x:Name="PlayButton" Content="▶ 播放" Style="{StaticResource PrimaryButton}" Click="Play_Click" IsEnabled="False" Margin="0,0,8,8" />
-                                <Button Grid.Column="1" Content="Ⅱ 暫停" Style="{StaticResource SecondaryButton}" Click="Pause_Click" IsEnabled="True" Margin="0,0,8,8" />
-                                <Button Grid.Column="2" Content="↺ 重設" Style="{StaticResource SecondaryButton}" Click="ResetPlayback_Click" Margin="0,0,0,8" />
-                                <Button Grid.Column="3" x:Name="ObstacleStopButton" Content="⚠ 障礙物急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" IsEnabled="False" Margin="8,0,8,8" />
-                                <TextBlock Grid.Column="5" x:Name="PlaybackStatusText" Text="請先建立模擬" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,0,8" />
-                                <Border Grid.Column="6" Background="#EEF8F5" CornerRadius="7" Padding="12,7" Margin="0,0,0,8">
+                                <Button Content="建立模擬【V3.3】" Style="{StaticResource SecondaryButton}" Click="RunSimulation_Click" Margin="0,0,8,8" AutomationProperties.Name="建立 V3.3 模擬" />
+                                <Button Grid.Column="1" x:Name="PlayButton" Content="▶ 播放" Style="{StaticResource PrimaryButton}" Click="Play_Click" IsEnabled="False" Margin="0,0,8,8" />
+                                <Button Grid.Column="2" Content="Ⅱ 暫停" Style="{StaticResource SecondaryButton}" Click="Pause_Click" IsEnabled="True" Margin="0,0,8,8" />
+                                <Button Grid.Column="3" Content="↺ 重設" Style="{StaticResource SecondaryButton}" Click="ResetPlayback_Click" Margin="0,0,0,8" />
+                                <Button Grid.Column="4" x:Name="ObstacleStopButton" Content="⚠ 障礙物急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" IsEnabled="False" Margin="8,0,8,8" />
+                                <TextBlock Grid.Column="6" x:Name="PlaybackStatusText" Text="請先建立模擬" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,0,8" />
+                                <Border Grid.Column="7" Background="#EEF8F5" CornerRadius="7" Padding="12,7" Margin="0,0,0,8">
                                     <TextBlock x:Name="SimulationClockText" Text="--:--:--" Foreground="{StaticResource SuccessBrush}" FontWeight="SemiBold" FontSize="15" />
                                 </Border>
                             </Grid>
@@ -350,7 +350,13 @@
                                     </DataGrid>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2">
-                                    <TextBlock Text="下行單程速度曲線" Style="{StaticResource SectionTitle}" />
+                                    <DockPanel LastChildFill="True" Margin="0,0,0,6">
+                                    <TextBlock Text="下行單程速度曲線【V3.2】" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="SpeedProfileRunComboBox" Width="155" SelectionChanged="SpeedProfileRun_SelectionChanged" AutomationProperties.Name="下行速度曲線車次" />
+                                        </StackPanel>
+                                    </DockPanel>
                                     <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
                                         <Canvas x:Name="SpeedCanvas" Height="230" SizeChanged="SpeedCanvas_SizeChanged" AutomationProperties.Name="速度時間曲線" />
                                     </Border>
@@ -359,32 +365,39 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="進出站時刻表">
+                    <TabItem Header="進出站時刻表【V3.2】">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="多列車下行時刻" FontWeight="SemiBold" FontSize="16" />
-                                <TextBlock Text="　核心以秒計算，表格僅在輸出階段格式化" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="進出站時刻（V1 理論／V2 實際）" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock x:Name="TimetableSourceText" Text="　V1 顯示解析基準；V2 寫實引擎顯示派車計畫與實際事件" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                             </StackPanel>
                             <DataGrid Grid.Row="1" x:Name="TimetableDataGrid" ItemsSource="{Binding TimetableRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="2">
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="82" />
+                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding TrainId}" Width="100" />
+                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
                                     <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="62" />
+                                    <DataGridTextColumn Header="服務類型" Binding="{Binding ServiceType}" Width="90" />
+                                    <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="115" />
                                     <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="68" />
                                     <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="120" />
-                                    <DataGridTextColumn Header="到站" Binding="{Binding ArrivalTime}" Width="95" />
-                                    <DataGridTextColumn Header="出站" Binding="{Binding DepartureTime}" Width="95" />
+                                    <DataGridTextColumn Header="計畫到站" Binding="{Binding PlannedArrivalTime}" Width="95" />
+                                    <DataGridTextColumn Header="計畫出站" Binding="{Binding PlannedDepartureTime}" Width="95" />
+                                    <DataGridTextColumn Header="實際到站" Binding="{Binding ArrivalTime}" Width="95" />
+                                    <DataGridTextColumn Header="實際出站" Binding="{Binding DepartureTime}" Width="95" />
                                     <DataGridTextColumn Header="停站" Binding="{Binding DwellTime}" Width="72" />
+                                    <DataGridTextColumn Header="延誤" Binding="{Binding Delay}" Width="72" />
+                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="82" />
                                     <DataGridTextColumn Header="累積 km" Binding="{Binding PositionKm}" Width="82" />
                                 </DataGrid.Columns>
                             </DataGrid>
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="區間物理明細">
+                    <TabItem Header="區間物理明細【V3.2】">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -392,19 +405,25 @@
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="各站間解析模型" FontWeight="SemiBold" FontSize="16" />
-                                <TextBlock Text="　自動判斷梯形或三角速度曲線" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="V1 理論基準／V2 實際區間" FontWeight="SemiBold" FontSize="16" />
+                                <TextBlock x:Name="SegmentSourceText" Text="　V1 自動判斷解析曲線；V2 改讀實際 SimulationWorld 軌跡與事件" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
                             </StackPanel>
                             <DataGrid Grid.Row="1" x:Name="SegmentDataGrid" ItemsSource="{Binding SegmentRows}" IsReadOnly="True" RowHeaderWidth="0">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="區間" Binding="{Binding Segment}" Width="*" MinWidth="160" />
+                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
+                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="120" />
+                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
+                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="78" />
                                     <DataGridTextColumn Header="距離 km" Binding="{Binding DistanceKm}" Width="84" />
                                     <DataGridTextColumn Header="曲線" Binding="{Binding Profile}" Width="74" />
                                     <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeedKmh}" Width="94" />
                                     <DataGridTextColumn Header="旅行時間" Binding="{Binding TravelTime}" Width="90" />
                                     <DataGridTextColumn Header="加速" Binding="{Binding AccelerationTime}" Width="78" />
                                     <DataGridTextColumn Header="巡航" Binding="{Binding CruisingTime}" Width="78" />
+                                    <DataGridTextColumn Header="惰行" Binding="{Binding CoastingTime}" Width="78" />
                                     <DataGridTextColumn Header="減速" Binding="{Binding DecelerationTime}" Width="78" />
+                                    <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="140" />
                                 </DataGrid.Columns>
                             </DataGrid>
                             <Border Grid.Row="2" Background="#F4F6FA" CornerRadius="7" Padding="10" Margin="0,10,0,0">
@@ -413,7 +432,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="移動閉塞與煞車">
+                    <TabItem Header="移動閉塞與煞車【V3.2】">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -470,7 +489,66 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="列車運行圖／匯出">
+                    <TabItem Header="V2 區間統計【V3.3】">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <WrapPanel Margin="0,0,0,8">
+                                <TextBlock Text="方向" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalDirectionComboBox" Width="92" SelectedIndex="0" SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6">
+                                    <ComboBoxItem Content="全部" Tag="All" />
+                                    <ComboBoxItem Content="下行" Tag="Outbound" />
+                                    <ComboBoxItem Content="上行" Tag="Inbound" />
+                                </ComboBox>
+                                <TextBlock Text="車輛" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalVehicleComboBox" Width="112" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="車次" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalServiceRunComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="車型" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="服務" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalServiceTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="停站模式" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <ComboBox x:Name="IntervalStopPatternComboBox" Width="130" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="模擬秒起" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <TextBox x:Name="IntervalStartSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <TextBlock Text="迄" VerticalAlignment="Center" Margin="0,0,5,6" />
+                                <TextBox x:Name="IntervalEndSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,0,10,6" />
+                                <CheckBox x:Name="IncludeInProgressCheckBox" Content="包含運行中區間" IsChecked="True"
+                                          Checked="IntervalFilter_Changed" Unchecked="IntervalFilter_Changed" Margin="0,0,10,6" VerticalAlignment="Center" />
+                                <Button Content="重新整理" Style="{StaticResource SecondaryButton}" Click="RefreshIntervalStatistics_Click" Margin="0,0,8,6" />
+                                <Button Content="匯出區間 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalCsv_Click" Margin="0,0,8,6" />
+                                <Button Content="匯出彙總 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalSummaryCsv_Click" Margin="0,0,8,6" />
+                                <TextBlock x:Name="IntervalSummaryText" Text="建立並播放 V2 模擬後顯示。" Foreground="{StaticResource MutedBrush}"
+                                           VerticalAlignment="Center" Margin="0,0,0,6" />
+                            </WrapPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding IntervalStatisticRows}" IsReadOnly="True" RowHeaderWidth="0">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
+                                    <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
+                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
+                                    <DataGridTextColumn Header="區間" Binding="{Binding Interval}" Width="135" />
+                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="60" />
+                                    <DataGridTextColumn Header="出發" Binding="{Binding Departure}" Width="88" />
+                                    <DataGridTextColumn Header="抵達" Binding="{Binding Arrival}" Width="88" />
+                                    <DataGridTextColumn Header="旅行秒" Binding="{Binding TravelTime}" Width="72" />
+                                    <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" />
+                                    <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeed}" Width="85" />
+                                    <DataGridTextColumn Header="閉塞受限 s" Binding="{Binding ControlLimitedTime}" Width="85" />
+                                    <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="*" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="列車運行圖／匯出【V3.2】">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />

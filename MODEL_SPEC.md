@@ -1,4 +1,38 @@
-# MRT Route Simulation Engine - Model Specification V2.1.0
+# MRT Route Simulation Engine - Model Specification V3.3.0
+
+> 現行規格（2026-08-24）。V3.0～V3.2 章節保留作核心演進說明；V3.3 以單一營運資料來源、逐車型性能、完整區間統計與 Schema 7 為準。
+
+產品版本、引擎與存檔格式分開表述：產品版本為 V3.3.0，`SimulationEngineKind` 可選 V1 基礎引擎或 V2 寫實引擎，現行專案格式為 `schemaVersion = 7`。本階段僅供內部測試，不移轉舊專案；Schema 1～6 會明確拒絕。
+
+## V3.3.0 本輪變更
+
+- V2 寫實引擎與 Schema 7 僅使用 `VehicleTypes + ServiceTypes + StopPatterns + Dispatch`；不再寫出或執行舊 `ServicePatterns／ServiceRuns` 雙資料源。
+- `VehicleTypeDefinition` 是逐車次性能的權威來源，實際套用最高速度、加速度、營運／緊急煞車、Jerk、牽引衰減、惰行減速度與車長；V2 UI 隱藏舊 V1 全域性能欄位。
+- 停站模式以交易式 UI 編輯名稱、停站／跨站、停站秒數覆寫及通過速限；取消不套用，刪除受引用項目會說明阻擋原因。
+- 手動發車計畫開啟時自動選取目前模式；端點可退出、建立反向續行，或指定接續既有的反向車次，同一實體車輛沿用 `VehicleId`。
+- V3.3 區間統計支援方向、車輛、車次、車型、服務、停站模式、模擬秒範圍及是否包含運行中等篩選，並輸出實際軌跡中的移動閉塞受限秒數。
+- `V3.3.0-完整功能驗證範例.mrtsim.json` 同時涵蓋上述功能、雙向派車及五類空間參考點，作為自動化與 Windows UI 驗收基準。
+
+## V3.2.0 本輪變更
+
+- `SpatialReferencePointDefinition` 支援 `IntermediateStation`、`FrontTurnback`、`RearTurnback`、`PocketTurnback` 與 `Junction`。中間站的順行／逆行參數分開保存及驗證。
+- `SpatialCapacityAnalysis.Calculate()` 以 URCS `Components.dll` 的 `CalTs()`／`CalCap()` 行為為相容基準，輸出順行或逆行設計班距、正常容量與設計容量；容量採與原程式一致的整數截斷。
+- 中間站雙方向參數包含進／離站坡度、停車點至號誌距離、號誌重疊距離、停站時間、前後區間巡航速度及安全係數。
+- 三類折返與銜接點保留原 UI 圖示所對應的距離、坡度、道岔速度、安全係數及停等欄位。空間折返距離會使用 `AnalyticalModel` 計算進出折返區旅行時間，再加上設定停等時間。
+- 中間站的方向別停站時間會套入 `SimulationWorld`；未續行列車完成端點工作後進入 `OutOfService`、`Active = false` 並產生 `ServiceEnded`。
+- V2 時刻表、區間物理與統計由同一份 `TrajectorySample`／`SimulationEvent` 建立；事件比對同時使用 `VehicleId` 與 `ServiceRunId`，避免折返接續後誤接其他實體車輛。
+
+### URCS 相容容量輸入與輸出
+
+`SpatialCapacityGlobalParameters` 保存號誌／轉換時間、反應時間、PHF 與營運餘裕率；`SpatialCapacityTrainParameters` 保存列車長度、加減速度與煞車有效因子。各參考點先依型式計算最小追蹤時間 `Ts`，再套用安全係數、PHF 與營運餘裕率求得設計班距及每小時容量。坡度造成有效加減速度小於等於 0 時會拒絕計算，不輸出無效容量。
+
+## V3.1.0 本輪變更
+
+- V2 首頁不再顯示僅 V1 使用的列車數量、指定班距與首班時間；V2 初始發車以 `DispatchPlanDefinition`／發車計畫為準。播放倍率仍只控制 UI 推進節奏，不改變 Engine 時間。
+- `HeadwayDirectionPlan` 與 `ManualTimetableRow` 均支援端點折返續行設定。續行時，端點處理完成後沿用 `VehicleId`、`VehicleTypeId`、`ServiceTypeId`、`StopPatternId`，並建立方向相反的新 `ServiceRunId`。
+- 手動發車計畫另可指定「折返後接續車次 ID」。例如下行第一車可接續上行第六車；接續沿用相同 `VehicleId`，不另生成目標車次。實際抵達早於目標計畫時間時進入等待，晚於目標時間時記錄延誤。
+- 未續行的計畫車次抵達端點後，完成該站停站／清車秒數即轉為退出營運；退出列車不再出現在路線圖，也不參與安全配對與安全計算。
+- 下行速度曲線使用 V3 車次識別，建立 `SimulationWorld` 後即可產生並顯示，不依賴播放後才補建識別。
 
 ## 1. 核心原則
 
@@ -217,7 +251,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ## 8. 自動化測試
 
-測試執行器包含 53 項案例，其中前 24 項為 V1.0 相容性測試：
+測試執行器包含 65 項案例，其中前 24 項為 V1.0 相容性測試：
 
 - 無限制性能、零距離及非法性能。
 - 5000 m 長距離梯形速度曲線。
@@ -236,6 +270,8 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 - 動態 Jerk 煞車包絡線、到站前低速連續性，以及移動閉塞控制不瞬間歸零。
 - 普通停站、跨站、車站通過速限、折返換用不同模式及舊版存檔升級。
 - 三段式軟體版本格式及組件版本一致性。
+- V3 雙向／跨午夜派車、目錄參照驗證、雙端發車、重複車輛拒絕、資源鎖定事件、區間統計 P95、schema 1 → 4 串接升級，以及 EngineKind／ProfileMode 分離。
+- V3.1 端點停站／清車後退出、一般折返續行、手動指定反向接續車次，以及折返設定的專案檔往返與舊檔預設行為。
 
 最新結果記錄於 `QA_REPORT.md`。
 
@@ -314,7 +350,10 @@ new SimulationWorld(
     profileMode,
     movingBlockMode,
     servicePatterns,
-    serviceRunPlans)
+    serviceRunPlans,
+    dispatchPlan,
+    vehicleTypes,
+    infrastructure)
 
 SimulationWorld.Tick()
 SimulationWorld.AdvanceTo(targetTimeSeconds)
@@ -373,20 +412,24 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 15. 專案存檔格式
 
-`SimulationProjectFormat` 使用版本化 UTF-8 JSON，預設副檔名為 `.mrtsim.json`，目前 `schemaVersion = 2`。內容包含：
+`SimulationProjectFormat` 使用版本化 UTF-8 JSON，預設副檔名為 `.mrtsim.json`，目前 `schemaVersion = 7`。現階段不支援舊存檔移轉；Schema 1～6、未知版本及未來版本都會拒絕。內容包含：
 
 - 路線編號、名稱、車站順序、站間距離與個別停站時間。
 - 列車性能、起終點折返時間，以及全部 V2 營運與安全參數。
-- 任意里程速限、列車數、指定／自動班距、首班時刻、播放倍率及三種模式選擇。
-- 服務模式、各站停／跨與通過速限，以及方向別車次的列車等級和模式。
+- 任意里程速限、播放倍率及引擎／營運模式選擇；V2 發車完全由發車計畫決定，不使用 V1 的列車數、指定班距與首班時刻。
+- 車型、服務類型、停站模式目錄，以及簡易班距／手動班表、端點續行與車輛配置模式。
+- 停站模式的逐站停／跨、停站秒數覆寫及通過速限。
+- 月台、股道、路徑、折返設施與站場配置。
+- 五類空間參考點，以及中間站順／逆行獨立參數。
+- 明確的 `SimulationEngineKind`，與 V2 的 `OperationProfileMode` 分開保存。
 
-讀取時先限制檔案大小，再反序列化並以既有 `Route`、`TrainParameters`、`OperationalParameters`、`SpeedLimitService` 與 `SimulationWorld` 做完整語意驗證；只有整份通過後 UI 才會替換目前設定。`schemaVersion = 1` 會升級成版本 2，並預設採 `普通車 / ALL_STOP`；未知版本、破損 JSON、缺欄位、無效列舉或超出模型範圍都會拒絕。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
+讀取時先限制檔案大小，再反序列化並做完整語意驗證；只有整份通過後 UI 才會替換目前設定。非 Schema 7、破損 JSON、缺欄位、無效列舉、目錄參照失效或超出模型範圍都會拒絕。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
 
 專案檔保存可重建模擬的設定，不保存播放到一半的列車瞬時位置、速度或事件歷史。
 
 ## 16. 輸入驗證與邊界
 
-| 輸入／情境 | V2.1.0 行為 |
+| 輸入／情境 | V3.3.0 行為 |
 |---|---|
 | 速限起點大於等於終點 | validation error |
 | 速限超過全線或不是 10 m 精度 | validation error |
@@ -400,15 +443,64 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 | 終點折返仍占用 | 後車的進站位置校正受移動授權限制，不得侵入最小淨距 |
 | 監視模式或障礙範圍被侵入 | 夾在合法路線邊界、停止並只記錄一次碰撞 |
 | 起點或終點設為跨站 | validation error |
-| 未指定服務模式／車次 | 採 `普通車 / ALL_STOP` |
+| 服務、停站模式或車次參照缺漏 | validation error，不猜測或補建執行資料 |
 | 高速越過停車點 | 保持煞車並記錄停站超限，不以單 Tick 歸零掩蓋 |
 | 專案檔破損或版本未知 | 拒絕讀取，UI 目前設定不變 |
+| 空間參考點坡度使有效加／減速度小於等於 0 | validation error，不產生容量或折返旅行時間 |
+| 未續行列車完成端點停站／清車 | 產生 `ServiceEnded`，設為 `OutOfService` 並從活動路線圖移除 |
 
-## 17. 已知限制與後續擴充
+## 17. V3.3 目錄與派車模型
 
-- 僅支援抽象單一直線；不是地理地圖。
+`VehicleTypeDefinition`、`ServiceTypeDefinition` 與 `StopPatternDefinition` 分別表示硬體性能、營運身分及逐站停靠規則，三者以系統產生的穩定 ID 關聯，顯示名稱可獨立修改。一般 UI 顯示中文名稱，內部 ID 只用於 Schema 7 內部參照；刪除仍被發車計畫或其他目錄引用的項目時必須拒絕並回報原因。
+
+每一 `PlannedServiceRun` 的 `VehicleTypeId` 會解析到獨立的 `TrainPerformance`；V2 `SimulationWorld` 不讀取首頁的 V1 全域性能值。因此不同車型可以在同一次模擬中具有不同的最高速度、加速度、營運／緊急煞車、Jerk、牽引衰減、惰行減速度與車長。
+
+`DispatchPlanDefinition` 支援 `SimpleHeadway` 與 `ManualTimetable`。`DispatchPlanExpander.Expand()` 先驗證所有目錄參照，再產生不可變的 `ResolvedDispatchPlan`：
+
+- 每一 `PlannedServiceRun` 都有計畫發車時間、方向、車型、服務類型、停站模式、`VehicleId` 與 `ServiceRunId`。
+- 跨午夜以第一個計畫時間為錨點排序，不把午夜後車次錯排到前一天。
+- 同一明確 `VehicleId` 不得同時指派給多個載入車次；目前不自行推測車輛周轉。
+- 派車車次抵達終點後，依端點折返續行設定分流：未續行者完成站點停站／清車秒數後退出；續行者建立反向新 `ServiceRunId`，不重複建立 `VehicleId`。
+
+## 18. V3 基礎設施與資源
+
+`InfrastructureGraph` 包含 `PlatformDefinition`、`TrackSegmentDefinition`、`RoutePathDefinition`、`TurnbackPlanDefinition` 與 `StationYardDefinition`。舊專案透過 legacy adapter 建立上下行雙軌、方向別月台、相鄰站路徑及抽象端點折返，維持既有拓樸語意。
+
+`RouteResourceReservationManager` 以資源 ID 原子預約一組路徑與起點月台。列車在計畫發車前檢查方向、車長、車型、服務類型、月台相容性與可用路徑；不足時維持等待並記錄原因。列車尾端淨空起點資源後釋放預約。
+
+此機制是保守安全骨架，不等同完整聯鎖、道岔幾何、尾軌連續軌跡或多月台最佳化。
+
+## 19. V3 結構化事件
+
+除既有文字訊息外，`SimulationEvent` 可保存 `ServiceRunId`、車型、服務類型、停站模式、月台、路徑、計畫時間、實際延誤與限制旗標。V3 新增的主要事件包括：
+
+- 計畫發車延誤與等待資源。
+- 月台指派、進路預約與釋放。
+- 預留的追越提出、完成與取消事件型別。
+
+追越事件型別是後續擴充契約；V3 尚未執行普通車待避與快速車追越。
+
+## 20. V3.3 區間統計
+
+`IntervalStatistics.Analyze()` 直接讀取 `TrajectorySample` 與 `SimulationEvent`，依實際行車方向建立區間：
+
+- 上下行分開判定，位置跨越在相鄰 `0.1 s` 樣本間線性內插；已有精確事件時優先使用事件。
+- 完成與運行中區間分開；運行中樣本不納入平均、最小、最大與 P95。
+- 完成樣本保存旅行時間、平均／峰值速度、相位時間與控制事件摘要。
+- 可依方向、車輛、車次、車型、服務、停站模式、起訖模擬秒數與是否包含運行中資料篩選。
+- 每一完成或運行中區間會由軌跡限制狀態累積移動閉塞受限秒數；明細、摘要與 CSV 使用同一計算結果。
+- P95 使用 nearest-rank 規則。
+- `BuildCsv()` 與 `BuildSummaryCsv()` 輸出中文欄名；UI 以 UTF-8 BOM 儲存，供試算表直接開啟。
+
+## 21. 產品版本、引擎與 UI 邊界
+
+V3.3.0 是產品版本，不是第三套模擬引擎。`SimulationEngineKind` 決定本次執行建立 V1 基礎引擎或 V2 寫實引擎；`OperationProfileMode` 只決定 V2 世界內的軌跡曲線，Schema 7 則只代表存檔契約，三者不可互相推導。V1 專案不建立 `SimulationWorld`；V2 編輯確認、引擎切換或專案讀取後會清除舊世界與區間統計。
+
+## 22. 已知限制與後續擴充
+
+- 僅支援抽象單一直線；不是地理地圖，也不宣稱完整空間幾何。
 - 預設上下行不同軌道，尚未建立單線共用、交叉渡線、道岔與聯鎖。
-- 尚未納入坡度、曲線阻力、超高、黏著變化、不同車型的物理性能及乘客上下車模型；目前 `ServiceClassId` 是普通／快速等服務等級，不是車型。
+- 尚未以逐段坡度、曲線阻力、超高、黏著變化及乘客上下車量動態修正列車性能；不同車型的額定性能已能逐車次套用，服務類型仍只表示普通／快速等營運身分。
 - 未以真實路線資料校準；人工輸入結果不能宣稱重現特定捷運路線。
 - 移動閉塞為概念模型，未涵蓋通訊失效、列車完整性、ATP／ATO／ATS 或安全完整性認證。
-- 後續可增加站間通過間隔分析、進階圖層篩選、真實資料校準與效能基準。
+- V3 已提供區間統計與中文 CSV；仍不宣稱超車執行、多月台最佳化或安全認證。

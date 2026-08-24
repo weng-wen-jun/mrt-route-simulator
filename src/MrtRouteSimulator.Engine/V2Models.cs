@@ -6,6 +6,17 @@ public enum OperationProfileMode
     RealisticOperations
 }
 
+/// <summary>
+/// Selects the simulation engine used for the active run.  This is deliberately
+/// separate from <see cref="OperationProfileMode"/>, which is also used by V2
+/// when it creates an undisturbed comparison trajectory.
+/// </summary>
+public enum SimulationEngineKind
+{
+    V1BasicPhysics,
+    V2RealisticOperations
+}
+
 public enum SpeedLimitDirection
 {
     Both,
@@ -70,7 +81,28 @@ public enum SimulationEventType
     Collision,
     BrakingModeChanged,
     StationPassed,
-    StationStopViolation
+    StationStopViolation,
+    DepartureDelayed,
+    WaitingForResource,
+    PlatformAssigned,
+    RouteReserved,
+    RouteReleased,
+    OvertakeRequested,
+    OvertakeCompleted,
+    OvertakeCancelled,
+    ServiceEnded
+}
+
+[Flags]
+public enum OperationalConstraint
+{
+    None = 0,
+    SpeedLimit = 1,
+    StationStop = 2,
+    MovingBlock = 4,
+    RouteResource = 8,
+    Platform = 16,
+    VehicleAvailability = 32
 }
 
 public sealed record SpeedLimitSegment(
@@ -83,7 +115,8 @@ public sealed record SpeedLimitSegment(
 public sealed record StationServiceInstruction(
     string StationId,
     StationServiceMode Mode,
-    double? SpeedLimitMetersPerSecond = null);
+    double? SpeedLimitMetersPerSecond = null,
+    double? DwellTimeSeconds = null);
 
 public sealed record ServicePattern(
     string PatternId,
@@ -95,7 +128,11 @@ public sealed record ServiceRunPlan(
     int ServiceNumber,
     TrainDirection Direction,
     string ServiceClassId,
-    string PatternId);
+    string PatternId,
+    string VehicleTypeId = "DEFAULT_VEHICLE",
+    string? OriginPlatformId = null,
+    double? PlannedDepartureTimeSeconds = null,
+    string? ExplicitServiceRunId = null);
 
 public sealed class OperationalParameters
 {
@@ -187,7 +224,12 @@ public sealed record WorldTrainState(
     string CurrentStationId,
     string? NextStationId,
     bool IsActive,
-    double SimulationTimeSeconds);
+    double SimulationTimeSeconds,
+    string VehicleTypeId = "DEFAULT_VEHICLE",
+    string? PlatformId = null,
+    double? PlannedDepartureTimeSeconds = null,
+    double? ActualDepartureTimeSeconds = null,
+    OperationalConstraint Constraints = OperationalConstraint.None);
 
 public sealed record SafetyObservation(
     double SimulationTimeSeconds,
@@ -223,7 +265,10 @@ public sealed record TrajectorySample(
     OperationalPhase Phase,
     string CurrentStationId,
     string? NextStationId,
-    bool IsPlanned);
+    bool IsPlanned,
+    string VehicleTypeId = "DEFAULT_VEHICLE",
+    string? PlatformId = null,
+    OperationalConstraint Constraints = OperationalConstraint.None);
 
 public sealed record SimulationEvent(
     double SimulationTimeSeconds,
@@ -234,7 +279,15 @@ public sealed record SimulationEvent(
     string TrackId,
     double PositionMeters,
     double SpeedMetersPerSecond,
-    string Message);
+    string Message,
+    string ServiceRunId = "",
+    string ServiceClassId = "",
+    string ServicePatternId = "",
+    string VehicleTypeId = "DEFAULT_VEHICLE",
+    string? PlatformId = null,
+    string? ResourceId = null,
+    double? PlannedTimeSeconds = null,
+    double? DelaySeconds = null);
 
 public sealed record SimulationSnapshot(
     double SimulationTimeSeconds,

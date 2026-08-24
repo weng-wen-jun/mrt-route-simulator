@@ -115,10 +115,6 @@ public partial class MainWindow
         StationDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
         var defaultDwell = ParseNonNegative(DefaultDwellTextBox, "預設停站時間");
         var stations = StationRows.Select(row => new ProjectStation(
@@ -126,22 +122,29 @@ public partial class MainWindow
             row.StationName.Trim(),
             row.DistanceFromPreviousKm * 1000,
             row.DwellTimeSeconds)).ToArray();
+        var engineKind = GetSelectedTag(EngineModeComboBox) == "V1BasicPhysics"
+            ? SimulationEngineKind.V1BasicPhysics
+            : SimulationEngineKind.V2RealisticOperations;
+        var resolvedDispatch = engineKind == SimulationEngineKind.V2RealisticOperations
+            ? BuildResolvedDispatchPlan()
+            : null;
+        var baselineVehicle = resolvedDispatch is null ? null : ResolveBaselineVehicle(resolvedDispatch);
         var train = new ProjectTrainSettings(
-            ParsePositive(MaxSpeedTextBox, "最高速度") / 3.6,
-            ParsePositive(AccelerationTextBox, "加速度"),
-            ParsePositive(DecelerationTextBox, "減速度"),
+            baselineVehicle?.MaxSpeedMetersPerSecond ?? ParsePositive(MaxSpeedTextBox, "最高速度") / 3.6,
+            baselineVehicle?.AccelerationMetersPerSecondSquared ?? ParsePositive(AccelerationTextBox, "加速度"),
+            baselineVehicle?.ServiceBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(DecelerationTextBox, "減速度"),
             defaultDwell,
             ParseNonNegative(OriginTurnaroundTextBox, "起點折返時間") * 60,
             ParseNonNegative(TerminalTurnaroundTextBox, "終點折返時間") * 60);
         var operations = new ProjectOperationalSettings(
-            ParsePositive(JerkTextBox, "Jerk"),
+            baselineVehicle?.JerkMetersPerSecondCubed ?? ParsePositive(JerkTextBox, "Jerk"),
             ParseNonNegative(CoastingRatioTextBox, "惰行比例"),
             ParseNonNegative(ApproachDistanceTextBox, "進站控制距離"),
             ParseNonNegative(ApproachSpeedTextBox, "進站控制速度") / 3.6,
             0.45,
-            ParsePositive(TrainLengthTextBox, "車長"),
-            ParsePositive(ServiceBrakeTextBox, "營運煞車減速度"),
-            ParsePositive(EmergencyBrakeTextBox, "緊急煞車減速度"),
+            baselineVehicle?.LengthMeters ?? ParsePositive(TrainLengthTextBox, "車長"),
+            baselineVehicle?.ServiceBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(ServiceBrakeTextBox, "營運煞車減速度"),
+            baselineVehicle?.EmergencyBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(EmergencyBrakeTextBox, "緊急煞車減速度"),
             ParseNonNegative(ReactionTimeTextBox, "控制反應時間"),
             0.8,
             3,
@@ -153,37 +156,50 @@ public partial class MainWindow
             row.LimitKmh / 3.6,
             ParseSpeedLimitDirection(row.Direction, index + 1),
             row.Note.Trim())).ToArray();
-        double? headway = string.IsNullOrWhiteSpace(HeadwayTextBox.Text)
-            ? null
-            : ParsePositive(HeadwayTextBox, "指定班距") * 60;
         var profileMode = GetSelectedTag(OperationModeComboBox) == "Basic"
             ? OperationProfileMode.BasicPhysics
             : OperationProfileMode.RealisticOperations;
+        double? headway = resolvedDispatch is not null
+            ? GetMinimumPlannedIntervalSeconds(resolvedDispatch)
+            : string.IsNullOrWhiteSpace(HeadwayTextBox.Text)
+                ? null
+                : ParsePositive(HeadwayTextBox, "指定班距") * 60;
         var simulation = new ProjectRunSettings(
-            ParsePositiveInteger(TrainCountTextBox, "列車數量"),
+            resolvedDispatch?.Runs.Count ?? ParsePositiveInteger(TrainCountTextBox, "列車數量"),
             headway,
-            ParseClock(StartTimeTextBox.Text),
+            resolvedDispatch?.ScheduleAnchorTime.TotalSeconds ?? ParseClock(StartTimeTextBox.Text),
             GetPlaybackSpeed(),
             profileMode,
             ParseMovingBlockMode(),
-            ParseBrakingEstimationMode());
-        var servicePatterns = BuildServicePatterns()
-            .Select(pattern => new ProjectServicePattern(
-                pattern.PatternId,
-                pattern.PatternName,
-                pattern.Instructions.Select(instruction => new ProjectStationServiceInstruction(
-                    instruction.StationId,
-                    instruction.Mode,
-                    instruction.SpeedLimitMetersPerSecond)).ToArray()))
-            .ToArray();
-        var serviceRuns = BuildServiceRunPlans()
-            .Select(plan => new ProjectServiceRunPlan(
-                plan.VehicleId,
-                plan.ServiceNumber,
-                plan.Direction,
-                plan.ServiceClassId,
-                plan.PatternId))
-            .ToArray();
+            ParseBrakingEstimationMode(),
+            engineKind);
+        var vehicleTypes = VehicleTypeRows.Select(row => new ProjectVehicleType(
+            row.Id, row.Name, row.LengthMeters, row.MaxSpeedKmh / 3.6, row.Acceleration,
+            row.ServiceBrake, row.EmergencyBrake, row.Jerk, row.TractionDecay, row.CoastingDeceleration)).ToArray();
+        var serviceTypes = ServiceTypeRows.Select(row => new ProjectServiceType(
+            row.Id, row.Name, row.ColorHex, row.RunPrefix, EmptyToNull(row.DefaultStopPatternId),
+            EmptyToNull(row.DefaultVehicleTypeId), row.Priority, row.CanRequestOvertake,
+            SplitIds(row.PreferredPlatformIds))).ToArray();
+        var stopPatterns = BuildStopPatternDefinitions().Select(pattern => new ProjectStopPattern(
+            pattern.Id,
+            pattern.DisplayName,
+            pattern.Instructions.Select(instruction => new ProjectStopPatternInstruction(
+                instruction.StationId, instruction.Action, instruction.DwellTimeSeconds,
+                instruction.PassingSpeedLimitMetersPerSecond)).ToArray())).ToArray();
+        var dispatch = new ProjectDispatchPlan(
+            _dispatchPlanningMode == "手動班表" ? DispatchPlanningMode.ManualTimetable : DispatchPlanningMode.SimpleHeadway,
+            _vehicleAssignmentMode == "全部指定" ? VehicleAssignmentMode.ExplicitOnly : VehicleAssignmentMode.Automatic,
+            HeadwayPlanRows.Select(row => new ProjectHeadwayPlan(
+                ParseDirection(row.Direction), ParseTime(row.FirstDeparture, "首班時間").TotalSeconds,
+                TimeSpan.FromMinutes(row.HeadwayMinutes).TotalSeconds, row.RunCount, row.ServiceTypeId,
+                EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
+                EmptyToNull(row.VehicleId), row.ContinueAfterTerminal)).ToArray(),
+            ManualTimetableRows.Select(row => new ProjectManualTimetableRow(
+                ParseTime(row.PlannedDeparture, "發車時間").TotalSeconds, ParseDirection(row.Direction), row.ServiceTypeId,
+                EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
+                EmptyToNull(row.VehicleId), EmptyToNull(row.ServiceRunId), row.ContinueAfterTerminal,
+                EmptyToNull(row.ContinuationServiceRunId))).ToArray());
+        var infrastructure = CaptureProjectInfrastructure(stations);
 
         return new SimulationProjectDocument(
             SimulationProjectFormat.CurrentSchemaVersion,
@@ -194,8 +210,13 @@ public partial class MainWindow
             operations,
             speedLimits,
             simulation,
-            servicePatterns,
-            serviceRuns);
+            null,
+            null,
+            vehicleTypes,
+            serviceTypes,
+            stopPatterns,
+            dispatch,
+            infrastructure);
     }
 
     private void ApplyProjectDocument(SimulationProjectDocument document)
@@ -244,33 +265,6 @@ public partial class MainWindow
         }
 
         ServicePatternRows.Clear();
-        foreach (var pattern in document.ServicePatterns ?? [])
-        {
-            foreach (var instruction in pattern.Instructions)
-            {
-                ServicePatternRows.Add(new ServicePatternInputRow
-                {
-                    PatternId = pattern.PatternId,
-                    PatternName = pattern.PatternName,
-                    StationId = instruction.StationId,
-                    Mode = instruction.Mode == StationServiceMode.Pass ? "跨站" : "停站",
-                    SpeedLimitKmh = instruction.SpeedLimitMetersPerSecond * 3.6
-                });
-            }
-        }
-
-        ServiceRunRows.Clear();
-        foreach (var plan in document.ServiceRuns ?? [])
-        {
-            ServiceRunRows.Add(new ServiceRunInputRow
-            {
-                VehicleId = plan.VehicleId,
-                ServiceNumber = plan.ServiceNumber,
-                Direction = plan.Direction == TrainDirection.Outbound ? "下行" : "上行",
-                ServiceClassId = plan.ServiceClassId,
-                PatternId = plan.PatternId
-            });
-        }
 
         TrainCountTextBox.Text = document.Simulation.TrainCount.ToString(CultureInfo.InvariantCulture);
         HeadwayTextBox.Text = document.Simulation.HeadwaySeconds is { } headway
@@ -281,6 +275,7 @@ public partial class MainWindow
         SelectComboBoxTag(
             OperationModeComboBox,
             document.Simulation.ProfileMode == OperationProfileMode.BasicPhysics ? "Basic" : "Realistic");
+        SelectComboBoxTag(EngineModeComboBox, document.Simulation.EngineKind.ToString());
         SelectComboBoxTag(MovingBlockModeComboBox, document.Simulation.MovingBlockMode.ToString());
         SelectComboBoxTag(BrakingModeComboBox, document.Simulation.BrakingEstimationMode.ToString());
         if (!SelectComboBoxTag(PlaybackSpeedComboBox, FormatProjectNumber(document.Simulation.PlaybackSpeed)))
@@ -289,6 +284,7 @@ public partial class MainWindow
         }
 
         SpeedLimitWarningText.Text = string.Empty;
+        ApplyExtendedProjectInputs(document);
         DrawRoute();
         DrawSpeedProfile();
     }

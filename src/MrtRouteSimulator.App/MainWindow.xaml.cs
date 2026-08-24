@@ -46,6 +46,7 @@ public partial class MainWindow : Window
         };
         _playbackTimer.Tick += PlaybackTimer_Tick;
         LoadSampleData();
+        ApplyEngineModeUiState();
         Loaded += (_, _) =>
         {
             DrawRoute();
@@ -68,6 +69,49 @@ public partial class MainWindow : Window
         V2SettingsHeading.BringIntoView();
         V2SettingsHeading.Focus();
     }
+
+    private void EngineMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!IsLoaded) return;
+        PausePlayback();
+        ClearResults();
+        ApplyEngineModeUiState();
+        PlayButton.IsEnabled = false;
+        StatusTextBlock.Text = $"模擬引擎已切換為 {CurrentEngineLabel()}；請重新建立模擬。";
+    }
+
+    private void ApplyEngineModeUiState()
+    {
+        if (EngineModeComboBox is null || SpeedLimitDataGrid is null) return;
+        var v2 = GetSelectedTag(EngineModeComboBox) != "V1BasicPhysics";
+        foreach (var control in new Control[]
+        {
+            OperationModeComboBox, MovingBlockModeComboBox, JerkTextBox, CoastingRatioTextBox,
+            ApproachDistanceTextBox, ApproachSpeedTextBox, TrainLengthTextBox, ReactionTimeTextBox,
+            ServiceBrakeTextBox, EmergencyBrakeTextBox, SpeedLimitDataGrid,
+            BrakingModeComboBox, ObstacleStopButton
+        })
+        {
+            control.IsEnabled = v2;
+        }
+
+        V1ScheduleSettingsPanel.Visibility = v2 ? Visibility.Collapsed : Visibility.Visible;
+        V1TrainPerformancePanel.Visibility = v2 ? Visibility.Collapsed : Visibility.Visible;
+        MaxSpeedTextBox.IsEnabled = !v2;
+        AccelerationTextBox.IsEnabled = !v2;
+        DecelerationTextBox.IsEnabled = !v2;
+        JerkTextBox.IsEnabled = false;
+        TrainLengthTextBox.IsEnabled = false;
+        ServiceBrakeTextBox.IsEnabled = false;
+        EmergencyBrakeTextBox.IsEnabled = false;
+        LegacyTrainPerformanceHeading.Text = "V1 基礎列車性能";
+        VehiclePerformanceSourceHint.Visibility = v2 ? Visibility.Visible : Visibility.Collapsed;
+        V2SettingsHeading.Text = v2 ? "V2 營運物理" : "V2 營運物理（切換至 V2 後可用）";
+    }
+
+    private string CurrentEngineLabel() => GetSelectedTag(EngineModeComboBox) == "V1BasicPhysics"
+        ? "V1 基礎物理"
+        : "V2 實際營運";
 
     private void LoadSampleData()
     {
@@ -192,20 +236,26 @@ public partial class MainWindow : Window
                 stationInputs,
                 defaultDwellSeconds);
 
-            var maxSpeedMetersPerSecond = ParsePositive(MaxSpeedTextBox, "最高速度") / 3.6;
+            var useV2Dispatch = GetSelectedTag(EngineModeComboBox) != "V1BasicPhysics";
+            var dispatchPlan = useV2Dispatch ? BuildResolvedDispatchPlan() : null;
+            var baselineVehicle = useV2Dispatch ? ResolveBaselineVehicle(dispatchPlan!) : null;
+            var maxSpeedMetersPerSecond = baselineVehicle?.MaxSpeedMetersPerSecond
+                ?? ParsePositive(MaxSpeedTextBox, "最高速度") / 3.6;
             _parameters = new TrainParameters(
                 maxSpeedMetersPerSecond,
-                ParsePositive(AccelerationTextBox, "加速度"),
-                ParsePositive(DecelerationTextBox, "減速度"),
+                baselineVehicle?.AccelerationMetersPerSecondSquared ?? ParsePositive(AccelerationTextBox, "加速度"),
+                baselineVehicle?.ServiceBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(DecelerationTextBox, "減速度"),
                 defaultDwellSeconds,
                 ParseNonNegative(OriginTurnaroundTextBox, "起點折返時間") * 60,
                 ParseNonNegative(TerminalTurnaroundTextBox, "終點折返時間") * 60);
 
-            var trainCount = ParsePositiveInteger(TrainCountTextBox, "列車數量");
-            double? specifiedHeadwaySeconds = string.IsNullOrWhiteSpace(HeadwayTextBox.Text)
+            var trainCount = dispatchPlan?.Runs.Count ?? ParsePositiveInteger(TrainCountTextBox, "列車數量");
+            double? specifiedHeadwaySeconds = dispatchPlan is not null
                 ? null
-                : ParsePositive(HeadwayTextBox, "指定班距") * 60;
-            _startClockSeconds = ParseClock(StartTimeTextBox.Text);
+                : string.IsNullOrWhiteSpace(HeadwayTextBox.Text)
+                    ? null
+                    : ParsePositive(HeadwayTextBox, "指定班距") * 60;
+            _startClockSeconds = dispatchPlan?.ScheduleAnchorTime.TotalSeconds ?? ParseClock(StartTimeTextBox.Text);
 
             _cycle = TripSimulator.CalculateCycleTime(_route, _parameters, _startClockSeconds);
             _multipleTrainResult = TripSimulator.SimulateMultipleTrains(
@@ -220,7 +270,7 @@ public partial class MainWindow : Window
                 trainCount,
                 specifiedHeadwaySeconds,
                 0.1);
-            ConfigureV2World(trainCount, specifiedHeadwaySeconds);
+            ConfigureV2World(trainCount, specifiedHeadwaySeconds, dispatchPlan);
 
             if (!_v2Enabled)
             {
@@ -231,7 +281,10 @@ public partial class MainWindow : Window
             PopulateResults();
             UpdatePlaybackView();
             PlayButton.IsEnabled = true;
-            StatusTextBlock.Text = $"{(_v2Enabled ? "V2 實際營運" : "V1 基礎物理")}模擬建立完成：{trainCount} 列車、{_route.Stations.Count} 站、固定 Tick 0.1 秒。";
+            var effectiveTrainCount = _v2Enabled
+                ? _v2World?.DispatchPlan?.Runs.Count ?? trainCount
+                : trainCount;
+            StatusTextBlock.Text = $"{(_v2Enabled ? "V2 實際營運" : "V1 基礎物理")}模擬建立完成：{effectiveTrainCount} 列車、{_route!.Stations.Count} 站、固定 Tick 0.1 秒。";
             PlaybackStatusText.Text = "模擬已就緒，按「播放」查看列車運行。";
         }
         catch (SimulationValidationException exception)
@@ -266,6 +319,7 @@ public partial class MainWindow : Window
         SpeedSummaryText.Text = $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} / {actualPeak:0.#} km/h";
 
         TimetableRows.Clear();
+        TimetableSourceText.Text = "V1 解析基準：固定下行理論時刻；V2 寫實引擎改讀派車計畫與實際事件";
         foreach (var train in _multipleTrainResult.Trains)
         {
             for (var index = 0; index < train.OutboundTrip.StationEvents.Count; index++)
@@ -286,6 +340,7 @@ public partial class MainWindow : Window
         }
 
         SegmentRows.Clear();
+        SegmentSourceText.Text = "V1 理論基準：三角形／梯形解析曲線；不代表 V2 實際營運軌跡";
         foreach (var segment in _cycle.OutboundTrip.Segments)
         {
             SegmentRows.Add(new SegmentRow(
@@ -356,10 +411,20 @@ public partial class MainWindow : Window
         _playbackTimeSeconds += _playbackTimer.Interval.TotalSeconds * GetPlaybackSpeed();
         if (_playbackTimeSeconds >= _playbackDurationSeconds)
         {
-            _playbackTimeSeconds = _playbackDurationSeconds;
-            PausePlayback();
-            PlaybackStatusText.Text = "所有列車均已完成一個循環。";
-            StatusTextBlock.Text = "模擬播放完成。";
+            if (_v2Enabled && HasPendingV2TerminalOutcomes())
+            {
+                _playbackDurationSeconds += Math.Max(60, (_v2World?.BaselineCycleTimeSeconds ?? 240) * 0.25);
+                PlaybackStatusText.Text = "仍有車次等待端點退出或折返接續，播放範圍已自動延長。";
+            }
+            else
+            {
+                _playbackTimeSeconds = _playbackDurationSeconds;
+                PausePlayback();
+                PlaybackStatusText.Text = _v2Enabled
+                    ? "所有計畫車次均已完成端點退出或折返接續。"
+                    : "所有列車均已完成一個循環。";
+                StatusTextBlock.Text = "模擬播放完成。";
+            }
         }
 
         UpdatePlaybackView();

@@ -14,13 +14,16 @@ public partial class MainWindow
 {
     private SimulationWorld? _v2World;
     private SimulationWorld? _plannedWorld;
+    private ResolvedDispatchPlan? _v2DispatchPlan;
+    private IReadOnlyList<SimulationEvent> _plannedTimetableEvents = [];
     private bool _v2Enabled;
+    private IReadOnlyList<TrajectorySample> _v2OutboundSpeedPreview = [];
+    private string? _v2OutboundPreviewRunId;
+    private double? _v2PlannedMinimumIntervalSeconds;
 
     public ObservableCollection<SpeedLimitInputRow> SpeedLimitRows { get; } = [];
 
     public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
-
-    public ObservableCollection<ServiceRunInputRow> ServiceRunRows { get; } = [];
 
     public ObservableCollection<SafetyRow> SafetyRows { get; } = [];
 
@@ -32,7 +35,7 @@ public partial class MainWindow
     {
         SpeedLimitRows.Clear();
         ServicePatternRows.Clear();
-        ServiceRunRows.Clear();
+        LoadSampleInputCatalogs();
         SpeedLimitRows.Add(new SpeedLimitInputRow
         {
             StartKm = 1.25,
@@ -63,14 +66,22 @@ public partial class MainWindow
         SpeedLimitWarningText.Text = string.Empty;
     }
 
-    private void ConfigureV2World(int trainCount, double? specifiedHeadwaySeconds)
+    private void ConfigureV2World(
+        int trainCount,
+        double? specifiedHeadwaySeconds,
+        ResolvedDispatchPlan? resolvedDispatchPlan = null)
     {
-        _v2Enabled = OperationModeComboBox.SelectedItem is ComboBoxItem item
-            && string.Equals(item.Tag?.ToString(), "Realistic", StringComparison.Ordinal);
+        _v2Enabled = EngineModeComboBox.SelectedItem is ComboBoxItem item
+            && string.Equals(item.Tag?.ToString(), "V2RealisticOperations", StringComparison.Ordinal);
         if (!_v2Enabled)
         {
             _v2World = null;
             _plannedWorld = null;
+            _v2DispatchPlan = null;
+            _plannedTimetableEvents = [];
+            _v2OutboundSpeedPreview = [];
+            _v2OutboundPreviewRunId = null;
+            _v2PlannedMinimumIntervalSeconds = null;
             ObstacleStopButton.IsEnabled = false;
             return;
         }
@@ -82,19 +93,17 @@ public partial class MainWindow
 
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        ServicePatternDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        ServiceRunDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
+        var dispatchPlan = resolvedDispatchPlan ?? BuildResolvedDispatchPlan();
+        var baselineVehicle = ResolveBaselineVehicle(dispatchPlan);
         var operational = new OperationalParameters(
-            ParsePositive(JerkTextBox, "Jerk"),
+            baselineVehicle.JerkMetersPerSecondCubed,
             ParseNonNegative(CoastingRatioTextBox, "惰行比例"),
             ParseNonNegative(ApproachDistanceTextBox, "進站控制距離"),
             ParseNonNegative(ApproachSpeedTextBox, "進站控制速度") / 3.6,
             tractionFadeRatio: 0.45,
-            ParsePositive(TrainLengthTextBox, "車長"),
-            ParsePositive(ServiceBrakeTextBox, "營運煞車減速度"),
-            ParsePositive(EmergencyBrakeTextBox, "緊急煞車減速度"),
+            baselineVehicle.LengthMeters,
+            baselineVehicle.ServiceBrakeDecelerationMetersPerSecondSquared,
+            baselineVehicle.EmergencyBrakeDecelerationMetersPerSecondSquared,
             ParseNonNegative(ReactionTimeTextBox, "控制反應時間"),
             brakeBuildUpTimeSeconds: 0.8,
             positioningErrorMeters: 3,
@@ -117,19 +126,27 @@ public partial class MainWindow
                 row.Note?.Trim() ?? string.Empty);
         }).ToArray();
         var servicePatterns = BuildServicePatterns();
-        var serviceRuns = BuildServiceRunPlans();
+        _v2DispatchPlan = dispatchPlan;
+        var vehicleTypes = BuildVehicleTypeDefinitions();
+        var infrastructure = BuildInfrastructureGraph(_route);
         var movingBlockMode = ParseMovingBlockMode();
+        var operationProfile = GetSelectedTag(OperationModeComboBox) == "Basic"
+            ? OperationProfileMode.BasicPhysics
+            : OperationProfileMode.RealisticOperations;
         _v2World = new SimulationWorld(
             _route,
             _parameters,
             operational,
-            trainCount,
+            dispatchPlan.Runs.Count,
             specifiedHeadwaySeconds,
             limits,
-            OperationProfileMode.RealisticOperations,
+            operationProfile,
             movingBlockMode,
             servicePatterns,
-            serviceRuns);
+            serviceRunPlans: null,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure);
         var brakingMode = ParseBrakingEstimationMode();
         if (brakingMode != BrakingEstimationMode.Service)
         {
@@ -140,18 +157,36 @@ public partial class MainWindow
             _route,
             _parameters,
             operational,
-            trainCount,
+            dispatchPlan.Runs.Count,
             specifiedHeadwaySeconds,
             speedLimits: null,
             OperationProfileMode.BasicPhysics,
             MovingBlockMode.Independent,
             servicePatterns,
-            serviceRuns);
-        _playbackDurationSeconds = _v2World.BaselineCycleTimeSeconds * 1.5
-            + (trainCount - 1) * _v2World.HeadwaySeconds;
+            serviceRunPlans: null,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure);
+        _v2PlannedMinimumIntervalSeconds = GetMinimumPlannedIntervalSeconds(dispatchPlan);
+        var lastPlannedStart = dispatchPlan.Runs.Max(run =>
+            RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime));
+        _playbackDurationSeconds = lastPlannedStart + _v2World.BaselineCycleTimeSeconds * 1.5;
+        _plannedWorld.AdvanceTo(_playbackDurationSeconds);
+        _plannedTimetableEvents = _plannedWorld.Events.ToArray();
+        _plannedWorld.Reset();
+        BuildV2OutboundSpeedPreview(
+            operational,
+            limits,
+            operationProfile,
+            movingBlockMode,
+            servicePatterns,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure,
+            brakingMode);
         ObstacleStopButton.IsEnabled = true;
         SpeedLimitWarningText.Text = string.Join("　", _v2World.SpeedLimits.GetOverlapWarnings());
-        PopulateFilterControls(trainCount);
+        PopulateFilterControls(dispatchPlan);
     }
 
     private void PopulateV2Results()
@@ -161,12 +196,18 @@ public partial class MainWindow
             return;
         }
 
-        HeadwaySummaryText.Text = $"{FormatDuration(_v2World.HeadwaySeconds)}（基準）";
+        HeadwaySummaryText.Text = _v2PlannedMinimumIntervalSeconds is { } interval
+            ? $"{FormatDuration(interval)}（計畫最短）"
+            : "單一／同時發車";
         PlaybackStatusText.Text = "V2 已就緒；播放時每個 0.1 秒控制與碰撞子步進都會依序執行。";
         DrawV2Route();
         DrawV2SpeedProfile();
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
+        PopulateIntervalStatistics();
+        PopulateV3Timetable();
+        PopulateV3SegmentDetails();
+        UpdateV2ActualSummary();
     }
 
     private void UpdateV2PlaybackView()
@@ -180,7 +221,7 @@ public partial class MainWindow
         _plannedWorld.AdvanceTo(_playbackTimeSeconds);
         var snapshot = _v2World.GetSnapshot();
         CurrentTrainRows.Clear();
-        foreach (var state in snapshot.Trains)
+        foreach (var state in snapshot.Trains.Where(state => state.Phase != OperationalPhase.OutOfService))
         {
             CurrentTrainRows.Add(new CurrentTrainRow(
                 state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
@@ -225,6 +266,10 @@ public partial class MainWindow
         DrawV2SpeedProfile();
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
+        PopulateIntervalStatistics(throttled: true);
+        PopulateV3Timetable();
+        PopulateV3SegmentDetails();
+        UpdateV2ActualSummary();
         _v2World.AcknowledgeSnapshotEvents();
     }
 
@@ -234,6 +279,8 @@ public partial class MainWindow
         _plannedWorld?.Reset();
         SafetyRows.Clear();
         EventRows.Clear();
+        IntervalStatisticRows.Clear();
+        _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         DrawSafetyDistanceChart();
@@ -244,14 +291,23 @@ public partial class MainWindow
     {
         _v2World = null;
         _plannedWorld = null;
+        _v2DispatchPlan = null;
+        _plannedTimetableEvents = [];
         _v2Enabled = false;
+        _v2OutboundSpeedPreview = [];
+        _v2OutboundPreviewRunId = null;
+        _v2PlannedMinimumIntervalSeconds = null;
         SafetyRows.Clear();
         EventRows.Clear();
+        IntervalStatisticRows.Clear();
+        _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
+        SpeedProfileRunComboBox.Items.Clear();
         ObstacleStopButton.IsEnabled = false;
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
+        IntervalSummaryText.Text = "目前不是 V2 模擬。";
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
     }
@@ -282,130 +338,15 @@ public partial class MainWindow
         HideValidation();
     }
 
-    private void AddServicePatternRow_Click(object sender, RoutedEventArgs e)
-    {
-        var stationId = StationRows.Count > 2 ? StationRows[1].StationId : string.Empty;
-        ServicePatternRows.Add(new ServicePatternInputRow
-        {
-            StationId = stationId
-        });
-        ServicePatternDataGrid.SelectedIndex = ServicePatternRows.Count - 1;
-        ServicePatternDataGrid.ScrollIntoView(ServicePatternRows[^1]);
-    }
-
-    private void RemoveServicePatternRow_Click(object sender, RoutedEventArgs e)
-    {
-        var index = ServicePatternDataGrid.SelectedIndex;
-        if (index < 0)
-        {
-            ShowValidation(["請先選取要刪除的服務模式列。"]);
-            return;
-        }
-
-        ServicePatternRows.RemoveAt(index);
-        HideValidation();
-    }
-
-    private void AddServiceRun_Click(object sender, RoutedEventArgs e)
-    {
-        ServiceRunRows.Add(new ServiceRunInputRow());
-        ServiceRunDataGrid.SelectedIndex = ServiceRunRows.Count - 1;
-        ServiceRunDataGrid.ScrollIntoView(ServiceRunRows[^1]);
-    }
-
-    private void RemoveServiceRun_Click(object sender, RoutedEventArgs e)
-    {
-        var index = ServiceRunDataGrid.SelectedIndex;
-        if (index < 0)
-        {
-            ShowValidation(["請先選取要刪除的車次服務計畫。"]);
-            return;
-        }
-
-        ServiceRunRows.RemoveAt(index);
-        HideValidation();
-    }
-
-    private ServicePattern[] BuildServicePatterns() => ServicePatternRows
-        .Select((row, index) => new
-        {
-            Row = row,
-            Index = index + 1,
-            PatternId = row.PatternId?.Trim() ?? string.Empty,
-            PatternName = row.PatternName?.Trim() ?? string.Empty
-        })
-        .GroupBy(item => item.PatternId, StringComparer.Ordinal)
-        .Select(group =>
-        {
-            if (string.IsNullOrWhiteSpace(group.Key))
-            {
-                throw new InvalidOperationException("服務模式 ID 不得空白。");
-            }
-
-            var names = group.Select(item => item.PatternName).Distinct(StringComparer.Ordinal).ToArray();
-            if (names.Length != 1 || string.IsNullOrWhiteSpace(names[0]))
-            {
-                throw new InvalidOperationException($"服務模式 {group.Key} 的名稱必須一致且不得空白。");
-            }
-
-            var instructions = group.Select(item =>
-            {
-                var stationId = item.Row.StationId?.Trim() ?? string.Empty;
-                if (string.IsNullOrWhiteSpace(stationId))
-                {
-                    throw new InvalidOperationException($"服務模式第 {item.Index} 列車站編號不得空白。");
-                }
-
-                if (item.Row.SpeedLimitKmh is { } speed
-                    && (!double.IsFinite(speed) || speed <= 0))
-                {
-                    throw new InvalidOperationException($"服務模式第 {item.Index} 列速度上限必須大於 0，或留空使用自動值。");
-                }
-
-                var mode = item.Row.Mode?.Trim() switch
-                {
-                    "停站" => StationServiceMode.Stop,
-                    "跨站" => StationServiceMode.Pass,
-                    _ => throw new InvalidOperationException($"服務模式第 {item.Index} 列請填寫「停站」或「跨站」。")
-                };
-                return new StationServiceInstruction(
-                    stationId,
-                    mode,
-                    item.Row.SpeedLimitKmh / 3.6);
-            }).ToArray();
-            return new ServicePattern(group.Key, names[0], instructions);
-        })
-        .ToArray();
-
-    private ServiceRunPlan[] BuildServiceRunPlans() => ServiceRunRows
-        .Select((row, index) =>
-        {
-            var rowNumber = index + 1;
-            if (string.IsNullOrWhiteSpace(row.VehicleId)
-                || string.IsNullOrWhiteSpace(row.ServiceClassId)
-                || string.IsNullOrWhiteSpace(row.PatternId))
-            {
-                throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列不得有空白欄位。");
-            }
-
-            if (row.ServiceNumber <= 0)
-            {
-                throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列序號必須大於 0。");
-            }
-
-            var direction = row.Direction?.Trim() switch
-            {
-                "下行" => TrainDirection.Outbound,
-                "上行" => TrainDirection.Inbound,
-                _ => throw new InvalidOperationException($"車次服務計畫第 {rowNumber} 列方向請填寫「下行」或「上行」。")
-            };
-            return new ServiceRunPlan(
-                row.VehicleId.Trim(),
-                row.ServiceNumber,
-                direction,
-                row.ServiceClassId.Trim(),
-                row.PatternId.Trim());
-        })
+    private ServicePattern[] BuildServicePatterns() => BuildStopPatternDefinitions()
+        .Select(pattern => new ServicePattern(
+            pattern.Id,
+            pattern.DisplayName,
+            pattern.Instructions.Select(item => new StationServiceInstruction(
+                item.StationId,
+                item.Action == StopPatternAction.Stop ? StationServiceMode.Stop : StationServiceMode.Pass,
+                item.PassingSpeedLimitMetersPerSecond,
+                item.DwellTimeSeconds)).ToArray()))
         .ToArray();
 
     private void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -442,16 +383,23 @@ public partial class MainWindow
 
         var selectedVehicle = ObstacleTrainComboBox.SelectedItem?.ToString();
         var snapshot = _v2World.GetSnapshot();
-        var target = snapshot.Trains.FirstOrDefault(train => train.VehicleId == selectedVehicle)
-            ?? snapshot.Trains
-                .Where(train => train.IsActive && train.Phase is not OperationalPhase.Collided and not OperationalPhase.EmergencyStopped)
-                .OrderByDescending(train => train.Direction == TrainDirection.Outbound
-                    ? train.FrontPositionMeters
-                    : _route!.TotalLengthMeters - train.FrontPositionMeters)
-                .FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(selectedVehicle))
+        {
+            ShowValidation(["請先選擇要觸發障礙物急停的實際車輛 ID。　"]);
+            return;
+        }
+
+        var target = snapshot.Trains.FirstOrDefault(train =>
+            train.VehicleId.Equals(selectedVehicle, StringComparison.OrdinalIgnoreCase));
         if (target is null)
         {
-            ShowValidation(["目前沒有可排程障礙物急停的列車。"]);
+            ShowValidation([$"找不到車輛「{selectedVehicle}」；請重新建立模擬以更新車輛清單。　"]);
+            return;
+        }
+
+        if (target.Phase == OperationalPhase.OutOfService)
+        {
+            ShowValidation([$"車輛「{selectedVehicle}」已退出營運，無法再觸發障礙物急停。　"]);
             return;
         }
 
@@ -618,6 +566,7 @@ public partial class MainWindow
         var inboundY = height * 0.63;
         DrawTrackLine(outboundY, "下行 DOWN →");
         DrawTrackLine(inboundY, "← 上行 UP");
+        DrawSpatialReferencePointGeometry(left, trackWidth, outboundY, inboundY, width, height);
 
         if (_v2World is not null)
         {
@@ -688,6 +637,7 @@ public partial class MainWindow
         {
             var x = left + state.FrontPositionMeters / _route.TotalLengthMeters * trackWidth;
             var y = state.Direction == TrainDirection.Outbound ? outboundY : inboundY;
+            (x, y) = GetSpatialReferencePointTrainPosition(state, x, y, left, trackWidth, outboundY, inboundY);
             var index = ParseVehicleIndex(state.VehicleId);
             var train = new Border
             {
@@ -701,7 +651,7 @@ public partial class MainWindow
                 BorderThickness = new Thickness(2),
                 Child = new TextBlock
                 {
-                    Text = $"V{index + 1:00}",
+                    Text = VehicleMarkerLabel(state.VehicleId),
                     Foreground = Brushes.White,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -742,20 +692,34 @@ public partial class MainWindow
             return;
         }
 
-        var samples = _v2World.Trajectory
-            .Where(sample => sample.VehicleId == "Vehicle 01" && sample.Direction == TrainDirection.Outbound)
+        var selectedRunId = SpeedProfileRunComboBox.SelectedItem?.ToString() ?? _v2OutboundPreviewRunId;
+        var actualSamples = _v2World.Trajectory
+            .Where(sample => sample.Direction == TrainDirection.Outbound
+                && (selectedRunId is null || sample.ServiceRunId == selectedRunId))
             .ToArray();
+        var useActual = actualSamples.Length >= 2;
+        var samples = useActual
+            ? actualSamples
+            : selectedRunId == _v2OutboundPreviewRunId && _v2OutboundSpeedPreview.Count >= 2
+                ? _v2OutboundSpeedPreview.ToArray()
+                : [];
         if (samples.Length < 2)
         {
-            AddCanvasText(SpeedCanvas, "播放後顯示 V2 速度、相位與即時速限。", 16, 18, 12, Color.FromRgb(102, 112, 133));
+            SpeedProfileSourceText.Text = selectedRunId is null ? "沒有下行車次" : $"{selectedRunId} 尚未產生實際軌跡";
+            AddCanvasText(SpeedCanvas, "所選下行車次尚未播放，或沒有可完成的單程軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
             return;
         }
+
+        SpeedProfileSourceText.Text = useActual
+            ? $"{selectedRunId} · V2 實際"
+            : $"{selectedRunId} · 無干擾計畫預覽";
 
         var left = 42d;
         var top = 17d;
         var plotWidth = width - left - 15;
         var plotHeight = height - top - 31;
-        var maxTime = Math.Max(1, samples[^1].SimulationTimeSeconds);
+        var minTime = samples[0].SimulationTimeSeconds;
+        var maxTime = Math.Max(minTime + 1, samples[^1].SimulationTimeSeconds);
         var maxSpeed = _parameters.MaxSpeedMetersPerSecond * 3.6 * 1.1;
         DrawAxes(SpeedCanvas, left, top, plotWidth, plotHeight, "km/h", "模擬時間");
 
@@ -763,7 +727,7 @@ public partial class MainWindow
         var limitLine = new Polyline { Stroke = new SolidColorBrush(Color.FromRgb(205, 126, 24)), StrokeThickness = 1.4, StrokeDashArray = [4, 3] };
         foreach (var sample in TrajectoryAnalysis.DecimatePreservingCriticalPoints(samples, 450))
         {
-            var x = left + sample.SimulationTimeSeconds / maxTime * plotWidth;
+            var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
             var y = top + plotHeight - sample.SpeedMetersPerSecond * 3.6 / maxSpeed * plotHeight;
             speedLine.Points.Add(new Point(x, y));
             var limit = _v2World.SpeedLimits.GetCurrentLimitMetersPerSecond(
@@ -776,6 +740,90 @@ public partial class MainWindow
         SpeedCanvas.Children.Add(limitLine);
         SpeedCanvas.Children.Add(speedLine);
         AddCanvasText(SpeedCanvas, "— 實際速度　- - 里程速限", left + 8, top + 3, 10, Color.FromRgb(85, 94, 112));
+    }
+
+    private void BuildV2OutboundSpeedPreview(
+        OperationalParameters operational,
+        IReadOnlyList<SpeedLimitSegment> limits,
+        OperationProfileMode operationProfile,
+        MovingBlockMode movingBlockMode,
+        IReadOnlyList<ServicePattern> servicePatterns,
+        ResolvedDispatchPlan dispatchPlan,
+        IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
+        InfrastructureGraph infrastructure,
+        BrakingEstimationMode brakingMode)
+    {
+        _v2OutboundSpeedPreview = [];
+        var firstOutbound = dispatchPlan.Runs
+            .Where(run => run.Direction == TrainDirection.Outbound)
+            .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
+            .ThenBy(run => run.Sequence)
+            .FirstOrDefault();
+        _v2OutboundPreviewRunId = firstOutbound?.ServiceRunId;
+        if (firstOutbound is null || _route is null || _parameters is null)
+        {
+            return;
+        }
+
+        var preview = new SimulationWorld(
+            _route,
+            _parameters,
+            operational,
+            dispatchPlan.Runs.Count,
+            initialDepartureIntervalSeconds: null,
+            limits,
+            operationProfile,
+            movingBlockMode,
+            servicePatterns,
+            serviceRunPlans: null,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure);
+        if (brakingMode != BrakingEstimationMode.Service)
+        {
+            preview.SetBrakingEstimationMode(brakingMode);
+        }
+
+        var plannedStart = RelativeDispatchSeconds(firstOutbound.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
+        var deadline = plannedStart + Math.Max(3600, preview.BaselineCycleTimeSeconds * 2);
+        while (preview.CurrentTimeSeconds < deadline
+            && !preview.Events.Any(item => item.EventType == SimulationEventType.Arrival
+                && item.ServiceRunId == firstOutbound.ServiceRunId
+                && Math.Abs(item.PositionMeters - _route.TotalLengthMeters) <= 0.5))
+        {
+            preview.Tick();
+        }
+
+        _v2OutboundSpeedPreview = preview.Trajectory
+            .Where(sample => sample.ServiceRunId == firstOutbound.ServiceRunId
+                && sample.Direction == TrainDirection.Outbound)
+            .ToArray();
+    }
+
+    private static double? GetMinimumPlannedIntervalSeconds(ResolvedDispatchPlan dispatchPlan)
+    {
+        var starts = dispatchPlan.Runs
+            .Select(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
+            .Distinct()
+            .OrderBy(value => value)
+            .ToArray();
+        if (starts.Length < 2)
+        {
+            return null;
+        }
+
+        return starts.Zip(starts.Skip(1), (first, second) => second - first)
+            .Where(interval => interval > 1e-7)
+            .DefaultIfEmpty()
+            .Min() is var minimum && minimum > 1e-7
+                ? minimum
+                : null;
+    }
+
+    private static double RelativeDispatchSeconds(TimeSpan value, TimeSpan anchor)
+    {
+        var result = value.TotalSeconds - anchor.TotalSeconds;
+        return result < 0 ? result + TimeSpan.FromDays(1).TotalSeconds : result;
     }
 
     private void DrawSafetyDistanceChart()
@@ -942,28 +990,57 @@ public partial class MainWindow
                      item.SimulationTimeSeconds >= startTime
                      && item.SimulationTimeSeconds <= endTime
                      && item.EventType is
-                         SimulationEventType.ObstacleEmergencyStop
+                         SimulationEventType.Departure
+                         or SimulationEventType.Arrival
+                         or SimulationEventType.StationPassed
+                         or SimulationEventType.TurnaroundStarted
+                         or SimulationEventType.DirectionChanged
+                         or SimulationEventType.ServiceEnded
+                         or SimulationEventType.DepartureDelayed
+                         or SimulationEventType.WaitingForResource
+                         or SimulationEventType.ObstacleEmergencyStop
                          or SimulationEventType.PredictedCollision
                          or SimulationEventType.Collision
                          or SimulationEventType.SafetyStatusChanged))
         {
             var x = left + (simulationEvent.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth;
             var y = top + plotHeight - simulationEvent.PositionMeters / _route.TotalLengthMeters * plotHeight;
+            var isSafetyEvent = simulationEvent.EventType is
+                SimulationEventType.ObstacleEmergencyStop
+                or SimulationEventType.PredictedCollision
+                or SimulationEventType.Collision
+                or SimulationEventType.SafetyStatusChanged;
+            var isTerminalEvent = simulationEvent.EventType is
+                SimulationEventType.TurnaroundStarted
+                or SimulationEventType.DirectionChanged
+                or SimulationEventType.ServiceEnded;
+            var markerColor = isSafetyEvent
+                ? Color.FromRgb(196, 48, 48)
+                : isTerminalEvent
+                    ? Color.FromRgb(126, 87, 194)
+                    : Color.FromRgb(22, 134, 107);
             var marker = new Ellipse
             {
                 Width = 8,
                 Height = 8,
-                Fill = new SolidColorBrush(Color.FromRgb(196, 48, 48)),
+                Fill = new SolidColorBrush(markerColor),
                 Stroke = Brushes.White,
                 StrokeThickness = 1,
-                ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds)}\n{simulationEvent.Message}"
+                ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds)}"
+                    + $"｜{EventTypeToChinese(simulationEvent.EventType)}\n{simulationEvent.Message}"
             };
             Canvas.SetLeft(marker, x - 4);
             Canvas.SetTop(marker, y - 4);
             TimeDistanceCanvas.Children.Add(marker);
         }
 
-        AddCanvasText(TimeDistanceCanvas, "實線：V2 模擬實際　虛線：無干擾計畫／理論　紅點：安全或障礙事件", left, 28, 10, Color.FromRgb(82, 93, 111));
+        AddCanvasText(
+            TimeDistanceCanvas,
+            "實線：V2 模擬實際　虛線：無干擾計畫／理論　綠點：車站　紫點：折返／退出　紅點：安全／障礙",
+            left,
+            28,
+            10,
+            Color.FromRgb(82, 93, 111));
 
         void DrawSeries(IReadOnlyList<TrajectorySample> source, bool isPlanned)
         {
@@ -1019,7 +1096,31 @@ public partial class MainWindow
     {
         if (_v2World is null || _v2World.SafetyHistory.Count == 0)
         {
-            SafetySummaryText.Text = "目前沒有相鄰列車配對。";
+            if (_v2World is null)
+            {
+                SafetySummaryText.Text = "請先建立 V2 寫實引擎模擬。";
+            }
+            else if (_v2World.MovingBlockMode == MovingBlockMode.Independent)
+            {
+                SafetySummaryText.Text = "目前為獨立運行模式，不建立移動閉塞相鄰配對；請切換為監視或控制。";
+            }
+            else if (_v2World.CurrentTimeSeconds <= 0.001)
+            {
+                SafetySummaryText.Text = "模擬尚未播放；第一個 0.1 秒 Tick 後才會建立相鄰配對。";
+            }
+            else
+            {
+                var active = _v2World.GetSnapshot().Trains.Count(train => train.IsActive);
+                SafetySummaryText.Text = active < 2
+                    ? "目前營運中列車少於兩列，沒有可形成的相鄰配對。"
+                    : "目前沒有同方向、同股道的相鄰列車配對；這是正常條件式空白。";
+            }
+            return;
+        }
+
+        if (SafetyRows.Count == 0)
+        {
+            SafetySummaryText.Text = "已有安全觀測，但目前的方向／狀態篩選沒有符合資料。";
             return;
         }
 
@@ -1050,21 +1151,146 @@ public partial class MainWindow
             : keys.FirstOrDefault();
     }
 
-    private void PopulateFilterControls(int trainCount)
+    private void PopulateFilterControls(ResolvedDispatchPlan dispatchPlan)
     {
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
+        SpeedProfileRunComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Add("全部");
-        for (var index = 0; index < trainCount; index++)
+        foreach (var vehicleId in dispatchPlan.Runs.Select(run => run.VehicleId)
+                     .Where(value => !string.IsNullOrWhiteSpace(value))
+                     .Select(value => value!)
+                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                     .Order(StringComparer.OrdinalIgnoreCase))
         {
-            var vehicleId = $"Vehicle {index + 1:00}";
             DiagramVehicleComboBox.Items.Add(vehicleId);
             ObstacleTrainComboBox.Items.Add(vehicleId);
         }
 
         DiagramVehicleComboBox.SelectedIndex = 0;
         ObstacleTrainComboBox.SelectedIndex = 0;
+        foreach (var serviceRunId in dispatchPlan.Runs
+                     .Where(run => run.Direction == TrainDirection.Outbound)
+                     .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
+                     .ThenBy(run => run.Sequence)
+                     .Select(run => run.ServiceRunId))
+        {
+            SpeedProfileRunComboBox.Items.Add(serviceRunId);
+        }
+        SpeedProfileRunComboBox.SelectedIndex = SpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
         ObstacleDelayTextBox.Text = "0";
+    }
+
+    private void SpeedProfileRun_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (IsLoaded)
+        {
+            DrawV2SpeedProfile();
+        }
+    }
+
+    private void UpdateV2ActualSummary()
+    {
+        if (_v2World is null || _v2DispatchPlan is null || _route is null || _parameters is null)
+        {
+            return;
+        }
+
+        var events = _v2World.Events;
+        var completedTrips = new List<double>();
+        foreach (var run in _v2DispatchPlan.Runs)
+        {
+            var originPosition = run.Direction == TrainDirection.Outbound ? 0 : _route.TotalLengthMeters;
+            var terminalPosition = run.Direction == TrainDirection.Outbound ? _route.TotalLengthMeters : 0;
+            var departure = events.Where(item => item.EventType == SimulationEventType.Departure
+                    && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
+                    && item.Direction == run.Direction
+                    && Math.Abs(item.PositionMeters - originPosition) <= 0.6)
+                .OrderBy(item => item.SimulationTimeSeconds)
+                .FirstOrDefault();
+            var arrival = events.Where(item => item.EventType == SimulationEventType.Arrival
+                    && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
+                    && item.Direction == run.Direction
+                    && Math.Abs(item.PositionMeters - terminalPosition) <= 0.6)
+                .OrderBy(item => item.SimulationTimeSeconds)
+                .FirstOrDefault();
+            if (departure is not null && arrival is not null && arrival.SimulationTimeSeconds >= departure.SimulationTimeSeconds)
+            {
+                completedTrips.Add(arrival.SimulationTimeSeconds - departure.SimulationTimeSeconds);
+            }
+        }
+
+        OneWaySummaryText.Text = completedTrips.Count > 0
+            ? $"{FormatDuration(completedTrips.Average())}（V2 實際平均）"
+            : $"{FormatDuration(_cycle?.OutboundTrip.TotalRunTimeSeconds ?? 0)}（無干擾基準）";
+
+        var actualDepartures = events.Where(item => item.EventType == SimulationEventType.Departure)
+            .OrderBy(item => item.SimulationTimeSeconds)
+            .Select(item => item.SimulationTimeSeconds)
+            .Distinct()
+            .ToArray();
+        var intervals = actualDepartures.Zip(actualDepartures.Skip(1), (first, second) => second - first)
+            .Where(value => value > 1e-7)
+            .ToArray();
+        HeadwaySummaryText.Text = intervals.Length > 0
+            ? $"{FormatDuration(intervals.Min())}（V2 實際最短）"
+            : _v2PlannedMinimumIntervalSeconds is { } planned
+                ? $"{FormatDuration(planned)}（計畫最短）"
+                : "單一／同時發車";
+
+        var peakSpeed = _v2World.Trajectory.Count > 0
+            ? _v2World.Trajectory.Max(sample => sample.SpeedMetersPerSecond) * 3.6
+            : 0;
+        SpeedSummaryText.Text = peakSpeed > 0
+            ? $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} / {peakSpeed:0.#} km/h（V2 實際）"
+            : $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} km/h（尚未播放）";
+
+        var outcomeTimes = events.Where(item => item.EventType is SimulationEventType.ServiceEnded or SimulationEventType.DirectionChanged)
+            .Select(item => item.SimulationTimeSeconds)
+            .ToArray();
+        CycleSummaryText.Text = outcomeTimes.Length > 0
+            ? $"{FormatDuration(outcomeTimes.Max())}（端點結果）"
+            : $"{FormatDuration(_cycle?.CycleTimeSeconds ?? 0)}（無干擾基準）";
+    }
+
+    private bool HasPendingV2TerminalOutcomes()
+    {
+        if (_v2World is null || _v2DispatchPlan is null)
+        {
+            return false;
+        }
+
+        foreach (var run in _v2DispatchPlan.Runs)
+        {
+            var plannedStart = RelativeDispatchSeconds(run.PlannedDepartureTime, _v2DispatchPlan.ScheduleAnchorTime);
+            if (_v2World.CurrentTimeSeconds + 1e-7 < plannedStart)
+            {
+                return true;
+            }
+
+            if (!run.ContinueAfterTerminal)
+            {
+                if (!_v2World.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
+                    && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
+                    && (string.IsNullOrWhiteSpace(run.VehicleId)
+                        || item.VehicleId.Equals(run.VehicleId, StringComparison.OrdinalIgnoreCase))))
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (!_v2World.Events.Any(item => item.EventType == SimulationEventType.DirectionChanged
+                && (string.IsNullOrWhiteSpace(run.VehicleId)
+                    || item.VehicleId.Equals(run.VehicleId, StringComparison.OrdinalIgnoreCase))
+                && item.SimulationTimeSeconds + 1e-7 >= plannedStart))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private bool EnsureDiagramAvailable()
@@ -1127,10 +1353,40 @@ public partial class MainWindow
 
     private static string ShortVehicle(string vehicleId) => vehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal);
 
-    private static int ParseVehicleIndex(string vehicleId) =>
-        int.TryParse(vehicleId.AsSpan(vehicleId.LastIndexOf(' ') + 1), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? Math.Max(0, value - 1)
-            : 0;
+    private static int ParseVehicleIndex(string vehicleId)
+    {
+        if (int.TryParse(vehicleId.AsSpan(vehicleId.LastIndexOf(' ') + 1), NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var value))
+        {
+            return Math.Max(0, value - 1);
+        }
+
+        unchecked
+        {
+            var hash = 2166136261u;
+            foreach (var character in vehicleId)
+            {
+                hash = (hash ^ char.ToUpperInvariant(character)) * 16777619u;
+            }
+            return (int)(hash & 0x7FFFFFFF);
+        }
+    }
+
+    private static string VehicleMarkerLabel(string vehicleId)
+    {
+        if (vehicleId.StartsWith("Vehicle ", StringComparison.Ordinal)
+            && int.TryParse(vehicleId.AsSpan(8), out var legacyNumber))
+        {
+            return $"V{legacyNumber:00}";
+        }
+
+        if (vehicleId.StartsWith("AUTO-", StringComparison.OrdinalIgnoreCase))
+        {
+            return "A" + vehicleId[5..].TrimStart('0').PadLeft(2, '0');
+        }
+
+        return vehicleId.Length <= 5 ? vehicleId : vehicleId[..5];
+    }
 
     private static string DirectionToChinese(TrainDirection direction) =>
         direction == TrainDirection.Outbound ? "下行" : "上行";
@@ -1188,7 +1444,17 @@ public partial class MainWindow
         SimulationEventType.Collision => "實際碰撞",
         SimulationEventType.StationPassed => "跨站通過",
         SimulationEventType.StationStopViolation => "停車超限",
-        _ => "煞車模式切換"
+        SimulationEventType.BrakingModeChanged => "煞車模式切換",
+        SimulationEventType.DepartureDelayed => "延遲發車",
+        SimulationEventType.WaitingForResource => "等待進路",
+        SimulationEventType.PlatformAssigned => "月台配置",
+        SimulationEventType.RouteReserved => "進路鎖定",
+        SimulationEventType.RouteReleased => "進路釋放",
+        SimulationEventType.OvertakeRequested => "待避要求",
+        SimulationEventType.OvertakeCompleted => "待避完成",
+        SimulationEventType.OvertakeCancelled => "待避取消",
+        SimulationEventType.ServiceEnded => "退出營運",
+        _ => type.ToString()
     };
 
     private static Polyline CreateChartLine(Color color, double thickness, DoubleCollection? dash = null) => new()
