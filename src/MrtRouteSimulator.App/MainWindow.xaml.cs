@@ -409,6 +409,21 @@ public partial class MainWindow : Window
         }
 
         _playbackTimeSeconds += _playbackTimer.Interval.TotalSeconds * GetPlaybackSpeed();
+        if (!_v2Enabled && _playbackTimeSeconds >= _playbackDurationSeconds)
+        {
+            _playbackTimeSeconds = _playbackDurationSeconds;
+        }
+
+        UpdatePlaybackView();
+        if (_v2Enabled && _v2World?.IsComplete == true)
+        {
+            _playbackTimeSeconds = _v2World.CurrentTimeSeconds;
+            PausePlayback();
+            PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
+            StatusTextBlock.Text = "模擬完整循環已完成。";
+            return;
+        }
+
         if (_playbackTimeSeconds >= _playbackDurationSeconds)
         {
             if (_v2Enabled && HasPendingV2TerminalOutcomes())
@@ -426,8 +441,6 @@ public partial class MainWindow : Window
                 StatusTextBlock.Text = "模擬播放完成。";
             }
         }
-
-        UpdatePlaybackView();
     }
 
     private void UpdatePlaybackView()
@@ -670,6 +683,8 @@ public partial class MainWindow : Window
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
 
     private void SpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
+
+    private void InboundSpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 
     private void ClearResults()
     {

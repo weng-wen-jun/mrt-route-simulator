@@ -23,6 +23,7 @@ public partial class MainWindow
     public ObservableCollection<TurnbackInputRow> TurnbackRows { get; } = [];
     public ObservableCollection<SpatialReferencePointInputRow> SpatialReferencePointRows { get; } = [];
     public ObservableCollection<IntervalStatisticRow> IntervalStatisticRows { get; } = [];
+    public ObservableCollection<JourneyStatisticRow> JourneyStatisticRows { get; } = [];
 
     public IReadOnlyList<string> StopModeOptions { get; } = ["停站", "跨站"];
     public IReadOnlyList<string> TrainDirectionOptions { get; } = ["下行", "上行"];

@@ -19,6 +19,8 @@ public partial class MainWindow
     private bool _v2Enabled;
     private IReadOnlyList<TrajectorySample> _v2OutboundSpeedPreview = [];
     private string? _v2OutboundPreviewRunId;
+    private IReadOnlyList<TrajectorySample> _v2InboundSpeedPreview = [];
+    private string? _v2InboundPreviewRunId;
     private double? _v2PlannedMinimumIntervalSeconds;
 
     public ObservableCollection<SpeedLimitInputRow> SpeedLimitRows { get; } = [];
@@ -81,6 +83,8 @@ public partial class MainWindow
             _plannedTimetableEvents = [];
             _v2OutboundSpeedPreview = [];
             _v2OutboundPreviewRunId = null;
+            _v2InboundSpeedPreview = [];
+            _v2InboundPreviewRunId = null;
             _v2PlannedMinimumIntervalSeconds = null;
             ObstacleStopButton.IsEnabled = false;
             return;
@@ -174,7 +178,7 @@ public partial class MainWindow
         _plannedWorld.AdvanceTo(_playbackDurationSeconds);
         _plannedTimetableEvents = _plannedWorld.Events.ToArray();
         _plannedWorld.Reset();
-        BuildV2OutboundSpeedPreview(
+        BuildV2SpeedPreviews(
             operational,
             limits,
             operationProfile,
@@ -280,6 +284,7 @@ public partial class MainWindow
         SafetyRows.Clear();
         EventRows.Clear();
         IntervalStatisticRows.Clear();
+        JourneyStatisticRows.Clear();
         _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
@@ -296,15 +301,19 @@ public partial class MainWindow
         _v2Enabled = false;
         _v2OutboundSpeedPreview = [];
         _v2OutboundPreviewRunId = null;
+        _v2InboundSpeedPreview = [];
+        _v2InboundPreviewRunId = null;
         _v2PlannedMinimumIntervalSeconds = null;
         SafetyRows.Clear();
         EventRows.Clear();
         IntervalStatisticRows.Clear();
+        JourneyStatisticRows.Clear();
         _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
         SpeedProfileRunComboBox.Items.Clear();
+        InboundSpeedProfileRunComboBox.Items.Clear();
         ObstacleStopButton.IsEnabled = false;
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         IntervalSummaryText.Text = "目前不是 V2 模擬。";
@@ -684,47 +693,86 @@ public partial class MainWindow
 
     private void DrawV2SpeedProfile()
     {
-        SpeedCanvas.Children.Clear();
-        var width = SpeedCanvas.ActualWidth;
-        var height = SpeedCanvas.ActualHeight;
+        DrawV2SpeedProfile(
+            TrainDirection.Outbound,
+            SpeedCanvas,
+            SpeedProfileRunComboBox,
+            SpeedProfileSourceText,
+            _v2OutboundPreviewRunId,
+            _v2OutboundSpeedPreview);
+        DrawV2SpeedProfile(
+            TrainDirection.Inbound,
+            InboundSpeedCanvas,
+            InboundSpeedProfileRunComboBox,
+            InboundSpeedProfileSourceText,
+            _v2InboundPreviewRunId,
+            _v2InboundSpeedPreview);
+    }
+
+    private void DrawV2SpeedProfile(
+        TrainDirection direction,
+        Canvas canvas,
+        ComboBox runComboBox,
+        TextBlock sourceText,
+        string? previewRunId,
+        IReadOnlyList<TrajectorySample> previewSamples)
+    {
+        canvas.Children.Clear();
+        var width = canvas.ActualWidth;
+        var height = canvas.ActualHeight;
         if (width < 100 || height < 100 || _v2World is null || _parameters is null)
         {
             return;
         }
 
-        var selectedRunId = SpeedProfileRunComboBox.SelectedItem?.ToString() ?? _v2OutboundPreviewRunId;
+        var directionLabel = DirectionToChinese(direction);
+        var selectedRunId = runComboBox.SelectedItem?.ToString() ?? previewRunId;
         var actualSamples = _v2World.Trajectory
-            .Where(sample => sample.Direction == TrainDirection.Outbound
+            .Where(sample => sample.Direction == direction
                 && (selectedRunId is null || sample.ServiceRunId == selectedRunId))
             .ToArray();
         var useActual = actualSamples.Length >= 2;
         var samples = useActual
             ? actualSamples
-            : selectedRunId == _v2OutboundPreviewRunId && _v2OutboundSpeedPreview.Count >= 2
-                ? _v2OutboundSpeedPreview.ToArray()
+            : selectedRunId == previewRunId && previewSamples.Count >= 2
+                ? previewSamples.ToArray()
                 : [];
         if (samples.Length < 2)
         {
-            SpeedProfileSourceText.Text = selectedRunId is null ? "沒有下行車次" : $"{selectedRunId} 尚未產生實際軌跡";
-            AddCanvasText(SpeedCanvas, "所選下行車次尚未播放，或沒有可完成的單程軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
+            sourceText.Text = selectedRunId is null ? $"沒有{directionLabel}車次" : $"{selectedRunId} 尚未產生實際軌跡";
+            AddCanvasText(canvas, $"所選{directionLabel}車次尚未播放，或沒有可完成的單程軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
             return;
         }
 
-        SpeedProfileSourceText.Text = useActual
+        sourceText.Text = useActual
             ? $"{selectedRunId} · V2 實際"
-            : $"{selectedRunId} · 無干擾計畫預覽";
+            : $"{selectedRunId} · 計畫預覽";
 
         var left = 42d;
-        var top = 17d;
-        var plotWidth = width - left - 15;
-        var plotHeight = height - top - 31;
+        var top = 14d;
+        var right = 15d;
+        var bottom = 38d;
+        var plotWidth = width - left - right;
+        var plotHeight = height - top - bottom;
         var minTime = samples[0].SimulationTimeSeconds;
         var maxTime = Math.Max(minTime + 1, samples[^1].SimulationTimeSeconds);
         var maxSpeed = _parameters.MaxSpeedMetersPerSecond * 3.6 * 1.1;
-        DrawAxes(SpeedCanvas, left, top, plotWidth, plotHeight, "km/h", "模擬時間");
+        DrawAxes(canvas, left, top, plotWidth, plotHeight, "km/h", string.Empty);
+        DrawSpeedTimeAxisTicks(canvas, left, top, plotWidth, plotHeight, minTime, maxTime);
 
-        var speedLine = new Polyline { Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)), StrokeThickness = 2.4 };
-        var limitLine = new Polyline { Stroke = new SolidColorBrush(Color.FromRgb(205, 126, 24)), StrokeThickness = 1.4, StrokeDashArray = [4, 3] };
+        var speedLine = new Polyline
+        {
+            Stroke = new SolidColorBrush(direction == TrainDirection.Outbound
+                ? Color.FromRgb(232, 109, 45)
+                : Color.FromRgb(34, 126, 173)),
+            StrokeThickness = 2.4
+        };
+        var limitLine = new Polyline
+        {
+            Stroke = new SolidColorBrush(Color.FromRgb(205, 126, 24)),
+            StrokeThickness = 1.4,
+            StrokeDashArray = [4, 3]
+        };
         foreach (var sample in TrajectoryAnalysis.DecimatePreservingCriticalPoints(samples, 450))
         {
             var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
@@ -737,12 +785,46 @@ public partial class MainWindow
             limitLine.Points.Add(new Point(x, top + plotHeight - limit / maxSpeed * plotHeight));
         }
 
-        SpeedCanvas.Children.Add(limitLine);
-        SpeedCanvas.Children.Add(speedLine);
-        AddCanvasText(SpeedCanvas, "— 實際速度　- - 里程速限", left + 8, top + 3, 10, Color.FromRgb(85, 94, 112));
+        canvas.Children.Add(limitLine);
+        canvas.Children.Add(speedLine);
+        AddCanvasText(canvas, "— 實際速度　- - 里程速限", left + 8, top + 2, 10, Color.FromRgb(85, 94, 112));
     }
 
-    private void BuildV2OutboundSpeedPreview(
+    private void DrawSpeedTimeAxisTicks(
+        Canvas canvas,
+        double left,
+        double top,
+        double width,
+        double height,
+        double minTime,
+        double maxTime)
+    {
+        const int tickCount = 4;
+        for (var index = 0; index <= tickCount; index++)
+        {
+            var ratio = index / (double)tickCount;
+            var x = left + ratio * width;
+            var time = minTime + ratio * (maxTime - minTime);
+            canvas.Children.Add(new Line
+            {
+                X1 = x,
+                X2 = x,
+                Y1 = top + height,
+                Y2 = top + height + 4,
+                Stroke = Brushes.SlateGray,
+                StrokeThickness = 1
+            });
+            AddCanvasText(
+                canvas,
+                TrajectoryAnalysis.FormatClock(_startClockSeconds + time),
+                Math.Clamp(x - 24, left - 2, left + width - 48),
+                top + height + 5,
+                9,
+                Color.FromRgb(102, 112, 133));
+        }
+    }
+
+    private void BuildV2SpeedPreviews(
         OperationalParameters operational,
         IReadOnlyList<SpeedLimitSegment> limits,
         OperationProfileMode operationProfile,
@@ -753,16 +835,50 @@ public partial class MainWindow
         InfrastructureGraph infrastructure,
         BrakingEstimationMode brakingMode)
     {
-        _v2OutboundSpeedPreview = [];
-        var firstOutbound = dispatchPlan.Runs
-            .Where(run => run.Direction == TrainDirection.Outbound)
+        (_v2OutboundPreviewRunId, _v2OutboundSpeedPreview) = BuildV2SpeedPreview(
+            TrainDirection.Outbound,
+            operational,
+            limits,
+            operationProfile,
+            movingBlockMode,
+            servicePatterns,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure,
+            brakingMode);
+        (_v2InboundPreviewRunId, _v2InboundSpeedPreview) = BuildV2SpeedPreview(
+            TrainDirection.Inbound,
+            operational,
+            limits,
+            operationProfile,
+            movingBlockMode,
+            servicePatterns,
+            dispatchPlan,
+            vehicleTypes,
+            infrastructure,
+            brakingMode);
+    }
+
+    private (string? RunId, IReadOnlyList<TrajectorySample> Samples) BuildV2SpeedPreview(
+        TrainDirection direction,
+        OperationalParameters operational,
+        IReadOnlyList<SpeedLimitSegment> limits,
+        OperationProfileMode operationProfile,
+        MovingBlockMode movingBlockMode,
+        IReadOnlyList<ServicePattern> servicePatterns,
+        ResolvedDispatchPlan dispatchPlan,
+        IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
+        InfrastructureGraph infrastructure,
+        BrakingEstimationMode brakingMode)
+    {
+        var firstRun = dispatchPlan.Runs
+            .Where(run => run.Direction == direction)
             .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
             .ThenBy(run => run.Sequence)
             .FirstOrDefault();
-        _v2OutboundPreviewRunId = firstOutbound?.ServiceRunId;
-        if (firstOutbound is null || _route is null || _parameters is null)
+        if (firstRun is null || _route is null || _parameters is null)
         {
-            return;
+            return (null, []);
         }
 
         var preview = new SimulationWorld(
@@ -784,20 +900,21 @@ public partial class MainWindow
             preview.SetBrakingEstimationMode(brakingMode);
         }
 
-        var plannedStart = RelativeDispatchSeconds(firstOutbound.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
+        var plannedStart = RelativeDispatchSeconds(firstRun.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
+        var terminalPosition = direction == TrainDirection.Outbound ? _route.TotalLengthMeters : 0;
         var deadline = plannedStart + Math.Max(3600, preview.BaselineCycleTimeSeconds * 2);
         while (preview.CurrentTimeSeconds < deadline
             && !preview.Events.Any(item => item.EventType == SimulationEventType.Arrival
-                && item.ServiceRunId == firstOutbound.ServiceRunId
-                && Math.Abs(item.PositionMeters - _route.TotalLengthMeters) <= 0.5))
+                && item.ServiceRunId == firstRun.ServiceRunId
+                && Math.Abs(item.PositionMeters - terminalPosition) <= 0.5))
         {
             preview.Tick();
         }
 
-        _v2OutboundSpeedPreview = preview.Trajectory
-            .Where(sample => sample.ServiceRunId == firstOutbound.ServiceRunId
-                && sample.Direction == TrainDirection.Outbound)
-            .ToArray();
+        return (firstRun.ServiceRunId, preview.Trajectory
+            .Where(sample => sample.ServiceRunId == firstRun.ServiceRunId
+                && sample.Direction == direction)
+            .ToArray());
     }
 
     private static double? GetMinimumPlannedIntervalSeconds(ResolvedDispatchPlan dispatchPlan)
@@ -1178,10 +1295,27 @@ public partial class MainWindow
             SpeedProfileRunComboBox.Items.Add(serviceRunId);
         }
         SpeedProfileRunComboBox.SelectedIndex = SpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
+        foreach (var serviceRunId in dispatchPlan.Runs
+                     .Where(run => run.Direction == TrainDirection.Inbound)
+                     .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
+                     .ThenBy(run => run.Sequence)
+                     .Select(run => run.ServiceRunId))
+        {
+            InboundSpeedProfileRunComboBox.Items.Add(serviceRunId);
+        }
+        InboundSpeedProfileRunComboBox.SelectedIndex = InboundSpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
         ObstacleDelayTextBox.Text = "0";
     }
 
     private void SpeedProfileRun_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (IsLoaded)
+        {
+            DrawV2SpeedProfile();
+        }
+    }
+
+    private void InboundSpeedProfileRun_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (IsLoaded)
         {

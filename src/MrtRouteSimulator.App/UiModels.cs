@@ -270,3 +270,14 @@ public sealed record IntervalStatisticRow(
     string PeakSpeed,
     string ControlLimitedTime,
     string ControlEvents);
+
+public sealed record JourneyStatisticRow(
+    string Vehicle,
+    string ServiceRun,
+    string Direction,
+    string Route,
+    string Status,
+    string Departure,
+    string Arrival,
+    string TravelTime,
+    string AverageSpeed);

@@ -349,7 +349,14 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </StackPanel>
-                                <StackPanel Grid.Column="2">
+                                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <DockPanel LastChildFill="True" Margin="0,0,0,6">
                                     <TextBlock Text="下行單程速度曲線【V3.2】" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
@@ -357,10 +364,21 @@
                                             <ComboBox x:Name="SpeedProfileRunComboBox" Width="155" SelectionChanged="SpeedProfileRun_SelectionChanged" AutomationProperties.Name="下行速度曲線車次" />
                                         </StackPanel>
                                     </DockPanel>
-                                    <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
-                                        <Canvas x:Name="SpeedCanvas" Height="230" SizeChanged="SpeedCanvas_SizeChanged" AutomationProperties.Name="速度時間曲線" />
+                                    <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
+                                        <Canvas x:Name="SpeedCanvas" Height="155" SizeChanged="SpeedCanvas_SizeChanged" AutomationProperties.Name="下行速度時間曲線" />
                                     </Border>
-                                </StackPanel>
+                                    <DockPanel Grid.Row="2" LastChildFill="True" Margin="0,10,0,6">
+                                        <TextBlock Text="上行單程速度曲線【V3.3】" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                            <TextBlock x:Name="InboundSpeedProfileSourceText" Text="V2 實際／計畫預覽" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                            <ComboBox x:Name="InboundSpeedProfileRunComboBox" Width="155" SelectionChanged="InboundSpeedProfileRun_SelectionChanged" AutomationProperties.Name="上行速度曲線車次" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                    <Border Grid.Row="3" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
+                                        <Canvas x:Name="InboundSpeedCanvas" Height="155" SizeChanged="InboundSpeedCanvas_SizeChanged" AutomationProperties.Name="上行速度時間曲線" />
+                                    </Border>
+                                </Grid>
+                                </ScrollViewer>
                             </Grid>
                         </Grid>
                     </TabItem>
@@ -493,6 +511,7 @@
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                             </Grid.RowDefinitions>
                             <WrapPanel Margin="0,0,0,8">
@@ -526,10 +545,28 @@
                                 <Button Content="重新整理" Style="{StaticResource SecondaryButton}" Click="RefreshIntervalStatistics_Click" Margin="0,0,8,6" />
                                 <Button Content="匯出區間 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalCsv_Click" Margin="0,0,8,6" />
                                 <Button Content="匯出彙總 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalSummaryCsv_Click" Margin="0,0,8,6" />
+                                <Button Content="匯出全程平均 CSV" Style="{StaticResource SecondaryButton}" Click="ExportJourneyCsv_Click" Margin="0,0,8,6" />
                                 <TextBlock x:Name="IntervalSummaryText" Text="建立並播放 V2 模擬後顯示。" Foreground="{StaticResource MutedBrush}"
                                            VerticalAlignment="Center" Margin="0,0,0,6" />
                             </WrapPanel>
-                            <DataGrid Grid.Row="1" ItemsSource="{Binding IntervalStatisticRows}" IsReadOnly="True" RowHeaderWidth="0">
+                            <StackPanel Grid.Row="1" Margin="0,0,0,10">
+                                <TextBlock Text="每車次起終站平均速率" Style="{StaticResource SectionTitle}" />
+                                <TextBlock Text="以起站實際發車至終站實際抵達計算，包含中間站停站時間。" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,5" />
+                                <DataGrid ItemsSource="{Binding JourneyStatisticRows}" IsReadOnly="True" RowHeaderWidth="0" Height="155">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
+                                        <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
+                                        <DataGridTextColumn Header="起站 → 終站" Binding="{Binding Route}" Width="135" />
+                                        <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="60" />
+                                        <DataGridTextColumn Header="起站離站" Binding="{Binding Departure}" Width="88" />
+                                        <DataGridTextColumn Header="終站抵達" Binding="{Binding Arrival}" Width="88" />
+                                        <DataGridTextColumn Header="全程秒" Binding="{Binding TravelTime}" Width="72" />
+                                        <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding IntervalStatisticRows}" IsReadOnly="True" RowHeaderWidth="0">
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
                                     <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />

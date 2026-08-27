@@ -61,6 +61,7 @@ var tests = new (string Name, Action Run)[]
     ("V2 寫實引擎依派車計畫從兩端發車並保留結構化識別", TestDispatchWorldFromBothEnds),
     ("V3 折返續行選項可展開並由存檔保留", TestDispatchContinuationPersistence),
     ("V3 未續行車完成端點清車後退出並消失", TestDispatchTerminalExitAfterDwell),
+    ("V2 全部車輛退出後才回報完整循環完成", TestWorldCompletionRequiresAllDispatchVehiclesToExit),
     ("V3 續行車完成端點作業後折返為新車次", TestDispatchTerminalContinuation),
     ("V3 手動班表可將下行車次接續為指定上行車次", TestDispatchSpecificContinuationChain),
     ("V2 寫實引擎拒絕重複指定車輛", TestDispatchDuplicateVehicleRejected),
@@ -932,6 +933,51 @@ static void TestDispatchTerminalExitAfterDwell()
         "清車完成後退出營運列車應從路線上消失。");
     True(world.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
         && item.ServiceRunId == "RUN-EXIT"), "應留下結構化退出營運事件。");
+    True(world.IsComplete, "最後一列車退出營運後世界應回報完整循環完成。");
+}
+
+static void TestWorldCompletionRequiresAllDispatchVehiclesToExit()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [
+                new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    vehicleId: "EMU-COMPLETE-01", serviceRunId: "RUN-COMPLETE-01"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(300), TrainDirection.Inbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    vehicleId: "EMU-COMPLETE-02", serviceRunId: "RUN-COMPLETE-02")
+            ],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var world = new SimulationWorld(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        2,
+        movingBlockMode: MovingBlockMode.Independent,
+        dispatchPlan: dispatch,
+        vehicleTypes: vehicles,
+        infrastructure: InfrastructureGraph.CreateLegacy(route));
+
+    while (!world.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
+               && item.ServiceRunId == "RUN-COMPLETE-01")
+           && world.CurrentTimeSeconds < 600)
+    {
+        world.Tick();
+    }
+
+    True(!world.IsComplete, "仍有尚未離開路線的排程車輛時不得提前回報完整循環完成。");
+    while (!world.IsComplete && world.CurrentTimeSeconds < 1200)
+    {
+        world.Tick();
+    }
+
+    True(world.IsComplete, "全部排程車輛均退出營運後應回報完整循環完成。");
+    Equal(2, world.Events.Count(item => item.EventType == SimulationEventType.ServiceEnded));
 }
 
 static void TestDispatchTerminalContinuation()
@@ -997,6 +1043,13 @@ static void TestDispatchSpecificContinuationChain()
     True(world.Events.Any(item => item.EventType == SimulationEventType.Departure
         && item.ServiceRunId == "RUN-UP-006" && item.VehicleId == "EMU-CIRCULATION-01"),
         "下行第一車應由同一實體車輛接續為指定上行第六車。");
+
+    while (!world.IsComplete && world.CurrentTimeSeconds < 1000)
+    {
+        world.Tick();
+    }
+
+    True(world.IsComplete, "指定折返接續的最後一個車次退出後，完整循環才應完成。");
 }
 
 static SimulationWorld CreateDispatchTerminalWorld(bool continueAfterTerminal, double terminalDwellSeconds)
@@ -1095,11 +1148,16 @@ static void TestIntervalStatistics()
     Equal(1, result.InProgressCount);
     Equal(1, result.Summaries.Count);
     NearlyEqual(30, result.Summaries[0].P95TravelTimeSeconds!.Value);
+    Equal(4, result.JourneyStatistics.Count);
+    Equal(3, result.JourneyStatistics.Count(item => item.IsComplete));
+    NearlyEqual(5, result.JourneyStatistics.Single(item => item.ServiceRunId == "RUN-2").AverageSpeedMetersPerSecond!.Value);
     var csv = IntervalStatistics.BuildCsv(result);
     var summaryCsv = IntervalStatistics.BuildSummaryCsv(result);
+    var journeyCsv = IntervalStatistics.BuildJourneyCsv(result);
     True(csv.Contains("完成", StringComparison.Ordinal) && csv.Contains("運行中", StringComparison.Ordinal), "中文 CSV 應區分完成與運行中。");
     True(csv.Contains("移動閉塞受限(s)", StringComparison.Ordinal), "區間 CSV 應輸出移動閉塞受限秒數。");
     True(summaryCsv.Contains("第95百分位旅行時間(s)", StringComparison.Ordinal), "摘要 CSV 應包含 P95 欄位。");
+    True(journeyCsv.Contains("起終站平均速度(km/h)", StringComparison.Ordinal), "全程平均速率 CSV 應輸出起終站平均速度欄位。");
 
     var completedOnly = IntervalStatistics.Analyze(route, samples, events,
         filter: new IntervalStatisticsFilter(IncludeInProgress: false));
@@ -1110,6 +1168,7 @@ static void TestIntervalStatistics()
             ServiceClassId: "普通車", ServicePatternId: "ALL_STOP", StartSimulationTimeSeconds: 90,
             EndSimulationTimeSeconds: 125, IncludeInProgress: false));
     Equal(1, selected.CompletedCount);
+    Equal(1, selected.JourneyStatistics.Count);
     NearlyEqual(20, selected.CompletedIntervals.Single().ControlLimitedSeconds!.Value);
     Equal(0, IntervalStatistics.Analyze(route, samples, events,
         filter: new IntervalStatisticsFilter(Direction: TrainDirection.Inbound)).AllIntervals.Count);

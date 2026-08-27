@@ -160,6 +160,9 @@ public sealed class SimulationWorld
 
     public double TimeStepSeconds => FixedTimeStepSeconds;
 
+    /// <summary>所有已排入世界的車輛均已完成最後一個車次並退出營運。</summary>
+    public bool IsComplete => _trains.Count > 0 && _trains.All(train => train.Completed);
+
     public IReadOnlyList<TrajectorySample> Trajectory => _trajectory;
 
     public IReadOnlyList<SafetyObservation> SafetyHistory => _safetyHistory;

@@ -53,6 +53,42 @@ public sealed record IntervalStatisticsFilter(
         return true;
     }
 
+    public bool Matches(JourneyStatistic item)
+    {
+        if (Direction is not null && item.Direction != Direction)
+        {
+            return false;
+        }
+
+        if (!MatchesText(VehicleId, item.VehicleId)
+            || !MatchesText(ServiceRunId, item.ServiceRunId)
+            || !MatchesText(VehicleTypeId, item.VehicleTypeId)
+            || !MatchesText(ServiceClassId, item.ServiceClassId)
+            || !MatchesText(ServicePatternId, item.ServicePatternId))
+        {
+            return false;
+        }
+
+        if (!IncludeInProgress && !item.IsComplete)
+        {
+            return false;
+        }
+
+        var itemStart = item.DepartureTimeSeconds ?? item.FirstObservedTimeSeconds;
+        var itemEnd = item.ArrivalTimeSeconds ?? item.LastObservedTimeSeconds;
+        if (StartSimulationTimeSeconds is { } start && itemEnd < start)
+        {
+            return false;
+        }
+
+        if (EndSimulationTimeSeconds is { } end && itemStart > end)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private static bool MatchesText(string? filter, string? value) =>
         filter is null || string.Equals(filter.Trim(), value, StringComparison.Ordinal);
 }
@@ -104,6 +140,31 @@ public sealed record IntervalStatistic
     public double? ControlLimitedSeconds { get; init; }
 }
 
+/// <summary>單一車次從起站發車至終站抵達的 V2 實際平均速率。</summary>
+public sealed record JourneyStatistic
+{
+    public required string VehicleId { get; init; }
+    public required string ServiceRunId { get; init; }
+    public string? VehicleTypeId { get; init; }
+    public required string ServiceClassId { get; init; }
+    public required string ServicePatternId { get; init; }
+    public required TrainDirection Direction { get; init; }
+    public required string OriginStationId { get; init; }
+    public required string OriginStationName { get; init; }
+    public required string TerminalStationId { get; init; }
+    public required string TerminalStationName { get; init; }
+    public required double DistanceMeters { get; init; }
+    public double? DepartureTimeSeconds { get; init; }
+    public double? ArrivalTimeSeconds { get; init; }
+    public double? TravelTimeSeconds { get; init; }
+    public double? AverageSpeedMetersPerSecond { get; init; }
+    public bool IsComplete { get; init; }
+    public double FirstObservedTimeSeconds { get; init; }
+    public double LastObservedTimeSeconds { get; init; }
+
+    public string Status => IsComplete ? "完成" : "運行中";
+}
+
 /// <summary>同一車站區間（僅使用完成樣本）的統計彙總。</summary>
 public sealed record IntervalStatisticsSummary(
     TrainDirection Direction,
@@ -127,6 +188,8 @@ public sealed record IntervalStatisticsResult(
     IReadOnlyList<IntervalStatisticsSummary> Summaries,
     IntervalStatisticsFilter Filter)
 {
+    public IReadOnlyList<JourneyStatistic> JourneyStatistics { get; init; } = [];
+
     public IReadOnlyList<IntervalStatistic> Completed => CompletedIntervals;
 
     public IReadOnlyList<IntervalStatistic> InProgress => InProgressIntervals;
@@ -167,11 +230,12 @@ public static class IntervalStatistics
         ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(samples);
         filter ??= new IntervalStatisticsFilter();
+        var allSamples = samples.ToArray();
         var allEvents = events?.ToArray() ?? [];
         var limits = speedLimits?.ToArray() ?? [];
         var raw = new List<IntervalStatistic>();
 
-        foreach (var run in samples
+        foreach (var run in allSamples
                      .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId)
                          && !string.IsNullOrWhiteSpace(item.ServiceRunId))
                      .GroupBy(item => (item.VehicleId, item.ServiceRunId, item.Direction)))
@@ -271,6 +335,17 @@ public static class IntervalStatistics
             }
         }
 
+        var journeys = allSamples
+            .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId)
+                && !string.IsNullOrWhiteSpace(item.ServiceRunId))
+            .GroupBy(item => (item.VehicleId, item.ServiceRunId, item.Direction))
+            .Select(run => CreateJourneyStatistic(route, run.OrderBy(item => item.SimulationTimeSeconds).ToArray(), allEvents))
+            .Where(item => item is not null)
+            .Cast<JourneyStatistic>()
+            .Where(filter.Matches)
+            .OrderBy(item => item.DepartureTimeSeconds ?? item.FirstObservedTimeSeconds)
+            .ThenBy(item => item.VehicleId, StringComparer.Ordinal)
+            .ToArray();
         var filtered = raw.Where(filter.Matches).ToArray();
         var completed = filtered.Where(item => item.IsComplete).ToArray();
         var inProgress = filtered.Where(item => !item.IsComplete).ToArray();
@@ -280,7 +355,10 @@ public static class IntervalStatistics
             .OrderBy(item => item.Direction)
             .ThenBy(item => item.FromStationId, StringComparer.Ordinal)
             .ToArray();
-        return new IntervalStatisticsResult(completed, inProgress, summaries, filter);
+        return new IntervalStatisticsResult(completed, inProgress, summaries, filter)
+        {
+            JourneyStatistics = journeys
+        };
     }
 
     public static string BuildCsv(IntervalStatisticsResult result, double displayClockStartSeconds = 0)
@@ -324,6 +402,37 @@ public static class IntervalStatistics
                 .Append(Number(item.ControlLimitedSeconds)).Append(',')
                 .Append(item.ControlEvents.TotalCount).Append(',')
                 .Append(Csv(string.Join('|', item.ControlEvents.EventTypes)))
+                .AppendLine();
+        }
+
+        return builder.ToString();
+    }
+
+    public static string BuildJourneyCsv(IntervalStatisticsResult result, double displayClockStartSeconds = 0)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        var builder = new StringBuilder();
+        builder.AppendLine("軟體版本,模型版本,車輛ID,車次ID,車型,服務類型,停站模式,方向,起站,終站,狀態,距離(m),起站離站模擬秒,終站抵達模擬秒,起站離站顯示時間,終站抵達顯示時間,全程旅行時間(s),起終站平均速度(km/h)");
+        foreach (var item in result.JourneyStatistics)
+        {
+            builder.Append(Csv(ProductVersion.Current)).Append(',')
+                .Append(Csv("V2 SimulationWorld")).Append(',')
+                .Append(Csv(item.VehicleId)).Append(',')
+                .Append(Csv(item.ServiceRunId)).Append(',')
+                .Append(Csv(item.VehicleTypeId ?? string.Empty)).Append(',')
+                .Append(Csv(item.ServiceClassId)).Append(',')
+                .Append(Csv(item.ServicePatternId)).Append(',')
+                .Append(item.Direction).Append(',')
+                .Append(Csv($"{item.OriginStationId} {item.OriginStationName}")).Append(',')
+                .Append(Csv($"{item.TerminalStationId} {item.TerminalStationName}")).Append(',')
+                .Append(item.Status).Append(',')
+                .Append(Number(item.DistanceMeters)).Append(',')
+                .Append(item.DepartureTimeSeconds is { } departure ? Number(departure) : string.Empty).Append(',')
+                .Append(item.ArrivalTimeSeconds is { } arrival ? Number(arrival) : string.Empty).Append(',')
+                .Append(Csv(item.DepartureTimeSeconds is { } d ? TrajectoryAnalysis.FormatClock(displayClockStartSeconds + d) : string.Empty)).Append(',')
+                .Append(Csv(item.ArrivalTimeSeconds is { } a ? TrajectoryAnalysis.FormatClock(displayClockStartSeconds + a) : string.Empty)).Append(',')
+                .Append(Number(item.TravelTimeSeconds)).Append(',')
+                .Append(Number(ToKmh(item.AverageSpeedMetersPerSecond)))
                 .AppendLine();
         }
 
@@ -419,6 +528,57 @@ public static class IntervalStatistics
                 endTime ?? observedEnd,
                 OperationalConstraint.MovingBlock),
             ControlEvents = SummarizeControlEvents(events, samples[0].VehicleId, direction, startTime ?? observedStart, endTime ?? observedEnd)
+        };
+    }
+
+    private static JourneyStatistic? CreateJourneyStatistic(
+        Route route,
+        IReadOnlyList<TrajectorySample> samples,
+        IReadOnlyList<SimulationEvent> events)
+    {
+        if (samples.Count == 0)
+        {
+            return null;
+        }
+
+        var direction = samples[0].Direction;
+        var origin = direction == TrainDirection.Outbound ? route.Stations[0] : route.Stations[^1];
+        var terminal = direction == TrainDirection.Outbound ? route.Stations[^1] : route.Stations[0];
+        var departure = FindDeparture(samples, events, origin, direction);
+        var arrival = departure is null
+            ? null
+            : FindArrival(samples, events, terminal, direction, departure.TimeSeconds);
+        var firstObserved = samples[0];
+        var lastObserved = samples[^1];
+        double? travelTime = departure is { } start && arrival is { } end
+            ? Math.Max(0, end.TimeSeconds - start.TimeSeconds)
+            : null;
+        var isComplete = departure is not null && arrival is not null;
+        var travelledDistance = isComplete
+            ? Math.Abs(terminal.PositionMeters - origin.PositionMeters)
+            : Math.Abs(lastObserved.PositionMeters - firstObserved.PositionMeters);
+        return new JourneyStatistic
+        {
+            VehicleId = samples[0].VehicleId,
+            ServiceRunId = samples[0].ServiceRunId,
+            VehicleTypeId = samples[0].VehicleTypeId,
+            ServiceClassId = samples[0].ServiceClassId,
+            ServicePatternId = samples[0].ServicePatternId,
+            Direction = direction,
+            OriginStationId = origin.StationId,
+            OriginStationName = origin.StationName,
+            TerminalStationId = terminal.StationId,
+            TerminalStationName = terminal.StationName,
+            DistanceMeters = travelledDistance,
+            DepartureTimeSeconds = departure?.TimeSeconds,
+            ArrivalTimeSeconds = arrival?.TimeSeconds,
+            TravelTimeSeconds = travelTime,
+            AverageSpeedMetersPerSecond = travelTime is > TimeEpsilon
+                ? travelledDistance / travelTime.Value
+                : null,
+            IsComplete = isComplete,
+            FirstObservedTimeSeconds = firstObserved.SimulationTimeSeconds,
+            LastObservedTimeSeconds = lastObserved.SimulationTimeSeconds
         };
     }
 

@@ -24,6 +24,7 @@ public partial class MainWindow
         if (!_v2Enabled || _v2World is null)
         {
             IntervalStatisticRows.Clear();
+            JourneyStatisticRows.Clear();
             if (IntervalSummaryText is not null) IntervalSummaryText.Text = "目前不是 V2 模擬。";
             return;
         }
@@ -43,6 +44,21 @@ public partial class MainWindow
             IntervalSummaryText.Text = "篩選條件無效。";
             return;
         }
+        JourneyStatisticRows.Clear();
+        foreach (var item in result.JourneyStatistics)
+        {
+            JourneyStatisticRows.Add(new JourneyStatisticRow(
+                item.VehicleId,
+                item.ServiceRunId,
+                DirectionToChinese(item.Direction),
+                $"{item.OriginStationId} → {item.TerminalStationId}",
+                item.Status,
+                item.DepartureTimeSeconds is { } departure ? FormatClock(_startClockSeconds + departure) : "—",
+                item.ArrivalTimeSeconds is { } arrival ? FormatClock(_startClockSeconds + arrival) : "—",
+                item.TravelTimeSeconds?.ToString("0.0", CultureInfo.InvariantCulture) ?? "—",
+                item.AverageSpeedMetersPerSecond is { } average ? (average * 3.6).ToString("0.0", CultureInfo.InvariantCulture) : "—"));
+        }
+
         IntervalStatisticRows.Clear();
         foreach (var item in result.AllIntervals)
         {
@@ -63,7 +79,8 @@ public partial class MainWindow
                     : string.Join("、", item.ControlEvents.EventTypes.Select(EventTypeToChinese))));
         }
 
-        IntervalSummaryText.Text = $"完成 {result.CompletedCount} 區間、運行中 {result.InProgressCount} 區間；彙總只計完成樣本。";
+        var completedJourneys = result.JourneyStatistics.Count(item => item.IsComplete);
+        IntervalSummaryText.Text = $"完成 {result.CompletedCount} 區間、運行中 {result.InProgressCount} 區間；完成 {completedJourneys}/{result.JourneyStatistics.Count} 全程車次。";
     }
 
     private IntervalStatisticsResult BuildIntervalStatisticsResult()
@@ -147,6 +164,31 @@ public partial class MainWindow
 
     private void ExportIntervalSummaryCsv_Click(object sender, RoutedEventArgs e) =>
         ExportIntervalCsv(summary: true);
+
+    private void ExportJourneyCsv_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var result = BuildIntervalStatisticsResult();
+            var dialog = new SaveFileDialog
+            {
+                Title = "匯出起終站平均速率 CSV",
+                Filter = "CSV 資料 (*.csv)|*.csv",
+                DefaultExt = ".csv",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = "V2起終站平均速率.csv"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            File.WriteAllText(dialog.FileName, IntervalStatistics.BuildJourneyCsv(result, _startClockSeconds),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            StatusTextBlock.Text = $"已匯出：{dialog.FileName}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowValidation([$"無法匯出起終站平均速率：{exception.Message}"]);
+        }
+    }
 
     private void ExportIntervalCsv(bool summary)
     {
