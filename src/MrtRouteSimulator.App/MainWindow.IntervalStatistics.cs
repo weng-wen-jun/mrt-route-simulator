@@ -165,6 +165,36 @@ public partial class MainWindow
     private void ExportIntervalSummaryCsv_Click(object sender, RoutedEventArgs e) =>
         ExportIntervalCsv(summary: true);
 
+    private void ExportResourceOccupancyCsv_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!_v2Enabled || _v2World is null)
+            {
+                throw new InvalidOperationException("請先建立並播放 V2 寫實模擬。");
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Title = "匯出資源占用與觀測容量 CSV",
+                Filter = "CSV 資料 (*.csv)|*.csv",
+                DefaultExt = ".csv",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = "V2資源占用與觀測容量.csv"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            var result = ResourceOccupancyAnalysis.Analyze(_v2World.Events, _v2World.CurrentTimeSeconds);
+            File.WriteAllText(dialog.FileName, ResourceOccupancyAnalysis.BuildCsv(result),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            StatusTextBlock.Text = $"已匯出：{dialog.FileName}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowValidation([$"無法匯出資源占用資料：{exception.Message}"]);
+        }
+    }
+
     private void ExportJourneyCsv_Click(object sender, RoutedEventArgs e)
     {
         try

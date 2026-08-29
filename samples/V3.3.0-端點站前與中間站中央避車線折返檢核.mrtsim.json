@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 7,
+  "routeId": "TB",
+  "routeName": "站前交替月台與中央避車線實體錨定站折返檢核線",
+  "stations": [
+    { "stationId": "TB01", "stationName": "北端站", "distanceFromPreviousMeters": 0, "dwellTimeSeconds": 15 },
+    { "stationId": "TB02", "stationName": "中央避車線錨定站", "distanceFromPreviousMeters": 500, "dwellTimeSeconds": 5 },
+    { "stationId": "TB03", "stationName": "中間站", "distanceFromPreviousMeters": 400, "dwellTimeSeconds": 15 },
+    { "stationId": "TB04", "stationName": "南端站", "distanceFromPreviousMeters": 600, "dwellTimeSeconds": 15 }
+  ],
+  "train": {
+    "maxSpeedMetersPerSecond": 22.2222222222,
+    "accelerationMetersPerSecondSquared": 1,
+    "decelerationMetersPerSecondSquared": 1,
+    "defaultDwellTimeSeconds": 15,
+    "originTurnaroundTimeSeconds": 120,
+    "terminalTurnaroundTimeSeconds": 120
+  },
+  "operations": {
+    "jerkMetersPerSecondCubed": 0.65,
+    "coastingRatio": 0.1,
+    "approachDistanceMeters": 120,
+    "approachSpeedMetersPerSecond": 0,
+    "tractionFadeRatio": 0.45,
+    "trainLengthMeters": 140,
+    "serviceBrakingMetersPerSecondSquared": 1,
+    "emergencyBrakingMetersPerSecondSquared": 1.3,
+    "controlReactionTimeSeconds": 1.5,
+    "brakeBuildUpTimeSeconds": 1.2,
+    "positioningErrorMeters": 1,
+    "safetyMarginMeters": 5,
+    "absoluteMinimumGapMeters": 10
+  },
+  "speedLimits": [],
+  "simulation": {
+    "trainCount": 3,
+    "headwaySeconds": null,
+    "startClockSeconds": 21600,
+    "playbackSpeed": 20,
+    "profileMode": "RealisticOperations",
+    "movingBlockMode": "Control",
+    "brakingEstimationMode": "Service",
+    "engineKind": "V2RealisticOperations"
+  },
+  "vehicleTypes": [
+    {
+      "id": "EMU-6",
+      "displayName": "六節測試電聯車",
+      "lengthMeters": 140,
+      "maxSpeedMetersPerSecond": 22.2222222222,
+      "accelerationMetersPerSecondSquared": 1,
+      "serviceBrakeDecelerationMetersPerSecondSquared": 1,
+      "emergencyBrakeDecelerationMetersPerSecondSquared": 1.3,
+      "jerkMetersPerSecondCubed": 0.65,
+      "tractionDecayPerSecond": 0.45,
+      "coastingDecelerationMetersPerSecond": 0.05
+    }
+  ],
+  "serviceTypes": [
+    {
+      "id": "LOCAL",
+      "displayName": "普通車",
+      "colorHex": "#4472C4",
+      "runPrefix": "LOC",
+      "defaultStopPatternId": "ALL_STOP",
+      "defaultVehicleTypeId": "EMU-6",
+      "priority": 1,
+      "canRequestOvertake": false,
+      "preferredPlatformIds": []
+    },
+    {
+      "id": "SHORT",
+      "displayName": "中央避車線區間車",
+      "colorHex": "#70AD47",
+      "runPrefix": "SHT",
+      "defaultStopPatternId": "POCKET_SHORT_TURN",
+      "defaultVehicleTypeId": "EMU-6",
+      "priority": 1,
+      "canRequestOvertake": false,
+      "preferredPlatformIds": []
+    }
+  ],
+  "stopPatterns": [
+    {
+      "id": "ALL_STOP",
+      "displayName": "全停站",
+      "instructions": [
+        { "stationId": "TB01", "action": "Stop", "dwellTimeSeconds": 15, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB02", "action": "Stop", "dwellTimeSeconds": 5, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB03", "action": "Stop", "dwellTimeSeconds": 15, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB04", "action": "Stop", "dwellTimeSeconds": 15, "passingSpeedLimitMetersPerSecond": null }
+      ]
+    },
+    {
+      "id": "POCKET_SHORT_TURN",
+      "displayName": "中央避車線區間折返",
+      "instructions": [
+        { "stationId": "TB01", "action": "Stop", "dwellTimeSeconds": 15, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB02", "action": "Turnback", "dwellTimeSeconds": 5, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB03", "action": "Stop", "dwellTimeSeconds": 5, "passingSpeedLimitMetersPerSecond": null },
+        { "stationId": "TB04", "action": "Stop", "dwellTimeSeconds": 15, "passingSpeedLimitMetersPerSecond": null }
+      ]
+    }
+  ],
+  "dispatch": {
+    "activeMode": "ManualTimetable",
+    "vehicleAssignmentMode": "Automatic",
+    "simpleHeadwayPlans": [],
+    "manualTimetableRows": [
+      {
+        "plannedDepartureTimeSeconds": 21600,
+        "direction": "Inbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "ALL_STOP",
+        "originPlatformId": "TB04:UP",
+        "vehicleId": "EMU-FRONT-01",
+        "serviceRunId": "CASE-01-UP",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "CASE-01-DOWN"
+      },
+      {
+        "plannedDepartureTimeSeconds": 21800,
+        "direction": "Outbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "ALL_STOP",
+        "originPlatformId": "TB01:DOWN-A",
+        "vehicleId": null,
+        "serviceRunId": "CASE-01-DOWN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 21660,
+        "direction": "Inbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "ALL_STOP",
+        "originPlatformId": "TB04:UP",
+        "vehicleId": "EMU-FRONT-02",
+        "serviceRunId": "CASE-01-UP-02",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "CASE-01-DOWN-02"
+      },
+      {
+        "plannedDepartureTimeSeconds": 21860,
+        "direction": "Outbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "ALL_STOP",
+        "originPlatformId": "TB01:DOWN-B",
+        "vehicleId": null,
+        "serviceRunId": "CASE-01-DOWN-02",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 22200,
+        "direction": "Inbound",
+        "serviceTypeId": "SHORT",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "POCKET_SHORT_TURN",
+        "originPlatformId": "TB04:UP",
+        "vehicleId": "EMU-POCKET-01",
+        "serviceRunId": "CASE-02-POCKET-IN",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "CASE-02-POCKET-OUT"
+      },
+      {
+        "plannedDepartureTimeSeconds": 22400,
+        "direction": "Outbound",
+        "serviceTypeId": "SHORT",
+        "vehicleTypeId": "EMU-6",
+        "stopPatternId": "POCKET_SHORT_TURN",
+        "originPlatformId": "TB02:DOWN",
+        "vehicleId": null,
+        "serviceRunId": "CASE-02-POCKET-OUT",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      }
+    ]
+  },
+  "infrastructure": {
+    "stationYards": [
+      {
+        "stationId": "TB01",
+        "name": "北端站場",
+        "platforms": [
+          { "platformId": "TB01:DOWN-A", "stationId": "TB01", "name": "北端下行 A 月台", "direction": "Outbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["DOWN-A"] },
+          { "platformId": "TB01:DOWN-B", "stationId": "TB01", "name": "北端下行 B 月台", "direction": "Outbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["DOWN-B"] },
+          { "platformId": "TB01:UP-A", "stationId": "TB01", "name": "北端上行 A 月台", "direction": "Inbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["UP-A"] },
+          { "platformId": "TB01:UP-B", "stationId": "TB01", "name": "北端上行 B 月台", "direction": "Inbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["UP-B"] }
+        ],
+        "trackSegmentIds": ["DOWN-A", "DOWN-B", "UP-A", "UP-B"],
+        "routePathIds": ["PATH-D-12-A", "PATH-D-12-B", "PATH-U-12-A", "PATH-U-12-B"],
+        "turnbackPlans": [],
+        "platformAllocationStrategy": "RoundRobin"
+      },
+      {
+        "stationId": "TB02",
+        "name": "中央避車線錨定站場",
+        "platforms": [
+          { "platformId": "TB02:DOWN", "stationId": "TB02", "name": "中央避車線下行月台", "direction": "Outbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["DOWN-M"] },
+          { "platformId": "TB02:UP", "stationId": "TB02", "name": "中央避車線上行月台", "direction": "Inbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["UP-M"] }
+        ],
+        "trackSegmentIds": ["DOWN-A", "DOWN-B", "DOWN-M", "UP-A", "UP-B", "UP-M"],
+        "routePathIds": ["PATH-D-12-A", "PATH-D-12-B", "PATH-D-23", "PATH-U-12-A", "PATH-U-12-B", "PATH-U-23"],
+        "turnbackPlans": [
+          { "turnbackId": "TB02-POCKET-TURN", "name": "中央避車線折返資源", "stationId": "TB02", "kind": "BeforeStation", "arrivalPlatformId": "TB02:UP", "departurePlatformId": "TB02:DOWN", "trackSegmentIds": ["UP-M", "DOWN-M"], "resourceIds": ["SIDING:TB02"], "turnbackTimeSeconds": 0 }
+        ],
+        "platformAllocationStrategy": "Automatic"
+      },
+      {
+        "stationId": "TB03",
+        "name": "中間站場",
+        "platforms": [
+          { "platformId": "TB03:DOWN", "stationId": "TB03", "name": "中間下行月台", "direction": "Outbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["DOWN-M"] },
+          { "platformId": "TB03:UP", "stationId": "TB03", "name": "中間上行月台", "direction": "Inbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["UP-M"] }
+        ],
+        "trackSegmentIds": ["DOWN-M", "UP-M"],
+        "routePathIds": ["PATH-D-23", "PATH-D-34", "PATH-U-23", "PATH-U-34"],
+        "turnbackPlans": [],
+        "platformAllocationStrategy": "Automatic"
+      },
+      {
+        "stationId": "TB04",
+        "name": "南端站場",
+        "platforms": [
+          { "platformId": "TB04:DOWN", "stationId": "TB04", "name": "南端下行月台", "direction": "Outbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["DOWN-M"] },
+          { "platformId": "TB04:UP", "stationId": "TB04", "name": "南端上行月台", "direction": "Inbound", "effectiveLengthMeters": 220, "stoppingPositionMeters": 0, "allowsPassengerService": true, "allowedVehicleTypeIds": [], "allowedServiceTypeIds": [], "trackSegmentIds": ["UP-M"] }
+        ],
+        "trackSegmentIds": ["DOWN-M", "UP-M"],
+        "routePathIds": ["PATH-D-34", "PATH-U-34"],
+        "turnbackPlans": [],
+        "platformAllocationStrategy": "Automatic"
+      }
+    ],
+    "trackSegments": [
+      { "trackId": "DOWN-A", "fromStationId": "TB01", "toStationId": "TB04", "startPositionMeters": 0, "endPositionMeters": 1500, "direction": "Outbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:DOWN-A"] },
+      { "trackId": "DOWN-B", "fromStationId": "TB01", "toStationId": "TB04", "startPositionMeters": 0, "endPositionMeters": 1500, "direction": "Outbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:DOWN-B"] },
+      { "trackId": "DOWN-M", "fromStationId": "TB01", "toStationId": "TB04", "startPositionMeters": 0, "endPositionMeters": 1500, "direction": "Outbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:DOWN-M"] },
+      { "trackId": "UP-A", "fromStationId": "TB04", "toStationId": "TB01", "startPositionMeters": 1500, "endPositionMeters": 0, "direction": "Inbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:UP-A"] },
+      { "trackId": "UP-B", "fromStationId": "TB04", "toStationId": "TB01", "startPositionMeters": 1500, "endPositionMeters": 0, "direction": "Inbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:UP-B"] },
+      { "trackId": "UP-M", "fromStationId": "TB04", "toStationId": "TB01", "startPositionMeters": 1500, "endPositionMeters": 0, "direction": "Inbound", "kind": "Mainline", "effectiveLengthMeters": 1500, "speedLimitMetersPerSecond": 22.2222222222, "conflictResourceIds": ["TRACK:UP-M"] }
+    ],
+    "paths": [
+      { "pathId": "PATH-D-12-A", "fromPlatformId": "TB01:DOWN-A", "toPlatformId": "TB02:DOWN", "direction": "Outbound", "trackSegmentIds": ["DOWN-A"], "resourceIds": ["PATH:DOWN:12-A"] },
+      { "pathId": "PATH-D-12-B", "fromPlatformId": "TB01:DOWN-B", "toPlatformId": "TB02:DOWN", "direction": "Outbound", "trackSegmentIds": ["DOWN-B"], "resourceIds": ["PATH:DOWN:12-B"] },
+      { "pathId": "PATH-D-23", "fromPlatformId": "TB02:DOWN", "toPlatformId": "TB03:DOWN", "direction": "Outbound", "trackSegmentIds": ["DOWN-M"], "resourceIds": ["PATH:DOWN:23"] },
+      { "pathId": "PATH-D-34", "fromPlatformId": "TB03:DOWN", "toPlatformId": "TB04:DOWN", "direction": "Outbound", "trackSegmentIds": ["DOWN-M"], "resourceIds": ["PATH:DOWN:34"] },
+      { "pathId": "PATH-U-12-A", "fromPlatformId": "TB02:UP", "toPlatformId": "TB01:UP-A", "direction": "Inbound", "trackSegmentIds": ["UP-A"], "resourceIds": ["PATH:UP:12-A"] },
+      { "pathId": "PATH-U-12-B", "fromPlatformId": "TB02:UP", "toPlatformId": "TB01:UP-B", "direction": "Inbound", "trackSegmentIds": ["UP-B"], "resourceIds": ["PATH:UP:12-B"] },
+      { "pathId": "PATH-U-23", "fromPlatformId": "TB03:UP", "toPlatformId": "TB02:UP", "direction": "Inbound", "trackSegmentIds": ["UP-M"], "resourceIds": ["PATH:UP:23"] },
+      { "pathId": "PATH-U-34", "fromPlatformId": "TB04:UP", "toPlatformId": "TB03:UP", "direction": "Inbound", "trackSegmentIds": ["UP-M"], "resourceIds": ["PATH:UP:34"] }
+    ],
+    "turnbackPlans": [
+      { "turnbackId": "TB02-POCKET-TURN", "name": "中央避車線折返資源", "stationId": "TB02", "kind": "BeforeStation", "arrivalPlatformId": "TB02:UP", "departurePlatformId": "TB02:DOWN", "trackSegmentIds": ["UP-M", "DOWN-M"], "resourceIds": ["SIDING:TB02"], "turnbackTimeSeconds": 0 }
+    ],
+    "spatialReferencePoints": [
+      {
+        "referencePointId": "REF-TB01-FRONT",
+        "stationId": "TB01",
+        "name": "北端站前折返（交替月台能力檢核）",
+        "kind": "BeforeStationTurnback",
+        "alternateBerthing": true,
+        "mainlineGradePermille": 0,
+        "branchlineGradePermille": 0,
+        "distanceFromStopToCrossoverMeters": 60,
+        "crossoverLengthMeters": 80,
+        "distanceFromCrossoverToTurnbackStopMeters": 0,
+        "turnbackDwellSeconds": 20,
+        "switchSpeedLimitMetersPerSecond": 9.7222222222,
+        "mainlineApproachCruiseSpeedMetersPerSecond": 16.6666666667,
+        "branchlineApproachCruiseSpeedMetersPerSecond": 16.6666666667,
+        "mainlineSafetyFactor": 1.5,
+        "branchlineSafetyFactor": 1.5,
+        "mainlineTrafficRatio": 0.5
+      },
+      {
+        "referencePointId": "REF-TB02-POCKET",
+        "stationId": "TB02",
+        "name": "中央避車線錨定站區間折返",
+        "kind": "CentralSidingTurnback",
+        "alternateBerthing": false,
+        "mainlineGradePermille": 0,
+        "branchlineGradePermille": 0,
+        "distanceFromStopToCrossoverMeters": 80,
+        "crossoverLengthMeters": 100,
+        "distanceFromCrossoverToTurnbackStopMeters": 120,
+        "turnbackDwellSeconds": 30,
+        "switchSpeedLimitMetersPerSecond": 9.7222222222,
+        "mainlineApproachCruiseSpeedMetersPerSecond": 16.6666666667,
+        "branchlineApproachCruiseSpeedMetersPerSecond": 16.6666666667,
+        "mainlineSafetyFactor": 1.5,
+        "branchlineSafetyFactor": 1.5,
+        "mainlineTrafficRatio": 0.5
+      }
+    ]
+  }
+}

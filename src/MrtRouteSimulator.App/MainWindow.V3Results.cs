@@ -106,4 +106,73 @@ public partial class MainWindow
         static double Phase(IntervalStatistic item, OperationalPhase phase) =>
             item.PhaseSeconds.TryGetValue(phase, out var seconds) ? seconds : 0;
     }
+
+    private void PopulateV1V2Comparison()
+    {
+        if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null || _parameters is null)
+        {
+            return;
+        }
+
+        var result = V1V2Comparison.Analyze(
+            _route,
+            _v2DispatchPlan,
+            BuildVehicleTypeDefinitions(),
+            BuildStopPatternDefinitions(),
+            _parameters,
+            _v2World.Events);
+        V1V2ComparisonRows.Clear();
+        foreach (var item in result.Stations)
+        {
+            V1V2ComparisonRows.Add(new V1V2ComparisonRow(
+                item.VehicleId,
+                item.ServiceRunId,
+                DirectionToChinese(item.Direction),
+                item.VehicleTypeId,
+                item.StopPatternId,
+                $"{item.StationId} {item.StationName}",
+                Clock(item.TheoreticalArrivalTimeSeconds),
+                Clock(item.TheoreticalDepartureTimeSeconds),
+                Seconds(item.TheoreticalDwellSeconds),
+                Clock(item.ActualArrivalTimeSeconds),
+                Clock(item.ActualDepartureTimeSeconds),
+                Seconds(item.ActualDwellSeconds),
+                Seconds(item.ArrivalDifferenceSeconds, signed: true),
+                Seconds(item.DepartureDifferenceSeconds, signed: true),
+                item.DepartureDifferencePercent is { } percent ? $"{percent:+0.0;-0.0;0.0}%" : "—",
+                item.Status));
+        }
+
+        string Clock(double? seconds) => seconds is { } value ? FormatClock(_startClockSeconds + value) : "—";
+        static string Seconds(double? seconds, bool signed = false) => seconds is not { } value
+            ? "—"
+            : signed ? $"{value:+0.0;-0.0;0.0} s" : $"{value:0.0} s";
+    }
+
+    private void PopulateResourceOccupancy()
+    {
+        if (!_v2Enabled || _v2World is null)
+        {
+            return;
+        }
+
+        var result = ResourceOccupancyAnalysis.Analyze(_v2World.Events, _v2World.CurrentTimeSeconds);
+        ResourceOccupancyRows.Clear();
+        foreach (var item in result.Resources)
+        {
+            ResourceOccupancyRows.Add(new ResourceOccupancyRow(
+                item.ResourceId,
+                $"{item.OccupiedSeconds:0.0} s",
+                $"{item.UtilizationPercent:0.0}%",
+                item.ReservationCount.ToString(),
+                $"{item.ObservedReservationsPerHour:0.0}",
+                item.MinimumReleaseHeadwaySeconds is { } headway ? $"{headway:0.0} s" : "—"));
+        }
+        if (ResourceOccupancySummaryText is not null)
+        {
+            ResourceOccupancySummaryText.Text = result.Resources.Count == 0
+                ? "播放模擬後，將依 RouteReserved／RouteReleased 顯示各資源的獨立占用時間軸。"
+                : $"觀測窗 {result.WindowEndSeconds - result.WindowStartSeconds:0.0} s；共 {result.Intervals.Count} 段資源占用。容量欄位是此排程的觀測值，不是安全認證容量。";
+        }
+    }
 }

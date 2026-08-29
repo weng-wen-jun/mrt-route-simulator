@@ -40,7 +40,8 @@ public enum BrakingEstimationMode
 public enum StationServiceMode
 {
     Stop,
-    Pass
+    Pass,
+    Turnback
 }
 
 public enum OperationalPhase
@@ -53,6 +54,10 @@ public enum OperationalPhase
     Braking,
     ApproachBraking,
     Arriving,
+    TailTrackOutbound,
+    TailTrackReturn,
+    SpatialTurnbackOutbound,
+    SpatialTurnbackReturn,
     Turning,
     EmergencyStopped,
     Collided,
@@ -87,6 +92,8 @@ public enum SimulationEventType
     PlatformAssigned,
     RouteReserved,
     RouteReleased,
+    TailTrackReached,
+    TailTrackReturnStarted,
     OvertakeRequested,
     OvertakeCompleted,
     OvertakeCancelled,
@@ -287,7 +294,8 @@ public sealed record SimulationEvent(
     string? PlatformId = null,
     string? ResourceId = null,
     double? PlannedTimeSeconds = null,
-    double? DelaySeconds = null);
+    double? DelaySeconds = null,
+    IReadOnlyList<string>? ResourceIds = null);
 
 public sealed record SimulationSnapshot(
     double SimulationTimeSeconds,

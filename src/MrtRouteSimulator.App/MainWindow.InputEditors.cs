@@ -10,6 +10,8 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
+    private readonly Dictionary<string, Window> _openEditorWindows = new(StringComparer.Ordinal);
+
     private string _dispatchPlanningMode = "簡易班距";
     private string _vehicleAssignmentMode = "自動配置";
 
@@ -21,13 +23,19 @@ public partial class MainWindow
     public ObservableCollection<TrackInputRow> TrackRows { get; } = [];
     public ObservableCollection<RoutePathInputRow> RoutePathRows { get; } = [];
     public ObservableCollection<TurnbackInputRow> TurnbackRows { get; } = [];
+    public ObservableCollection<StationOvertakeFacilityInputRow> StationOvertakeFacilityRows { get; } = [];
     public ObservableCollection<SpatialReferencePointInputRow> SpatialReferencePointRows { get; } = [];
+    // 範本與站點採不同集合，避免日後調整預設值靜默覆寫既有站場的個別設定。
+    public ObservableCollection<SpatialReferencePointInputRow> SpatialReferencePointTemplateRows { get; } = [];
     public ObservableCollection<IntervalStatisticRow> IntervalStatisticRows { get; } = [];
     public ObservableCollection<JourneyStatisticRow> JourneyStatisticRows { get; } = [];
+    public ObservableCollection<V1V2ComparisonRow> V1V2ComparisonRows { get; } = [];
+    public ObservableCollection<ResourceOccupancyRow> ResourceOccupancyRows { get; } = [];
 
-    public IReadOnlyList<string> StopModeOptions { get; } = ["停站", "跨站"];
+    public IReadOnlyList<string> StopModeOptions { get; } = ["停站", "跨站", "折返"];
     public IReadOnlyList<string> TrainDirectionOptions { get; } = ["下行", "上行"];
     public IReadOnlyList<string> InfrastructureDirectionOptions { get; } = ["雙向", "下行", "上行"];
+    public IReadOnlyList<string> OvertakeDirectionOptions { get; } = ["下行", "上行"];
     public IReadOnlyList<string> TrackKindOptions { get; } = ["正線", "月台線", "待避線", "側線", "橫渡線", "折返線", "尾軌", "進站線", "其他"];
     public IReadOnlyList<string> TurnbackKindOptions { get; } = ["抽象折返", "站前折返", "站後折返"];
 
@@ -69,7 +77,9 @@ public partial class MainWindow
         TrackRows.Clear();
         RoutePathRows.Clear();
         TurnbackRows.Clear();
+        StationOvertakeFacilityRows.Clear();
         SpatialReferencePointRows.Clear();
+        Replace(SpatialReferencePointTemplateRows, CreateDefaultSpatialReferencePointTemplateRows());
     }
 
     private void FocusRouteInput_Click(object sender, RoutedEventArgs e)
@@ -95,7 +105,8 @@ public partial class MainWindow
             TextColumn("緊急煞車", nameof(VehicleTypeInputRow.EmergencyBrake), 85),
             TextColumn("Jerk", nameof(VehicleTypeInputRow.Jerk), 70),
             TextColumn("牽引衰減", nameof(VehicleTypeInputRow.TractionDecay), 85),
-            TextColumn("惰行減速度", nameof(VehicleTypeInputRow.CoastingDeceleration), 95)
+            TextColumn("惰行減速度", nameof(VehicleTypeInputRow.CoastingDeceleration), 95),
+            OptionComboColumn("車型預設停站模式", nameof(VehicleTypeInputRow.DefaultStopPatternId), StopPatternOptions, 155)
         };
         ShowTransactionalEditor("車型目錄", VehicleTypeRows, Clone,
             rows => new VehicleTypeInputRow { Id = CreateGeneratedId("VEHICLE"), Name = $"新車型 {rows.Count + 1}" },
@@ -127,6 +138,7 @@ public partial class MainWindow
 
     private void EditStopPatterns()
     {
+        if (TryActivateEditor("StopPatterns")) return;
         var draft = new ObservableCollection<ServicePatternInputRow>(ServicePatternRows.Select(Clone));
         var grid = CreateGrid(draft,
             TextColumn("模式名稱", nameof(ServicePatternInputRow.PatternName), 150),
@@ -144,15 +156,15 @@ public partial class MainWindow
             }
             foreach (var row in draft.Where(item => item.PatternId.Equals(selected.PatternId, StringComparison.OrdinalIgnoreCase)))
                 row.PatternName = editor.Text;
-            grid.Dispatcher.BeginInvoke(grid.Items.Refresh);
         };
-        var window = CreateEditorWindow("停站模式管理【V3.3】", 780, 600);
+        var window = CreateEditorWindow("停站模式管理【V3.4】", 780, 600);
+        RegisterEditorWindow("StopPatterns", window);
         window.Owner = this;
         var root = (DockPanel)window.Content;
         var panel = new DockPanel { Margin = new Thickness(10) };
         var note = new TextBlock
         {
-            Text = "「所有車站停靠」由系統依路線自動維護。新增模式後，可用「新增站點設定」補上同一模式的其他車站。",
+            Text = "「所有車站停靠」由系統依路線自動維護。中央避車線應錨定既有實體車站，再將該站點動作設為「折返」。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -160,6 +172,7 @@ public partial class MainWindow
         panel.Children.Add(note);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         var addPattern = new Button { Content = "新增模式", MinWidth = 84, Margin = new Thickness(0, 0, 8, 0) };
+        var clonePattern = new Button { Content = "複製選取模式", MinWidth = 112, Margin = new Thickness(0, 0, 8, 0) };
         var addInstruction = new Button { Content = "新增站點設定", MinWidth = 104, Margin = new Thickness(0, 0, 8, 0) };
         var remove = new Button { Content = "刪除選取", MinWidth = 88 };
         addPattern.Click += (_, _) =>
@@ -174,6 +187,28 @@ public partial class MainWindow
             draft.Add(row);
             grid.SelectedItem = row;
             grid.ScrollIntoView(row);
+        };
+        clonePattern.Click += (_, _) =>
+        {
+            if (grid.SelectedItem is not ServicePatternInputRow selected)
+            {
+                ShowValidation(["請先選取要複製的停站模式。"]);
+                return;
+            }
+            var newPatternId = CreateGeneratedId("PATTERN");
+            var copies = draft.Where(item => item.PatternId.Equals(selected.PatternId, StringComparison.OrdinalIgnoreCase))
+                .Select(item => new ServicePatternInputRow
+                {
+                    PatternId = newPatternId,
+                    PatternName = $"{selected.PatternName} 副本",
+                    StationId = item.StationId,
+                    Mode = item.Mode,
+                    DwellTimeSeconds = item.DwellTimeSeconds,
+                    SpeedLimitKmh = item.SpeedLimitKmh
+                }).ToArray();
+            foreach (var copy in copies) draft.Add(copy);
+            grid.SelectedItem = copies.FirstOrDefault();
+            if (grid.SelectedItem is not null) grid.ScrollIntoView(grid.SelectedItem);
         };
         addInstruction.Click += (_, _) =>
         {
@@ -202,6 +237,7 @@ public partial class MainWindow
             if (grid.SelectedItem is ServicePatternInputRow selected) draft.Remove(selected);
         };
         buttons.Children.Add(addPattern);
+        buttons.Children.Add(clonePattern);
         buttons.Children.Add(addInstruction);
         buttons.Children.Add(remove);
         DockPanel.SetDock(buttons, Dock.Top);
@@ -223,11 +259,12 @@ public partial class MainWindow
                 ShowValidation(exception is SimulationValidationException validation ? validation.Errors : [exception.Message]);
             }
         });
-        window.ShowDialog();
+        window.Show();
     }
 
     private void EditDispatchPlan_Click(object sender, RoutedEventArgs e)
     {
+        if (TryActivateEditor("DispatchPlan")) return;
         var headways = new ObservableCollection<HeadwayPlanInputRow>(HeadwayPlanRows.Select(Clone));
         var manual = new ObservableCollection<ManualTimetableInputRow>(ManualTimetableRows.Select(Clone));
         var mode = new ComboBox { ItemsSource = new[] { "簡易班距", "手動班表" }, SelectedItem = _dispatchPlanningMode, Width = 130 };
@@ -261,7 +298,8 @@ public partial class MainWindow
         mode.SelectionChanged += (_, _) =>
             tabs.SelectedIndex = mode.SelectedItem?.ToString() == "手動班表" ? 1 : 0;
 
-        var window = CreateEditorWindow("發車計畫【V3.3】", 1050, 620);
+        var window = CreateEditorWindow("發車計畫【V3.4】", 1050, 620);
+        RegisterEditorWindow("DispatchPlan", window);
         var root = (DockPanel)window.Content;
         var settings = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12) };
         settings.Children.Add(new TextBlock { Text = "使用模式", VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
@@ -281,16 +319,18 @@ public partial class MainWindow
             _vehicleAssignmentMode = assignment.SelectedItem?.ToString() ?? "自動配置";
             MarkInputCommitted("發車計畫已更新；請重新建立模擬。", window);
         });
-        window.ShowDialog();
+        window.Show();
     }
 
     private void EditInfrastructure_Click(object sender, RoutedEventArgs e)
     {
+        if (TryActivateEditor("Infrastructure")) return;
         EnsureInfrastructureDraft();
         var platforms = new ObservableCollection<PlatformInputRow>(PlatformRows.Select(Clone));
         var tracks = new ObservableCollection<TrackInputRow>(TrackRows.Select(Clone));
         var paths = new ObservableCollection<RoutePathInputRow>(RoutePathRows.Select(Clone));
         var turnbacks = new ObservableCollection<TurnbackInputRow>(TurnbackRows.Select(Clone));
+        var overtakeFacilities = new ObservableCollection<StationOvertakeFacilityInputRow>(StationOvertakeFacilityRows.Select(Clone));
         var tabs = new TabControl();
         var platformGrid = CreateGrid(platforms,
             TextColumn("月台 ID", nameof(PlatformInputRow.PlatformId), 115),
@@ -330,22 +370,36 @@ public partial class MainWindow
             TextColumn("股道", nameof(TurnbackInputRow.TrackSegmentIds), 100),
             TextColumn("資源", nameof(TurnbackInputRow.ResourceIds), 120),
             TextColumn("秒", nameof(TurnbackInputRow.TurnbackTimeSeconds), 65));
+        var overtakeGrid = CreateGrid(overtakeFacilities,
+            TextColumn("設施 ID", nameof(StationOvertakeFacilityInputRow.FacilityId), 125),
+            TextColumn("車站", nameof(StationOvertakeFacilityInputRow.StationId), 75),
+            ComboColumn("方向", nameof(StationOvertakeFacilityInputRow.Direction), OvertakeDirectionOptions, 70),
+            TextColumn("共線正線", nameof(StationOvertakeFacilityInputRow.MainlineTrackSegmentId), 125),
+            TextColumn("普通車月台", nameof(StationOvertakeFacilityInputRow.LocalPlatformId), 115),
+            TextColumn("快速車月台", nameof(StationOvertakeFacilityInputRow.ExpressPlatformId), 115),
+            TextColumn("普通車待避線", nameof(StationOvertakeFacilityInputRow.LocalTrackSegmentId), 125),
+            TextColumn("快速車通過線", nameof(StationOvertakeFacilityInputRow.ExpressTrackSegmentId), 125),
+            TextColumn("分歧 km", nameof(StationOvertakeFacilityInputRow.EntryKm), 85),
+            TextColumn("衝突資源 ID", nameof(StationOvertakeFacilityInputRow.ResourceIds), 150));
         tabs.Items.Add(CreateEditableTab("月台", platformGrid, platforms, () => new PlatformInputRow()));
         tabs.Items.Add(CreateEditableTab("股道", trackGrid, tracks, () => new TrackInputRow()));
         tabs.Items.Add(CreateEditableTab("進路", pathGrid, paths, () => new RoutePathInputRow()));
         tabs.Items.Add(CreateEditableTab("折返", turnbackGrid, turnbacks, () => new TurnbackInputRow()));
-        var window = CreateEditorWindow("月台／股道／進路／折返", 1100, 650);
+        tabs.Items.Add(CreateStationOvertakeFacilityTab(overtakeGrid, overtakeFacilities));
+        var window = CreateEditorWindow("月台／股道／進路／折返／站內越行", 1360, 700);
+        RegisterEditorWindow("Infrastructure", window);
         ((DockPanel)window.Content).Children.Add(tabs);
         AddOkCancel(window, () =>
         {
-            CommitGrid(platformGrid); CommitGrid(trackGrid); CommitGrid(pathGrid); CommitGrid(turnbackGrid);
+            CommitGrid(platformGrid); CommitGrid(trackGrid); CommitGrid(pathGrid); CommitGrid(turnbackGrid); CommitGrid(overtakeGrid);
             Replace(PlatformRows, platforms.Select(Clone));
             Replace(TrackRows, tracks.Select(Clone));
             Replace(RoutePathRows, paths.Select(Clone));
             Replace(TurnbackRows, turnbacks.Select(Clone));
+            Replace(StationOvertakeFacilityRows, overtakeFacilities.Select(Clone));
             MarkInputCommitted("基礎設施已更新；請重新建立模擬。", window);
         });
-        window.ShowDialog();
+        window.Show();
     }
 
     private VehicleTypeDefinition[] BuildVehicleTypeDefinitions() => BuildVehicleTypeDefinitions(VehicleTypeRows);
@@ -353,7 +407,7 @@ public partial class MainWindow
     private static VehicleTypeDefinition[] BuildVehicleTypeDefinitions(IEnumerable<VehicleTypeInputRow> source) => source.Select(row =>
         new VehicleTypeDefinition(row.Id, row.Name, row.LengthMeters, row.MaxSpeedKmh / 3.6,
             row.Acceleration, row.ServiceBrake, row.EmergencyBrake, row.Jerk,
-            row.TractionDecay, row.CoastingDeceleration)).ToArray();
+            row.TractionDecay, row.CoastingDeceleration, EmptyToNull(row.DefaultStopPatternId))).ToArray();
 
     private ServiceTypeDefinition[] BuildServiceTypeDefinitions() => BuildServiceTypeDefinitions(ServiceTypeRows);
 
@@ -375,6 +429,11 @@ public partial class MainWindow
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (missing.Length > 0)
             throw new InvalidOperationException($"車型仍被服務類型或發車計畫引用，無法刪除：{string.Join("、", missing)}。");
+        var stopIds = BuildStopPatternDefinitions().Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var invalidDefault = values.FirstOrDefault(item =>
+            item.DefaultStopPatternId is { } stopId && !stopIds.Contains(stopId));
+        if (invalidDefault is not null)
+            throw new InvalidOperationException($"車型「{invalidDefault.DisplayName}」引用不存在的預設停站模式。" );
     }
 
     private void ValidateServiceTypeCatalog(IEnumerable<ServiceTypeInputRow> source)
@@ -429,9 +488,12 @@ public partial class MainWindow
                     {
                         "停站" => StopPatternAction.Stop,
                         "跨站" => StopPatternAction.Pass,
-                        _ => throw new InvalidOperationException($"停站模式第 {item.Number} 列請選擇「停站」或「跨站」。")
+                        "折返" => StopPatternAction.Turnback,
+                        _ => throw new InvalidOperationException($"停站模式第 {item.Number} 列請選擇「停站」、「跨站」或「折返」。")
                     };
-                    var dwell = action == StopPatternAction.Stop ? item.Row.DwellTimeSeconds : null;
+                    var dwell = action is StopPatternAction.Stop or StopPatternAction.Turnback
+                        ? item.Row.DwellTimeSeconds
+                        : null;
                     var passing = action == StopPatternAction.Pass ? item.Row.SpeedLimitKmh / 3.6 : null;
                     return new StopPatternInstruction(stationId, action, dwell, passing);
                 }).ToArray();
@@ -444,6 +506,7 @@ public partial class MainWindow
     {
         var ids = patterns.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var missing = ServiceTypeRows.Select(item => item.DefaultStopPatternId)
+            .Concat(VehicleTypeRows.Select(item => item.DefaultStopPatternId))
             .Concat(HeadwayPlanRows.Select(item => item.StopPatternId))
             .Concat(ManualTimetableRows.Select(item => item.StopPatternId))
             .Where(item => !string.IsNullOrWhiteSpace(item) && !ids.Contains(item))
@@ -481,12 +544,16 @@ public partial class MainWindow
 
     private InfrastructureGraph BuildInfrastructureGraph(EngineRoute route)
     {
-        var spatialReferencePoints = BuildSpatialReferencePointDefinitions(SpatialReferencePointRows);
+        var spatialReferencePoints = BuildSpatialReferencePointDefinitions(GetCompleteSpatialReferencePointRows());
+        var spatialReferencePointTemplates = BuildSpatialReferencePointTemplateDefinitions(
+            SpatialReferencePointTemplateRows.Count == 0
+                ? CreateDefaultSpatialReferencePointTemplateRows()
+                : SpatialReferencePointTemplateRows);
         if (PlatformRows.Count == 0 || TrackRows.Count == 0 || RoutePathRows.Count == 0)
         {
             var legacy = InfrastructureGraph.CreateLegacy(route);
             return new InfrastructureGraph(route, legacy.StationYards, legacy.TrackSegments, legacy.Paths,
-                legacy.TurnbackPlans, spatialReferencePoints);
+                legacy.TurnbackPlans, spatialReferencePoints, spatialReferencePointTemplates: spatialReferencePointTemplates);
         }
 
         var platforms = PlatformRows.Select(row => new PlatformDefinition(row.PlatformId, row.StationId, row.Name,
@@ -502,6 +569,17 @@ public partial class MainWindow
         var turnbacks = TurnbackRows.Select(row => new TurnbackPlanDefinition(row.TurnbackId, row.Name, row.StationId,
             ParseTurnbackKind(row.Kind), EmptyToNull(row.ArrivalPlatformId), EmptyToNull(row.DeparturePlatformId),
             SplitIds(row.TrackSegmentIds), SplitIds(row.ResourceIds), row.TurnbackTimeSeconds)).ToArray();
+        var overtakeFacilities = StationOvertakeFacilityRows.Select(row => new StationOvertakeFacilityDefinition(
+            row.FacilityId,
+            row.StationId,
+            ParseTrackDirection(row.Direction),
+            row.MainlineTrackSegmentId,
+            row.LocalPlatformId,
+            row.ExpressPlatformId,
+            row.LocalTrackSegmentId,
+            row.ExpressTrackSegmentId,
+            row.EntryKm * 1000,
+            SplitIds(row.ResourceIds))).ToArray();
         var yards = route.Stations.Select(station => new StationYardDefinition(station.StationId, station.StationName,
             platforms.Where(item => item.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)),
             tracks.Where(item => item.FromStationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)
@@ -509,7 +587,8 @@ public partial class MainWindow
             paths.Where(item => item.FromPlatformId.StartsWith(station.StationId + ":", StringComparison.OrdinalIgnoreCase)
                 || item.ToPlatformId.StartsWith(station.StationId + ":", StringComparison.OrdinalIgnoreCase)).Select(item => item.PathId),
             turnbacks.Where(item => item.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)))).ToArray();
-        return new InfrastructureGraph(route, yards, tracks, paths, turnbacks, spatialReferencePoints);
+        return new InfrastructureGraph(route, yards, tracks, paths, turnbacks, spatialReferencePoints, overtakeFacilities,
+            spatialReferencePointTemplates);
     }
 
     private static SpatialReferencePointDefinition[] BuildSpatialReferencePointDefinitions(
@@ -529,6 +608,49 @@ public partial class MainWindow
             row.StationReverseDistanceToSignalMeters, row.StationReverseOverlapMeters,
             row.StationReverseDwellSeconds, row.StationReverseEarlierCruiseSpeedKmh / 3.6,
             row.StationReverseLaterCruiseSpeedKmh / 3.6, row.StationReverseSafetyFactor)).ToArray();
+
+    private static SpatialReferencePointTemplateDefinition[] BuildSpatialReferencePointTemplateDefinitions(
+        IEnumerable<SpatialReferencePointInputRow> rows) => rows.Select(row => new SpatialReferencePointTemplateDefinition(
+            ParseSpatialReferencePointKind(row.Kind), row.AlternateBerthing,
+            row.MainlineGradePermille, row.BranchlineGradePermille,
+            row.DistanceFromStopToCrossoverMeters, row.CrossoverLengthMeters,
+            row.DistanceFromCrossoverToTurnbackStopMeters, row.TurnbackDwellSeconds,
+            row.SwitchSpeedLimitKmh / 3.6, row.MainlineApproachCruiseSpeedKmh / 3.6,
+            row.BranchlineApproachCruiseSpeedKmh / 3.6, row.MainlineSafetyFactor,
+            row.BranchlineSafetyFactor, row.MainlineTrafficRatio,
+            row.StationForwardGradeInPermille, row.StationForwardGradeOutPermille,
+            row.StationForwardDistanceToSignalMeters, row.StationForwardOverlapMeters,
+            row.StationForwardDwellSeconds, row.StationForwardEarlierCruiseSpeedKmh / 3.6,
+            row.StationForwardLaterCruiseSpeedKmh / 3.6, row.StationForwardSafetyFactor,
+            row.StationReverseGradeInPermille, row.StationReverseGradeOutPermille,
+            row.StationReverseDistanceToSignalMeters, row.StationReverseOverlapMeters,
+            row.StationReverseDwellSeconds, row.StationReverseEarlierCruiseSpeedKmh / 3.6,
+            row.StationReverseLaterCruiseSpeedKmh / 3.6, row.StationReverseSafetyFactor)).ToArray();
+
+    private SpatialReferencePointInputRow[] GetCompleteSpatialReferencePointRows()
+    {
+        var rows = SpatialReferencePointRows.Select(Clone).ToList();
+        IEnumerable<SpatialReferencePointInputRow> templates = SpatialReferencePointTemplateRows.Count == 0
+            ? CreateDefaultSpatialReferencePointTemplateRows()
+            : SpatialReferencePointTemplateRows;
+        var intermediateTemplate = templates.FirstOrDefault(item => item.Kind == "中間站")
+            ?? CreateDefaultSpatialReferencePointTemplateRows().Single(item => item.Kind == "中間站");
+        foreach (var station in StationRows)
+        {
+            if (string.IsNullOrWhiteSpace(station.StationId)
+                || rows.Any(item => item.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            var row = Clone(intermediateTemplate);
+            row.ReferencePointId = $"AUTO-SPATIAL:{station.StationId}";
+            row.StationId = station.StationId;
+            row.Name = station.StationName;
+            row.Kind = "中間站";
+            rows.Add(row);
+        }
+        return rows.ToArray();
+    }
 
     private void EnsureInfrastructureDraft()
     {
@@ -578,7 +700,6 @@ public partial class MainWindow
     {
         if (PlatformRows.Count == 0 || TrackRows.Count == 0 || RoutePathRows.Count == 0)
         {
-            if (SpatialReferencePointRows.Count == 0) return null;
             EnsureInfrastructureDraft();
         }
         var platforms = PlatformRows.Select(row => new ProjectPlatform(row.PlatformId, row.StationId, row.Name,
@@ -606,7 +727,7 @@ public partial class MainWindow
                 .Select(item => item.PathId).ToArray(),
             turnbacks.Where(item => item.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)).ToArray()))
             .ToArray();
-        var spatialReferencePoints = SpatialReferencePointRows.Select(row => new ProjectSpatialReferencePoint(
+        var spatialReferencePoints = GetCompleteSpatialReferencePointRows().Select(row => new ProjectSpatialReferencePoint(
             row.ReferencePointId, row.StationId, row.Name, ParseSpatialReferencePointKind(row.Kind),
             row.AlternateBerthing, row.MainlineGradePermille, row.BranchlineGradePermille,
             row.DistanceFromStopToCrossoverMeters, row.CrossoverLengthMeters,
@@ -622,7 +743,40 @@ public partial class MainWindow
             row.StationReverseDistanceToSignalMeters, row.StationReverseOverlapMeters,
             row.StationReverseDwellSeconds, row.StationReverseEarlierCruiseSpeedKmh / 3.6,
             row.StationReverseLaterCruiseSpeedKmh / 3.6, row.StationReverseSafetyFactor)).ToArray();
-        return new ProjectInfrastructure(yards, tracks, paths, turnbacks, spatialReferencePoints);
+        var spatialReferencePointTemplates = BuildSpatialReferencePointTemplateDefinitions(
+            SpatialReferencePointTemplateRows.Count == 0
+                ? CreateDefaultSpatialReferencePointTemplateRows()
+                : SpatialReferencePointTemplateRows)
+            .Select(template => new ProjectSpatialReferencePointTemplate(
+                template.Kind, template.AlternateBerthing, template.MainlineGradePermille,
+                template.BranchlineGradePermille, template.DistanceFromStopToCrossoverMeters,
+                template.CrossoverLengthMeters, template.DistanceFromCrossoverToTurnbackStopMeters,
+                template.TurnbackDwellSeconds, template.SwitchSpeedLimitMetersPerSecond,
+                template.MainlineApproachCruiseSpeedMetersPerSecond,
+                template.BranchlineApproachCruiseSpeedMetersPerSecond, template.MainlineSafetyFactor,
+                template.BranchlineSafetyFactor, template.MainlineTrafficRatio,
+                template.StationForwardGradeInPermille, template.StationForwardGradeOutPermille,
+                template.StationForwardDistanceToSignalMeters, template.StationForwardOverlapMeters,
+                template.StationForwardDwellSeconds, template.StationForwardEarlierCruiseSpeedMetersPerSecond,
+                template.StationForwardLaterCruiseSpeedMetersPerSecond, template.StationForwardSafetyFactor,
+                template.StationReverseGradeInPermille, template.StationReverseGradeOutPermille,
+                template.StationReverseDistanceToSignalMeters, template.StationReverseOverlapMeters,
+                template.StationReverseDwellSeconds, template.StationReverseEarlierCruiseSpeedMetersPerSecond,
+                template.StationReverseLaterCruiseSpeedMetersPerSecond, template.StationReverseSafetyFactor))
+            .ToArray();
+        var overtakeFacilities = StationOvertakeFacilityRows.Select(row => new ProjectStationOvertakeFacility(
+            row.FacilityId,
+            row.StationId,
+            ParseTrackDirection(row.Direction),
+            row.MainlineTrackSegmentId,
+            row.LocalPlatformId,
+            row.ExpressPlatformId,
+            row.LocalTrackSegmentId,
+            row.ExpressTrackSegmentId,
+            row.EntryKm * 1000,
+            SplitIds(row.ResourceIds))).ToArray();
+        return new ProjectInfrastructure(yards, tracks, paths, turnbacks, spatialReferencePoints, overtakeFacilities,
+            spatialReferencePointTemplates);
     }
 
     private void ApplyExtendedProjectInputs(SimulationProjectDocument document)
@@ -637,6 +791,7 @@ public partial class MainWindow
             Jerk = item.JerkMetersPerSecondCubed,
             TractionDecay = item.TractionDecayPerSecond,
             CoastingDeceleration = item.CoastingDecelerationMetersPerSecondSquared
+            ,DefaultStopPatternId = item.DefaultStopPatternId ?? string.Empty
         }));
         Replace(ServiceTypeRows, (document.ServiceTypes ?? []).Select(item => new ServiceTypeInputRow
         {
@@ -657,7 +812,12 @@ public partial class MainWindow
                     PatternId = pattern.Id,
                     PatternName = pattern.DisplayName,
                     StationId = instruction.StationId,
-                    Mode = instruction.Action == StopPatternAction.Pass ? "跨站" : "停站",
+                    Mode = instruction.Action switch
+                    {
+                        StopPatternAction.Pass => "跨站",
+                        StopPatternAction.Turnback => "折返",
+                        _ => "停站"
+                    },
                     DwellTimeSeconds = instruction.DwellTimeSeconds,
                     SpeedLimitKmh = instruction.PassingSpeedLimitMetersPerSecond * 3.6
                 });
@@ -737,6 +897,19 @@ public partial class MainWindow
             TrackSegmentIds = JoinIds(item.TrackSegmentIds ?? []), ResourceIds = JoinIds(item.ResourceIds ?? []),
             TurnbackTimeSeconds = item.TurnbackTimeSeconds
         }));
+        Replace(StationOvertakeFacilityRows, (infrastructure?.StationOvertakeFacilities ?? []).Select(item => new StationOvertakeFacilityInputRow
+        {
+            FacilityId = item.FacilityId,
+            StationId = item.StationId,
+            Direction = TrackDirectionToChinese(item.Direction),
+            MainlineTrackSegmentId = item.MainlineTrackSegmentId,
+            LocalPlatformId = item.LocalPlatformId,
+            ExpressPlatformId = item.ExpressPlatformId,
+            LocalTrackSegmentId = item.LocalTrackSegmentId,
+            ExpressTrackSegmentId = item.ExpressTrackSegmentId,
+            EntryKm = item.EntryPositionMeters / 1000,
+            ResourceIds = JoinIds(item.ResourceIds ?? [])
+        }));
         Replace(SpatialReferencePointRows, (infrastructure?.SpatialReferencePoints ?? []).Select(item => new SpatialReferencePointInputRow
         {
             ReferencePointId = item.ReferencePointId,
@@ -773,6 +946,43 @@ public partial class MainWindow
             StationReverseLaterCruiseSpeedKmh = item.StationReverseLaterCruiseSpeedMetersPerSecond * 3.6,
             StationReverseSafetyFactor = item.StationReverseSafetyFactor
         }));
+        Replace(SpatialReferencePointTemplateRows, (infrastructure?.SpatialReferencePointTemplates ?? []).Select(item => new SpatialReferencePointInputRow
+        {
+            Kind = SpatialReferencePointKindToChinese(item.Kind),
+            AlternateBerthing = item.AlternateBerthing,
+            MainlineGradePermille = item.MainlineGradePermille,
+            BranchlineGradePermille = item.BranchlineGradePermille,
+            DistanceFromStopToCrossoverMeters = item.DistanceFromStopToCrossoverMeters,
+            CrossoverLengthMeters = item.CrossoverLengthMeters,
+            DistanceFromCrossoverToTurnbackStopMeters = item.DistanceFromCrossoverToTurnbackStopMeters,
+            TurnbackDwellSeconds = item.TurnbackDwellSeconds,
+            SwitchSpeedLimitKmh = item.SwitchSpeedLimitMetersPerSecond * 3.6,
+            MainlineApproachCruiseSpeedKmh = item.MainlineApproachCruiseSpeedMetersPerSecond * 3.6,
+            BranchlineApproachCruiseSpeedKmh = item.BranchlineApproachCruiseSpeedMetersPerSecond * 3.6,
+            MainlineSafetyFactor = item.MainlineSafetyFactor,
+            BranchlineSafetyFactor = item.BranchlineSafetyFactor,
+            MainlineTrafficRatio = item.MainlineTrafficRatio,
+            StationForwardGradeInPermille = item.StationForwardGradeInPermille,
+            StationForwardGradeOutPermille = item.StationForwardGradeOutPermille,
+            StationForwardDistanceToSignalMeters = item.StationForwardDistanceToSignalMeters,
+            StationForwardOverlapMeters = item.StationForwardOverlapMeters,
+            StationForwardDwellSeconds = item.StationForwardDwellSeconds,
+            StationForwardEarlierCruiseSpeedKmh = item.StationForwardEarlierCruiseSpeedMetersPerSecond * 3.6,
+            StationForwardLaterCruiseSpeedKmh = item.StationForwardLaterCruiseSpeedMetersPerSecond * 3.6,
+            StationForwardSafetyFactor = item.StationForwardSafetyFactor,
+            StationReverseGradeInPermille = item.StationReverseGradeInPermille,
+            StationReverseGradeOutPermille = item.StationReverseGradeOutPermille,
+            StationReverseDistanceToSignalMeters = item.StationReverseDistanceToSignalMeters,
+            StationReverseOverlapMeters = item.StationReverseOverlapMeters,
+            StationReverseDwellSeconds = item.StationReverseDwellSeconds,
+            StationReverseEarlierCruiseSpeedKmh = item.StationReverseEarlierCruiseSpeedMetersPerSecond * 3.6,
+            StationReverseLaterCruiseSpeedKmh = item.StationReverseLaterCruiseSpeedMetersPerSecond * 3.6,
+            StationReverseSafetyFactor = item.StationReverseSafetyFactor
+        }));
+        if (SpatialReferencePointTemplateRows.Count == 0)
+        {
+            Replace(SpatialReferencePointTemplateRows, CreateDefaultSpatialReferencePointTemplateRows());
+        }
     }
 
     private void MarkInputCommitted(string status, Window window)
@@ -780,7 +990,7 @@ public partial class MainWindow
         PausePlayback();
         ClearResults();
         StatusTextBlock.Text = status;
-        window.DialogResult = true;
+        window.Close();
     }
 
     private static Window CreateEditorWindow(string title, double width, double height) => new()
@@ -798,9 +1008,12 @@ public partial class MainWindow
         Func<ObservableCollection<T>, T> create, IEnumerable<DataGridColumn> columns, double width,
         Action<IEnumerable<T>>? validate = null)
     {
+        var key = title;
+        if (TryActivateEditor(key)) return;
         var draft = new ObservableCollection<T>(source.Select(clone));
         var grid = CreateGrid(draft, columns.ToArray());
         var window = CreateEditorWindow(title, width, 560);
+        RegisterEditorWindow(key, window);
         window.Owner = this;
         ((DockPanel)window.Content).Children.Add(CreateEditorPanel(grid, draft, () => create(draft)));
         AddOkCancel(window, () =>
@@ -817,11 +1030,32 @@ public partial class MainWindow
                 ShowValidation(exception is SimulationValidationException validation ? validation.Errors : [exception.Message]);
             }
         });
-        window.ShowDialog();
+        window.Show();
     }
 
     private static TabItem CreateEditableTab<T>(string title, DataGrid grid, ObservableCollection<T> rows, Func<T> create) =>
         new() { Header = title, Content = CreateEditorPanel(grid, rows, create) };
+
+    private static TabItem CreateStationOvertakeFacilityTab(
+        DataGrid grid,
+        ObservableCollection<StationOvertakeFacilityInputRow> rows)
+    {
+        var panel = new DockPanel();
+        var hint = new TextBlock
+        {
+            Text = "站間維持單一正線時，可在雙島四股站設定普通車待避與快速車通過；同站同方向可建立多組候選，系統會依待避列車、進站位置與可用衝突資源選擇。分歧位置必須在列車進站前；建立模擬或存檔時會檢查月台、股道、方向與衝突資源。",
+            Margin = new Thickness(10, 10, 10, 0),
+            TextWrapping = TextWrapping.Wrap
+        };
+        DockPanel.SetDock(hint, Dock.Top);
+        panel.Children.Add(hint);
+        panel.Children.Add(CreateEditorPanel(grid, rows, () => new StationOvertakeFacilityInputRow
+        {
+            FacilityId = CreateGeneratedId("OVERTAKE"),
+            Direction = "下行"
+        }));
+        return new TabItem { Header = "站內越行", Content = panel };
+    }
 
     private static FrameworkElement CreateEditorPanel<T>(DataGrid grid, ObservableCollection<T> rows, Func<T> create)
     {
@@ -855,9 +1089,35 @@ public partial class MainWindow
         var ok = new Button { Content = "確定", MinWidth = 88, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
         var cancel = new Button { Content = "取消", MinWidth = 88, IsCancel = true };
         ok.Click += (_, _) => commit();
+        cancel.Click += (_, _) => window.Close();
         buttons.Children.Add(ok); buttons.Children.Add(cancel);
         DockPanel.SetDock(buttons, Dock.Bottom);
         ((DockPanel)window.Content).Children.Insert(0, buttons);
+    }
+
+    private bool TryActivateEditor(string key)
+    {
+        if (!_openEditorWindows.TryGetValue(key, out var window)) return false;
+        if (!window.IsVisible)
+        {
+            _openEditorWindows.Remove(key);
+            return false;
+        }
+
+        if (window.WindowState == WindowState.Minimized) window.WindowState = WindowState.Normal;
+        window.Activate();
+        window.Focus();
+        return true;
+    }
+
+    private void RegisterEditorWindow(string key, Window window)
+    {
+        _openEditorWindows[key] = window;
+        window.Closed += (_, _) =>
+        {
+            if (_openEditorWindows.TryGetValue(key, out var current) && ReferenceEquals(current, window))
+                _openEditorWindows.Remove(key);
+        };
     }
 
     private static void CommitGrid(DataGrid grid)
@@ -935,8 +1195,46 @@ public partial class MainWindow
         _ => "站前折返"
     };
 
+    private static SpatialReferencePointInputRow[] CreateDefaultSpatialReferencePointTemplateRows() =>
+        SpatialReferencePointTemplateDefinition.CreateDefaults().Select(ToInputRow).ToArray();
+
+    private static SpatialReferencePointInputRow ToInputRow(SpatialReferencePointTemplateDefinition item) => new()
+    {
+        Kind = SpatialReferencePointKindToChinese(item.Kind),
+        AlternateBerthing = item.AlternateBerthing,
+        MainlineGradePermille = item.MainlineGradePermille,
+        BranchlineGradePermille = item.BranchlineGradePermille,
+        DistanceFromStopToCrossoverMeters = item.DistanceFromStopToCrossoverMeters,
+        CrossoverLengthMeters = item.CrossoverLengthMeters,
+        DistanceFromCrossoverToTurnbackStopMeters = item.DistanceFromCrossoverToTurnbackStopMeters,
+        TurnbackDwellSeconds = item.TurnbackDwellSeconds,
+        SwitchSpeedLimitKmh = item.SwitchSpeedLimitMetersPerSecond * 3.6,
+        MainlineApproachCruiseSpeedKmh = item.MainlineApproachCruiseSpeedMetersPerSecond * 3.6,
+        BranchlineApproachCruiseSpeedKmh = item.BranchlineApproachCruiseSpeedMetersPerSecond * 3.6,
+        MainlineSafetyFactor = item.MainlineSafetyFactor,
+        BranchlineSafetyFactor = item.BranchlineSafetyFactor,
+        MainlineTrafficRatio = item.MainlineTrafficRatio,
+        StationForwardGradeInPermille = item.StationForwardGradeInPermille,
+        StationForwardGradeOutPermille = item.StationForwardGradeOutPermille,
+        StationForwardDistanceToSignalMeters = item.StationForwardDistanceToSignalMeters,
+        StationForwardOverlapMeters = item.StationForwardOverlapMeters,
+        StationForwardDwellSeconds = item.StationForwardDwellSeconds,
+        StationForwardEarlierCruiseSpeedKmh = item.StationForwardEarlierCruiseSpeedMetersPerSecond * 3.6,
+        StationForwardLaterCruiseSpeedKmh = item.StationForwardLaterCruiseSpeedMetersPerSecond * 3.6,
+        StationForwardSafetyFactor = item.StationForwardSafetyFactor,
+        StationReverseGradeInPermille = item.StationReverseGradeInPermille,
+        StationReverseGradeOutPermille = item.StationReverseGradeOutPermille,
+        StationReverseDistanceToSignalMeters = item.StationReverseDistanceToSignalMeters,
+        StationReverseOverlapMeters = item.StationReverseOverlapMeters,
+        StationReverseDwellSeconds = item.StationReverseDwellSeconds,
+        StationReverseEarlierCruiseSpeedKmh = item.StationReverseEarlierCruiseSpeedMetersPerSecond * 3.6,
+        StationReverseLaterCruiseSpeedKmh = item.StationReverseLaterCruiseSpeedMetersPerSecond * 3.6,
+        StationReverseSafetyFactor = item.StationReverseSafetyFactor
+    };
+
     private static VehicleTypeInputRow Clone(VehicleTypeInputRow x) => new() { Id = x.Id, Name = x.Name, LengthMeters = x.LengthMeters, MaxSpeedKmh = x.MaxSpeedKmh,
-        Acceleration = x.Acceleration, ServiceBrake = x.ServiceBrake, EmergencyBrake = x.EmergencyBrake, Jerk = x.Jerk, TractionDecay = x.TractionDecay, CoastingDeceleration = x.CoastingDeceleration };
+        Acceleration = x.Acceleration, ServiceBrake = x.ServiceBrake, EmergencyBrake = x.EmergencyBrake, Jerk = x.Jerk, TractionDecay = x.TractionDecay, CoastingDeceleration = x.CoastingDeceleration,
+        DefaultStopPatternId = x.DefaultStopPatternId };
     private static ServiceTypeInputRow Clone(ServiceTypeInputRow x) => new() { Id = x.Id, Name = x.Name, ColorHex = x.ColorHex, RunPrefix = x.RunPrefix,
         DefaultStopPatternId = x.DefaultStopPatternId, DefaultVehicleTypeId = x.DefaultVehicleTypeId, Priority = x.Priority, CanRequestOvertake = x.CanRequestOvertake,
         PreferredPlatformIds = x.PreferredPlatformIds };
@@ -960,6 +1258,19 @@ public partial class MainWindow
     private static TurnbackInputRow Clone(TurnbackInputRow x) => new() { TurnbackId = x.TurnbackId, Name = x.Name, StationId = x.StationId, Kind = x.Kind,
         ArrivalPlatformId = x.ArrivalPlatformId, DeparturePlatformId = x.DeparturePlatformId, TrackSegmentIds = x.TrackSegmentIds,
         ResourceIds = x.ResourceIds, TurnbackTimeSeconds = x.TurnbackTimeSeconds };
+    private static StationOvertakeFacilityInputRow Clone(StationOvertakeFacilityInputRow x) => new()
+    {
+        FacilityId = x.FacilityId,
+        StationId = x.StationId,
+        Direction = x.Direction,
+        MainlineTrackSegmentId = x.MainlineTrackSegmentId,
+        LocalPlatformId = x.LocalPlatformId,
+        ExpressPlatformId = x.ExpressPlatformId,
+        LocalTrackSegmentId = x.LocalTrackSegmentId,
+        ExpressTrackSegmentId = x.ExpressTrackSegmentId,
+        EntryKm = x.EntryKm,
+        ResourceIds = x.ResourceIds
+    };
     private static SpatialReferencePointInputRow Clone(SpatialReferencePointInputRow x) => new()
     {
         ReferencePointId = x.ReferencePointId, StationId = x.StationId, Name = x.Name, Kind = x.Kind,

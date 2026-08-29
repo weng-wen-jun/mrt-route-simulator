@@ -41,6 +41,8 @@ var tests = new (string Name, Action Run)[]
     ("車輛 ID 與折返後車次 ID 分離", TestVehicleAndServiceRunIdentity),
     ("CSV 支援跨日時間及必要欄位", TestTrajectoryCsv),
     ("軌跡降採樣保留端點與相位轉折", TestTrajectoryDecimation),
+    ("軌跡留存策略不改變事件且可限制取樣", TestTraceRetentionPolicies),
+    ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
     ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
@@ -48,11 +50,16 @@ var tests = new (string Name, Action Run)[]
     ("控制模式在起點未淨空時延後發車", TestDepartureClearanceProtection),
     ("同一追撞只記錄一次碰撞事件", TestCollisionEventRecordedOnce),
     ("動態煞車包絡線使到站前速度接近零", TestDynamicStationBrakingContinuity),
+    ("StationStopController 以曲線與預測停點控制精停", TestStationStopControllerTracksCurveAndPrediction),
+    ("進站低速限制解除後仍受精停目標速度約束", TestStationStopControllerPreventsPostNearStopBounce),
+    ("SimulationWorld 進站近停後不會重新牽引回彈", TestSimulationWorldStationBrakingDoesNotReaccelerate),
     ("移動閉塞控制不再把高速列車瞬間歸零", TestMovingBlockControlDoesNotHardStop),
     ("跨站車不套用固定進站速度或停站", TestExpressServicePassesStation),
     ("跨站車仍遵守車站通過速限", TestPassingServiceHonorsStationLimit),
     ("折返後可套用不同停站模式", TestTurnaroundLoadsDifferentServicePattern),
     ("專案存檔 JSON 可完整往返", TestSimulationProjectRoundTrip),
+    ("完成模擬固定時刻表封存可完整往返", TestFixedTimetableArchiveRoundTrip),
+    ("固定時刻表封存會拒絕破損或不相符資料", TestFixedTimetableArchiveValidation),
     ("舊 Schema 存檔會明確拒絕", TestLegacyProjectRejected),
     ("專案存檔拒絕未知版本與破損 JSON", TestSimulationProjectValidation),
     ("軟體版本符合三段式規則且與組件一致", TestProductVersionMetadata),
@@ -66,19 +73,32 @@ var tests = new (string Name, Action Run)[]
     ("V3 手動班表可將下行車次接續為指定上行車次", TestDispatchSpecificContinuationChain),
     ("V2 寫實引擎拒絕重複指定車輛", TestDispatchDuplicateVehicleRejected),
     ("V3 舊路線與自訂資源會產生鎖定事件", TestInfrastructureResourceLockEvents),
+    ("V3.4 資源占用時間軸可獨立統計月台與衝突區", TestResourceOccupancyAnalysis),
+    ("V3.4 自動多月台配置會平衡可用月台", TestAutomaticPlatformAllocationBalancesCandidates),
     ("V2 區間統計支援完整篩選、控制受限秒數與 P95", TestIntervalStatistics),
+    ("V1 理論與 V2 實際可依相同停站條件逐欄比較", TestV1V2Comparison),
     ("Schema 7 存檔不再寫出舊執行資料源", TestCanonicalSchemaOmitsLegacySources),
     ("產品 EngineKind 與 ProfileMode 可獨立設定", TestEngineKindProfileModeSeparation),
     ("V3.2 五類空間參考點欄位與上下限有效", TestSpatialReferencePointValidation),
+    ("V3.4 實體站空間分類完整且拒絕虛擬節點", TestPhysicalStationSpatialClassification),
     ("V3.3 空間參考點可由 Schema 7 完整存取", TestSpatialReferencePointPersistence),
+    ("五類空間參考點範本可保存且不回寫既有站場", TestSpatialReferencePointTemplatePersistence),
     ("V3.2 站後折返幾何、道岔限速與停等時間會進入模擬", TestSpatialReferencePointTurnbackTiming),
+    ("站後折返會經由上下行尾軌虛擬節點再接續", TestAfterStationTailTrackVirtualNodeTurnback),
     ("V3.2 URCS 五類預設安全時距與容量相符", TestSpatialCapacityDefaultVectors),
     ("V3.2 URCS 中間站順逆行參數獨立", TestSpatialCapacityStationDirections),
     ("V3.2 URCS 容量採截斷且拒絕無效坡度組合", TestSpatialCapacityTruncationAndValidation),
     ("V3.2 中間站方向別停站設定接入 SimulationWorld", TestSpatialStationDwellIntegration),
     ("V3.2 首班零秒與端點退出完整進入時刻表及區間統計", TestV3TimetableAndIntervalTerminalBoundaries),
     ("V3.3 完整功能範例可讀取並產生主要營運事件", TestComprehensiveSampleProject),
-    ("V2 車型目錄性能成為列車運算權威", TestVehicleCatalogPerformanceAuthority)
+    ("V3.4 雙島四股範例可展示快速車跨越普通車", TestFourTrackExpressPassingScenario),
+    ("V3.4 越行可從多組候選設施選擇最近可達者", TestMultipleStationOvertakeCandidates),
+    ("V3.4 上下行可同時以獨立資源完成站內越行", TestSimultaneousBidirectionalOvertakes),
+    ("V2 車型目錄性能成為列車運算權威", TestVehicleCatalogPerformanceAuthority),
+    ("V3.4 車型與服務可各自指派獨立停站模式", TestIndependentStopPatternAssignments),
+    ("V3.4 站前折返交替月台會保留資源並避免壅塞", TestFrontTurnbackAlternateBerthing),
+    ("V3.4 中央避車線以實體錨定站依停站模式折返", TestCentralSidingAnchoredStationTurnback),
+    ("V3.4 折返檢核範例可匯入 Schema 7", TestTurnbackScenarioSampleProject)
 };
 
 var passed = 0;
@@ -566,6 +586,60 @@ static void TestTrajectoryDecimation()
     True(decimated.Select(sample => sample.Phase).Distinct().Count() >= 2, "相位轉折應保留。");
 }
 
+static void TestTraceRetentionPolicies()
+{
+    var options = new SimulationWorldOptions(
+        CreateFiveStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent);
+    var full = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.Full }).CreateWorld();
+    var decimated = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.Decimated(2) }).CreateWorld();
+    var eventsOnly = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.EventsOnly }).CreateWorld();
+
+    full.AdvanceTo(60);
+    decimated.AdvanceTo(60);
+    eventsOnly.AdvanceTo(60);
+
+    True(decimated.Trajectory.Count < full.Trajectory.Count,
+        "降採樣留存應少於完整 0.1 秒軌跡，但不得改變引擎推進。" );
+    Equal(full.Events.Count, decimated.Events.Count);
+    Equal(full.Events.Count, eventsOnly.Events.Count);
+    Equal(0, eventsOnly.Trajectory.Count);
+    True(decimated.Trajectory.Any(sample => sample.Phase == OperationalPhase.Accelerating),
+        "降採樣留存至少應保留車次的初始相位。" );
+}
+
+static void TestSimulationSession()
+{
+    var actualOptions = new SimulationWorldOptions(
+        CreateThreeStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent);
+    var plannedOptions = actualOptions with
+    {
+        ProfileMode = OperationProfileMode.BasicPhysics,
+        MovingBlockMode = MovingBlockMode.Independent
+    };
+    var session = new SimulationSession(actualOptions, plannedOptions);
+
+    session.PreparePlannedTimeline(180);
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.Departure),
+        "模擬會話應先建立獨立的計畫事件時間線。" );
+    var snapshot = session.AdvanceTo(10);
+    NearlyEqual(10, snapshot.SimulationTimeSeconds, 1e-9);
+    NearlyEqual(10, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+    session.Reset();
+    NearlyEqual(0, session.ActualWorld.CurrentTimeSeconds, 1e-9);
+    NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+    True(session.PlannedEvents.Count > 0, "重設播放不應遺失已建立的計畫事件時間線。" );
+}
+
 static void TestInitialV2Departure()
 {
     var world = CreateWorld(trainCount: 2, headwaySeconds: 60);
@@ -658,12 +732,29 @@ static void TestDynamicStationBrakingContinuity()
         var prior = result.Samples.Last(sample => sample.SimulationTimeSeconds < arrival.SimulationTimeSeconds);
         True(prior.SpeedMetersPerSecond <= 1 / 3.6 + 1e-9,
             $"{arrival.PositionMeters:0.#} m 到站前速度仍過高：{prior.SpeedMetersPerSecond * 3.6:0.##} km/h。");
-        True(Math.Abs(arrival.PositionMeters - prior.PositionMeters) <= 0.5 + 1e-7,
-            "到站前一個 Tick 必須已位於停車點容許範圍。");
+        True(Math.Abs(arrival.PositionMeters - prior.PositionMeters) <= 2 + 1e-7,
+            "Jerk 受限近停收斂時，到站前一個 Tick 必須位於 2 m 停車點容許範圍。");
     }
 
     True(result.Events.All(item => item.EventType != SimulationEventType.StationStopViolation),
         "預設參數不得產生停車超限事件。");
+    foreach (var arrival in arrivals)
+    {
+        var station = route.Stations.Single(item => Math.Abs(item.PositionMeters - arrival.PositionMeters) <= 1e-7);
+        var approachSamples = result.Samples
+            .Where(sample => sample.NextStationId == station.StationId
+                && sample.SimulationTimeSeconds < arrival.SimulationTimeSeconds)
+            .ToArray();
+        var prematureNearStops = approachSamples
+            .Where(sample => sample.Phase == OperationalPhase.ApproachBraking
+                && sample.SpeedMetersPerSecond <= 0.15
+                && Math.Abs(station.PositionMeters - sample.PositionMeters) > 0.5)
+            .ToArray();
+        True(!prematureNearStops.Any(nearStop => approachSamples.Any(later =>
+                later.SimulationTimeSeconds > nearStop.SimulationTimeSeconds
+                && later.SpeedMetersPerSecond > nearStop.SpeedMetersPerSecond + 0.1)),
+            $"{station.StationId} 進站近停後不得再次牽引加速。");
+    }
     var envelope = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
         80 / 3.6,
         1,
@@ -672,6 +763,147 @@ static void TestDynamicStationBrakingContinuity()
         0.1,
         jerkLimited: true);
     True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestStationStopControllerTracksCurveAndPrediction()
+{
+    var highSpeed = StationStopController.Calculate(new StationStopControlInput(
+        RemainingDistanceMeters: 140,
+        CurrentSpeedMetersPerSecond: 22,
+        CurrentAccelerationMetersPerSecondSquared: 0.5,
+        LinePermittedSpeedMetersPerSecond: 25,
+        ServiceBrakingMetersPerSecondSquared: 0.9,
+        JerkMetersPerSecondCubed: 0.65,
+        TimeStepSeconds: 0.1,
+        JerkLimited: true,
+        SnapDistanceMeters: 2,
+        SnapSpeedMetersPerSecond: 0.15));
+    True(highSpeed.TargetSpeedMetersPerSecond < 25,
+        "高速進站必須由距離—速度煞車曲線壓低一般線速。 ");
+    True(highSpeed.RequiresServiceBraking,
+        "全煞預測越過停車點時必須要求營運煞車。 ");
+    True(highSpeed.StopPositionErrorMeters > 0,
+        "停點預測誤差為正時必須明確表示會越過停車點。 ");
+
+    var precision = StationStopController.Calculate(new StationStopControlInput(
+        RemainingDistanceMeters: 8,
+        CurrentSpeedMetersPerSecond: 0.1,
+        CurrentAccelerationMetersPerSecondSquared: 0,
+        LinePermittedSpeedMetersPerSecond: 20,
+        ServiceBrakingMetersPerSecondSquared: 0.9,
+        JerkMetersPerSecondCubed: 0.65,
+        TimeStepSeconds: 0.1,
+        JerkLimited: true,
+        SnapDistanceMeters: 2,
+        SnapSpeedMetersPerSecond: 0.15));
+    Equal(StationStopControlMode.PrecisionApproach, precision.Mode);
+    True(precision.TargetSpeedMetersPerSecond < StationStopController.PrecisionMaximumSpeedMetersPerSecond,
+        "低速精停階段必須再依剩餘距離收斂目標速度。 ");
+
+    var snap = StationStopController.Calculate(new StationStopControlInput(
+        RemainingDistanceMeters: 1.5,
+        CurrentSpeedMetersPerSecond: 0.1,
+        CurrentAccelerationMetersPerSecondSquared: 0,
+        LinePermittedSpeedMetersPerSecond: 20,
+        ServiceBrakingMetersPerSecondSquared: 0.9,
+        JerkMetersPerSecondCubed: 0.65,
+        TimeStepSeconds: 0.1,
+        JerkLimited: true,
+        SnapDistanceMeters: 2,
+        SnapSpeedMetersPerSecond: 0.15));
+    Equal(StationStopControlMode.StopSnap, snap.Mode);
+    Equal(0d, snap.TargetSpeedMetersPerSecond);
+}
+
+static void TestStationStopControllerPreventsPostNearStopBounce()
+{
+    var route = CreateThreeStationRoute();
+    var world = new SimulationWorld(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        trainCount: 1,
+        speedLimits:
+        [
+            new SpeedLimitSegment(980, 990, 0.05, SpeedLimitDirection.Outbound, "近停限制解除回歸")
+        ],
+        movingBlockMode: MovingBlockMode.Independent);
+    while (!world.Events.Any(item => item.EventType == SimulationEventType.Arrival
+               && item.Direction == TrainDirection.Outbound
+               && Math.Abs(item.PositionMeters - 1000) <= 0.5)
+           && world.CurrentTimeSeconds < 500)
+    {
+        world.Tick();
+    }
+
+    var arrival = world.Events.Single(item => item.EventType == SimulationEventType.Arrival
+        && item.Direction == TrainDirection.Outbound && Math.Abs(item.PositionMeters - 1000) <= 0.5);
+    var approach = world.Trajectory
+        .Where(sample => sample.Direction == TrainDirection.Outbound
+            && sample.NextStationId == "O02"
+            && sample.SimulationTimeSeconds < arrival.SimulationTimeSeconds)
+        .OrderBy(sample => sample.SimulationTimeSeconds)
+        .ToArray();
+    var nearStop = approach
+        .Where(sample => sample.PositionMeters >= 980 && sample.PositionMeters <= 990.5)
+        .MinBy(sample => sample.SpeedMetersPerSecond);
+    True(nearStop is not null && nearStop.SpeedMetersPerSecond <= 1,
+        $"近站低速限制必須使列車接近低速；實際最低 {nearStop?.SpeedMetersPerSecond * 3.6:0.##} km/h。 ");
+    var laterPeakSpeed = approach
+        .Where(sample => sample.SimulationTimeSeconds > nearStop!.SimulationTimeSeconds)
+        .Max(sample => sample.SpeedMetersPerSecond);
+
+    True(laterPeakSpeed <= StationStopController.PrecisionMaximumSpeedMetersPerSecond + 0.2,
+        $"低速限制解除後，進站列車最高僅能回復至精停目標速度；實際 {laterPeakSpeed * 3.6:0.##} km/h。 ");
+}
+
+static void TestSimulationWorldStationBrakingDoesNotReaccelerate()
+{
+    var route = CreateThreeStationRoute();
+    var world = new SimulationWorld(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        trainCount: 1,
+        movingBlockMode: MovingBlockMode.Independent);
+    world.AdvanceTo(500);
+
+    var arrivals = world.Events
+        .Where(item => item.EventType == SimulationEventType.Arrival && item.Direction == TrainDirection.Outbound)
+        .ToArray();
+    True(arrivals.Length >= 2, "測試列車必須抵達中間站與端點站。 ");
+    var checkedApproachPairs = 0;
+    foreach (var arrival in arrivals)
+    {
+        var stationId = route.Stations
+            .Single(station => Math.Abs(station.PositionMeters - arrival.PositionMeters) <= 1e-7)
+            .StationId;
+        var approachSamples = world.Trajectory
+            .Where(sample => sample.VehicleId == arrival.VehicleId
+                && sample.Direction == arrival.Direction
+                && sample.NextStationId == stationId
+                && sample.SimulationTimeSeconds < arrival.SimulationTimeSeconds)
+            .OrderBy(sample => sample.SimulationTimeSeconds)
+            .ToArray();
+        for (var index = 1; index < approachSamples.Length; index++)
+        {
+            var previous = approachSamples[index - 1];
+            var current = approachSamples[index];
+            if (previous.Phase != OperationalPhase.ApproachBraking
+                || current.Phase != OperationalPhase.ApproachBraking)
+            {
+                continue;
+            }
+
+            checkedApproachPairs++;
+            True(current.SpeedMetersPerSecond <= previous.SpeedMetersPerSecond + 1e-7,
+                $"{stationId} 進站煞車鎖定後不應再次牽引加速。 ");
+        }
+    }
+
+    True(checkedApproachPairs > 0, "測試情境必須覆蓋 SimulationWorld 的進站煞車軌跡。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.StationStopViolation),
+        "近停吸附不應產生停車超限事件。 ");
 }
 
 static void TestMovingBlockControlDoesNotHardStop()
@@ -816,6 +1048,51 @@ static void TestDispatchPlanMissingCatalogReference()
         "找不到服務類型");
 }
 
+static void TestIndependentStopPatternAssignments()
+{
+    var vehicleSpecific = new VehicleTypeDefinition("VEH-LOCAL", "車型專屬停站", 80, 22.222, 1, 0.9, 1.3, 0.65, 0.45, 0.05, "VEHICLE_STOP");
+    var serviceSpecific = new VehicleTypeDefinition("VEH-EXPRESS", "服務專屬停站", 80, 22.222, 1, 0.9, 1.3, 0.65, 0.45, 0.05);
+    var services = new[]
+    {
+        new ServiceTypeDefinition("LOCAL", "普通服務", "#4472C4", "L", "SERVICE_STOP", "VEH-LOCAL"),
+        new ServiceTypeDefinition("EXPRESS", "快速服務", "#C00000", "E", "SERVICE_STOP", "VEH-EXPRESS")
+    };
+    var stops = new[]
+    {
+        new StopPatternDefinition("VEHICLE_STOP", "車型專屬", [new StopPatternInstruction("P01", StopPatternAction.Stop), new StopPatternInstruction("P02", StopPatternAction.Pass), new StopPatternInstruction("P03", StopPatternAction.Stop)]),
+        new StopPatternDefinition("SERVICE_STOP", "服務專屬", [new StopPatternInstruction("P01", StopPatternAction.Stop), new StopPatternInstruction("P02", StopPatternAction.Stop), new StopPatternInstruction("P03", StopPatternAction.Stop)])
+    };
+    var plan = new DispatchPlanDefinition([], [
+        new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "VEH-LOCAL", serviceRunId: "VEHICLE-RUN"),
+        new ManualTimetableRow(TimeSpan.FromMinutes(5), TrainDirection.Outbound, "EXPRESS", "VEH-EXPRESS", serviceRunId: "SERVICE-RUN")
+    ], DispatchPlanningMode.ManualTimetable);
+
+    var dispatch = DispatchPlanExpander.Expand(plan, [vehicleSpecific, serviceSpecific], services, stops);
+    Equal("VEHICLE_STOP", dispatch.Runs.Single(item => item.ServiceRunId == "VEHICLE-RUN").StopPatternId);
+    Equal("SERVICE_STOP", dispatch.Runs.Single(item => item.ServiceRunId == "SERVICE-RUN").StopPatternId);
+
+    var document = CreateProjectDocument() with
+    {
+        VehicleTypes = [new ProjectVehicleType("VEH-LOCAL", "車型專屬停站", 80, 22.222, 1, 0.9, 1.3, 0.65, 0.45, 0.05, "VEHICLE_STOP")],
+        ServiceTypes = [new ProjectServiceType("LOCAL", "普通服務", "#4472C4", "L", "SERVICE_STOP", "VEH-LOCAL")],
+        StopPatterns = stops.Select(item => new ProjectStopPattern(item.Id, item.DisplayName, item.Instructions.Select(instruction =>
+            new ProjectStopPatternInstruction(instruction.StationId, instruction.Action, instruction.DwellTimeSeconds, instruction.PassingSpeedLimitMetersPerSecond)).ToArray())).ToArray(),
+        Dispatch = new ProjectDispatchPlan(DispatchPlanningMode.ManualTimetable, VehicleAssignmentMode.Automatic, [],
+            [new ProjectManualTimetableRow(0, TrainDirection.Outbound, "LOCAL", "VEH-LOCAL", null, ServiceRunId: "VEHICLE-RUN")])
+    };
+    var restored = SimulationProjectFormat.Deserialize(SimulationProjectFormat.Serialize(document));
+    Equal("VEHICLE_STOP", restored.VehicleTypes!.Single().DefaultStopPatternId
+        ?? throw new InvalidOperationException("車型預設停站模式未保存。"));
+    var restoredDispatch = DispatchPlanExpander.Expand(ToDispatchPlanDefinition(restored.Dispatch!),
+        (restored.VehicleTypes ?? throw new InvalidOperationException("缺少車型目錄。")).Select(ToVehicleTypeDefinition),
+        (restored.ServiceTypes ?? throw new InvalidOperationException("缺少服務類型目錄。")).Select(item => new ServiceTypeDefinition(item.Id, item.DisplayName, item.ColorHex, item.RunPrefix,
+            item.DefaultStopPatternId, item.DefaultVehicleTypeId, item.Priority, item.CanRequestOvertake, item.PreferredPlatformIds)),
+        (restored.StopPatterns ?? throw new InvalidOperationException("缺少停站模式目錄。")).Select(item => new StopPatternDefinition(item.Id, item.DisplayName,
+            item.Instructions.Select(instruction => new StopPatternInstruction(instruction.StationId, instruction.Action,
+                instruction.DwellTimeSeconds, instruction.PassingSpeedLimitMetersPerSecond)))));
+    Equal("VEHICLE_STOP", restoredDispatch.Runs.Single().StopPatternId);
+}
+
 static void TestDispatchWorldFromBothEnds()
 {
     var (vehicles, services, stops) = CreatePlanningCatalogs();
@@ -869,6 +1146,83 @@ static void TestDispatchDuplicateVehicleRejected()
             dispatchPlan: expanded,
             vehicleTypes: vehicles),
         "未串接");
+}
+
+static void TestResourceOccupancyAnalysis()
+{
+    var events = new[]
+    {
+        new SimulationEvent(0, SimulationEventType.RouteReserved, "V-01", null, TrainDirection.Outbound, "DOWN", 0, 0, "鎖定", ServiceRunId: "RUN-01", ResourceIds: ["PLATFORM:A", "CONFLICT:X"]),
+        new SimulationEvent(10, SimulationEventType.RouteReleased, "V-01", null, TrainDirection.Outbound, "DOWN", 100, 5, "釋放衝突區", ServiceRunId: "RUN-01", ResourceIds: ["CONFLICT:X"]),
+        new SimulationEvent(15, SimulationEventType.RouteReserved, "V-02", null, TrainDirection.Outbound, "DOWN", 0, 0, "鎖定", ServiceRunId: "RUN-02", ResourceIds: ["CONFLICT:X"]),
+        new SimulationEvent(20, SimulationEventType.RouteReleased, "V-01", null, TrainDirection.Outbound, "DOWN", 200, 0, "釋放月台", ServiceRunId: "RUN-01", ResourceIds: ["PLATFORM:A"]),
+        new SimulationEvent(30, SimulationEventType.RouteReleased, "V-02", null, TrainDirection.Outbound, "DOWN", 200, 0, "釋放衝突區", ServiceRunId: "RUN-02", ResourceIds: ["CONFLICT:X"])
+    };
+
+    var result = ResourceOccupancyAnalysis.Analyze(events, 30);
+    Equal(3, result.Intervals.Count);
+    var platform = result.Resources.Single(item => item.ResourceId == "PLATFORM:A");
+    NearlyEqual(20, platform.OccupiedSeconds);
+    NearlyEqual(66.6666667, platform.UtilizationPercent, 1e-5);
+    var conflict = result.Resources.Single(item => item.ResourceId == "CONFLICT:X");
+    Equal(2, conflict.ReservationCount);
+    NearlyEqual(25, conflict.OccupiedSeconds);
+    NearlyEqual(20, conflict.MinimumReleaseHeadwaySeconds ?? -1);
+    True(ResourceOccupancyAnalysis.BuildCsv(result).Contains("CONFLICT:X", StringComparison.Ordinal),
+        "資源占用分析 CSV 必須保留資源 ID。 ");
+}
+
+static void TestAutomaticPlatformAllocationBalancesCandidates()
+{
+    var route = RouteFactory.FromSegmentDistances(
+        "PA", "自動多月台配置測試線",
+        [new StationInput("PA01", "起點", 0, 0), new StationInput("PA02", "終點", 1000, 0)], 0);
+    var vehicle = new VehicleTypeDefinition("EMU-PA", "多月台測試車", 80, 22.222, 1, 0.9, 1.3, 0.65, 0.45, 0.05);
+    var service = new ServiceTypeDefinition("LOCAL", "普通車", "#4472C4", "PA", "ALL_STOP", "EMU-PA");
+    var stops = new StopPatternDefinition("ALL_STOP", "全停站", [
+        new StopPatternInstruction("PA01", StopPatternAction.Stop),
+        new StopPatternInstruction("PA02", StopPatternAction.Stop)]);
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition([], [
+            new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-PA", "ALL_STOP", "PA01:D1", "PA-V1", "PA-R1"),
+            new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-PA", "ALL_STOP", "PA01:D2", "PA-V2", "PA-R2"),
+            new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-PA", "ALL_STOP", "PA01:D3", "PA-V3", "PA-R3")],
+            DispatchPlanningMode.ManualTimetable),
+        [vehicle], [service], [stops]);
+    var platforms = Enumerable.Range(1, 3).SelectMany(index => new[]
+    {
+        new PlatformDefinition($"PA01:D{index}", "PA01", $"起點下行 {index}", TrackDirection.Outbound, 220, trackSegmentIds: [$"PA-D{index}"]),
+        new PlatformDefinition($"PA02:D{index}", "PA02", $"終點下行 {index}", TrackDirection.Outbound, 220, trackSegmentIds: [$"PA-D{index}"])
+    }).ToArray();
+    var tracks = Enumerable.Range(1, 3).Select(index => new TrackSegmentDefinition(
+        $"PA-D{index}", "PA01", "PA02", 0, 1000, TrackDirection.Outbound, TrackKind.Mainline, 1000, 22.222,
+        [$"TRACK:PA:{index}"])).ToArray();
+    var paths = Enumerable.Range(1, 3).Select(index => new RoutePathDefinition(
+        $"PA-P{index}", $"PA01:D{index}", $"PA02:D{index}", TrackDirection.Outbound, [$"PA-D{index}"],
+        [$"PATH:PA:{index}"])).ToArray();
+    var infrastructure = new InfrastructureGraph(route,
+        [
+            new StationYardDefinition("PA01", "起點站場", platforms.Where(item => item.StationId == "PA01"),
+                tracks.Select(item => item.TrackId), paths.Select(item => item.PathId)),
+            new StationYardDefinition("PA02", "終點站場", platforms.Where(item => item.StationId == "PA02"),
+                tracks.Select(item => item.TrackId), paths.Select(item => item.PathId),
+                platformAllocationStrategy: PlatformAllocationStrategy.Automatic)
+        ],
+        tracks, paths);
+    var world = new SimulationWorld(route, CreateParameters(), OperationalParameters.CreateDefault(), 3,
+        movingBlockMode: MovingBlockMode.Independent, dispatchPlan: dispatch, vehicleTypes: [vehicle], infrastructure: infrastructure);
+    world.AdvanceTo(1);
+
+    var assignedDestinationPlatforms = world.Events
+        .Where(item => item.EventType == SimulationEventType.RouteReserved && item.ResourceIds is not null)
+        .SelectMany(item => item.ResourceIds!)
+        .Where(resource => resource.StartsWith("PLATFORM:PA02:", StringComparison.OrdinalIgnoreCase))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .Order(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
+    Equal(3, assignedDestinationPlatforms.Length);
+    True(assignedDestinationPlatforms.SequenceEqual(["PLATFORM:PA02:D1", "PLATFORM:PA02:D2", "PLATFORM:PA02:D3"], StringComparer.OrdinalIgnoreCase),
+        "Automatic 策略必須在三座同方向可用月台間平均分配，而非固定取第一座。 ");
 }
 
 static void TestDispatchContinuationPersistence()
@@ -1176,6 +1530,44 @@ static void TestIntervalStatistics()
         filter: new IntervalStatisticsFilter(StartSimulationTimeSeconds: 400)).AllIntervals.Count);
 }
 
+static void TestV1V2Comparison()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition([], [new ManualTimetableRow(
+            TimeSpan.Zero,
+            TrainDirection.Outbound,
+            "LOCAL",
+            "EMU-6",
+            "ALL_STOP",
+            vehicleId: "CMP-01",
+            serviceRunId: "CMP-OUT")], DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var world = new SimulationWorld(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        trainCount: 1,
+        movingBlockMode: MovingBlockMode.Independent,
+        dispatchPlan: dispatch,
+        vehicleTypes: vehicles,
+        infrastructure: InfrastructureGraph.CreateLegacy(route));
+    world.AdvanceTo(600);
+
+    var result = V1V2Comparison.Analyze(route, dispatch, vehicles, stops, CreateParameters(), world.Events);
+    Equal(3, result.Stations.Count);
+    var intermediate = result.Stations.Single(item => item.StationId == "O02");
+    True(intermediate.TheoreticalArrivalTimeSeconds is not null && intermediate.ActualArrivalTimeSeconds is not null,
+        "同條件比較必須同時保留中間站 V1 理論與 V2 實際到站時間。 ");
+    True(intermediate.DepartureDifferenceSeconds is not null && intermediate.DepartureDifferencePercent is not null,
+        "同條件比較必須計算出站秒差與百分比。 ");
+    True(V1V2Comparison.BuildCsv(result).Contains("V2 實際出站", StringComparison.Ordinal),
+        "比較 CSV 必須包含理論／實際逐欄欄位。 ");
+}
+
 static void TestCanonicalSchemaOmitsLegacySources()
 {
     var json = SimulationProjectFormat.Serialize(CreateProjectDocument());
@@ -1257,13 +1649,69 @@ static void TestSpatialReferencePointPersistence()
     var json = SimulationProjectFormat.Serialize(document);
     var restored = SimulationProjectFormat.Deserialize(json);
     Equal(7, restored.SchemaVersion);
-    var stored = restored.Infrastructure!.SpatialReferencePoints!.Single();
+    var stored = restored.Infrastructure!.SpatialReferencePoints!.Single(item => item.ReferencePointId == "REF-P02-STATION");
     Equal("REF-P02-STATION", stored.ReferencePointId);
     Equal(SpatialReferencePointKind.IntermediateStation, stored.Kind);
     NearlyEqual(1.5, stored.StationForwardGradeInPermille);
     NearlyEqual(42, stored.StationForwardDwellSeconds);
     NearlyEqual(-2, stored.StationReverseGradeOutPermille);
     NearlyEqual(65, stored.StationReverseEarlierCruiseSpeedMetersPerSecond * 3.6);
+}
+
+static void TestPhysicalStationSpatialClassification()
+{
+    var route = CreateThreeStationRoute();
+    var legacy = InfrastructureGraph.CreateLegacy(route);
+    Equal(route.Stations.Count, legacy.SpatialReferencePoints.Count);
+    Equal(route.Stations.Count, legacy.SpatialReferencePoints.Select(item => item.StationId)
+        .Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    True(route.Stations.All(station => legacy.SpatialReferencePoints.Any(point =>
+            point.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase))),
+        "每一實體路線站必須取得恰好一個空間分類。 ");
+
+    var virtualPoint = new SpatialReferencePointDefinition(
+        "INVALID-TAIL", "TAIL:O03", "不應列為車站的尾軌節點", SpatialReferencePointKind.AfterStationTurnback);
+    Throws<SimulationValidationException>(
+        () => _ = new InfrastructureGraph(route, legacy.StationYards, legacy.TrackSegments, legacy.Paths,
+            legacy.TurnbackPlans, [virtualPoint]),
+        "空間參考點");
+}
+
+static void TestSpatialReferencePointTemplatePersistence()
+{
+    var source = CreateProjectDocument();
+    var route = RouteFactory.FromSegmentDistances(source.RouteId, source.RouteName,
+        source.Stations.Select(station => new StationInput(station.StationId, station.StationName,
+            station.DistanceFromPreviousMeters, station.DwellTimeSeconds)), source.Train.DefaultDwellTimeSeconds);
+    var legacy = InfrastructureGraph.CreateLegacy(route);
+    var templates = SpatialReferencePointTemplateDefinition.CreateDefaults().ToList();
+    var templateIndex = templates.FindIndex(item => item.Kind == SpatialReferencePointKind.BeforeStationTurnback);
+    templates[templateIndex] = new SpatialReferencePointTemplateDefinition(
+        SpatialReferencePointKind.BeforeStationTurnback,
+        alternateBerthing: true,
+        distanceFromStopToCrossoverMeters: 260,
+        crossoverLengthMeters: 180,
+        turnbackDwellSeconds: 42,
+        switchSpeedLimitMetersPerSecond: 32 / 3.6,
+        mainlineApproachCruiseSpeedMetersPerSecond: 70 / 3.6,
+        mainlineSafetyFactor: 1.8);
+    var originalStation = new SpatialReferencePointDefinition(
+        "REF-P02", "P02", "已建立站場", SpatialReferencePointKind.IntermediateStation,
+        stationForwardDwellSeconds: 47);
+    var graph = new InfrastructureGraph(route, legacy.StationYards, legacy.TrackSegments, legacy.Paths,
+        legacy.TurnbackPlans, [originalStation], spatialReferencePointTemplates: templates);
+    var document = source with { Infrastructure = ProjectInfrastructureFromGraph(graph) };
+
+    var restored = SimulationProjectFormat.Deserialize(SimulationProjectFormat.Serialize(document));
+    var restoredGraph = ToInfrastructureGraph(restored.Infrastructure!, route);
+    Equal(5, restoredGraph.SpatialReferencePointTemplates.Count);
+    var restoredTemplate = restoredGraph.GetSpatialReferencePointTemplate(SpatialReferencePointKind.BeforeStationTurnback);
+    True(restoredTemplate.AlternateBerthing, "站前折返範本的交替停靠設定必須保存。");
+    NearlyEqual(260, restoredTemplate.DistanceFromStopToCrossoverMeters);
+    NearlyEqual(42, restoredTemplate.TurnbackDwellSeconds);
+    var newStation = restoredTemplate.Create("REF-P03", "P03", "由範本建立");
+    NearlyEqual(260, newStation.DistanceFromStopToCrossoverMeters);
+    NearlyEqual(47, restoredGraph.FindSpatialReferencePoint("P02")!.StationForwardDwellSeconds);
 }
 
 static void TestSpatialReferencePointTurnbackTiming()
@@ -1301,6 +1749,116 @@ static void TestSpatialReferencePointTurnbackTiming()
         vehicle.ServiceBrakeDecelerationMetersPerSecondSquared).TravelTimeSeconds;
     NearlyEqual(7 + oneWay * 2, changed.SimulationTimeSeconds - started.SimulationTimeSeconds, 0.11);
     Equal(TrainDirection.Inbound, world.GetSnapshot().Trains.Single().Direction);
+}
+
+static void TestAfterStationTailTrackVirtualNodeTurnback()
+{
+    var route = RouteFactory.FromSegmentDistances(
+        "RT",
+        "站後折返尾軌虛擬節點測試線",
+        [
+            new StationInput("RT01", "北端站", 0, 0),
+            new StationInput("RT02", "南端站", 1000, 0)
+        ],
+        0);
+    var tailNodeId = "TAIL:RT02-REAR";
+    var platforms = new[]
+    {
+        new PlatformDefinition("RT01:DOWN", "RT01", "北端下行月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN"]),
+        new PlatformDefinition("RT01:UP", "RT01", "北端上行月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP"]),
+        new PlatformDefinition("RT02:DOWN", "RT02", "南端下行月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN"]),
+        new PlatformDefinition("RT02:UP", "RT02", "南端上行月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP"])
+    };
+    var tracks = new[]
+    {
+        new TrackSegmentDefinition("DOWN", "RT01", "RT02", 0, 1000, TrackDirection.Outbound, TrackKind.Mainline, 1000, 22.222, ["TRACK:DOWN"]),
+        new TrackSegmentDefinition("UP", "RT02", "RT01", 1000, 0, TrackDirection.Inbound, TrackKind.Mainline, 1000, 22.222, ["TRACK:UP"]),
+        new TrackSegmentDefinition("RT02-TAIL-DOWN", "RT02", tailNodeId, 1000, 1160, TrackDirection.Outbound, TrackKind.TailTrack, 160, 25 / 3.6, ["TAIL:RT02"]),
+        new TrackSegmentDefinition("RT02-TAIL-UP", tailNodeId, "RT02", 1160, 1000, TrackDirection.Inbound, TrackKind.TailTrack, 160, 25 / 3.6, ["TAIL:RT02"])
+    };
+    var paths = new[]
+    {
+        new RoutePathDefinition("RT-D", "RT01:DOWN", "RT02:DOWN", TrackDirection.Outbound, ["DOWN"], ["PATH:RT:D"]),
+        new RoutePathDefinition("RT-U", "RT02:UP", "RT01:UP", TrackDirection.Inbound, ["UP"], ["PATH:RT:U"])
+    };
+    var turnback = new TurnbackPlanDefinition(
+        "RT02-REAR", "南端站後尾軌折返", "RT02", TurnbackKind.AfterStation,
+        "RT02:DOWN", "RT02:UP", ["RT02-TAIL-DOWN", "RT02-TAIL-UP"], ["TURNBACK:RT02"], 0);
+    var yards = new[]
+    {
+        new StationYardDefinition("RT01", "北端站場", platforms.Where(item => item.StationId == "RT01"), ["DOWN", "UP"], ["RT-D", "RT-U"]),
+        new StationYardDefinition("RT02", "南端站場", platforms.Where(item => item.StationId == "RT02"),
+            ["DOWN", "UP", "RT02-TAIL-DOWN", "RT02-TAIL-UP"], ["RT-D", "RT-U"], [turnback])
+    };
+    var point = new SpatialReferencePointDefinition(
+        "RT02-REAR", "RT02", "南端站後折返", SpatialReferencePointKind.AfterStationTurnback,
+        distanceFromStopToCrossoverMeters: 0, crossoverLengthMeters: 0,
+        distanceFromCrossoverToTurnbackStopMeters: 160, turnbackDwellSeconds: 3,
+        switchSpeedLimitMetersPerSecond: 25 / 3.6);
+    var infrastructure = new InfrastructureGraph(route, yards, tracks, paths, [turnback], [point]);
+    var layout = infrastructure.FindAfterStationTailTrackLayout(turnback);
+    True(layout is not null, "站後折返的成對尾軌必須建立虛擬節點配置。 ");
+    Equal(tailNodeId, layout!.VirtualNodeId);
+    NearlyEqual(1160, layout.VirtualNodePositionMeters);
+
+    var world = new SimulationWorld(
+        route,
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        trainCount: 1,
+        movingBlockMode: MovingBlockMode.Independent,
+        infrastructure: infrastructure);
+    while (!world.Events.Any(item => item.EventType == SimulationEventType.DirectionChanged
+        && item.Direction == TrainDirection.Inbound)
+        && world.CurrentTimeSeconds < 500)
+    {
+        world.Tick();
+    }
+
+    var tailArrival = world.Events.Single(item => item.EventType == SimulationEventType.TailTrackReached);
+    Equal("RT02-TAIL-DOWN", tailArrival.TrackId);
+    Equal(tailNodeId, tailArrival.ResourceId!);
+    NearlyEqual(1160, tailArrival.PositionMeters, 1e-7);
+    var returnStarted = world.Events.Single(item => item.EventType == SimulationEventType.TailTrackReturnStarted);
+    Equal(TrainDirection.Inbound, returnStarted.Direction);
+    Equal("RT02-TAIL-UP", returnStarted.TrackId);
+    True(returnStarted.SimulationTimeSeconds >= tailArrival.SimulationTimeSeconds + 3 - 0.11,
+        "列車抵達尾軌虛擬節點後必須先完成設定的折返停等。 ");
+    True(world.Trajectory.Any(sample => sample.TrackId == "RT02-TAIL-DOWN"
+        && sample.PositionMeters > 1000 + 1e-7),
+        "列車必須實際駛入端點站外的下行尾軌。 ");
+    True(world.Trajectory.Any(sample => sample.TrackId == "RT02-TAIL-UP"
+        && sample.PositionMeters > 1000 + 1e-7),
+        "列車必須改走上行尾軌返回端點站。 ");
+    var outboundTailSamples = world.Trajectory
+        .Where(sample => sample.TrackId == "RT02-TAIL-DOWN")
+        .OrderBy(sample => sample.SimulationTimeSeconds)
+        .Select(sample => sample.PositionMeters)
+        .ToArray();
+    var inboundTailSamples = world.Trajectory
+        .Where(sample => sample.TrackId == "RT02-TAIL-UP")
+        .OrderBy(sample => sample.SimulationTimeSeconds)
+        .Select(sample => sample.PositionMeters)
+        .ToArray();
+    True(outboundTailSamples.Length > 2 && inboundTailSamples.Length > 2,
+        "站後折返尾軌必須保留固定子步進的連續軌跡樣本。 ");
+    True(outboundTailSamples.Zip(outboundTailSamples.Skip(1), (previous, next) => next + 1e-7 >= previous).All(value => value),
+        "下行尾軌的里程樣本必須連續朝虛擬節點前進。 ");
+    True(inboundTailSamples.Zip(inboundTailSamples.Skip(1), (previous, next) => next <= previous + 1e-7).All(value => value),
+        "上行尾軌的里程樣本必須連續返回端點站。 ");
+    True(world.Events.Any(item => item.EventType == SimulationEventType.DirectionChanged
+        && item.Direction == TrainDirection.Inbound),
+        "由尾軌返回端點站後必須接續上行新車次。 ");
+    var reverseArrival = world.Events.Single(item => item.EventType == SimulationEventType.Arrival
+        && item.Direction == TrainDirection.Inbound && item.PositionMeters >= 999.5);
+    True(reverseArrival.PlatformId == "RT02:UP", "尾軌換向返回後必須停靠反方向月台。 ");
+    var reverseDeparture = world.Events.First(item => item.EventType == SimulationEventType.Departure
+        && item.Direction == TrainDirection.Inbound && item.SimulationTimeSeconds >= reverseArrival.SimulationTimeSeconds);
+    True(reverseDeparture.PlatformId == "RT02:UP", "尾軌返回後必須由反方向月台發車。 ");
+    True(reverseDeparture.SimulationTimeSeconds >= reverseArrival.SimulationTimeSeconds,
+        "反方向月台的發車事件不可早於尾軌返回抵達事件。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        "站後折返尾軌資源預約期間不得產生碰撞。 ");
 }
 
 static void TestSpatialCapacityDefaultVectors()
@@ -1465,8 +2023,11 @@ static void TestComprehensiveSampleProject()
     NearlyEqual(25, expressPattern.Instructions.Single(item => item.StationId == "V03").DwellTimeSeconds!.Value);
     NearlyEqual(50, expressPattern.Instructions.Single(item => item.StationId == "V02")
         .PassingSpeedLimitMetersPerSecond!.Value * 3.6);
-    var roundTrip = SimulationProjectFormat.Deserialize(SimulationProjectFormat.Serialize(document));
-    True(roundTrip.ServicePatterns is null && roundTrip.ServiceRuns is null, "範例往返後不得產生舊執行資料源。");
+    var roundTripJson = SimulationProjectFormat.Serialize(document);
+    var roundTrip = SimulationProjectFormat.Deserialize(roundTripJson);
+    True(!roundTripJson.Contains("servicePatterns", StringComparison.OrdinalIgnoreCase)
+        && !roundTripJson.Contains("serviceRuns", StringComparison.OrdinalIgnoreCase),
+        "範例往返後不得產生舊執行資料源。");
     NearlyEqual(25, roundTrip.StopPatterns!.Single(item => item.Id == "EXPRESS").Instructions
         .Single(item => item.StationId == "V03").DwellTimeSeconds!.Value);
 
@@ -1511,7 +2072,13 @@ static void TestComprehensiveSampleProject()
         item.DisplayName,
         item.Instructions.Select(instruction => new StationServiceInstruction(
             instruction.StationId,
-            instruction.Action == StopPatternAction.Stop ? StationServiceMode.Stop : StationServiceMode.Pass,
+            instruction.Action switch
+            {
+                StopPatternAction.Stop => StationServiceMode.Stop,
+                StopPatternAction.Pass => StationServiceMode.Pass,
+                StopPatternAction.Turnback => StationServiceMode.Turnback,
+                _ => throw new InvalidOperationException("停站模式動作無效。")
+            },
             instruction.PassingSpeedLimitMetersPerSecond,
             instruction.DwellTimeSeconds)).ToArray())).ToArray();
     var world = new SimulationWorld(
@@ -1593,6 +2160,334 @@ static void TestComprehensiveSampleProject()
         "軌跡必須包含下行資料，供下行速度曲線與運行圖驗證。");
 }
 
+static void TestFourTrackExpressPassingScenario()
+{
+    var repositoryRoot = FindRepositoryRoot();
+    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    True(File.Exists(samplePath), $"找不到雙島四股越行驗證範例：{samplePath}");
+
+    var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
+    Equal(SimulationProjectFormat.CurrentSchemaVersion, document.SchemaVersion);
+    Equal(3, document.Stations.Length);
+    Equal(2, document.ServiceTypes!.Length);
+    Equal(2, document.StopPatterns!.Length);
+    var roundTrip = SimulationProjectFormat.Deserialize(SimulationProjectFormat.Serialize(document));
+    Equal(6, roundTrip.Infrastructure!.TrackSegments.Length);
+    Equal(2, roundTrip.Dispatch!.ManualTimetableRows!.Length);
+    var overtakeYard = document.Infrastructure!.StationYards.Single(item => item.StationId == "OV02");
+    Equal(4, overtakeYard.Platforms!.Length);
+    True(overtakeYard.TrackSegmentIds!.Contains("DOWN-MAIN"), "越行站的站間方向必須維持單一共線正線。");
+    var facility = document.Infrastructure.StationOvertakeFacilities!.Single();
+    Equal("DOWN-MAIN", facility.MainlineTrackSegmentId);
+    Equal("OV02-D-LOCAL", facility.LocalTrackSegmentId);
+    Equal("OV02-D-EXPRESS", facility.ExpressTrackSegmentId);
+    Equal(facility.FacilityId, roundTrip.Infrastructure!.StationOvertakeFacilities!.Single().FacilityId);
+
+    var express = document.ServiceTypes.Single(item => item.Id == "EXPRESS");
+    True(express.CanRequestOvertake && express.Priority > document.ServiceTypes.Single(item => item.Id == "LOCAL").Priority,
+        "快速車範例必須保留較高優先序與追越請求設定。");
+    True(document.StopPatterns.Single(item => item.Id == "EXPRESS_PASS").Instructions
+        .Single(item => item.StationId == "OV02").Action == StopPatternAction.Pass,
+        "快速車必須跨越雙島四股越行站。 ");
+
+    var (world, _, _) = CreateWorldFromProjectDocument(document);
+    world.AdvanceTo(1000);
+
+    var eventTrace = string.Join(" | ", world.Events
+        .Where(item => item.ServiceRunId is "RUN-LOCAL-001" or "RUN-EXPRESS-001")
+        .Select(item => $"{item.ServiceRunId}:{item.EventType}@{item.SimulationTimeSeconds:0.0}:{item.TrackId}"));
+    var localDwell = world.Events.SingleOrDefault(item => item.EventType == SimulationEventType.DwellStarted
+        && item.ServiceRunId == "RUN-LOCAL-001" && Math.Abs(item.PositionMeters - 1600) <= 0.5)
+        ?? throw new InvalidOperationException($"普通車未在 OV02 待避：{eventTrace}");
+    var expressPass = world.Events.SingleOrDefault(item => item.EventType == SimulationEventType.StationPassed
+        && item.ServiceRunId == "RUN-EXPRESS-001" && Math.Abs(item.PositionMeters - 1600) <= 0.5)
+        ?? throw new InvalidOperationException($"快速車未通過 OV02：{eventTrace}");
+    var localDeparture = world.Events.SingleOrDefault(item => item.EventType == SimulationEventType.Departure
+        && item.ServiceRunId == "RUN-LOCAL-001" && Math.Abs(item.PositionMeters - 1600) <= 0.5)
+        ?? throw new InvalidOperationException($"普通車未離開 OV02：{eventTrace}");
+    True(localDwell.SimulationTimeSeconds < expressPass.SimulationTimeSeconds
+        && expressPass.SimulationTimeSeconds < localDeparture.SimulationTimeSeconds,
+        $"快速車必須在普通車停靠 OV02 期間跨越該站。普通車停靠={localDwell.SimulationTimeSeconds:0.0}、快速車通過={expressPass.SimulationTimeSeconds:0.0}、普通車發車={localDeparture.SimulationTimeSeconds:0.0}；{eventTrace}");
+    var requested = world.Events.Single(item => item.EventType == SimulationEventType.OvertakeRequested
+        && item.ServiceRunId == "RUN-EXPRESS-001");
+    var completed = world.Events.Single(item => item.EventType == SimulationEventType.OvertakeCompleted
+        && item.ServiceRunId == "RUN-EXPRESS-001");
+    Equal("EMU-LOCAL-01", requested.RelatedVehicleId!);
+    Equal("EMU-LOCAL-01", completed.RelatedVehicleId!);
+    Equal("OV02-D-EXPRESS", requested.TrackId);
+    Equal("DOWN-MAIN", completed.TrackId);
+    True(localDwell.SimulationTimeSeconds < requested.SimulationTimeSeconds
+        && requested.SimulationTimeSeconds < completed.SimulationTimeSeconds
+        && completed.SimulationTimeSeconds <= expressPass.SimulationTimeSeconds
+        && completed.SimulationTimeSeconds < localDeparture.SimulationTimeSeconds,
+        "越行事件必須在普通車待避期間完成，並在快速車通過站場後才允許普通車發車。 ");
+    True(world.Events.Any(item => item.EventType == SimulationEventType.WaitingForResource
+        && item.ServiceRunId == "RUN-LOCAL-001"
+        && item.RelatedVehicleId == "EMU-EXPRESS-01"
+        && item.ResourceId == facility.FacilityId),
+        $"普通車的原定停站時間到達時，必須因快速車正接近越行站而繼續待避。普通車停站={localDwell.SimulationTimeSeconds:0.0}、快速車通過={expressPass.SimulationTimeSeconds:0.0}、普通車發車={localDeparture.SimulationTimeSeconds:0.0}。 ");
+
+    var pairedSamples = world.Trajectory
+        .Where(item => item.ServiceRunId is "RUN-LOCAL-001" or "RUN-EXPRESS-001")
+        .GroupBy(item => item.SimulationTimeSeconds)
+        .Select(group => new
+        {
+            Local = group.SingleOrDefault(item => item.ServiceRunId == "RUN-LOCAL-001"),
+            Express = group.SingleOrDefault(item => item.ServiceRunId == "RUN-EXPRESS-001")
+        })
+        .Where(item => item.Local is not null && item.Express is not null)
+        .ToArray();
+    True(pairedSamples.Any(item => item.Express!.PositionMeters + 20 < item.Local!.PositionMeters),
+        "快速車發車後必須先位於普通車後方。");
+    var localTracks = world.Trajectory.Where(item => item.ServiceRunId == "RUN-LOCAL-001").Select(item => item.TrackId).ToHashSet();
+    var expressTracks = world.Trajectory.Where(item => item.ServiceRunId == "RUN-EXPRESS-001").Select(item => item.TrackId).ToHashSet();
+    True(localTracks.Contains("DOWN-MAIN") && localTracks.Contains("OV02-D-LOCAL"),
+        "普通車應先使用共線正線，抵達越行站後轉入站內待避線。 ");
+    True(expressTracks.Contains("DOWN-MAIN") && expressTracks.Contains("OV02-D-EXPRESS"),
+        "快速車只在站內分歧至通過線，完成後必須匯回共線正線。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        "站內越行示範不得產生碰撞。");
+}
+
+static void TestMultipleStationOvertakeCandidates()
+{
+    var repositoryRoot = FindRepositoryRoot();
+    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    var source = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
+    var primary = source.Infrastructure!.StationOvertakeFacilities!.Single();
+    var nearerAlternative = primary with
+    {
+        FacilityId = "OV02-D-OVERTAKE-ALT",
+        EntryPositionMeters = 1320,
+        ResourceIds = ["OV02:D:ALT:ENTRY", "OV02:D:ALT:THROAT", "OV02:D:ALT:EXIT"]
+    };
+    var document = source with
+    {
+        Infrastructure = source.Infrastructure with
+        {
+            StationOvertakeFacilities = [primary, nearerAlternative]
+        }
+    };
+    var (world, _, _) = CreateWorldFromProjectDocument(document);
+    world.AdvanceTo(1000);
+
+    Equal(2, world.Infrastructure.FindStationOvertakeFacilities("OV02", TrainDirection.Outbound).Count);
+    var requested = world.Events.Single(item => item.EventType == SimulationEventType.OvertakeRequested
+        && item.ServiceRunId == "RUN-EXPRESS-001");
+    Equal("OV02-D-OVERTAKE-ALT", requested.ResourceId!);
+    True(world.Events.Any(item => item.EventType == SimulationEventType.RouteReserved
+        && item.ResourceId == "OV02-D-OVERTAKE-ALT"
+        && item.ResourceIds is not null
+        && item.ResourceIds.Contains("OV02:D:ALT:THROAT", StringComparer.OrdinalIgnoreCase)),
+        "選定的越行候選必須保留其自身衝突資源，而非誤用第一筆設施。 ");
+}
+
+static void TestSimultaneousBidirectionalOvertakes()
+{
+    var repositoryRoot = FindRepositoryRoot();
+    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    var document = CreateBidirectionalOvertakeDocument(
+        SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath)));
+    var (world, _, _) = CreateWorldFromProjectDocument(document);
+    world.AdvanceTo(1000);
+
+    var requests = world.Events
+        .Where(item => item.EventType == SimulationEventType.OvertakeRequested)
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .ToArray();
+    Equal(2, requests.Length);
+    var outbound = requests.Single(item => item.Direction == TrainDirection.Outbound);
+    var inbound = requests.Single(item => item.Direction == TrainDirection.Inbound);
+    Equal("OV02-D-OVERTAKE", outbound.ResourceId!);
+    Equal("OV02-U-OVERTAKE", inbound.ResourceId!);
+    var completions = world.Events
+        .Where(item => item.EventType == SimulationEventType.OvertakeCompleted)
+        .ToArray();
+    var outboundCompletion = completions.Single(item => item.Direction == TrainDirection.Outbound);
+    var inboundCompletion = completions.Single(item => item.Direction == TrainDirection.Inbound);
+    True(Math.Max(outbound.SimulationTimeSeconds, inbound.SimulationTimeSeconds)
+            < Math.Min(outboundCompletion.SimulationTimeSeconds, inboundCompletion.SimulationTimeSeconds),
+        "上下行越行的資源保留期間必須重疊，證明兩個方向可同時進行而非互相排隊。 ");
+    var reservedResources = world.Events
+        .Where(item => item.EventType == SimulationEventType.RouteReserved
+            && item.ResourceId is "OV02-D-OVERTAKE" or "OV02-U-OVERTAKE")
+        .SelectMany(item => item.ResourceIds ?? [])
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    True(reservedResources.Contains("OV02:D:THROAT") && reservedResources.Contains("OV02:U:THROAT"),
+        "雙向越行必須各自保留方向專屬衝突區。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        "反向同時越行不得產生碰撞。 ");
+}
+
+static SimulationProjectDocument CreateBidirectionalOvertakeDocument(SimulationProjectDocument source)
+{
+    var infrastructure = source.Infrastructure!;
+    var inboundEndpointPlatforms = new[]
+    {
+        new ProjectPlatform("OV01-U-LOCAL", "OV01", "北端上行普通車月台", TrackDirection.Inbound, 220,
+            110, true, ["EMU-LOCAL"], ["LOCAL"], ["UP-MAIN"]),
+        new ProjectPlatform("OV01-U-EXPRESS", "OV01", "北端上行快速車月台", TrackDirection.Inbound, 220,
+            110, true, ["EMU-EXPRESS"], ["EXPRESS"], ["UP-MAIN"]),
+        new ProjectPlatform("OV03-U-LOCAL", "OV03", "南端上行普通車月台", TrackDirection.Inbound, 220,
+            110, true, ["EMU-LOCAL"], ["LOCAL"], ["UP-MAIN"]),
+        new ProjectPlatform("OV03-U-EXPRESS", "OV03", "南端上行快速車月台", TrackDirection.Inbound, 220,
+            110, true, ["EMU-EXPRESS"], ["EXPRESS"], ["UP-MAIN"])
+    };
+    var inboundPaths = new[]
+    {
+        new ProjectRoutePath("PATH-U-LOCAL-01", "OV03-U-LOCAL", "OV02-U-LOCAL", TrackDirection.Inbound,
+            ["UP-MAIN"], ["PATH:OV03:OV02:LOCAL"]),
+        new ProjectRoutePath("PATH-U-LOCAL-02", "OV02-U-LOCAL", "OV01-U-LOCAL", TrackDirection.Inbound,
+            ["UP-MAIN"], ["PATH:OV02:OV01:LOCAL"]),
+        new ProjectRoutePath("PATH-U-EXPRESS-01", "OV03-U-EXPRESS", "OV02-U-EXPRESS", TrackDirection.Inbound,
+            ["UP-MAIN"], ["PATH:OV03:OV02:EXPRESS"]),
+        new ProjectRoutePath("PATH-U-EXPRESS-02", "OV02-U-EXPRESS", "OV01-U-EXPRESS", TrackDirection.Inbound,
+            ["UP-MAIN"], ["PATH:OV02:OV01:EXPRESS"])
+    };
+    var yards = infrastructure.StationYards!.Select(yard => yard.StationId switch
+    {
+        "OV01" => yard with
+        {
+            Platforms = yard.Platforms!.Concat(inboundEndpointPlatforms.Where(item => item.StationId == "OV01")).ToArray(),
+            RoutePathIds = yard.RoutePathIds!.Concat(inboundPaths.Where(item => item.ToPlatformId.StartsWith("OV01", StringComparison.Ordinal))
+                .Select(item => item.PathId)).ToArray()
+        },
+        "OV03" => yard with
+        {
+            Platforms = yard.Platforms!.Concat(inboundEndpointPlatforms.Where(item => item.StationId == "OV03")).ToArray(),
+            RoutePathIds = yard.RoutePathIds!.Concat(inboundPaths.Where(item => item.FromPlatformId.StartsWith("OV03", StringComparison.Ordinal))
+                .Select(item => item.PathId)).ToArray()
+        },
+        "OV02" => yard with
+        {
+            RoutePathIds = yard.RoutePathIds!.Concat(inboundPaths.Select(item => item.PathId)).ToArray()
+        },
+        _ => yard
+    }).ToArray();
+    var inboundFacility = new ProjectStationOvertakeFacility(
+        "OV02-U-OVERTAKE", "OV02", TrackDirection.Inbound, "UP-MAIN", "OV02-U-LOCAL", "OV02-U-EXPRESS",
+        "OV02-U-LOCAL", "OV02-U-EXPRESS", 1840, ["OV02:U:ENTRY", "OV02:U:THROAT", "OV02:U:EXIT"]);
+    var services = source.ServiceTypes!.Select(service => service with
+    {
+        PreferredPlatformIds = service.PreferredPlatformIds!.Concat(service.Id == "LOCAL"
+            ? ["OV01-U-LOCAL", "OV02-U-LOCAL", "OV03-U-LOCAL"]
+            : ["OV01-U-EXPRESS", "OV02-U-EXPRESS", "OV03-U-EXPRESS"])
+            .ToArray()
+    }).ToArray();
+    var inboundRuns = new[]
+    {
+        new ProjectManualTimetableRow(21600, TrainDirection.Inbound, "LOCAL", "EMU-LOCAL", "ALL_STOP",
+            "OV03-U-LOCAL", "EMU-LOCAL-02", "RUN-LOCAL-002"),
+        new ProjectManualTimetableRow(21655, TrainDirection.Inbound, "EXPRESS", "EMU-EXPRESS", "EXPRESS_PASS",
+            "OV03-U-EXPRESS", "EMU-EXPRESS-02", "RUN-EXPRESS-002")
+    };
+    return source with
+    {
+        Simulation = source.Simulation with { TrainCount = 4 },
+        ServiceTypes = services,
+        Dispatch = source.Dispatch! with { ManualTimetableRows = source.Dispatch.ManualTimetableRows!.Concat(inboundRuns).ToArray() },
+        Infrastructure = infrastructure with
+        {
+            StationYards = yards,
+            Paths = infrastructure.Paths!.Concat(inboundPaths).ToArray(),
+            StationOvertakeFacilities = infrastructure.StationOvertakeFacilities!.Append(inboundFacility).ToArray()
+        }
+    };
+}
+
+static (SimulationWorld World, Route Route, ResolvedDispatchPlan Dispatch) CreateWorldFromProjectDocument(
+    SimulationProjectDocument document)
+{
+    var route = RouteFactory.FromSegmentDistances(
+        document.RouteId,
+        document.RouteName,
+        document.Stations.Select(item => new StationInput(
+            item.StationId,
+            item.StationName,
+            item.DistanceFromPreviousMeters,
+            item.DwellTimeSeconds)),
+        document.Train.DefaultDwellTimeSeconds);
+    var vehicleTypes = document.VehicleTypes!.Select(ToVehicleTypeDefinition).ToArray();
+    var serviceTypes = document.ServiceTypes!.Select(item => new ServiceTypeDefinition(
+        item.Id,
+        item.DisplayName,
+        item.ColorHex,
+        item.RunPrefix,
+        item.DefaultStopPatternId,
+        item.DefaultVehicleTypeId,
+        item.Priority,
+        item.CanRequestOvertake,
+        item.PreferredPlatformIds)).ToArray();
+    var stopPatterns = document.StopPatterns!.Select(item => new StopPatternDefinition(
+        item.Id,
+        item.DisplayName,
+        item.Instructions.Select(instruction => new StopPatternInstruction(
+            instruction.StationId,
+            instruction.Action,
+            instruction.DwellTimeSeconds,
+            instruction.PassingSpeedLimitMetersPerSecond)))).ToArray();
+    var dispatch = DispatchPlanExpander.Expand(
+        ToDispatchPlanDefinition(document.Dispatch!),
+        vehicleTypes,
+        serviceTypes,
+        stopPatterns);
+    var servicePatterns = document.StopPatterns!.Select(item => new ServicePattern(
+        item.Id,
+        item.DisplayName,
+        item.Instructions.Select(instruction => new StationServiceInstruction(
+            instruction.StationId,
+            instruction.Action switch
+            {
+                StopPatternAction.Stop => StationServiceMode.Stop,
+                StopPatternAction.Pass => StationServiceMode.Pass,
+                StopPatternAction.Turnback => StationServiceMode.Turnback,
+                _ => throw new InvalidOperationException("停站模式動作無效。")
+            },
+            instruction.PassingSpeedLimitMetersPerSecond,
+            instruction.DwellTimeSeconds)).ToArray())).ToArray();
+    var world = new SimulationWorld(
+        route,
+        new TrainParameters(
+            document.Train.MaxSpeedMetersPerSecond,
+            document.Train.AccelerationMetersPerSecondSquared,
+            document.Train.DecelerationMetersPerSecondSquared,
+            document.Train.DefaultDwellTimeSeconds,
+            document.Train.OriginTurnaroundTimeSeconds,
+            document.Train.TerminalTurnaroundTimeSeconds),
+        new OperationalParameters(
+            document.Operations.JerkMetersPerSecondCubed,
+            document.Operations.CoastingRatio,
+            document.Operations.ApproachDistanceMeters,
+            document.Operations.ApproachSpeedMetersPerSecond,
+            document.Operations.TractionFadeRatio,
+            document.Operations.TrainLengthMeters,
+            document.Operations.ServiceBrakingMetersPerSecondSquared,
+            document.Operations.EmergencyBrakingMetersPerSecondSquared,
+            document.Operations.ControlReactionTimeSeconds,
+            document.Operations.BrakeBuildUpTimeSeconds,
+            document.Operations.PositioningErrorMeters,
+            document.Operations.SafetyMarginMeters,
+            document.Operations.AbsoluteMinimumGapMeters),
+        document.Simulation.TrainCount,
+        document.Simulation.HeadwaySeconds,
+        document.SpeedLimits.Select(item => new SpeedLimitSegment(
+            item.StartPositionMeters,
+            item.EndPositionMeters,
+            item.LimitMetersPerSecond,
+            item.Direction,
+            item.Note)),
+        document.Simulation.ProfileMode,
+        document.Simulation.MovingBlockMode,
+        servicePatterns,
+        [],
+        dispatch,
+        vehicleTypes,
+        ToInfrastructureGraph(document.Infrastructure!, route),
+        serviceTypes: serviceTypes);
+    world.SetBrakingEstimationMode(document.Simulation.BrakingEstimationMode);
+    return (world, route, dispatch);
+}
+
 static VehicleTypeDefinition ToVehicleTypeDefinition(ProjectVehicleType item) => new(
     item.Id,
     item.DisplayName,
@@ -1603,7 +2498,8 @@ static VehicleTypeDefinition ToVehicleTypeDefinition(ProjectVehicleType item) =>
     item.EmergencyBrakeDecelerationMetersPerSecondSquared,
     item.JerkMetersPerSecondCubed,
     item.TractionDecayPerSecond,
-    item.CoastingDecelerationMetersPerSecondSquared);
+    item.CoastingDecelerationMetersPerSecondSquared,
+    item.DefaultStopPatternId);
 
 static DispatchPlanDefinition ToDispatchPlanDefinition(ProjectDispatchPlan item) => new(
     item.SimpleHeadwayPlans?.Select(plan => new HeadwayDirectionPlan(
@@ -1703,7 +2599,49 @@ static InfrastructureGraph ToInfrastructureGraph(ProjectInfrastructure item, Rou
         point.StationReverseDwellSeconds,
         point.StationReverseEarlierCruiseSpeedMetersPerSecond,
         point.StationReverseLaterCruiseSpeedMetersPerSecond,
-        point.StationReverseSafetyFactor)));
+        point.StationReverseSafetyFactor)),
+    (item.StationOvertakeFacilities ?? []).Select(facility => new StationOvertakeFacilityDefinition(
+        facility.FacilityId,
+        facility.StationId,
+        facility.Direction,
+        facility.MainlineTrackSegmentId,
+        facility.LocalPlatformId,
+        facility.ExpressPlatformId,
+        facility.LocalTrackSegmentId,
+        facility.ExpressTrackSegmentId,
+        facility.EntryPositionMeters,
+        facility.ResourceIds)),
+    (item.SpatialReferencePointTemplates ?? []).Select(template => new SpatialReferencePointTemplateDefinition(
+        template.Kind,
+        template.AlternateBerthing,
+        template.MainlineGradePermille,
+        template.BranchlineGradePermille,
+        template.DistanceFromStopToCrossoverMeters,
+        template.CrossoverLengthMeters,
+        template.DistanceFromCrossoverToTurnbackStopMeters,
+        template.TurnbackDwellSeconds,
+        template.SwitchSpeedLimitMetersPerSecond,
+        template.MainlineApproachCruiseSpeedMetersPerSecond,
+        template.BranchlineApproachCruiseSpeedMetersPerSecond,
+        template.MainlineSafetyFactor,
+        template.BranchlineSafetyFactor,
+        template.MainlineTrafficRatio,
+        template.StationForwardGradeInPermille,
+        template.StationForwardGradeOutPermille,
+        template.StationForwardDistanceToSignalMeters,
+        template.StationForwardOverlapMeters,
+        template.StationForwardDwellSeconds,
+        template.StationForwardEarlierCruiseSpeedMetersPerSecond,
+        template.StationForwardLaterCruiseSpeedMetersPerSecond,
+        template.StationForwardSafetyFactor,
+        template.StationReverseGradeInPermille,
+        template.StationReverseGradeOutPermille,
+        template.StationReverseDistanceToSignalMeters,
+        template.StationReverseOverlapMeters,
+        template.StationReverseDwellSeconds,
+        template.StationReverseEarlierCruiseSpeedMetersPerSecond,
+        template.StationReverseLaterCruiseSpeedMetersPerSecond,
+        template.StationReverseSafetyFactor)));
 
 static TurnbackPlanDefinition ToTurnbackPlanDefinition(ProjectTurnbackPlan item) => new(
     item.TurnbackId,
@@ -1762,7 +2700,49 @@ static ProjectInfrastructure ProjectInfrastructureFromGraph(InfrastructureGraph 
         point.StationReverseGradeInPermille, point.StationReverseGradeOutPermille,
         point.StationReverseDistanceToSignalMeters, point.StationReverseOverlapMeters,
         point.StationReverseDwellSeconds, point.StationReverseEarlierCruiseSpeedMetersPerSecond,
-        point.StationReverseLaterCruiseSpeedMetersPerSecond, point.StationReverseSafetyFactor)).ToArray());
+        point.StationReverseLaterCruiseSpeedMetersPerSecond, point.StationReverseSafetyFactor)).ToArray(),
+    graph.StationOvertakeFacilities.Select(facility => new ProjectStationOvertakeFacility(
+        facility.FacilityId,
+        facility.StationId,
+        facility.Direction,
+        facility.MainlineTrackSegmentId,
+        facility.LocalPlatformId,
+        facility.ExpressPlatformId,
+        facility.LocalTrackSegmentId,
+        facility.ExpressTrackSegmentId,
+        facility.EntryPositionMeters,
+        facility.ResourceIds.ToArray())).ToArray(),
+    graph.SpatialReferencePointTemplates.Select(template => new ProjectSpatialReferencePointTemplate(
+        template.Kind,
+        template.AlternateBerthing,
+        template.MainlineGradePermille,
+        template.BranchlineGradePermille,
+        template.DistanceFromStopToCrossoverMeters,
+        template.CrossoverLengthMeters,
+        template.DistanceFromCrossoverToTurnbackStopMeters,
+        template.TurnbackDwellSeconds,
+        template.SwitchSpeedLimitMetersPerSecond,
+        template.MainlineApproachCruiseSpeedMetersPerSecond,
+        template.BranchlineApproachCruiseSpeedMetersPerSecond,
+        template.MainlineSafetyFactor,
+        template.BranchlineSafetyFactor,
+        template.MainlineTrafficRatio,
+        template.StationForwardGradeInPermille,
+        template.StationForwardGradeOutPermille,
+        template.StationForwardDistanceToSignalMeters,
+        template.StationForwardOverlapMeters,
+        template.StationForwardDwellSeconds,
+        template.StationForwardEarlierCruiseSpeedMetersPerSecond,
+        template.StationForwardLaterCruiseSpeedMetersPerSecond,
+        template.StationForwardSafetyFactor,
+        template.StationReverseGradeInPermille,
+        template.StationReverseGradeOutPermille,
+        template.StationReverseDistanceToSignalMeters,
+        template.StationReverseOverlapMeters,
+        template.StationReverseDwellSeconds,
+        template.StationReverseEarlierCruiseSpeedMetersPerSecond,
+        template.StationReverseLaterCruiseSpeedMetersPerSecond,
+        template.StationReverseSafetyFactor)).ToArray());
 
 static (VehicleTypeDefinition[] Vehicles, ServiceTypeDefinition[] Services, StopPatternDefinition[] Stops) CreatePlanningCatalogs()
 {
@@ -1815,7 +2795,6 @@ static void TestSimulationProjectRoundTrip()
     Equal(MovingBlockMode.Control, restored.Simulation.MovingBlockMode);
     Equal(BrakingEstimationMode.Emergency, restored.Simulation.BrakingEstimationMode);
     NearlyEqual(45 / 3.6, restored.SpeedLimits[0].LimitMetersPerSecond, 1e-9);
-    True(restored.ServicePatterns is null && restored.ServiceRuns is null, "Schema 7 不應保留舊執行資料源。");
     Equal(1, restored.VehicleTypes!.Length);
     Equal(1, restored.ServiceTypes!.Length);
     Equal(2, restored.StopPatterns!.Length);
@@ -1823,6 +2802,49 @@ static void TestSimulationProjectRoundTrip()
     Equal(StopPatternAction.Pass, express.Instructions.Single().Action);
     NearlyEqual(45 / 3.6, express.Instructions.Single().PassingSpeedLimitMetersPerSecond!.Value);
     True(json.Contains($"\"schemaVersion\": {SimulationProjectFormat.CurrentSchemaVersion}", StringComparison.Ordinal), "存檔必須包含版本欄位。");
+}
+
+static void TestFixedTimetableArchiveRoundTrip()
+{
+    var source = CreateProjectDocument();
+    var timetable = new[]
+    {
+        new OperationsTimetableEntry("EMU-001", "RUN-001", TrainDirection.Outbound, "LOCAL", "EXPRESS", "EMU-6",
+            "P01", "起點", 0, null, 0, null, 0, null, 0, "已發車"),
+        new OperationsTimetableEntry("EMU-001", "RUN-001", TrainDirection.Outbound, "LOCAL", "EXPRESS", "EMU-6",
+            "P02", "中央", 1200, null, null, 72.4, 72.4, 0, 2.4, "已抵達"),
+        new OperationsTimetableEntry("EMU-001", "RUN-001", TrainDirection.Outbound, "LOCAL", "EXPRESS", "EMU-6",
+            "P03", "終點", 2000, null, null, 124.8, null, null, null, "退出營運")
+    };
+
+    var archive = FixedTimetableArchiveFormat.Create(source, timetable);
+    var json = FixedTimetableArchiveFormat.Serialize(archive);
+    True(FixedTimetableArchiveFormat.IsFixedTimetableArchive(json), "封存 JSON 必須可辨識為固定時刻表。");
+    var restored = FixedTimetableArchiveFormat.Deserialize(json);
+
+    Equal(FixedTimetableArchiveFormat.CurrentArchiveFormatVersion, restored.ArchiveFormatVersion);
+    Equal(FixedTimetableArchiveFormat.ArchiveType, restored.ArchiveType);
+    Equal("測試專案線", restored.Project.RouteName);
+    Equal(3, restored.Entries.Length);
+    NearlyEqual(72.4, restored.Entries.Single(item => item.StationId == "P02").ActualDepartureTimeSeconds!.Value, 1e-9);
+    Equal("退出營運", restored.Entries.Single(item => item.StationId == "P03").Status);
+}
+
+static void TestFixedTimetableArchiveValidation()
+{
+    var archive = FixedTimetableArchiveFormat.Create(
+        CreateProjectDocument(),
+        [new OperationsTimetableEntry("EMU-001", "RUN-001", TrainDirection.Outbound, "LOCAL", "EXPRESS", "EMU-6",
+            "P01", "起點", 0, null, 0, null, 0, null, 0, "已發車")]);
+    var root = JsonNode.Parse(FixedTimetableArchiveFormat.Serialize(archive))!.AsObject();
+    root["archiveFormatVersion"] = 999;
+    Throws<SimulationValidationException>(() => FixedTimetableArchiveFormat.Deserialize(root.ToJsonString()),
+        "不支援固定時刻表封存版本");
+
+    root["archiveFormatVersion"] = FixedTimetableArchiveFormat.CurrentArchiveFormatVersion;
+    root["entries"]!.AsArray()[0]!["stationId"] = "MISSING";
+    Throws<SimulationValidationException>(() => FixedTimetableArchiveFormat.Deserialize(root.ToJsonString()),
+        "參照不存在的車站");
 }
 
 static void TestLegacyProjectRejected()
@@ -1834,6 +2856,11 @@ static void TestLegacyProjectRejected()
         Throws<SimulationValidationException>(() => SimulationProjectFormat.Deserialize(root.ToJsonString()),
             "不支援存檔版本");
     }
+
+    root["schemaVersion"] = SimulationProjectFormat.CurrentSchemaVersion;
+    root["servicePatterns"] = new JsonArray();
+    Throws<SimulationValidationException>(() => SimulationProjectFormat.Deserialize(root.ToJsonString()),
+        "不支援舊執行資料來源");
 }
 
 static void TestSimulationProjectValidation()
@@ -1847,6 +2874,322 @@ static void TestSimulationProjectValidation()
     Throws<SimulationValidationException>(
         () => SimulationProjectFormat.Deserialize("{ invalid json"),
         "JSON 格式無效");
+}
+
+static void TestFrontTurnbackAlternateBerthing()
+{
+    var route = RouteFactory.FromSegmentDistances(
+        "FT",
+        "站前交替月台折返測試線",
+        [
+            new StationInput("FT01", "北端站", 0, 0),
+            new StationInput("FT02", "南端站", 1000, 0)
+        ],
+        0);
+    var vehicle = new VehicleTypeDefinition("EMU-FT", "站前折返測試車", 140, 22.222, 1, 1, 1.3, 0.65, 0.45, 0.05);
+    var service = new ServiceTypeDefinition("LOCAL", "普通車", "#4472C4", "FT", "ALL_STOP", "EMU-FT");
+    var stops = new StopPatternDefinition("ALL_STOP", "所有車站停靠",
+    [
+        new StopPatternInstruction("FT01", StopPatternAction.Stop),
+        new StopPatternInstruction("FT02", StopPatternAction.Stop)
+    ]);
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [
+                new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Inbound, "LOCAL", "EMU-FT", "ALL_STOP",
+                    originPlatformId: "FT02:UP", vehicleId: "EMU-FT-A", serviceRunId: "FT-IN-A",
+                    continueAfterTerminal: true, continuationServiceRunId: "FT-OUT-A"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(10), TrainDirection.Inbound, "LOCAL", "EMU-FT", "ALL_STOP",
+                    originPlatformId: "FT02:UP", vehicleId: "EMU-FT-B", serviceRunId: "FT-IN-B",
+                    continueAfterTerminal: true, continuationServiceRunId: "FT-OUT-B"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(20), TrainDirection.Inbound, "LOCAL", "EMU-FT", "ALL_STOP",
+                    originPlatformId: "FT02:UP", vehicleId: "EMU-FT-C", serviceRunId: "FT-IN-C"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(200), TrainDirection.Outbound, "LOCAL", "EMU-FT", "ALL_STOP",
+                    originPlatformId: "FT01:DOWN-A", serviceRunId: "FT-OUT-A"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(230), TrainDirection.Outbound, "LOCAL", "EMU-FT", "ALL_STOP",
+                    originPlatformId: "FT01:DOWN-B", serviceRunId: "FT-OUT-B")
+            ],
+            DispatchPlanningMode.ManualTimetable),
+        [vehicle],
+        [service],
+        [stops]);
+    var infrastructure = CreateFrontTurnbackInfrastructure(route);
+    var world = new SimulationWorld(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 1, 1),
+        OperationalParameters.CreateDefault(),
+        3,
+        movingBlockMode: MovingBlockMode.Independent,
+        servicePatterns:
+        [
+            new ServicePattern("ALL_STOP", "所有車站停靠",
+            [
+                new StationServiceInstruction("FT01", StationServiceMode.Stop),
+                new StationServiceInstruction("FT02", StationServiceMode.Stop)
+            ])
+        ],
+        dispatchPlan: dispatch,
+        vehicleTypes: [vehicle],
+        infrastructure: infrastructure);
+
+    world.AdvanceTo(300);
+    var inboundArrivals = world.Events
+        .Where(item => item.EventType == SimulationEventType.Arrival
+            && item.Direction == TrainDirection.Inbound
+            && (item.VehicleId is "EMU-FT-A" or "EMU-FT-B")
+            && item.PositionMeters <= 0.5)
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .ToArray();
+    Equal(2, inboundArrivals.Length);
+    Equal("FT01:UP-A", inboundArrivals[0].PlatformId!);
+    Equal("FT01:UP-B", inboundArrivals[1].PlatformId!);
+    True(world.Events.Any(item => item.EventType == SimulationEventType.WaitingForResource
+        && item.VehicleId == "EMU-FT-C"),
+        "兩座交替月台都被預留時，後車必須留在起點等待資源。");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        $"交替月台與資源保留期間不得發生碰撞：{string.Join(" | ", world.Events.Where(item => item.EventType == SimulationEventType.Collision).Select(item => $"{item.VehicleId}@{item.SimulationTimeSeconds:0.0}({item.TrackId})"))}");
+
+    world.AdvanceTo(420);
+    var thirdArrival = world.Events.SingleOrDefault(item => item.EventType == SimulationEventType.Arrival
+        && item.VehicleId == "EMU-FT-C"
+        && item.PositionMeters <= 0.5);
+    True(thirdArrival is not null,
+        $"第三車尚未抵達北端站；事件：{string.Join(" | ", world.Events.Where(item => item.VehicleId == "EMU-FT-C").Select(item => $"{item.EventType}@{item.SimulationTimeSeconds:0.0}:{item.ResourceId}"))}");
+    Equal("FT01:UP-A", thirdArrival!.PlatformId!);
+    var turnbacks = world.Events
+        .Where(item => item.EventType == SimulationEventType.DirectionChanged
+            && (item.ServiceRunId is "FT-OUT-A" or "FT-OUT-B"))
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .ToArray();
+    Equal(2, turnbacks.Length);
+    var frontTurnbackTrajectory = world.Trajectory
+        .Where(item => item.VehicleId == "EMU-FT-A"
+            && item.TrackId.StartsWith("TURNBACK:FT01-FRONT:", StringComparison.Ordinal))
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .ToArray();
+    True(frontTurnbackTrajectory.Any(item => item.TrackId.EndsWith(":OUT", StringComparison.Ordinal)
+        && item.Phase == OperationalPhase.SpatialTurnbackOutbound),
+        "站前折返應把外出橫渡線行程記錄為獨立固定子步進軌跡。 ");
+    True(frontTurnbackTrajectory.Any(item => item.TrackId.EndsWith(":RETURN", StringComparison.Ordinal)
+        && item.Phase == OperationalPhase.SpatialTurnbackReturn),
+        "站前折返應把返回月台行程記錄為獨立固定子步進軌跡。 ");
+    True(frontTurnbackTrajectory.Any(item => item.PositionMeters < -0.5),
+        "站前折返虛擬橫渡線必須有離開實體站的非零位置。 ");
+    True(frontTurnbackTrajectory.Zip(frontTurnbackTrajectory.Skip(1), (previous, current) =>
+            current.SimulationTimeSeconds - previous.SimulationTimeSeconds)
+        .All(step => Math.Abs(step - 0.1) < 1e-6),
+        "站前折返的外出、等待與返回軌跡必須維持 0.1 秒固定子步進。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        "等待解除與後續折返期間不得產生碰撞。");
+}
+
+static void TestCentralSidingAnchoredStationTurnback()
+{
+    var route = RouteFactory.FromSegmentDistances(
+        "CS",
+        "中央避車線實體錨定站折返測試線",
+        [
+            new StationInput("CS01", "北端站", 0, 0),
+            new StationInput("CS02", "中央避車線錨定站", 800, 3),
+            new StationInput("CS03", "南端站", 800, 0)
+        ],
+        0);
+    var vehicle = new VehicleTypeDefinition("EMU-CS", "中央折返測試車", 140, 22.222, 1, 1, 1.3, 0.65, 0.45, 0.05);
+    var service = new ServiceTypeDefinition("SHORT", "區間車", "#70AD47", "CS", "SHORT-TURN", "EMU-CS");
+    var pattern = new StopPatternDefinition("SHORT-TURN", "中央避車線區間車",
+    [
+        new StopPatternInstruction("CS01", StopPatternAction.Stop),
+        new StopPatternInstruction("CS02", StopPatternAction.Turnback, dwellTimeSeconds: 3),
+        new StopPatternInstruction("CS03", StopPatternAction.Stop)
+    ]);
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [
+                new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Inbound, "SHORT", "EMU-CS", "SHORT-TURN",
+                    originPlatformId: "CS03:UP", vehicleId: "EMU-CS-01", serviceRunId: "CS-IN-01",
+                    continuationServiceRunId: "CS-OUT-01"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(150), TrainDirection.Outbound, "SHORT", "EMU-CS", "SHORT-TURN",
+                    originPlatformId: "CS02:DOWN", serviceRunId: "CS-OUT-01")
+            ],
+            DispatchPlanningMode.ManualTimetable),
+        [vehicle],
+        [service],
+        [pattern]);
+    var infrastructure = CreateCentralSidingVirtualInfrastructure(route);
+    var world = new SimulationWorld(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 1, 1),
+        OperationalParameters.CreateDefault(),
+        1,
+        movingBlockMode: MovingBlockMode.Independent,
+        servicePatterns:
+        [
+            new ServicePattern("SHORT-TURN", "中央避車線區間車",
+            [
+                new StationServiceInstruction("CS01", StationServiceMode.Stop),
+                new StationServiceInstruction("CS02", StationServiceMode.Turnback, DwellTimeSeconds: 3),
+                new StationServiceInstruction("CS03", StationServiceMode.Stop)
+            ])
+        ],
+        dispatchPlan: dispatch,
+        vehicleTypes: [vehicle],
+        infrastructure: infrastructure);
+
+    world.AdvanceTo(300);
+    var arrival = world.Events.Single(item => item.EventType == SimulationEventType.Arrival
+        && item.ServiceRunId == "CS-IN-01"
+        && item.PositionMeters >= 799.5 && item.PositionMeters <= 800.5);
+    Equal("CS02:UP", arrival.PlatformId!);
+    var turnaround = world.Events.Single(item => item.EventType == SimulationEventType.TurnaroundStarted
+        && item.ServiceRunId == "CS-IN-01");
+    True(turnaround.SimulationTimeSeconds >= arrival.SimulationTimeSeconds + 3 - 0.11,
+        "中央避車線錨定站折返應先完成設定的停站秒數。");
+    var changed = world.Events.Single(item => item.EventType == SimulationEventType.DirectionChanged
+        && item.ServiceRunId == "CS-OUT-01");
+    Equal("EMU-CS-01", changed.VehicleId);
+    True(changed.SimulationTimeSeconds >= 150 - 0.11,
+        "指定接續車次尚未到計畫時間前不得由實體錨定站發車。");
+    True(world.Events.Any(item => item.EventType == SimulationEventType.Departure
+        && item.ServiceRunId == "CS-OUT-01"),
+        "中央避車線錨定站折返後必須產生反向接續發車事件。");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
+        && item.ServiceRunId == "CS-IN-01"),
+        "中央避車線折返不應把進站車次當成端點退出。");
+    var centralTurnbackTrajectory = world.Trajectory
+        .Where(item => item.VehicleId == "EMU-CS-01"
+            && item.TrackId.StartsWith("TURNBACK:CS02-POCKET:", StringComparison.Ordinal))
+        .ToArray();
+    True(centralTurnbackTrajectory.Any(item => item.TrackId.EndsWith(":OUT", StringComparison.Ordinal)
+        && item.Phase == OperationalPhase.SpatialTurnbackOutbound)
+        && centralTurnbackTrajectory.Any(item => item.TrackId.EndsWith(":RETURN", StringComparison.Ordinal)
+            && item.Phase == OperationalPhase.SpatialTurnbackReturn),
+        "中央避車線折返應完整保留外出與返回兩段固定子步進軌跡。 ");
+    True(centralTurnbackTrajectory.Any(item => item.PositionMeters < 799.5),
+        "中央避車線虛擬停車區必須有偏離實體錨定站的非零位置。 ");
+    True(!world.Events.Any(item => item.EventType == SimulationEventType.Collision),
+        "中央避車線錨定站折返不得產生碰撞。");
+}
+
+static void TestTurnbackScenarioSampleProject()
+{
+    var repositoryRoot = FindRepositoryRoot();
+    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.3.0-端點站前與中間站中央避車線折返檢核.mrtsim.json");
+    True(File.Exists(samplePath), $"找不到折返檢核範例：{samplePath}");
+
+    var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
+    Equal(SimulationProjectFormat.CurrentSchemaVersion, document.SchemaVersion);
+    Equal(4, document.Stations.Length);
+    Equal(2, document.ServiceTypes!.Length);
+    Equal(2, document.StopPatterns!.Length);
+    True(document.StopPatterns.Single(item => item.Id == "POCKET_SHORT_TURN").Instructions.Any(item =>
+            item.StationId == "TB02" && item.Action == StopPatternAction.Turnback),
+        "範例必須把中央避車線錨定實體站設定為 Turnback。");
+    True(document.Infrastructure!.SpatialReferencePoints!.Any(item =>
+            item.StationId == "TB01"
+            && item.Kind == SpatialReferencePointKind.BeforeStationTurnback
+            && item.AlternateBerthing),
+        "範例必須保留端點站前交替月台設定。");
+    True(document.Infrastructure.SpatialReferencePoints!.Any(item =>
+            item.StationId == "TB02"
+            && item.Kind == SpatialReferencePointKind.CentralSidingTurnback),
+        "範例必須以 TB02 作為中央避車線實體錨定站。");
+    True(document.Infrastructure.TurnbackPlans!.Any(item =>
+            item.StationId == "TB02"
+            && item.ResourceIds!.Contains("SIDING:TB02")),
+        "範例必須鎖定中央避車線折返資源。");
+    Equal(6, document.Dispatch!.ManualTimetableRows!.Length);
+
+    var roundTrip = SimulationProjectFormat.Deserialize(SimulationProjectFormat.Serialize(document));
+    True(roundTrip.StopPatterns!.Single(item => item.Id == "POCKET_SHORT_TURN").Instructions.Any(item =>
+            item.Action == StopPatternAction.Turnback),
+        "範例往返後不得遺失中央避車線折返指令。");
+}
+
+static InfrastructureGraph CreateFrontTurnbackInfrastructure(Route route)
+{
+    var platforms = new[]
+    {
+        new PlatformDefinition("FT01:DOWN-A", "FT01", "北端下行 A 月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN-A"]),
+        new PlatformDefinition("FT01:DOWN-B", "FT01", "北端下行 B 月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN-B"]),
+        new PlatformDefinition("FT01:UP-A", "FT01", "北端上行 A 月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP-A"]),
+        new PlatformDefinition("FT01:UP-B", "FT01", "北端上行 B 月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP-B"]),
+        new PlatformDefinition("FT02:DOWN", "FT02", "南端下行月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN-A", "DOWN-B"]),
+        new PlatformDefinition("FT02:UP", "FT02", "南端上行月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP-A", "UP-B"])
+    };
+    var tracks = new[]
+    {
+        new TrackSegmentDefinition("DOWN-A", "FT01", "FT02", 0, route.TotalLengthMeters,
+            TrackDirection.Outbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:DOWN-A"]),
+        new TrackSegmentDefinition("DOWN-B", "FT01", "FT02", 0, route.TotalLengthMeters,
+            TrackDirection.Outbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:DOWN-B"]),
+        new TrackSegmentDefinition("UP-A", "FT02", "FT01", route.TotalLengthMeters, 0,
+            TrackDirection.Inbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:UP-A"]),
+        new TrackSegmentDefinition("UP-B", "FT02", "FT01", route.TotalLengthMeters, 0,
+            TrackDirection.Inbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:UP-B"])
+    };
+    var paths = new[]
+    {
+        new RoutePathDefinition("FT-D-A", "FT01:DOWN-A", "FT02:DOWN", TrackDirection.Outbound, ["DOWN-A"], ["PATH:FT:D:A"]),
+        new RoutePathDefinition("FT-D-B", "FT01:DOWN-B", "FT02:DOWN", TrackDirection.Outbound, ["DOWN-B"], ["PATH:FT:D:B"]),
+        new RoutePathDefinition("FT-U-A", "FT02:UP", "FT01:UP-A", TrackDirection.Inbound, ["UP-A"], ["PATH:FT:U:A"]),
+        new RoutePathDefinition("FT-U-B", "FT02:UP", "FT01:UP-B", TrackDirection.Inbound, ["UP-B"], ["PATH:FT:U:B"])
+    };
+    var yards = new[]
+    {
+        new StationYardDefinition("FT01", "北端站場", platforms.Where(item => item.StationId == "FT01"),
+            ["DOWN-A", "DOWN-B", "UP-A", "UP-B"], paths.Where(item => item.FromPlatformId.StartsWith("FT01", StringComparison.Ordinal)
+                || item.ToPlatformId.StartsWith("FT01", StringComparison.Ordinal)).Select(item => item.PathId),
+            platformAllocationStrategy: PlatformAllocationStrategy.RoundRobin),
+        new StationYardDefinition("FT02", "南端站場", platforms.Where(item => item.StationId == "FT02"),
+            ["DOWN-A", "DOWN-B", "UP-A", "UP-B"], paths.Where(item => item.FromPlatformId.StartsWith("FT02", StringComparison.Ordinal)
+                || item.ToPlatformId.StartsWith("FT02", StringComparison.Ordinal)).Select(item => item.PathId))
+    };
+    var point = new SpatialReferencePointDefinition(
+        "FT01-FRONT", "FT01", "北端站前折返", SpatialReferencePointKind.BeforeStationTurnback,
+        alternateBerthing: true, distanceFromStopToCrossoverMeters: 30, crossoverLengthMeters: 20,
+        turnbackDwellSeconds: 5, switchSpeedLimitMetersPerSecond: 20 / 3.6);
+    return new InfrastructureGraph(route, yards, tracks, paths, spatialReferencePoints: [point]);
+}
+
+static InfrastructureGraph CreateCentralSidingVirtualInfrastructure(Route route)
+{
+    var platforms = new[]
+    {
+        new PlatformDefinition("CS02:DOWN", "CS02", "中央避車線下行月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN"]),
+        new PlatformDefinition("CS02:UP", "CS02", "中央避車線上行月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP"]),
+        new PlatformDefinition("CS03:DOWN", "CS03", "南端下行月台", TrackDirection.Outbound, 220, trackSegmentIds: ["DOWN"]),
+        new PlatformDefinition("CS03:UP", "CS03", "南端上行月台", TrackDirection.Inbound, 220, trackSegmentIds: ["UP"])
+    };
+    var tracks = new[]
+    {
+        new TrackSegmentDefinition("DOWN", "CS01", "CS03", 0, route.TotalLengthMeters,
+            TrackDirection.Outbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:DOWN"]),
+        new TrackSegmentDefinition("UP", "CS03", "CS01", route.TotalLengthMeters, 0,
+            TrackDirection.Inbound, TrackKind.Mainline, route.TotalLengthMeters, 22.222, ["TRACK:UP"])
+    };
+    var paths = new[]
+    {
+        new RoutePathDefinition("CS-D-23", "CS02:DOWN", "CS03:DOWN", TrackDirection.Outbound, ["DOWN"], ["PATH:CS:D:23"]),
+        new RoutePathDefinition("CS-U-32", "CS03:UP", "CS02:UP", TrackDirection.Inbound, ["UP"], ["PATH:CS:U:32"])
+    };
+    var turnback = new TurnbackPlanDefinition(
+        "CS02-TURNBACK", "中央避車線折返資源", "CS02", TurnbackKind.BeforeStation,
+        "CS02:UP", "CS02:DOWN", ["UP", "DOWN"], ["SIDING:CS02"], 0);
+    var yards = new[]
+    {
+        new StationYardDefinition("CS01", "北端站場"),
+        new StationYardDefinition("CS02", "中央避車線錨定站場", platforms.Where(item => item.StationId == "CS02"),
+            ["DOWN", "UP"], paths.Select(item => item.PathId), [turnback]),
+        new StationYardDefinition("CS03", "南端站場", platforms.Where(item => item.StationId == "CS03"),
+            ["DOWN", "UP"], paths.Select(item => item.PathId))
+    };
+    var point = new SpatialReferencePointDefinition(
+        "CS02-POCKET", "CS02", "中央避車線錨定站", SpatialReferencePointKind.CentralSidingTurnback,
+        distanceFromStopToCrossoverMeters: 20, crossoverLengthMeters: 30, distanceFromCrossoverToTurnbackStopMeters: 40,
+        turnbackDwellSeconds: 5, switchSpeedLimitMetersPerSecond: 20 / 3.6);
+    return new InfrastructureGraph(route, yards, tracks, paths, [turnback], [point]);
 }
 
 static void TestVehicleCatalogPerformanceAuthority()
@@ -1983,8 +3326,6 @@ static SimulationProjectDocument CreateProjectDocument()
             OperationProfileMode.RealisticOperations,
             MovingBlockMode.Control,
             BrakingEstimationMode.Emergency),
-        null,
-        null,
         [new ProjectVehicleType("EMU-6", "六節電聯車", defaults.TrainLengthMeters, 80 / 3.6, 1,
             defaults.ServiceBrakingMetersPerSecondSquared, defaults.EmergencyBrakingMetersPerSecondSquared,
             defaults.JerkMetersPerSecondCubed, 0.45, 0.05)],

@@ -9,14 +9,20 @@ public partial class MainWindow
 {
     private void EditSpatialReferencePoints_Click(object sender, RoutedEventArgs e)
     {
+        if (TryActivateEditor("SpatialReferencePoints")) return;
+        var initialRows = GetCompleteSpatialReferencePointRows();
         var stations = DraftRows("中間站");
         var junctions = DraftRows("銜接點");
         var front = DraftRows("站前折返");
         var rear = DraftRows("站後折返");
         var pocket = DraftRows("中央避車線折返");
+        IEnumerable<SpatialReferencePointInputRow> templateSource = SpatialReferencePointTemplateRows.Count == 0
+            ? CreateDefaultSpatialReferencePointTemplateRows()
+            : SpatialReferencePointTemplateRows;
+        var templates = new ObservableCollection<SpatialReferencePointInputRow>(templateSource.Select(Clone));
         var stationIds = StationRows.Select(row => row.StationId)
             .Where(id => !string.IsNullOrWhiteSpace(id)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var sequence = SpatialReferencePointRows.Count;
+        var sequence = initialRows.Length;
 
         var stationGrid = CreateGrid(stations,
             TextColumn("參考點 ID", nameof(SpatialReferencePointInputRow.ReferencePointId), 105),
@@ -89,24 +95,75 @@ public partial class MainWindow
             TextColumn("避車線折返停等 s", nameof(SpatialReferencePointInputRow.TurnbackDwellSeconds), 125),
             TextColumn("道岔限速 km/h", nameof(SpatialReferencePointInputRow.SwitchSpeedLimitKmh), 105));
 
+        var templateGrid = CreateGrid(templates,
+            TextColumn("站場型式", nameof(SpatialReferencePointInputRow.Kind), 110),
+            CheckColumn("交替停靠", nameof(SpatialReferencePointInputRow.AlternateBerthing), 85),
+            TextColumn("主線坡度 ‰", nameof(SpatialReferencePointInputRow.MainlineGradePermille), 90),
+            TextColumn("側線坡度 ‰", nameof(SpatialReferencePointInputRow.BranchlineGradePermille), 90),
+            TextColumn("停車點至橫渡線 m", nameof(SpatialReferencePointInputRow.DistanceFromStopToCrossoverMeters), 125),
+            TextColumn("橫渡線長度 m", nameof(SpatialReferencePointInputRow.CrossoverLengthMeters), 110),
+            TextColumn("橫渡線至停車區 m", nameof(SpatialReferencePointInputRow.DistanceFromCrossoverToTurnbackStopMeters), 130),
+            TextColumn("折返停等 s", nameof(SpatialReferencePointInputRow.TurnbackDwellSeconds), 90),
+            TextColumn("道岔 km/h", nameof(SpatialReferencePointInputRow.SwitchSpeedLimitKmh), 90),
+            TextColumn("主線 km/h", nameof(SpatialReferencePointInputRow.MainlineApproachCruiseSpeedKmh), 90),
+            TextColumn("側線 km/h", nameof(SpatialReferencePointInputRow.BranchlineApproachCruiseSpeedKmh), 90),
+            TextColumn("主線安全", nameof(SpatialReferencePointInputRow.MainlineSafetyFactor), 85),
+            TextColumn("側線安全", nameof(SpatialReferencePointInputRow.BranchlineSafetyFactor), 85),
+            TextColumn("主線比例", nameof(SpatialReferencePointInputRow.MainlineTrafficRatio), 85),
+            TextColumn("順進坡度 ‰", nameof(SpatialReferencePointInputRow.StationForwardGradeInPermille), 90),
+            TextColumn("順出坡度 ‰", nameof(SpatialReferencePointInputRow.StationForwardGradeOutPermille), 90),
+            TextColumn("順離開 m", nameof(SpatialReferencePointInputRow.StationForwardDistanceToSignalMeters), 90),
+            TextColumn("順重疊 m", nameof(SpatialReferencePointInputRow.StationForwardOverlapMeters), 90),
+            TextColumn("順停站 s", nameof(SpatialReferencePointInputRow.StationForwardDwellSeconds), 85),
+            TextColumn("順進站 km/h", nameof(SpatialReferencePointInputRow.StationForwardEarlierCruiseSpeedKmh), 100),
+            TextColumn("順離站 km/h", nameof(SpatialReferencePointInputRow.StationForwardLaterCruiseSpeedKmh), 100),
+            TextColumn("順安全", nameof(SpatialReferencePointInputRow.StationForwardSafetyFactor), 80),
+            TextColumn("逆進坡度 ‰", nameof(SpatialReferencePointInputRow.StationReverseGradeInPermille), 90),
+            TextColumn("逆出坡度 ‰", nameof(SpatialReferencePointInputRow.StationReverseGradeOutPermille), 90),
+            TextColumn("逆離開 m", nameof(SpatialReferencePointInputRow.StationReverseDistanceToSignalMeters), 90),
+            TextColumn("逆重疊 m", nameof(SpatialReferencePointInputRow.StationReverseOverlapMeters), 90),
+            TextColumn("逆停站 s", nameof(SpatialReferencePointInputRow.StationReverseDwellSeconds), 85),
+            TextColumn("逆進站 km/h", nameof(SpatialReferencePointInputRow.StationReverseEarlierCruiseSpeedKmh), 100),
+            TextColumn("逆離站 km/h", nameof(SpatialReferencePointInputRow.StationReverseLaterCruiseSpeedKmh), 100),
+            TextColumn("逆安全", nameof(SpatialReferencePointInputRow.StationReverseSafetyFactor), 80));
+        templateGrid.Columns[0].IsReadOnly = true;
+
         var tabs = new TabControl();
         tabs.Items.Add(CreateEditableTab("中間站", stationGrid, stations,
-            () => CreateRow("中間站", ++sequence, stationIds.FirstOrDefault())));
+            () => CreateRow("中間站", ++sequence, stationIds.FirstOrDefault(), templates)));
         tabs.Items.Add(CreateEditableTab("銜接點", junctionGrid, junctions,
-            () => CreateRow("銜接點", ++sequence, stationIds.FirstOrDefault())));
+            () => CreateRow("銜接點", ++sequence, stationIds.FirstOrDefault(), templates)));
         tabs.Items.Add(CreateEditableTab("站前折返", frontGrid, front,
-            () => CreateRow("站前折返", ++sequence, stationIds.LastOrDefault())));
+            () => CreateRow("站前折返", ++sequence, stationIds.LastOrDefault(), templates)));
         tabs.Items.Add(CreateEditableTab("站後折返", rearGrid, rear,
-            () => CreateRow("站後折返", ++sequence, stationIds.LastOrDefault())));
+            () => CreateRow("站後折返", ++sequence, stationIds.LastOrDefault(), templates)));
         tabs.Items.Add(CreateEditableTab("中央避車線折返", pocketGrid, pocket,
-            () => CreateRow("中央避車線折返", ++sequence, stationIds.LastOrDefault())));
+            () => CreateRow("中央避車線折返", ++sequence, stationIds.LastOrDefault(), templates)));
+        tabs.Items.Add(new TabItem
+        {
+            Header = "新增站預設範本",
+            Content = new DockPanel
+            {
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = "這五筆範本只會在按「新增」建立實體站場時複製；變更範本不會回寫現有站場的個別覆寫。",
+                        TextWrapping = TextWrapping.Wrap,
+                        Margin = new Thickness(10, 10, 10, 0)
+                    },
+                    templateGrid
+                }
+            }
+        });
 
         var window = CreateEditorWindow("空間參考點／折返站型式", 1220, 650);
+        RegisterEditorWindow("SpatialReferencePoints", window);
         window.Owner = this;
         var root = (DockPanel)window.Content;
         var note = new TextBlock
         {
-            Text = "設定完成後會立即重繪路線圖。中間站可分別設定順行／逆行容量參數；站前折返的停站時間會取代該次折返的端點停站時間；站後與中央避車線的停等時間則用於站後折返。",
+            Text = "每一實體站只能選一種型式。新增站場會複製「新增站預設範本」的當前值；中間站可分別設定順行／逆行容量參數；站前折返的停站時間會取代該次折返的端點停站時間。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(12),
             Foreground = System.Windows.Media.Brushes.DimGray
@@ -116,19 +173,26 @@ public partial class MainWindow
         root.Children.Add(tabs);
         AddOkCancel(window, () =>
         {
-            CommitGrid(stationGrid); CommitGrid(junctionGrid); CommitGrid(frontGrid); CommitGrid(rearGrid); CommitGrid(pocketGrid);
+            CommitGrid(stationGrid); CommitGrid(junctionGrid); CommitGrid(frontGrid); CommitGrid(rearGrid); CommitGrid(pocketGrid); CommitGrid(templateGrid);
             var combined = stations.Concat(junctions).Concat(front).Concat(rear).Concat(pocket).Select(Clone).ToArray();
             try
             {
                 _ = BuildSpatialReferencePointDefinitions(combined);
+                _ = BuildSpatialReferencePointTemplateDefinitions(templates);
                 var duplicateStation = combined.GroupBy(row => row.StationId, StringComparer.OrdinalIgnoreCase)
                     .FirstOrDefault(group => group.Count() > 1);
                 if (duplicateStation is not null)
                 {
                     throw new SimulationValidationException([$"車站「{duplicateStation.Key}」只能指定一種空間參考點型式。　"]);
                 }
+                var missingStations = stationIds.Except(combined.Select(row => row.StationId), StringComparer.OrdinalIgnoreCase).ToArray();
+                if (missingStations.Length > 0)
+                {
+                    throw new SimulationValidationException([$"每一實體站都必須指定一種空間參考點型式；尚未分類：{string.Join("、", missingStations)}。"]);
+                }
 
                 Replace(SpatialReferencePointRows, combined);
+                Replace(SpatialReferencePointTemplateRows, templates.Select(Clone));
                 CommitInfrastructurePreview("空間參考點已更新並立即呈現在路線圖；請重新建立模擬以套用行車與折返設定。", window);
             }
             catch (SimulationValidationException exception)
@@ -137,10 +201,10 @@ public partial class MainWindow
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         });
-        window.ShowDialog();
+        window.Show();
 
         ObservableCollection<SpatialReferencePointInputRow> DraftRows(string kind) =>
-            new(SpatialReferencePointRows.Where(row => row.Kind == kind).Select(Clone));
+            new(initialRows.Where(row => row.Kind == kind).Select(Clone));
     }
 
     private void CommitInfrastructurePreview(string status, Window window)
@@ -160,19 +224,21 @@ public partial class MainWindow
             // 車站主表仍在編輯時保留已提交設定；建立模擬會顯示完整驗證原因。
         }
         StatusTextBlock.Text = status;
-        window.DialogResult = true;
+        window.Close();
     }
 
-    private static SpatialReferencePointInputRow CreateRow(string kind, int sequence, string? stationId)
+    private static SpatialReferencePointInputRow CreateRow(
+        string kind,
+        int sequence,
+        string? stationId,
+        IEnumerable<SpatialReferencePointInputRow> templates)
     {
-        var row = new SpatialReferencePointInputRow
-        {
-            ReferencePointId = $"REF-{sequence:000}",
-            StationId = stationId ?? string.Empty,
-            Name = kind,
-            Kind = kind,
-            MainlineApproachCruiseSpeedKmh = kind == "站前折返" ? 60 : 80
-        };
+        var template = templates.Single(item => item.Kind.Equals(kind, StringComparison.Ordinal));
+        var row = Clone(template);
+        row.ReferencePointId = $"REF-{sequence:000}";
+        row.StationId = stationId ?? string.Empty;
+        row.Name = kind;
+        row.Kind = kind;
         return row;
     }
 }

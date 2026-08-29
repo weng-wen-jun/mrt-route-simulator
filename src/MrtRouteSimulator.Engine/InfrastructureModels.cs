@@ -378,6 +378,9 @@ public sealed class TurnbackPlanDefinition
     public IReadOnlySet<string> ResourceIds { get; }
     public double TurnbackTimeSeconds { get; }
 
+    /// <summary>站後折返使用的執行期尾軌虛擬節點編號。</summary>
+    public string VirtualTailNodeId => $"TAIL:{TurnbackId}";
+
     private void Validate()
     {
         var errors = new List<string>();
@@ -395,6 +398,21 @@ public sealed class TurnbackPlanDefinition
 
         PlatformDefinition.Throw(errors);
     }
+}
+
+/// <summary>
+/// 站後折返的成對尾軌。兩條線共用一個不屬於路線車站的虛擬節點：列車由到達方向
+/// 駛入該點，完成折返停等後再從相反方向駛回端點站。
+/// </summary>
+public sealed record AfterStationTailTrackLayout(
+    string VirtualNodeId,
+    double VirtualNodePositionMeters,
+    TrackSegmentDefinition OutboundTrack,
+    TrackSegmentDefinition InboundTrack)
+{
+    public TrackSegmentDefinition GetTrack(TrainDirection direction) => direction == TrainDirection.Outbound
+        ? OutboundTrack
+        : InboundTrack;
 }
 
 /// <summary>單一車站的月台、股道、進路及折返配置。</summary>
@@ -467,6 +485,61 @@ public sealed class StationYardDefinition
         => new ReadOnlyCollection<T>((values ?? []).ToArray());
 }
 
+/// <summary>
+/// 站間維持單一正線時，供普通車待避、快速車由站內通過線跨越的設施定義。
+/// </summary>
+public sealed class StationOvertakeFacilityDefinition
+{
+    public StationOvertakeFacilityDefinition(
+        string facilityId,
+        string stationId,
+        TrackDirection direction,
+        string mainlineTrackSegmentId,
+        string localPlatformId,
+        string expressPlatformId,
+        string localTrackSegmentId,
+        string expressTrackSegmentId,
+        double entryPositionMeters,
+        IEnumerable<string>? resourceIds = null)
+    {
+        FacilityId = PlatformDefinition.NormalizeRequired(facilityId, "越行設施編號");
+        StationId = PlatformDefinition.NormalizeRequired(stationId, "越行設施車站編號");
+        Direction = direction;
+        MainlineTrackSegmentId = PlatformDefinition.NormalizeRequired(mainlineTrackSegmentId, "越行設施正線股道編號");
+        LocalPlatformId = PlatformDefinition.NormalizeRequired(localPlatformId, "越行設施普通車月台編號");
+        ExpressPlatformId = PlatformDefinition.NormalizeRequired(expressPlatformId, "越行設施快速車通過月台編號");
+        LocalTrackSegmentId = PlatformDefinition.NormalizeRequired(localTrackSegmentId, "越行設施普通車股道編號");
+        ExpressTrackSegmentId = PlatformDefinition.NormalizeRequired(expressTrackSegmentId, "越行設施快速車通過股道編號");
+        EntryPositionMeters = entryPositionMeters;
+        ResourceIds = PlatformDefinition.ToFrozenIds(resourceIds, "越行設施資源編號");
+
+        var errors = new List<string>();
+        PlatformDefinition.RequireDirection(Direction, "越行設施方向", errors);
+        if (!double.IsFinite(EntryPositionMeters))
+        {
+            errors.Add("越行設施進入位置必須是有限數值。");
+        }
+
+        if (ResourceIds.Count == 0)
+        {
+            errors.Add("越行設施至少需要一個站前、站內或站後衝突資源。");
+        }
+
+        PlatformDefinition.Throw(errors);
+    }
+
+    public string FacilityId { get; }
+    public string StationId { get; }
+    public TrackDirection Direction { get; }
+    public string MainlineTrackSegmentId { get; }
+    public string LocalPlatformId { get; }
+    public string ExpressPlatformId { get; }
+    public string LocalTrackSegmentId { get; }
+    public string ExpressTrackSegmentId { get; }
+    public double EntryPositionMeters { get; }
+    public IReadOnlySet<string> ResourceIds { get; }
+}
+
 /// <summary>站場拓樸及其查詢、驗證入口。</summary>
 public sealed class InfrastructureGraph
 {
@@ -476,14 +549,23 @@ public sealed class InfrastructureGraph
         IEnumerable<TrackSegmentDefinition> trackSegments,
         IEnumerable<RoutePathDefinition> paths,
         IEnumerable<TurnbackPlanDefinition>? turnbackPlans = null,
-        IEnumerable<SpatialReferencePointDefinition>? spatialReferencePoints = null)
+        IEnumerable<SpatialReferencePointDefinition>? spatialReferencePoints = null,
+        IEnumerable<StationOvertakeFacilityDefinition>? stationOvertakeFacilities = null,
+        IEnumerable<SpatialReferencePointTemplateDefinition>? spatialReferencePointTemplates = null)
     {
         Route = route ?? throw new ArgumentNullException(nameof(route));
         StationYards = Copy(stationYards, "站場");
         TrackSegments = Copy(trackSegments, "股道");
         Paths = Copy(paths, "進路");
         TurnbackPlans = Copy(turnbackPlans ?? StationYards.SelectMany(yard => yard.TurnbackPlans), "折返設定");
-        SpatialReferencePoints = Copy(spatialReferencePoints ?? [], "空間參考點");
+        StationOvertakeFacilities = Copy(stationOvertakeFacilities ?? [], "站內越行設施");
+        var requestedTemplates = spatialReferencePointTemplates?.ToArray();
+        SpatialReferencePointTemplates = Copy(
+            requestedTemplates is { Length: > 0 }
+                ? requestedTemplates
+                : SpatialReferencePointTemplateDefinition.CreateDefaults(),
+            "空間參考點範本");
+        SpatialReferencePoints = CompleteSpatialReferencePoints(route, spatialReferencePoints, SpatialReferencePointTemplates);
         Validate();
     }
 
@@ -494,11 +576,63 @@ public sealed class InfrastructureGraph
     public IReadOnlyList<RoutePathDefinition> RoutePaths => Paths;
     public IReadOnlyList<TurnbackPlanDefinition> TurnbackPlans { get; }
     public IReadOnlyList<SpatialReferencePointDefinition> SpatialReferencePoints { get; }
+    public IReadOnlyList<StationOvertakeFacilityDefinition> StationOvertakeFacilities { get; }
+    public IReadOnlyList<SpatialReferencePointTemplateDefinition> SpatialReferencePointTemplates { get; }
     public IReadOnlyList<PlatformDefinition> Platforms => StationYards.SelectMany(yard => yard.Platforms).ToArray();
 
     public SpatialReferencePointDefinition? FindSpatialReferencePoint(string stationId) =>
         SpatialReferencePoints.FirstOrDefault(item =>
             item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase));
+
+    public SpatialReferencePointTemplateDefinition GetSpatialReferencePointTemplate(SpatialReferencePointKind kind) =>
+        SpatialReferencePointTemplates.Single(item => item.Kind == kind);
+
+    public StationOvertakeFacilityDefinition? FindStationOvertakeFacility(
+        string stationId,
+        TrainDirection direction) =>
+        FindStationOvertakeFacilities(stationId, direction).FirstOrDefault();
+
+    /// <summary>
+    /// 取得同一車站、方向的全部越行候選。引擎會依實際待避列車、進站位置及可用資源選擇，
+    /// 因此不得以第一筆設定作為唯一候選。
+    /// </summary>
+    public IReadOnlyList<StationOvertakeFacilityDefinition> FindStationOvertakeFacilities(
+        string stationId,
+        TrainDirection direction) =>
+        StationOvertakeFacilities
+            .Where(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)
+                && PlatformDefinition.DirectionMatches(item.Direction, (TrackDirection)direction))
+            .OrderBy(item => item.FacilityId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    /// <summary>
+    /// 取得站後折返指定的成對尾軌。未設定 TailTrack 時傳回 null，保留舊版以折返時間
+    /// 抽象化尾軌作業的相容行為。
+    /// </summary>
+    public AfterStationTailTrackLayout? FindAfterStationTailTrackLayout(TurnbackPlanDefinition plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        if (plan.Kind != TurnbackKind.AfterStation)
+        {
+            return null;
+        }
+
+        var tailTracks = plan.TrackSegmentIds
+            .Select(trackId => TrackSegments.FirstOrDefault(track =>
+                track.TrackId.Equals(trackId, StringComparison.OrdinalIgnoreCase)))
+            .Where(track => track?.Kind == TrackKind.TailTrack)
+            .Cast<TrackSegmentDefinition>()
+            .ToArray();
+        if (tailTracks.Length == 0)
+        {
+            return null;
+        }
+
+        var outbound = tailTracks.Single(track => track.Direction == TrackDirection.Outbound);
+        var inbound = tailTracks.Single(track => track.Direction == TrackDirection.Inbound);
+        var virtualPosition = GetNodePosition(outbound, plan.VirtualTailNodeId);
+        return new AfterStationTailTrackLayout(plan.VirtualTailNodeId, virtualPosition, outbound, inbound);
+    }
 
     /// <summary>把舊版線性路線轉成兩條獨立的 DOWN／UP 全線股道。</summary>
     public static InfrastructureGraph CreateLegacy(Route route)
@@ -628,6 +762,10 @@ public sealed class InfrastructureGraph
     {
         var errors = new List<string>();
         var stationIds = Route.Stations.Select(station => station.StationId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var virtualTailNodeIds = TurnbackPlans
+            .Where(plan => plan.Kind == TurnbackKind.AfterStation)
+            .Select(plan => plan.VirtualTailNodeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var yardIds = Unique(StationYards.Select(yard => yard.StationId), "站場車站編號", errors);
         foreach (var yard in StationYards)
         {
@@ -642,11 +780,26 @@ public sealed class InfrastructureGraph
         var pathIds = Unique(Paths.Select(path => path.PathId), "進路編號", errors);
         var turnbackIds = Unique(TurnbackPlans.Select(plan => plan.TurnbackId), "折返設定編號", errors);
         var referencePointIds = Unique(SpatialReferencePoints.Select(point => point.ReferencePointId), "空間參考點編號", errors);
-        _ = Unique(SpatialReferencePoints.Select(point => point.StationId), "空間參考點所屬車站", errors);
+        var overtakeFacilityIds = Unique(StationOvertakeFacilities.Select(facility => facility.FacilityId), "站內越行設施編號", errors);
+        var templateKinds = SpatialReferencePointTemplates.Select(template => template.Kind).ToArray();
+        var requiredTemplateKinds = Enum.GetValues<SpatialReferencePointKind>();
+        if (templateKinds.Length != requiredTemplateKinds.Length
+            || templateKinds.Distinct().Count() != requiredTemplateKinds.Length
+            || requiredTemplateKinds.Except(templateKinds).Any())
+        {
+            errors.Add("空間參考點範本必須恰好包含五種車站型式各一筆。");
+        }
+        var classifiedStationIds = Unique(SpatialReferencePoints.Select(point => point.StationId), "空間參考點所屬車站", errors);
+        if (SpatialReferencePoints.Count != Route.Stations.Count
+            || !stationIds.SetEquals(classifiedStationIds))
+        {
+            errors.Add("每一實體路線車站必須恰好指定一種空間參考點型式；虛擬尾軌或避車線節點不可列入車站分類。 ");
+        }
 
         foreach (var track in TrackSegments)
         {
-            if (!stationIds.Contains(track.FromStationId) || !stationIds.Contains(track.ToStationId))
+            if ((!stationIds.Contains(track.FromStationId) && !virtualTailNodeIds.Contains(track.FromStationId))
+                || (!stationIds.Contains(track.ToStationId) && !virtualTailNodeIds.Contains(track.ToStationId)))
             {
                 errors.Add($"股道「{track.TrackId}」引用不存在的起訖車站。");
             }
@@ -708,6 +861,8 @@ public sealed class InfrastructureGraph
                     errors.Add($"折返設定「{plan.TurnbackId}」引用不存在的股道「{trackId}」。");
                 }
             }
+
+            ValidateAfterStationTailTracks(plan, trackIds, errors);
         }
 
         foreach (var yard in StationYards)
@@ -737,12 +892,153 @@ public sealed class InfrastructureGraph
             }
         }
 
+        foreach (var facility in StationOvertakeFacilities)
+        {
+            if (!stationIds.Contains(facility.StationId) || !yardIds.Contains(facility.StationId))
+            {
+                errors.Add($"站內越行設施「{facility.FacilityId}」引用不存在的站場車站「{facility.StationId}」。");
+                continue;
+            }
+
+            var yard = StationYards.Single(item => item.StationId.Equals(facility.StationId, StringComparison.OrdinalIgnoreCase));
+            var directionPlatforms = yard.Platforms
+                .Where(platform => PlatformDefinition.DirectionMatches(platform.Direction, facility.Direction))
+                .ToArray();
+            if (yard.Platforms.Count < 4 || directionPlatforms.Length < 2)
+            {
+                errors.Add($"站內越行設施「{facility.FacilityId}」僅能設定於雙島四股站；站場必須至少有四座月台且同方向至少兩座月台。");
+            }
+
+            var localPlatform = Platforms.FirstOrDefault(item => item.PlatformId.Equals(facility.LocalPlatformId, StringComparison.OrdinalIgnoreCase));
+            var expressPlatform = Platforms.FirstOrDefault(item => item.PlatformId.Equals(facility.ExpressPlatformId, StringComparison.OrdinalIgnoreCase));
+            ValidateFacilityPlatform(facility, localPlatform, facility.LocalPlatformId, facility.LocalTrackSegmentId, "普通車", errors);
+            ValidateFacilityPlatform(facility, expressPlatform, facility.ExpressPlatformId, facility.ExpressTrackSegmentId, "快速車", errors);
+
+            var mainline = TrackSegments.FirstOrDefault(item => item.TrackId.Equals(facility.MainlineTrackSegmentId, StringComparison.OrdinalIgnoreCase));
+            if (mainline is null || mainline.Kind != TrackKind.Mainline
+                || !PlatformDefinition.DirectionMatches(mainline.Direction, facility.Direction))
+            {
+                errors.Add($"站內越行設施「{facility.FacilityId}」的共線正線股道無效、不是正線或方向不符。");
+            }
+
+            if (facility.MainlineTrackSegmentId.Equals(facility.LocalTrackSegmentId, StringComparison.OrdinalIgnoreCase)
+                || facility.MainlineTrackSegmentId.Equals(facility.ExpressTrackSegmentId, StringComparison.OrdinalIgnoreCase)
+                || facility.LocalTrackSegmentId.Equals(facility.ExpressTrackSegmentId, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"站內越行設施「{facility.FacilityId}」的正線、普通車待避線與快速車通過線必須是三條不同股道。");
+            }
+
+            var station = Route.Stations.Single(item => item.StationId.Equals(facility.StationId, StringComparison.OrdinalIgnoreCase));
+            var entryIsBeforeStation = facility.Direction == TrackDirection.Outbound
+                ? facility.EntryPositionMeters < station.PositionMeters - 1e-7
+                : facility.EntryPositionMeters > station.PositionMeters + 1e-7;
+            if (!entryIsBeforeStation)
+            {
+                errors.Add($"站內越行設施「{facility.FacilityId}」的分歧位置必須位於列車進站前。");
+            }
+        }
+
         _ = yardIds;
         _ = pathIds;
         _ = turnbackIds;
         _ = referencePointIds;
+        _ = overtakeFacilityIds;
         PlatformDefinition.Throw(errors);
     }
+
+    private static void ValidateFacilityPlatform(
+        StationOvertakeFacilityDefinition facility,
+        PlatformDefinition? platform,
+        string platformId,
+        string trackId,
+        string role,
+        ICollection<string> errors)
+    {
+        if (platform is null
+            || !platform.StationId.Equals(facility.StationId, StringComparison.OrdinalIgnoreCase)
+            || !PlatformDefinition.DirectionMatches(platform.Direction, facility.Direction)
+            || !platform.TrackSegmentIds.Contains(trackId))
+        {
+            errors.Add($"站內越行設施「{facility.FacilityId}」的{role}月台「{platformId}」或股道「{trackId}」不屬於同方向站場配置。");
+        }
+    }
+
+    private void ValidateAfterStationTailTracks(
+        TurnbackPlanDefinition plan,
+        IReadOnlySet<string> trackIds,
+        ICollection<string> errors)
+    {
+        var tailTracks = plan.TrackSegmentIds
+            .Where(trackIds.Contains)
+            .Select(trackId => TrackSegments.Single(track => track.TrackId.Equals(trackId, StringComparison.OrdinalIgnoreCase)))
+            .Where(track => track.Kind == TrackKind.TailTrack)
+            .ToArray();
+        if (tailTracks.Length == 0)
+        {
+            return;
+        }
+
+        if (plan.Kind != TurnbackKind.AfterStation)
+        {
+            errors.Add($"折返設定「{plan.TurnbackId}」只有站後折返可引用 TailTrack。 ");
+            return;
+        }
+
+        var outboundTracks = tailTracks.Where(track => track.Direction == TrackDirection.Outbound).ToArray();
+        var inboundTracks = tailTracks.Where(track => track.Direction == TrackDirection.Inbound).ToArray();
+        if (tailTracks.Length != 2 || outboundTracks.Length != 1 || inboundTracks.Length != 1)
+        {
+            errors.Add($"站後折返「{plan.TurnbackId}」使用實體尾軌時，必須指定一條下行與一條上行 TailTrack。 ");
+            return;
+        }
+
+        var stationIndex = Route.Stations
+            .Select((station, index) => (station, index))
+            .FirstOrDefault(item => item.station.StationId.Equals(plan.StationId, StringComparison.OrdinalIgnoreCase))
+            .index;
+        if (stationIndex != 0 && stationIndex != Route.Stations.Count - 1)
+        {
+            errors.Add($"站後折返「{plan.TurnbackId}」必須設於路線端點站。 ");
+            return;
+        }
+
+        var expectedArrivalDirection = stationIndex == 0 ? TrainDirection.Inbound : TrainDirection.Outbound;
+        var arrivalTrack = expectedArrivalDirection == TrainDirection.Outbound ? outboundTracks[0] : inboundTracks[0];
+        var departureTrack = expectedArrivalDirection == TrainDirection.Outbound ? inboundTracks[0] : outboundTracks[0];
+        var nodeId = plan.VirtualTailNodeId;
+        if (!ConnectsStationAndTailNode(arrivalTrack, plan.StationId, nodeId)
+            || !ConnectsStationAndTailNode(departureTrack, plan.StationId, nodeId))
+        {
+            errors.Add($"站後折返「{plan.TurnbackId}」的上下行尾軌必須連接端點站與虛擬節點「{nodeId}」。");
+            return;
+        }
+
+        var nodePosition = GetNodePosition(arrivalTrack, nodeId);
+        if (Math.Abs(nodePosition - GetNodePosition(departureTrack, nodeId)) > 1e-7)
+        {
+            errors.Add($"站後折返「{plan.TurnbackId}」的上下行尾軌虛擬節點里程必須相同。 ");
+        }
+
+        var stationPosition = Route.Stations[stationIndex].PositionMeters;
+        var isBeyondTerminal = stationIndex == 0
+            ? nodePosition < stationPosition - 1e-7
+            : nodePosition > stationPosition + 1e-7;
+        if (!isBeyondTerminal)
+        {
+            errors.Add($"站後折返「{plan.TurnbackId}」的虛擬節點必須位於端點站之外。 ");
+        }
+    }
+
+    private static bool ConnectsStationAndTailNode(TrackSegmentDefinition track, string stationId, string nodeId) =>
+        (track.FromStationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)
+            && track.ToStationId.Equals(nodeId, StringComparison.OrdinalIgnoreCase))
+        || (track.ToStationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)
+            && track.FromStationId.Equals(nodeId, StringComparison.OrdinalIgnoreCase));
+
+    private static double GetNodePosition(TrackSegmentDefinition track, string nodeId) =>
+        track.FromStationId.Equals(nodeId, StringComparison.OrdinalIgnoreCase)
+            ? track.StartPositionMeters
+            : track.EndPositionMeters;
 
     private static IReadOnlySet<string> Unique(IEnumerable<string> values, string field, ICollection<string> errors)
     {
@@ -756,6 +1052,30 @@ public sealed class InfrastructureGraph
         }
 
         return set;
+    }
+
+    private static IReadOnlyList<SpatialReferencePointDefinition> CompleteSpatialReferencePoints(
+        Route route,
+        IEnumerable<SpatialReferencePointDefinition>? values,
+        IReadOnlyList<SpatialReferencePointTemplateDefinition> templates)
+    {
+        var points = (values ?? []).ToArray();
+        var intermediateTemplate = templates.Single(item => item.Kind == SpatialReferencePointKind.IntermediateStation);
+        var result = new List<SpatialReferencePointDefinition>(points);
+        foreach (var station in route.Stations)
+        {
+            if (points.Any(point => point.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+            result.Add(intermediateTemplate.Create(
+                $"AUTO-SPATIAL:{station.StationId}",
+                station.StationId,
+                station.StationName,
+                station.DwellTimeSeconds,
+                station.DwellTimeSeconds));
+        }
+        return new ReadOnlyCollection<SpatialReferencePointDefinition>(result);
     }
 
     private static IReadOnlyList<T> Copy<T>(IEnumerable<T>? values, string field)
@@ -859,6 +1179,17 @@ public sealed class RouteResourceReservationManager
             }
 
             return true;
+        }
+    }
+
+    public IReadOnlyList<string> GetResources(string reservationId)
+    {
+        var owner = PlatformDefinition.NormalizeRequired(reservationId, "預約識別碼");
+        lock (sync)
+        {
+            return resourcesByOwner.TryGetValue(owner, out var resources)
+                ? resources.ToArray()
+                : [];
         }
     }
 

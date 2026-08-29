@@ -43,6 +43,8 @@
             <MenuItem Header="_檔案" AutomationProperties.Name="檔案選單">
                 <MenuItem Header="存檔" Click="SaveProject_Click" AutomationProperties.Name="儲存模擬專案" />
                 <MenuItem Header="讀取存檔" Click="LoadProject_Click" AutomationProperties.Name="讀取模擬專案" />
+                <Separator />
+                <MenuItem Header="匯出完成後固定時刻表…" Click="ExportFixedTimetableArchive_Click" AutomationProperties.Name="匯出完成後固定時刻表" />
             </MenuItem>
             <MenuItem Header="_輸入" AutomationProperties.Name="輸入選單">
                 <MenuItem Header="路線與車站" Click="FocusRouteInput_Click" />
@@ -52,7 +54,7 @@
                 <MenuItem Header="停站模式" Click="FocusStopPatterns_Click" />
                 <MenuItem Header="發車計畫…" Click="EditDispatchPlan_Click" />
                 <MenuItem Header="空間參考點／折返站型式…" Click="EditSpatialReferencePoints_Click" />
-                <MenuItem Header="月台／股道／折返…" Click="EditInfrastructure_Click" />
+                <MenuItem Header="月台／股道／越行／折返…" Click="EditInfrastructure_Click" />
             </MenuItem>
             <MenuItem Header="_設定" AutomationProperties.Name="設定選單">
                 <MenuItem Header="前往 V2 營運參數" Click="FocusV2Settings_Click" AutomationProperties.Name="前往 V2 營運參數" />
@@ -358,7 +360,7 @@
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
                                     <DockPanel LastChildFill="True" Margin="0,0,0,6">
-                                    <TextBlock Text="下行單程速度曲線【V3.2】" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
+                                        <TextBlock Text="下行單程速度曲線【V3.3】" Style="{StaticResource SectionTitle}" Margin="0" VerticalAlignment="Center" />
                                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                             <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
                                             <ComboBox x:Name="SpeedProfileRunComboBox" Width="155" SelectionChanged="SpeedProfileRun_SelectionChanged" AutomationProperties.Name="下行速度曲線車次" />
@@ -447,6 +449,63 @@
                             <Border Grid.Row="2" Background="#F4F6FA" CornerRadius="7" Padding="10" Margin="0,10,0,0">
                                 <TextBlock Text="基礎模式保留 V1.0 三角形／梯形解析結果；V2 是營運與號誌概念模擬，不代表真實 ATP／ATO／ATS 或鐵路安全認證。" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
                             </Border>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="V1／V2 同條件比較【V3.4】">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="同一車次、同一停站條件：V1 解析理論 vs. V2 寫實實際" FontWeight="SemiBold" FontSize="16" />
+                            <TextBlock Grid.Row="1" Text="跨站不套用站停差異；折返節點明確標記為 V1 不適用，避免以不同模型硬湊數字。" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,10" />
+                            <DataGrid Grid.Row="2" ItemsSource="{Binding V1V2ComparisonRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="2">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
+                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
+                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
+                                    <DataGridTextColumn Header="車型" Binding="{Binding VehicleType}" Width="85" />
+                                    <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="110" />
+                                    <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="65" />
+                                    <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="110" />
+                                    <DataGridTextColumn Header="V1 到站" Binding="{Binding TheoreticalArrival}" Width="88" />
+                                    <DataGridTextColumn Header="V1 出站" Binding="{Binding TheoreticalDeparture}" Width="88" />
+                                    <DataGridTextColumn Header="V1 停站" Binding="{Binding TheoreticalDwell}" Width="76" />
+                                    <DataGridTextColumn Header="V2 到站" Binding="{Binding ActualArrival}" Width="88" />
+                                    <DataGridTextColumn Header="V2 出站" Binding="{Binding ActualDeparture}" Width="88" />
+                                    <DataGridTextColumn Header="V2 停站" Binding="{Binding ActualDwell}" Width="76" />
+                                    <DataGridTextColumn Header="到站差" Binding="{Binding ArrivalDifference}" Width="75" />
+                                    <DataGridTextColumn Header="出站差" Binding="{Binding DepartureDifference}" Width="75" />
+                                    <DataGridTextColumn Header="出站差 %" Binding="{Binding DepartureDifferencePercent}" Width="82" />
+                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="125" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="資源占用與觀測容量【V3.4】">
+                        <Grid Margin="14">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <StackPanel Margin="0,0,0,10">
+                                <TextBlock Text="月台／進路／衝突區／尾軌獨立占用時間軸" FontWeight="SemiBold" FontSize="16" />
+                                <Button Content="匯出資源占用 CSV" Style="{StaticResource SecondaryButton}" Click="ExportResourceOccupancyCsv_Click" Margin="0,7,0,2" HorizontalAlignment="Left" />
+                                <TextBlock x:Name="ResourceOccupancySummaryText" Text="建立並播放 V2 模擬後顯示。" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <DataGrid Grid.Row="1" ItemsSource="{Binding ResourceOccupancyRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="1">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="資源 ID" Binding="{Binding ResourceId}" Width="*" MinWidth="180" />
+                                    <DataGridTextColumn Header="占用時間" Binding="{Binding OccupiedTime}" Width="95" />
+                                    <DataGridTextColumn Header="使用率" Binding="{Binding Utilization}" Width="85" />
+                                    <DataGridTextColumn Header="預約次數" Binding="{Binding ReservationCount}" Width="85" />
+                                    <DataGridTextColumn Header="觀測每小時次數" Binding="{Binding ObservedReservationsPerHour}" Width="115" />
+                                    <DataGridTextColumn Header="最短釋放間距" Binding="{Binding MinimumReleaseHeadway}" Width="110" />
+                                </DataGrid.Columns>
+                            </DataGrid>
                         </Grid>
                     </TabItem>
 

@@ -1,8 +1,34 @@
-# MRT Route Simulation Engine - Model Specification V3.3.0
+# MRT Route Simulation Engine - Model Specification V3.4.2
 
-> 現行規格（2026-08-24）。V3.0～V3.2 章節保留作核心演進說明；V3.3 以單一營運資料來源、逐車型性能、完整區間統計與 Schema 7 為準。
+> 現行規格（2026-08-29）。V3.0～V3.3 章節保留作核心演進說明；V3.4 以單一營運資料來源、逐車型性能、完整區間統計、目的月台資源保留、虛擬站／尾軌折返、StationStopController 與 Schema 7 為準。
 
-產品版本、引擎與存檔格式分開表述：產品版本為 V3.3.0，`SimulationEngineKind` 可選 V1 基礎引擎或 V2 寫實引擎，現行專案格式為 `schemaVersion = 7`。本階段僅供內部測試，不移轉舊專案；Schema 1～6 會明確拒絕。
+產品版本、引擎與存檔格式分開表述：產品版本為 V3.4.2，`SimulationEngineKind` 可選 V1 基礎引擎或 V2 寫實引擎，現行專案格式為 `schemaVersion = 7`。本階段僅供內部測試，不移轉舊專案；Schema 1～6 會明確拒絕。
+
+## V3.4.2 本輪變更
+
+- `StationStopController` 是 V2 排定停站的單一進站速度控制來源。它以剩餘距離、目前速度／加速度、營運煞車能力、Jerk 與 0.1 秒步長產生距離－速度曲線，並呼叫 `BrakingEnvelopeCalculator` 預測現在全營運煞車的停止距離。
+- 預測停止距離超過剩餘距離 0.05 m 時，控制器要求營運煞車；否則由目標速度控制牽引、惰行或煞車。最後 12 m 的精停曲線額外限制為 3 m/s，並以 `sqrt(2 × 0.5 × max(0, D - 2 m))` 收斂至 2 m 近停吸附邊界。
+- `SimulationWorld` 先取站點控制目標，再對障礙物、越行及移動閉塞取更低允許速度；因此新控制器不放寬既有保護。既有 `StationBrakingActive` 低速解除條件保留，排定停站不再以該旗標作為持續全煞車的唯一控制。
+
+## V3.4.1 本輪變更
+
+- `Automatic` 月台配置依成功配置數平衡同方向候選；`EarliestAvailable` 依實際月台最後釋放時間排序。候選均須通過原子資源預約，不可用時才改試下一座。
+- `SimulationEvent.ResourceIds` 保存每次預約或釋放的實際資源。`ResourceOccupancyAnalysis` 由結構化事件重建各資源占用區間，輸出使用率、觀測每小時預約數及最短釋放間距。
+- 越行候選可跨連續跨站區段搜尋，遇到快速車應停站即停止；選擇順序為可用資源、進站距離及設施 ID。越行中仍會保持普通車待避，方向專屬資源可讓上下行越行重疊執行。
+- `VehicleTypeDefinition.DefaultStopPatternId` 是派車未明確指定時的第二優先停站模式來源；Schema 7 保存該欄位。五類型式範本與實體站分類完整化皆由基礎設施模型處理。
+- 站後折返尾軌以固定 0.1 秒樣本連續記錄；返回端點後必須先產生反方向月台到達事件，再從相同月台發車。
+- 站前與中央避車線折返採 `TURNBACK:<ReferencePointId>:OUT/RETURN` 執行期分段軌道。列車先依其空間參考點的停車點、橫渡線與中央避車線距離駛至虛擬折返點，停等後反向駛回實體錨定站；兩段均使用既有列車性能、道岔限速、坡度、Jerk 與 0.1 秒 Tick，路線圖只消費這些軌跡樣本。
+
+## V3.4.0 本輪變更
+
+- `StopPatternAction`／`StationServiceMode` 新增 `Turnback`。此指令只能設在非端點且具有 `CentralSidingTurnback` 空間參考點的虛擬站；列車先依設定停站，再進入折返資源與反向接續流程。
+- `SimulationWorld` 在出發前預留目的停靠月台；列車尾端淨空進路後，預約縮為目的月台，持續保留至下一次發車或退出。端點站前交替月台與中央避車線折返另持有折返資源。
+- 目的站站場採 `RoundRobin`，或站前折返設為 `alternateBerthing = true` 時，依前一次成功配置結果輪替相容月台；已占用月台會改試下一候選，全部不可用才記錄等待。
+- `SimulationSession` 以 `SimulationWorldOptions` 建立實際與計畫世界，負責同一目標時間的固定 Tick 推進、重設及計畫事件時間線；WPF 僅消費快照與結構化輸出。
+- `SimulationTraceRetentionPolicy` 可選完整、降採樣或僅事件。預設完整保留每個活動車輛的 0.1 秒樣本；降採樣仍保留規則時間點、相位／站點／軌道／月台／約束變化與有事件的車次，僅事件模式不保存軌跡樣本。
+- 已完成的 V2 `SimulationWorld` 可匯出獨立 `.mrttimetable.json` 固定時刻表封存。封存包含正規化 Schema 7 專案設定與每個車次／車站的實際到離站、停站、誤點及狀態；重新讀取只呈現凍結結果，不把結果回寫成新的 `Dispatch` 資料源。
+- `StationOvertakeFacilityDefinition` 可把越行限定在雙島四股站場：站間仍使用單一方向正線；普通車進入待避月台，具較高優先序且 `CanRequestOvertake = true` 的跨站快速車在站前取得進入、站內及站後衝突資源後切入通過線，完成跨越即匯回正線。普通車原定停站結束時，若快速車已進入接近範圍或站內越行中，須繼續待避。
+- `TurnbackKind.AfterStation` 若在 `TrackSegmentIds` 指定一條下行與一條上行 `TailTrack`，兩線必須都連接端點站與 `TAIL:<TurnbackId>` 虛擬節點、並在相同的端點外側里程相接。列車依到達方向駛入對應尾軌，在虛擬節點停等後改走反方向尾軌回站；兩條尾軌及其衝突資源會原子保留。未指定 `TailTrack` 時保留既有解析旅行時間加折返停等的相容行為。
 
 ## V3.3.0 本輪變更
 
@@ -295,9 +321,10 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ### ServicePattern、ServiceRunPlan
 
-- `ServicePattern` 以模式 ID 定義各站 `Stop`／`Pass` 指令；未列出的車站一律採 `Stop`。
+- `ServicePattern` 以模式 ID 定義各站 `Stop`／`Pass`／`Turnback` 指令；未列出的車站一律採 `Stop`。
 - `Pass` 指令可附有限正數的車站通過速限；跨站時不套用停站煞車曲線或停站進站上限。
 - 起點與終點不得設定為 `Pass`。保留模式 `ALL_STOP` 代表全部停站。
+- `Turnback` 只適用於設定為 `CentralSidingTurnback` 的非端點虛擬站；它不是一般端點退出，會保留月台／避車線資源並反向接續。
 - `ServiceRunPlan` 依 `VehicleId`、服務序號與方向指定列車等級及模式。折返方向可使用另一筆計畫，因此同一實體列車往返可套用不同停站模式。
 - 若完全沒有服務計畫，所有列車預設為 `普通車 / ALL_STOP`，維持舊版行為。
 
@@ -316,6 +343,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 - 軌跡取樣保留車輛、車次、列車等級、服務模式、方向、軌道、位置、速度、加速度、相位與計畫／實際標記。
 - 安全觀測保存前後車端點、車頭間距、淨距、時間間隔、動態安全距離、障礙煞車需求、預估停止里程、安全裕度及預測侵入量。
 - 事件涵蓋發車、抵達、跨站通過、停站超限、停站、折返、安全狀態變更、控制煞車、障礙急停、預測碰撞、實際碰撞及煞車模式切換。
+- 軌跡留存策略不改變 `Tick()` 的固定步進、`SimulationEvent` 或安全觀測；結果頁與 CSV 若需要完整曲線，必須使用預設完整策略。
 
 ## 10. V2.1.0 實際營運軌跡
 
@@ -324,7 +352,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 1. 列車最高速度。
 2. 隨速度遞減的牽引能力。
 3. 使用者設定的惰行比例。
-4. 由目前速度、加速度、營運煞車能力、Jerk 與剩餘距離逐 Tick 重算的停站煞車包絡線。
+4. `StationStopController` 依目前速度、加速度、營運煞車能力、Jerk 與剩餘距離逐 Tick 重算的停站距離－速度曲線及煞停預測。
 5. 現在及前方里程速限。
 
 `BrakingEnvelopeCalculator` 使用與實際控制相同的減速度、Jerk 與 `0.1 s` 步長向前積分：
@@ -335,7 +363,7 @@ v_next = max(0, v + a_next × dt)
 d_stop += (v + v_next) / 2 × dt
 ```
 
-當預估煞停距離加一個 Tick 前視量到達剩餘距離時開始煞車。每一步先限制加速度變化，再更新速度與位置，正常運行的速度、加速度與位置保持連續。只有同時符合距停車點 `0.5 m` 及速度不高於 `0.15 m/s` 才判定到站；若高速越過停車點，保持煞車並記錄 `StationStopViolation`，不得無條件把速度歸零。障礙物急停是明確事件，可瞬間把指定前車速度設為 0，不納入正常連續性要求。
+`StationStopController` 先以距離－速度煞車曲線限制高速段；全煞停點預測越過停車點時才要求營運煞車。最後 12 m 再改用低速終端速度曲線，目標速度在 2 m 近停吸附邊界收斂至零，避免暫時低速後回到一般線速牽引。每一步先限制加速度變化，再更新速度與位置，正常運行的速度、加速度與位置保持連續。一般情況只有同時符合距停車點 `0.5 m` 及速度不高於 `0.15 m/s` 才判定到站；若殘距不超過 `2 m` 且速度已低於該門檻，則直接以停車點完成到站。若高速越過停車點，保持煞車並記錄 `StationStopViolation`，不得無條件把速度歸零。障礙物急停是明確事件，可瞬間把指定前車速度設為 0，不納入正常連續性要求。
 
 ## 11. SimulationWorld
 
@@ -418,14 +446,16 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 - 列車性能、起終點折返時間，以及全部 V2 營運與安全參數。
 - 任意里程速限、播放倍率及引擎／營運模式選擇；V2 發車完全由發車計畫決定，不使用 V1 的列車數、指定班距與首班時刻。
 - 車型、服務類型、停站模式目錄，以及簡易班距／手動班表、端點續行與車輛配置模式。
-- 停站模式的逐站停／跨、停站秒數覆寫及通過速限。
+- 停站模式的逐站停／跨／中央避車線虛擬站折返、停站秒數覆寫及通過速限。
 - 月台、股道、路徑、折返設施與站場配置。
 - 五類空間參考點，以及中間站順／逆行獨立參數。
 - 明確的 `SimulationEngineKind`，與 V2 的 `OperationProfileMode` 分開保存。
 
-讀取時先限制檔案大小，再反序列化並做完整語意驗證；只有整份通過後 UI 才會替換目前設定。非 Schema 7、破損 JSON、缺欄位、無效列舉、目錄參照失效或超出模型範圍都會拒絕。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
+讀取時先限制檔案大小，再反序列化並做完整語意驗證；只有整份通過後 UI 才會替換目前設定。非 Schema 7、破損 JSON、舊 `servicePatterns`／`serviceRuns` 雙資料源、缺欄位、無效列舉、目錄參照失效或超出模型範圍都會拒絕。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
 
 專案檔保存可重建模擬的設定，不保存播放到一半的列車瞬時位置、速度或事件歷史。
+
+完成後固定時刻表使用獨立的 `FixedTimetableArchiveFormat`，格式版本目前為 `1`、副檔名為 `.mrttimetable.json`。它只在所有列車完成營運後由 `OperationsTimetable.Build()` 的實際事件建立；讀取時會同時驗證內含 Schema 7 專案、車站名稱／里程、實際時間的非負有限性與車次／方向／車站的唯一性。此封存不是動態模擬的檢查點，也不支援從中途續跑。
 
 ## 16. 輸入驗證與邊界
 
@@ -464,11 +494,11 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 18. V3 基礎設施與資源
 
-`InfrastructureGraph` 包含 `PlatformDefinition`、`TrackSegmentDefinition`、`RoutePathDefinition`、`TurnbackPlanDefinition` 與 `StationYardDefinition`。舊專案透過 legacy adapter 建立上下行雙軌、方向別月台、相鄰站路徑及抽象端點折返，維持既有拓樸語意。
+`InfrastructureGraph` 包含 `PlatformDefinition`、`TrackSegmentDefinition`、`RoutePathDefinition`、`TurnbackPlanDefinition`、`StationYardDefinition` 與 `StationOvertakeFacilityDefinition`。越行設施必須配置在至少四座月台、同方向至少兩座月台的雙島四股站，並明確指定共線正線、普通車待避月台／股道、快速車通過月台／股道、站前分歧位置及不可共用的衝突資源。站後折返可選擇成對 `TailTrack`，其非車站端使用 `TAIL:<TurnbackId>` 的虛擬節點；未配置時仍使用抽象端點折返。舊專案透過 legacy adapter 建立上下行雙軌、方向別月台、相鄰站路徑及抽象端點折返，維持既有拓樸語意。
 
-`RouteResourceReservationManager` 以資源 ID 原子預約一組路徑與起點月台。列車在計畫發車前檢查方向、車長、車型、服務類型、月台相容性與可用路徑；不足時維持等待並記錄原因。列車尾端淨空起點資源後釋放預約。
+`RouteResourceReservationManager` 以資源 ID 原子預約一組路徑、起點月台與（停靠時）目的月台。列車在計畫發車前檢查方向、車長、車型、服務類型、月台相容性與可用路徑；不足時維持等待並記錄原因。列車尾端淨空起點資源後釋放進路，但目的月台持續保留至下一次發車或退出；端點站前交替月台與中央避車線折返會在此期間加掛折返資源。
 
-此機制是保守安全骨架，不等同完整聯鎖、道岔幾何、尾軌連續軌跡或多月台最佳化。
+此機制是保守安全骨架，不等同完整聯鎖、道岔幾何或多月台最佳化；成對站後 `TailTrack` 已能提供尾軌往返的離散連續軌跡，但不代表可部署的實際聯鎖模型。
 
 ## 19. V3 結構化事件
 
@@ -476,9 +506,9 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 - 計畫發車延誤與等待資源。
 - 月台指派、進路預約與釋放。
-- 預留的追越提出、完成與取消事件型別。
+- 站內追越提出、完成與取消事件型別。
 
-追越事件型別是後續擴充契約；V3 尚未執行普通車待避與快速車追越。
+站內越行只在 `StationOvertakeFacilityDefinition` 設定完整且快速車符合較高優先序、可請求越行、下一站為 `Pass`、普通車已進入指定待避月台等條件時執行。快速車若不能原子取得站前／站內／站後衝突資源，會在分歧點前煞停等待；不得以改寫位置或事件方式穿越普通車。完成後 `TrackId` 回到共線正線，移動閉塞、安全觀測與障礙物保護恢復以該正線配對。
 
 ## 20. V3.3 區間統計
 
@@ -494,7 +524,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 21. 產品版本、引擎與 UI 邊界
 
-V3.3.0 是產品版本，不是第三套模擬引擎。`SimulationEngineKind` 決定本次執行建立 V1 基礎引擎或 V2 寫實引擎；`OperationProfileMode` 只決定 V2 世界內的軌跡曲線，Schema 7 則只代表存檔契約，三者不可互相推導。V1 專案不建立 `SimulationWorld`；V2 編輯確認、引擎切換或專案讀取後會清除舊世界與區間統計。
+V3.4.1 是產品版本，不是第三套模擬引擎。`SimulationEngineKind` 決定本次執行建立 V1 基礎引擎或 V2 寫實引擎；`OperationProfileMode` 只決定 V2 世界內的軌跡曲線，Schema 7 則只代表存檔契約，三者不可互相推導。V1 專案不建立 `SimulationWorld`；V2 編輯確認、引擎切換或專案讀取後會清除舊世界與區間統計。
 
 ## 22. 已知限制與後續擴充
 
@@ -503,4 +533,4 @@ V3.3.0 是產品版本，不是第三套模擬引擎。`SimulationEngineKind` �
 - 尚未以逐段坡度、曲線阻力、超高、黏著變化及乘客上下車量動態修正列車性能；不同車型的額定性能已能逐車次套用，服務類型仍只表示普通／快速等營運身分。
 - 未以真實路線資料校準；人工輸入結果不能宣稱重現特定捷運路線。
 - 移動閉塞為概念模型，未涵蓋通訊失效、列車完整性、ATP／ATO／ATS 或安全完整性認證。
-- V3 已提供區間統計與中文 CSV；仍不宣稱超車執行、多月台最佳化或安全認證。
+- V3 已提供區間統計、中文 CSV 與設定式雙島四股站內越行；仍不宣稱全線自動超車排程、多月台最佳化或安全認證。

@@ -12,9 +12,11 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
-    private SimulationWorld? _v2World;
-    private SimulationWorld? _plannedWorld;
+    private SimulationSession? _v2Session;
+    private SimulationWorld? _v2World => _v2Session?.ActualWorld;
+    private SimulationWorld? _plannedWorld => _v2Session?.PlannedWorld;
     private ResolvedDispatchPlan? _v2DispatchPlan;
+    private SimulationProjectDocument? _activeSimulationProjectDocument;
     private IReadOnlyList<SimulationEvent> _plannedTimetableEvents = [];
     private bool _v2Enabled;
     private IReadOnlyList<TrajectorySample> _v2OutboundSpeedPreview = [];
@@ -77,9 +79,9 @@ public partial class MainWindow
             && string.Equals(item.Tag?.ToString(), "V2RealisticOperations", StringComparison.Ordinal);
         if (!_v2Enabled)
         {
-            _v2World = null;
-            _plannedWorld = null;
+            _v2Session = null;
             _v2DispatchPlan = null;
+            _activeSimulationProjectDocument = null;
             _plannedTimetableEvents = [];
             _v2OutboundSpeedPreview = [];
             _v2OutboundPreviewRunId = null;
@@ -130,6 +132,7 @@ public partial class MainWindow
                 row.Note?.Trim() ?? string.Empty);
         }).ToArray();
         var servicePatterns = BuildServicePatterns();
+        var serviceTypes = BuildServiceTypeDefinitions();
         _v2DispatchPlan = dispatchPlan;
         var vehicleTypes = BuildVehicleTypeDefinitions();
         var infrastructure = BuildInfrastructureGraph(_route);
@@ -137,47 +140,37 @@ public partial class MainWindow
         var operationProfile = GetSelectedTag(OperationModeComboBox) == "Basic"
             ? OperationProfileMode.BasicPhysics
             : OperationProfileMode.RealisticOperations;
-        _v2World = new SimulationWorld(
-            _route,
-            _parameters,
-            operational,
-            dispatchPlan.Runs.Count,
-            specifiedHeadwaySeconds,
-            limits,
-            operationProfile,
-            movingBlockMode,
-            servicePatterns,
-            serviceRunPlans: null,
-            dispatchPlan,
-            vehicleTypes,
-            infrastructure);
         var brakingMode = ParseBrakingEstimationMode();
-        if (brakingMode != BrakingEstimationMode.Service)
+        var actualOptions = new SimulationWorldOptions(
+            Route: _route,
+            TrainParameters: _parameters,
+            OperationalParameters: operational,
+            TrainCount: dispatchPlan.Runs.Count,
+            InitialDepartureIntervalSeconds: specifiedHeadwaySeconds,
+            SpeedLimits: limits,
+            ProfileMode: operationProfile,
+            MovingBlockMode: movingBlockMode,
+            ServicePatterns: servicePatterns,
+            DispatchPlan: dispatchPlan,
+            VehicleTypes: vehicleTypes,
+            Infrastructure: infrastructure,
+            InitialBrakingEstimationMode: brakingMode,
+            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full,
+            ServiceTypes: serviceTypes);
+        var plannedOptions = actualOptions with
         {
-            _v2World.SetBrakingEstimationMode(brakingMode);
-        }
-
-        _plannedWorld = new SimulationWorld(
-            _route,
-            _parameters,
-            operational,
-            dispatchPlan.Runs.Count,
-            specifiedHeadwaySeconds,
-            speedLimits: null,
-            OperationProfileMode.BasicPhysics,
-            MovingBlockMode.Independent,
-            servicePatterns,
-            serviceRunPlans: null,
-            dispatchPlan,
-            vehicleTypes,
-            infrastructure);
+            SpeedLimits = null,
+            ProfileMode = OperationProfileMode.BasicPhysics,
+            MovingBlockMode = MovingBlockMode.Independent,
+            InitialBrakingEstimationMode = BrakingEstimationMode.Service
+        };
+        _v2Session = new SimulationSession(actualOptions, plannedOptions);
         _v2PlannedMinimumIntervalSeconds = GetMinimumPlannedIntervalSeconds(dispatchPlan);
         var lastPlannedStart = dispatchPlan.Runs.Max(run =>
             RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime));
-        _playbackDurationSeconds = lastPlannedStart + _v2World.BaselineCycleTimeSeconds * 1.5;
-        _plannedWorld.AdvanceTo(_playbackDurationSeconds);
-        _plannedTimetableEvents = _plannedWorld.Events.ToArray();
-        _plannedWorld.Reset();
+        _playbackDurationSeconds = lastPlannedStart + _v2Session.ActualWorld.BaselineCycleTimeSeconds * 1.5;
+        _v2Session.PreparePlannedTimeline(_playbackDurationSeconds);
+        _plannedTimetableEvents = _v2Session.PlannedEvents;
         BuildV2SpeedPreviews(
             operational,
             limits,
@@ -189,8 +182,10 @@ public partial class MainWindow
             infrastructure,
             brakingMode);
         ObstacleStopButton.IsEnabled = true;
-        SpeedLimitWarningText.Text = string.Join("　", _v2World.SpeedLimits.GetOverlapWarnings());
+        SpeedLimitWarningText.Text = string.Join("　", _v2Session.ActualWorld.SpeedLimits.GetOverlapWarnings());
         PopulateFilterControls(dispatchPlan);
+        // 匯出固定時刻表時必須使用建立此世界當下的設定，不能誤用之後才被使用者修改的輸入欄位。
+        _activeSimulationProjectDocument = CaptureProjectDocument();
     }
 
     private void PopulateV2Results()
@@ -211,19 +206,20 @@ public partial class MainWindow
         PopulateIntervalStatistics();
         PopulateV3Timetable();
         PopulateV3SegmentDetails();
+        PopulateV1V2Comparison();
+        PopulateResourceOccupancy();
         UpdateV2ActualSummary();
     }
 
     private void UpdateV2PlaybackView()
     {
-        if (!_v2Enabled || _v2World is null || _plannedWorld is null)
+        if (!_v2Enabled || _v2Session is null)
         {
             return;
         }
 
-        _v2World.AdvanceTo(_playbackTimeSeconds);
-        _plannedWorld.AdvanceTo(_playbackTimeSeconds);
-        var snapshot = _v2World.GetSnapshot();
+        var session = _v2Session;
+        var snapshot = session.AdvanceTo(_playbackTimeSeconds);
         CurrentTrainRows.Clear();
         foreach (var state in snapshot.Trains.Where(state => state.Phase != OperationalPhase.OutOfService))
         {
@@ -233,7 +229,7 @@ public partial class MainWindow
                 state.IsActive ? PhaseToChinese(state.Phase) : "待發",
                 $"{state.FrontPositionMeters / 1000:0.00}",
                 $"{state.SpeedMetersPerSecond * 3.6:0.#}",
-                state.CurrentStationId,
+                GetV2CurrentLocation(state),
                 state.NextStationId ?? "—"));
         }
 
@@ -253,7 +249,7 @@ public partial class MainWindow
         }
 
         EventRows.Clear();
-        foreach (var simulationEvent in _v2World.Events.TakeLast(300).Reverse())
+        foreach (var simulationEvent in session.ActualWorld.Events.TakeLast(300).Reverse())
         {
             EventRows.Add(new EventRow(
                 TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds),
@@ -273,18 +269,21 @@ public partial class MainWindow
         PopulateIntervalStatistics(throttled: true);
         PopulateV3Timetable();
         PopulateV3SegmentDetails();
+        PopulateV1V2Comparison();
+        PopulateResourceOccupancy();
         UpdateV2ActualSummary();
-        _v2World.AcknowledgeSnapshotEvents();
+        session.ActualWorld.AcknowledgeSnapshotEvents();
     }
 
     private void ResetV2Playback()
     {
-        _v2World?.Reset();
-        _plannedWorld?.Reset();
+        _v2Session?.Reset();
         SafetyRows.Clear();
         EventRows.Clear();
         IntervalStatisticRows.Clear();
         JourneyStatisticRows.Clear();
+        V1V2ComparisonRows.Clear();
+        ResourceOccupancyRows.Clear();
         _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
@@ -294,9 +293,9 @@ public partial class MainWindow
 
     private void ClearV2Results()
     {
-        _v2World = null;
-        _plannedWorld = null;
+        _v2Session = null;
         _v2DispatchPlan = null;
+        _activeSimulationProjectDocument = null;
         _plannedTimetableEvents = [];
         _v2Enabled = false;
         _v2OutboundSpeedPreview = [];
@@ -353,7 +352,13 @@ public partial class MainWindow
             pattern.DisplayName,
             pattern.Instructions.Select(item => new StationServiceInstruction(
                 item.StationId,
-                item.Action == StopPatternAction.Stop ? StationServiceMode.Stop : StationServiceMode.Pass,
+                item.Action switch
+                {
+                    StopPatternAction.Stop => StationServiceMode.Stop,
+                    StopPatternAction.Pass => StationServiceMode.Pass,
+                    StopPatternAction.Turnback => StationServiceMode.Turnback,
+                    _ => throw new SimulationValidationException(["停站模式動作無效。"])
+                },
                 item.PassingSpeedLimitMetersPerSecond,
                 item.DwellTimeSeconds)).ToArray()))
         .ToArray();
@@ -568,14 +573,18 @@ public partial class MainWindow
             return;
         }
 
-        var left = 60d;
-        var right = 38d;
+        var tailTrackLayouts = GetAfterStationTailTrackVisualLayouts();
+        var hasNorthTailTrack = tailTrackLayouts.Any(item => item.StationIndex == 0);
+        var hasSouthTailTrack = tailTrackLayouts.Any(item => item.StationIndex == _route.Stations.Count - 1);
+        var left = hasNorthTailTrack ? 132d : 60d;
+        var right = hasSouthTailTrack ? 112d : 38d;
         var trackWidth = Math.Max(1, width - left - right);
         var outboundY = height * 0.39;
         var inboundY = height * 0.63;
         DrawTrackLine(outboundY, "下行 DOWN →");
         DrawTrackLine(inboundY, "← 上行 UP");
         DrawSpatialReferencePointGeometry(left, trackWidth, outboundY, inboundY, width, height);
+        DrawAfterStationTailTrackGeometry(tailTrackLayouts, left, trackWidth, outboundY, inboundY, width, height);
 
         if (_v2World is not null)
         {
@@ -881,24 +890,21 @@ public partial class MainWindow
             return (null, []);
         }
 
-        var preview = new SimulationWorld(
-            _route,
-            _parameters,
-            operational,
-            dispatchPlan.Runs.Count,
-            initialDepartureIntervalSeconds: null,
-            limits,
-            operationProfile,
-            movingBlockMode,
-            servicePatterns,
-            serviceRunPlans: null,
-            dispatchPlan,
-            vehicleTypes,
-            infrastructure);
-        if (brakingMode != BrakingEstimationMode.Service)
-        {
-            preview.SetBrakingEstimationMode(brakingMode);
-        }
+        var preview = new SimulationWorldOptions(
+            Route: _route,
+            TrainParameters: _parameters,
+            OperationalParameters: operational,
+            TrainCount: dispatchPlan.Runs.Count,
+            SpeedLimits: limits,
+            ProfileMode: operationProfile,
+            MovingBlockMode: movingBlockMode,
+            ServicePatterns: servicePatterns,
+            DispatchPlan: dispatchPlan,
+            VehicleTypes: vehicleTypes,
+            Infrastructure: infrastructure,
+            InitialBrakingEstimationMode: brakingMode,
+            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full,
+            ServiceTypes: BuildServiceTypeDefinitions()).CreateWorld();
 
         var plannedStart = RelativeDispatchSeconds(firstRun.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
         var terminalPosition = direction == TrainDirection.Outbound ? _route.TotalLengthMeters : 0;
@@ -1060,7 +1066,25 @@ public partial class MainWindow
         startTime = Math.Clamp(startTime, 0, availableMaxTime);
         endTime = Math.Clamp(endTime, startTime + 0.1, Math.Max(startTime + 0.1, availableMaxTime));
         var visibleDuration = Math.Max(0.1, endTime - startTime);
-        DrawAxes(TimeDistanceCanvas, left, top, plotWidth, plotHeight, "累積里程", "時間");
+        var tailTrackLayouts = GetAfterStationTailTrackVisualLayouts();
+        var positions = _route.Stations.Select(station => station.PositionMeters)
+            .Concat(actual.Select(sample => sample.PositionMeters))
+            .Concat(planned.Select(sample => sample.PositionMeters))
+            .Concat(tailTrackLayouts.Select(item => item.Layout.VirtualNodePositionMeters))
+            .ToArray();
+        var minimumPosition = positions.Min();
+        var maximumPosition = positions.Max();
+        var positionSpan = Math.Max(1, maximumPosition - minimumPosition);
+        double ToDiagramY(double position) => top + plotHeight
+            - (position - minimumPosition) / positionSpan * plotHeight;
+        DrawAxes(
+            TimeDistanceCanvas,
+            left,
+            top,
+            plotWidth,
+            plotHeight,
+            tailTrackLayouts.Count == 0 ? "累積里程" : "累積里程（含尾軌）",
+            "時間");
         AddCanvasText(
             TimeDistanceCanvas,
             $"{_route.RouteName}｜計畫／理論與 V2 模擬實際運行圖｜{_v2World.MovingBlockMode}｜速限 {_v2World.SpeedLimits.Limits.Count} 段｜固定 Tick 0.1 s",
@@ -1071,7 +1095,7 @@ public partial class MainWindow
 
         foreach (var station in _route.Stations)
         {
-            var y = top + plotHeight - station.PositionMeters / _route.TotalLengthMeters * plotHeight;
+            var y = ToDiagramY(station.PositionMeters);
             TimeDistanceCanvas.Children.Add(new Line
             {
                 X1 = left,
@@ -1082,6 +1106,28 @@ public partial class MainWindow
                 StrokeThickness = 1
             });
             AddCanvasText(TimeDistanceCanvas, $"{station.StationId}  {station.PositionMeters / 1000:0.00} km", 3, y - 8, 10, Color.FromRgb(82, 93, 111));
+        }
+
+        foreach (var tailTrack in tailTrackLayouts)
+        {
+            var y = ToDiagramY(tailTrack.Layout.VirtualNodePositionMeters);
+            TimeDistanceCanvas.Children.Add(new Line
+            {
+                X1 = left,
+                X2 = left + plotWidth,
+                Y1 = y,
+                Y2 = y,
+                Stroke = new SolidColorBrush(Color.FromRgb(188, 92, 52)),
+                StrokeThickness = 1,
+                StrokeDashArray = [4, 3]
+            });
+            AddCanvasText(
+                TimeDistanceCanvas,
+                $"{tailTrack.Layout.VirtualNodeId}  {tailTrack.Layout.VirtualNodePositionMeters / 1000:0.00} km",
+                3,
+                y - 8,
+                10,
+                Color.FromRgb(188, 92, 52));
         }
 
         for (var tick = 0; tick <= 6; tick++)
@@ -1111,6 +1157,8 @@ public partial class MainWindow
                          or SimulationEventType.Arrival
                          or SimulationEventType.StationPassed
                          or SimulationEventType.TurnaroundStarted
+                         or SimulationEventType.TailTrackReached
+                         or SimulationEventType.TailTrackReturnStarted
                          or SimulationEventType.DirectionChanged
                          or SimulationEventType.ServiceEnded
                          or SimulationEventType.DepartureDelayed
@@ -1121,7 +1169,7 @@ public partial class MainWindow
                          or SimulationEventType.SafetyStatusChanged))
         {
             var x = left + (simulationEvent.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth;
-            var y = top + plotHeight - simulationEvent.PositionMeters / _route.TotalLengthMeters * plotHeight;
+            var y = ToDiagramY(simulationEvent.PositionMeters);
             var isSafetyEvent = simulationEvent.EventType is
                 SimulationEventType.ObstacleEmergencyStop
                 or SimulationEventType.PredictedCollision
@@ -1129,6 +1177,8 @@ public partial class MainWindow
                 or SimulationEventType.SafetyStatusChanged;
             var isTerminalEvent = simulationEvent.EventType is
                 SimulationEventType.TurnaroundStarted
+                or SimulationEventType.TailTrackReached
+                or SimulationEventType.TailTrackReturnStarted
                 or SimulationEventType.DirectionChanged
                 or SimulationEventType.ServiceEnded;
             var markerColor = isSafetyEvent
@@ -1153,7 +1203,7 @@ public partial class MainWindow
 
         AddCanvasText(
             TimeDistanceCanvas,
-            "實線：V2 模擬實際　虛線：無干擾計畫／理論　綠點：車站　紫點：折返／退出　紅點：安全／障礙",
+            "實線：V2 模擬實際　虛線：無干擾計畫／理論　綠點：車站　紫點：折返／尾軌／退出　紅點：安全／障礙",
             left,
             28,
             10,
@@ -1190,7 +1240,7 @@ public partial class MainWindow
                 {
                     line.Points.Add(new Point(
                         left + (sample.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth,
-                        top + plotHeight - sample.PositionMeters / _route.TotalLengthMeters * plotHeight));
+                        ToDiagramY(sample.PositionMeters)));
                 }
 
                 TimeDistanceCanvas.Children.Add(line);
@@ -1201,7 +1251,7 @@ public partial class MainWindow
                         TimeDistanceCanvas,
                         ShortVehicle(first.VehicleId),
                         left + (first.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth + 3,
-                        top + plotHeight - first.PositionMeters / _route.TotalLengthMeters * plotHeight - 15,
+                        ToDiagramY(first.PositionMeters) - 15,
                         9,
                         TrainColors[index % TrainColors.Length]);
                 }
@@ -1542,6 +1592,10 @@ public partial class MainWindow
         OperationalPhase.Braking => "煞車",
         OperationalPhase.ApproachBraking => "進站平順煞車",
         OperationalPhase.Arriving => "到站",
+        OperationalPhase.TailTrackOutbound => "駛入尾軌",
+        OperationalPhase.TailTrackReturn => "尾軌返回",
+        OperationalPhase.SpatialTurnbackOutbound => "駛入折返線",
+        OperationalPhase.SpatialTurnbackReturn => "折返線返回",
         OperationalPhase.Turning => "折返",
         OperationalPhase.EmergencyStopped => "障礙急停",
         OperationalPhase.Collided => "碰撞停止",
@@ -1584,6 +1638,8 @@ public partial class MainWindow
         SimulationEventType.PlatformAssigned => "月台配置",
         SimulationEventType.RouteReserved => "進路鎖定",
         SimulationEventType.RouteReleased => "進路釋放",
+        SimulationEventType.TailTrackReached => "抵達尾軌節點",
+        SimulationEventType.TailTrackReturnStarted => "尾軌返回",
         SimulationEventType.OvertakeRequested => "待避要求",
         SimulationEventType.OvertakeCompleted => "待避完成",
         SimulationEventType.OvertakeCancelled => "待避取消",

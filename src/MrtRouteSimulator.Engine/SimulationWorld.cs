@@ -6,13 +6,15 @@ public sealed class SimulationWorld
 
     private const double NumericalTolerance = 1e-7;
     private const double ArrivalPositionToleranceMeters = 0.5;
+    // 固定 0.1 秒、Jerk 受限煞車在近停時可能留下約 1.5 m 的殘距；不應再重新牽引。
+    private const double StationStopSnapToleranceMeters = 2;
     private const double ArrivalSpeedToleranceMetersPerSecond = 0.15;
     private const double StationBrakingLookAheadMeters = 0.05;
     private const double MovingBlockControlLookAheadSeconds = 0.5;
     private const string DefaultPatternId = "ALL_STOP";
     private const string DefaultServiceClassId = "普通車";
     private readonly List<MutableTrain> _trains = [];
-    private readonly List<TrajectorySample> _trajectory = [];
+    private readonly SimulationTraceStore _traceStore;
     private readonly List<SafetyObservation> _safetyHistory = [];
     private readonly List<SimulationEvent> _events = [];
     private readonly List<SimulationEvent> _newEvents = [];
@@ -22,7 +24,11 @@ public sealed class SimulationWorld
     private readonly Dictionary<string, ServicePattern> _servicePatterns = new(StringComparer.Ordinal);
     private readonly Dictionary<ServiceRunPlanKey, ServiceRunPlan> _serviceRunPlans = [];
     private readonly Dictionary<string, VehicleTypeDefinition> _vehicleTypes = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ServiceTypeDefinition> _serviceTypes = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, PlannedServiceRun> _dispatchRunsById = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<PlatformRotationKey, string> _lastDestinationPlatforms = [];
+    private readonly Dictionary<string, int> _destinationPlatformAllocationCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, double> _platformLastReleasedAtSeconds = new(StringComparer.OrdinalIgnoreCase);
     private readonly ResolvedDispatchPlan? _dispatchPlan;
     private readonly RouteResourceReservationManager _resourceReservations = new();
     private readonly bool _enforceRouteResources;
@@ -80,7 +86,9 @@ public sealed class SimulationWorld
         IEnumerable<ServiceRunPlan>? serviceRunPlans = null,
         ResolvedDispatchPlan? dispatchPlan = null,
         IEnumerable<VehicleTypeDefinition>? vehicleTypes = null,
-        InfrastructureGraph? infrastructure = null)
+        InfrastructureGraph? infrastructure = null,
+        SimulationTraceRetentionPolicy? traceRetentionPolicy = null,
+        IEnumerable<ServiceTypeDefinition>? serviceTypes = null)
     {
         if (trainCount <= 0)
         {
@@ -94,6 +102,8 @@ public sealed class SimulationWorld
         ProfileMode = profileMode;
         MovingBlockMode = movingBlockMode;
         BrakingEstimationMode = BrakingEstimationMode.Service;
+        TraceRetentionPolicy = traceRetentionPolicy ?? SimulationTraceRetentionPolicy.Full;
+        _traceStore = new SimulationTraceStore(TraceRetentionPolicy);
         _enforceRouteResources = infrastructure is not null || dispatchPlan is not null;
         Infrastructure = infrastructure ?? InfrastructureGraph.CreateLegacy(route);
         Infrastructure.Validate();
@@ -107,6 +117,13 @@ public sealed class SimulationWorld
             if (!_vehicleTypes.TryAdd(vehicleType.Id, vehicleType))
             {
                 throw new SimulationValidationException([$"車型 ID「{vehicleType.Id}」重複。"]);
+            }
+        }
+        foreach (var serviceType in serviceTypes ?? [])
+        {
+            if (!_serviceTypes.TryAdd(serviceType.Id, serviceType))
+            {
+                throw new SimulationValidationException([$"服務類型 ID「{serviceType.Id}」重複。"]);
             }
         }
 
@@ -160,10 +177,12 @@ public sealed class SimulationWorld
 
     public double TimeStepSeconds => FixedTimeStepSeconds;
 
+    public SimulationTraceRetentionPolicy TraceRetentionPolicy { get; }
+
     /// <summary>所有已排入世界的車輛均已完成最後一個車次並退出營運。</summary>
     public bool IsComplete => _trains.Count > 0 && _trains.All(train => train.Completed);
 
-    public IReadOnlyList<TrajectorySample> Trajectory => _trajectory;
+    public IReadOnlyList<TrajectorySample> Trajectory => _traceStore.Trajectory;
 
     public IReadOnlyList<SafetyObservation> SafetyHistory => _safetyHistory;
 
@@ -322,13 +341,16 @@ public sealed class SimulationWorld
             ReleaseRouteReservation(train);
         }
         CurrentTimeSeconds = 0;
-        _trajectory.Clear();
+        _traceStore.Reset();
         _safetyHistory.Clear();
         _events.Clear();
         _newEvents.Clear();
         _currentSafety = [];
         _lastSafetyStatuses.Clear();
         _controlBrakingActive.Clear();
+        _lastDestinationPlatforms.Clear();
+        _destinationPlatformAllocationCounts.Clear();
+        _platformLastReleasedAtSeconds.Clear();
         _scheduledObstacles.Clear();
         _nextEventIndex = 0;
         InitializeTrains(trainCount);
@@ -504,6 +526,20 @@ public sealed class SimulationWorld
                 if (instruction.Mode == StationServiceMode.Pass && endpointIds.Contains(stationId))
                 {
                     errors.Add($"起終點站 {stationId} 不得設定為跨站。");
+                }
+
+                if (instruction.Mode == StationServiceMode.Turnback)
+                {
+                    if (endpointIds.Contains(stationId))
+                    {
+                        errors.Add($"起終點站 {stationId} 應使用端點折返續行；中央避車線折返僅能設定於中間實體錨定站。 ");
+                    }
+
+                    var spatialReference = Infrastructure.FindSpatialReferencePoint(stationId);
+                    if (spatialReference?.Kind != SpatialReferencePointKind.CentralSidingTurnback)
+                    {
+                        errors.Add($"服務模式 {patternId} 的 {stationId} 折返需對應 CentralSidingTurnback 空間參考點。");
+                    }
                 }
 
                 if (instruction.SpeedLimitMetersPerSecond is { } limit
@@ -739,14 +775,15 @@ public sealed class SimulationWorld
         }
     }
 
-    private bool HasDepartureClearance(MutableTrain train)
+    private bool HasDepartureClearance(MutableTrain train, string? prospectiveTrackId = null)
     {
+        var trackId = prospectiveTrackId ?? train.TrackId;
         var nearestLeader = _trains
             .Where(other => !ReferenceEquals(other, train)
                 && other.Active
                 && other.Phase != OperationalPhase.OutOfService
                 && other.Direction == train.Direction
-                && other.TrackId == train.TrackId
+                && other.TrackId.Equals(trackId, StringComparison.OrdinalIgnoreCase)
                 && Progress(train.Direction, other.Position) >= Progress(train.Direction, train.Position))
             .OrderBy(other => Math.Abs(other.Position - train.Position))
             .FirstOrDefault();
@@ -775,7 +812,7 @@ public sealed class SimulationWorld
             return true;
         }
 
-        if (train.ReservationId is not null)
+        if (train.ReservationId is not null && !train.HasStationReservation)
         {
             return true;
         }
@@ -798,47 +835,79 @@ public sealed class SimulationWorld
         var originPlatform = string.IsNullOrWhiteSpace(train.PlatformId)
             ? originCandidates.FirstOrDefault()
             : originCandidates.FirstOrDefault(item => item.PlatformId.Equals(train.PlatformId, StringComparison.OrdinalIgnoreCase));
-        var destinationPlatform = Infrastructure.FindCompatiblePlatforms(
-                destination.StationId,
-                train.Direction,
-                length,
-                train.VehicleTypeId,
-                train.ServiceClassId,
-                requirePassengerService: true)
-            .FirstOrDefault();
-        if (originPlatform is null || destinationPlatform is null)
+        var destinationCandidates = Infrastructure.FindCompatiblePlatforms(
+            destination.StationId,
+            train.Direction,
+            length,
+            train.VehicleTypeId,
+            train.ServiceClassId,
+            requirePassengerService: true);
+        if (originPlatform is null || destinationCandidates.Count == 0)
         {
             return MarkWaitingForResource(train, $"{origin.StationId} 找不到符合車型、服務類型與方向的月台。", origin.StationId);
         }
 
-        var path = Infrastructure.FindPaths(
-                originPlatform.PlatformId,
-                destinationPlatform.PlatformId,
-                train.Direction,
-                train.VehicleTypeId,
-                train.ServiceClassId,
-                length)
-            .FirstOrDefault();
-        if (path is null)
+        var reservationId = train.ReservationId
+            ?? $"{train.VehicleId}|{train.ServiceRunId}|{train.CurrentStationIndex}";
+        var reserveDestinationPlatform = GetStationInstruction(train, destination).Mode != StationServiceMode.Pass;
+        RoutePathDefinition? selectedPath = null;
+        PlatformDefinition? selectedDestinationPlatform = null;
+        string? blockedResourceId = null;
+        foreach (var destinationPlatform in OrderDestinationPlatformCandidates(train, destination, destinationCandidates))
         {
-            return MarkWaitingForResource(train, $"{originPlatform.PlatformId} 至 {destinationPlatform.PlatformId} 沒有可用進路。", originPlatform.PlatformId);
+            var path = Infrastructure.FindPaths(
+                    originPlatform.PlatformId,
+                    destinationPlatform.PlatformId,
+                    train.Direction,
+                    train.VehicleTypeId,
+                    train.ServiceClassId,
+                    length)
+                .FirstOrDefault();
+            if (path is null)
+            {
+                continue;
+            }
+
+            var resources = path.ResourceIds
+                .Append($"PLATFORM:{originPlatform.PlatformId}")
+                .Concat(reserveDestinationPlatform
+                    ? [$"PLATFORM:{destinationPlatform.PlatformId}"]
+                    : [])
+                .ToArray();
+            if (!_resourceReservations.Reserve(reservationId, resources))
+            {
+                blockedResourceId = path.PathId;
+                continue;
+            }
+
+            selectedPath = path;
+            selectedDestinationPlatform = destinationPlatform;
+            break;
         }
 
-        var reservationId = $"{train.VehicleId}|{train.ServiceRunId}|{train.CurrentStationIndex}";
-        var resources = path.ResourceIds.Append($"PLATFORM:{originPlatform.PlatformId}");
-        if (!_resourceReservations.Reserve(reservationId, resources))
+        if (selectedPath is null || selectedDestinationPlatform is null)
         {
-            return MarkWaitingForResource(train, $"進路 {path.PathId} 正由其他列車使用。", path.PathId);
+            var resourceId = blockedResourceId ?? originPlatform.PlatformId;
+            return MarkWaitingForResource(
+                train,
+                $"{originPlatform.PlatformId} 至 {destination.StationId} 沒有可用進路或目的月台。",
+                resourceId);
         }
 
         train.ReservationId = reservationId;
         train.ReservedAtPosition = train.Position;
-        train.RoutePathId = path.PathId;
-        train.ExpectedDestinationPlatformId = destinationPlatform.PlatformId;
+        train.RoutePathId = selectedPath.PathId;
+        train.ExpectedDestinationPlatformId = reserveDestinationPlatform
+            ? selectedDestinationPlatform.PlatformId
+            : null;
+        train.HasDestinationPlatformReservation = reserveDestinationPlatform;
+        train.HasStationReservation = false;
         train.PlatformId = originPlatform.PlatformId;
-        train.TrackId = path.TrackSegmentIds.FirstOrDefault() ?? train.TrackId;
+        train.PendingDepartureTrackId = selectedPath.TrackSegmentIds.FirstOrDefault() ?? train.TrackId;
+        train.TrackId = train.PendingDepartureTrackId;
         train.WaitingResourceEventEmitted = false;
         train.Constraints |= OperationalConstraint.Platform | OperationalConstraint.RouteResource;
+        RememberDestinationPlatform(train, destination, selectedDestinationPlatform);
         AddEvent(
             SimulationEventType.PlatformAssigned,
             train,
@@ -851,11 +920,109 @@ public sealed class SimulationWorld
             SimulationEventType.RouteReserved,
             train,
             null,
-            $"{train.ServiceRunId} 已鎖定進路 {path.PathId}。",
+            $"{train.ServiceRunId} 已鎖定進路 {selectedPath.PathId}，並保留目的月台 {selectedDestinationPlatform.PlatformId}。",
             train.Position,
             train.Speed,
-            path.PathId);
+            selectedPath.PathId,
+            resourceIds: _resourceReservations.GetResources(reservationId));
         return true;
+    }
+
+    private IReadOnlyList<PlatformDefinition> OrderDestinationPlatformCandidates(
+        MutableTrain train,
+        Station destination,
+        IReadOnlyList<PlatformDefinition> candidates)
+    {
+        if (candidates.Count < 2)
+        {
+            return candidates;
+        }
+
+        if (UsesRoundRobinDestinationAllocation(train, destination))
+        {
+            var key = new PlatformRotationKey(destination.StationId, train.Direction);
+            if (!_lastDestinationPlatforms.TryGetValue(key, out var lastPlatformId))
+            {
+                return candidates;
+            }
+
+            var lastIndex = candidates
+                .Select((platform, index) => (platform, index))
+                .FirstOrDefault(item => item.platform.PlatformId.Equals(lastPlatformId, StringComparison.OrdinalIgnoreCase))
+                .index;
+            if (!candidates[lastIndex].PlatformId.Equals(lastPlatformId, StringComparison.OrdinalIgnoreCase))
+            {
+                return candidates;
+            }
+
+            return candidates
+                .Skip(lastIndex + 1)
+                .Concat(candidates.Take(lastIndex + 1))
+                .ToArray();
+        }
+
+        return GetDestinationPlatformAllocationStrategy(destination) switch
+        {
+            // 所有候選都會先經過資源預約檢查；在可用月台之中，優先讓長時間未使用的月台承接。
+            PlatformAllocationStrategy.EarliestAvailable => candidates
+                .OrderBy(platform => _platformLastReleasedAtSeconds.TryGetValue(platform.PlatformId, out var releasedAt)
+                    ? releasedAt
+                    : double.NegativeInfinity)
+                .ThenBy(platform => _destinationPlatformAllocationCounts.GetValueOrDefault(platform.PlatformId))
+                .ThenBy(platform => platform.PlatformId, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            // 自動策略以同站、同方向的實際成功配置次數均衡負載；無法預約者仍會繼續嘗試下一候選。
+            PlatformAllocationStrategy.Automatic => candidates
+                .OrderBy(platform => _destinationPlatformAllocationCounts.GetValueOrDefault(platform.PlatformId))
+                .ThenBy(platform => _platformLastReleasedAtSeconds.TryGetValue(platform.PlatformId, out var releasedAt)
+                    ? releasedAt
+                    : double.NegativeInfinity)
+                .ThenBy(platform => platform.PlatformId, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
+            _ => candidates
+        };
+    }
+
+    private PlatformAllocationStrategy GetDestinationPlatformAllocationStrategy(Station destination) =>
+        Infrastructure.StationYards.FirstOrDefault(item =>
+            item.StationId.Equals(destination.StationId, StringComparison.OrdinalIgnoreCase))?.PlatformAllocationStrategy
+        ?? PlatformAllocationStrategy.Automatic;
+
+    private bool UsesRoundRobinDestinationAllocation(MutableTrain train, Station destination)
+    {
+        var yard = Infrastructure.StationYards.FirstOrDefault(item =>
+            item.StationId.Equals(destination.StationId, StringComparison.OrdinalIgnoreCase));
+        if (yard?.PlatformAllocationStrategy == PlatformAllocationStrategy.RoundRobin)
+        {
+            return true;
+        }
+
+        var spatialReference = Infrastructure.FindSpatialReferencePoint(destination.StationId);
+        return spatialReference is
+        {
+            Kind: SpatialReferencePointKind.BeforeStationTurnback,
+            AlternateBerthing: true
+        };
+    }
+
+    private void RememberDestinationPlatform(
+        MutableTrain train,
+        Station destination,
+        PlatformDefinition destinationPlatform)
+    {
+        if (UsesRoundRobinDestinationAllocation(train, destination))
+        {
+            _lastDestinationPlatforms[new PlatformRotationKey(destination.StationId, train.Direction)] =
+                destinationPlatform.PlatformId;
+            return;
+        }
+
+        if (GetDestinationPlatformAllocationStrategy(destination) is PlatformAllocationStrategy.Automatic
+            or PlatformAllocationStrategy.EarliestAvailable)
+        {
+            _destinationPlatformAllocationCounts[destinationPlatform.PlatformId] =
+                _destinationPlatformAllocationCounts.GetValueOrDefault(destinationPlatform.PlatformId) + 1;
+        }
     }
 
     private bool MarkWaitingForResource(MutableTrain train, string message, string resourceId)
@@ -879,7 +1046,7 @@ public sealed class SimulationWorld
 
     private void ReleaseDepartureRouteIfClear(MutableTrain train)
     {
-        if (train.ReservationId is null || !train.Active)
+        if (train.ReservationId is null || train.RoutePathId is null || !train.Active)
         {
             return;
         }
@@ -890,7 +1057,47 @@ public sealed class SimulationWorld
             return;
         }
 
-        ReleaseRouteReservation(train);
+        RetainDestinationPlatformOrReleaseRoute(train);
+    }
+
+    private void RetainDestinationPlatformOrReleaseRoute(MutableTrain train)
+    {
+        if (train.ReservationId is not null && train.HasStationReservation)
+        {
+            return;
+        }
+
+        if (train.ReservationId is null
+            || !train.HasDestinationPlatformReservation
+            || string.IsNullOrWhiteSpace(train.ExpectedDestinationPlatformId))
+        {
+            ReleaseRouteReservation(train);
+            return;
+        }
+
+        var pathId = train.RoutePathId;
+        var platformResource = $"PLATFORM:{train.ExpectedDestinationPlatformId}";
+        var releasedResources = _resourceReservations.GetResources(train.ReservationId)
+            .Where(resource => !resource.Equals(platformResource, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (!_resourceReservations.Reserve(train.ReservationId, [platformResource]))
+        {
+            throw new InvalidOperationException($"列車 {train.VehicleId} 無法保留已鎖定的目的月台 {train.ExpectedDestinationPlatformId}。");
+        }
+
+        train.RoutePathId = null;
+        train.HasDestinationPlatformReservation = false;
+        train.HasStationReservation = true;
+        RememberReleasedPlatforms(releasedResources);
+        AddEvent(
+            SimulationEventType.RouteReleased,
+            train,
+            null,
+            $"{train.ServiceRunId} 已釋放進路 {pathId}，保留抵達月台 {train.ExpectedDestinationPlatformId}。",
+            train.Position,
+            train.Speed,
+            pathId,
+            resourceIds: releasedResources);
     }
 
     private void ReleaseRouteReservation(MutableTrain train)
@@ -901,17 +1108,255 @@ public sealed class SimulationWorld
         }
 
         var pathId = train.RoutePathId;
+        var releasedResources = _resourceReservations.GetResources(train.ReservationId);
         _resourceReservations.Release(train.ReservationId);
+        RememberReleasedPlatforms(releasedResources);
         AddEvent(
             SimulationEventType.RouteReleased,
             train,
             null,
-            $"{train.ServiceRunId} 已釋放進路 {pathId}。",
+            pathId is null
+                ? $"{train.ServiceRunId} 已釋放站場資源。"
+                : $"{train.ServiceRunId} 已釋放進路 {pathId}。",
             train.Position,
             train.Speed,
-            pathId);
+            pathId,
+            resourceIds: releasedResources);
         train.ReservationId = null;
         train.RoutePathId = null;
+        train.HasDestinationPlatformReservation = false;
+        train.HasStationReservation = false;
+    }
+
+    private void RememberReleasedPlatforms(IEnumerable<string> resourceIds)
+    {
+        foreach (var resourceId in resourceIds)
+        {
+            const string platformPrefix = "PLATFORM:";
+            if (resourceId.StartsWith(platformPrefix, StringComparison.OrdinalIgnoreCase)
+                && resourceId.Length > platformPrefix.Length)
+            {
+                _platformLastReleasedAtSeconds[resourceId[platformPrefix.Length..]] = CurrentTimeSeconds;
+            }
+        }
+    }
+
+    private StationOvertakeSelection? FindEligibleStationOvertake(MutableTrain expressTrain)
+    {
+        if (!_serviceTypes.TryGetValue(expressTrain.ServiceClassId, out var expressService)
+            || !expressService.CanRequestOvertake)
+        {
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(expressTrain.OvertakeFacilityId))
+        {
+            var activeFacility = Infrastructure.StationOvertakeFacilities.FirstOrDefault(item =>
+                item.FacilityId.Equals(expressTrain.OvertakeFacilityId, StringComparison.OrdinalIgnoreCase));
+            var stationIndex = activeFacility is null
+                ? -1
+                : Route.Stations.ToList().FindIndex(station =>
+                    station.StationId.Equals(activeFacility.StationId, StringComparison.OrdinalIgnoreCase));
+            if (activeFacility is not null && stationIndex >= 0)
+            {
+                var station = Route.Stations[stationIndex];
+                var localTrain = _trains
+                    .Where(candidate => !ReferenceEquals(candidate, expressTrain)
+                        && candidate.Active
+                        && candidate.Phase == OperationalPhase.Dwelling
+                        && candidate.Direction == expressTrain.Direction
+                        && candidate.CurrentStationIndex == stationIndex
+                        && candidate.PlatformId is not null
+                        && candidate.PlatformId.Equals(activeFacility.LocalPlatformId, StringComparison.OrdinalIgnoreCase)
+                        && GetStationInstruction(candidate, station).Mode != StationServiceMode.Pass
+                        && _serviceTypes.TryGetValue(candidate.ServiceClassId, out var localService)
+                        && expressService.Priority > localService.Priority)
+                    .OrderBy(candidate => Math.Abs(candidate.Position - expressTrain.Position))
+                    .FirstOrDefault();
+                return localTrain is null
+                    ? null
+                    : new StationOvertakeSelection(station, activeFacility, localTrain);
+            }
+        }
+
+        var selections = new List<StationOvertakeSelection>();
+        for (var stationIndex = expressTrain.NextStationIndex;
+             stationIndex >= 0 && stationIndex < Route.Stations.Count;
+             stationIndex += (int)expressTrain.Direction)
+        {
+            var station = Route.Stations[stationIndex];
+            // 一旦遇到快速車應停靠的車站，不能再跨越該停車點安排更遠的越行。
+            if (GetStationInstruction(expressTrain, station).Mode != StationServiceMode.Pass)
+            {
+                break;
+            }
+
+            foreach (var facility in Infrastructure.FindStationOvertakeFacilities(station.StationId, expressTrain.Direction))
+            {
+                if (!expressTrain.TrackId.Equals(facility.MainlineTrackSegmentId, StringComparison.OrdinalIgnoreCase)
+                    || ForwardDistance(expressTrain.Direction, expressTrain.Position, facility.EntryPositionMeters) < -NumericalTolerance)
+                {
+                    continue;
+                }
+
+                var localTrain = _trains
+                    .Where(candidate => !ReferenceEquals(candidate, expressTrain)
+                        && candidate.Active
+                        && candidate.Phase == OperationalPhase.Dwelling
+                        && candidate.Direction == expressTrain.Direction
+                        && candidate.CurrentStationIndex == stationIndex
+                        && candidate.PlatformId is not null
+                        && candidate.PlatformId.Equals(facility.LocalPlatformId, StringComparison.OrdinalIgnoreCase)
+                        && GetStationInstruction(candidate, station).Mode != StationServiceMode.Pass
+                        && _serviceTypes.TryGetValue(candidate.ServiceClassId, out var localService)
+                        && expressService.Priority > localService.Priority)
+                    .OrderBy(candidate => Math.Abs(candidate.Position - expressTrain.Position))
+                    .FirstOrDefault();
+                if (localTrain is not null)
+                {
+                    selections.Add(new StationOvertakeSelection(station, facility, localTrain));
+                }
+            }
+        }
+
+        if (selections.Count == 0)
+        {
+            return null;
+        }
+
+        return selections
+            .OrderBy(selection => _resourceReservations.IsAvailable(
+                selection.Facility.ResourceIds.Append($"PLATFORM:{selection.Facility.ExpressPlatformId}")) ? 0 : 1)
+            .ThenBy(selection => ForwardDistance(
+                expressTrain.Direction,
+                expressTrain.Position,
+                selection.Facility.EntryPositionMeters))
+            .ThenBy(selection => selection.Facility.FacilityId, StringComparer.OrdinalIgnoreCase)
+            .First();
+    }
+
+    private bool TryEnterStationOvertake(MutableTrain expressTrain)
+    {
+        if (expressTrain.OvertakeFacilityId is not null)
+        {
+            return true;
+        }
+
+        var selection = FindEligibleStationOvertake(expressTrain);
+        if (selection is not { } candidate || !HasReachedStationOvertakeEntry(expressTrain, candidate.Facility))
+        {
+            return false;
+        }
+
+        var station = candidate.Station;
+        var facility = candidate.Facility;
+        var localTrain = candidate.LocalTrain;
+
+        var reservationId = $"OVERTAKE:{expressTrain.VehicleId}|{facility.FacilityId}|{expressTrain.CurrentStationIndex}";
+        var resources = facility.ResourceIds.Append($"PLATFORM:{facility.ExpressPlatformId}").ToArray();
+        if (!_resourceReservations.Reserve(reservationId, resources))
+        {
+            expressTrain.WaitingForOvertakeFacilityId = facility.FacilityId;
+            return false;
+        }
+
+        expressTrain.ReservationId = reservationId;
+        expressTrain.RoutePathId = null;
+        expressTrain.HasDestinationPlatformReservation = false;
+        expressTrain.HasStationReservation = false;
+        expressTrain.OvertakeFacilityId = facility.FacilityId;
+        expressTrain.OvertakenVehicleId = localTrain.VehicleId;
+        expressTrain.WaitingForOvertakeFacilityId = null;
+        expressTrain.TrackId = facility.ExpressTrackSegmentId;
+        AddEvent(
+            SimulationEventType.RouteReserved,
+            expressTrain,
+            localTrain.VehicleId,
+            $"{expressTrain.ServiceRunId} 已鎖定越行設施 {facility.FacilityId} 的衝突區與通過月台。",
+            expressTrain.Position,
+            expressTrain.Speed,
+            facility.FacilityId,
+            resourceIds: _resourceReservations.GetResources(reservationId));
+        AddEvent(
+            SimulationEventType.OvertakeRequested,
+            expressTrain,
+            localTrain.VehicleId,
+            $"{expressTrain.ServiceRunId} 取得 {station.StationId} 站內通過線，普通車 {localTrain.ServiceRunId} 留在待避月台。",
+            expressTrain.Position,
+            expressTrain.Speed,
+            facility.FacilityId);
+        return true;
+    }
+
+    private static bool HasReachedStationOvertakeEntry(
+        MutableTrain train,
+        StationOvertakeFacilityDefinition facility) =>
+        train.Direction == TrainDirection.Outbound
+            ? train.Position >= facility.EntryPositionMeters - NumericalTolerance
+            : train.Position <= facility.EntryPositionMeters + NumericalTolerance;
+
+    private double? GetStationOvertakeEntryDistance(MutableTrain train)
+    {
+        var selection = FindEligibleStationOvertake(train);
+        if (selection is not { } candidate || train.OvertakeFacilityId is not null)
+        {
+            return null;
+        }
+
+        var distance = ForwardDistance(train.Direction, train.Position, candidate.Facility.EntryPositionMeters);
+        return distance > NumericalTolerance ? distance : 0;
+    }
+
+    private bool ShouldHoldForStationOvertake(MutableTrain localTrain)
+    {
+        if (!_serviceTypes.ContainsKey(localTrain.ServiceClassId)
+            || localTrain.PlatformId is null)
+        {
+            return false;
+        }
+
+        var station = Route.Stations[localTrain.CurrentStationIndex];
+        var selected = _trains
+            .Where(candidate => candidate.Active
+                && candidate.Direction == localTrain.Direction
+                && !ReferenceEquals(candidate, localTrain)
+                && _serviceTypes.TryGetValue(candidate.ServiceClassId, out var service)
+                && service.CanRequestOvertake
+                && service.Priority > _serviceTypes[localTrain.ServiceClassId].Priority)
+            .Select(candidate => (Train: candidate, Selection: FindEligibleStationOvertake(candidate)))
+            .Where(candidate => candidate.Selection is { } selection
+                && ReferenceEquals(selection.LocalTrain, localTrain))
+            .OrderBy(candidate => Math.Abs(candidate.Train.Position - localTrain.Position))
+            .FirstOrDefault();
+        if (selected.Selection is not { } overtake)
+        {
+            return false;
+        }
+
+        var facility = overtake.Facility;
+        var waitingExpress = selected.Train;
+
+        var entryDistance = ForwardDistance(localTrain.Direction, waitingExpress.Position, facility.EntryPositionMeters);
+        if (waitingExpress.OvertakeFacilityId is null
+            && entryDistance > OperationalParameters.ApproachDistanceMeters + NumericalTolerance)
+        {
+            return false;
+        }
+
+        if (!localTrain.WaitingForOvertakeEventEmitted)
+        {
+            AddEvent(
+                SimulationEventType.WaitingForResource,
+                localTrain,
+                waitingExpress.VehicleId,
+                $"{localTrain.ServiceRunId} 在 {station.StationId} 待避，等待快速車 {waitingExpress.ServiceRunId} 站內跨越。",
+                localTrain.Position,
+                0,
+                facility.FacilityId);
+            localTrain.WaitingForOvertakeEventEmitted = true;
+        }
+
+        return true;
     }
 
     private void UpdateTrain(
@@ -924,6 +1369,26 @@ public sealed class SimulationWorld
         if (!train.Active || train.Phase == OperationalPhase.OutOfService || train.Collided || train.ObstacleStopped)
         {
             return;
+        }
+
+        if (train.AwaitingPostPassRoute)
+        {
+            train.Speed = 0;
+            train.Acceleration = 0;
+            if (!TryReserveDepartureRoute(train))
+            {
+                train.Constraints |= OperationalConstraint.RouteResource | OperationalConstraint.Platform;
+                return;
+            }
+
+            var facility = train.OvertakeFacilityId is null
+                ? null
+                : Infrastructure.StationOvertakeFacilities.FirstOrDefault(item =>
+                    item.FacilityId.Equals(train.OvertakeFacilityId, StringComparison.OrdinalIgnoreCase));
+            if (facility is not null)
+            {
+                CompleteStationOvertake(train, facility);
+            }
         }
 
         var performance = GetVehiclePerformance(train);
@@ -941,16 +1406,44 @@ public sealed class SimulationWorld
                     return;
                 }
 
+                if (ShouldHoldForStationOvertake(train))
+                {
+                    train.DwellRemaining = FixedTimeStepSeconds;
+                    return;
+                }
+
                 if (!TryReserveDepartureRoute(train))
                 {
                     train.Constraints |= OperationalConstraint.RouteResource | OperationalConstraint.Platform;
                     return;
                 }
 
+                if (MovingBlockMode == MovingBlockMode.Control
+                    && !HasDepartureClearance(train, train.PendingDepartureTrackId))
+                {
+                    train.Constraints |= OperationalConstraint.MovingBlock;
+                    AssignStationTrack(train, train.PlatformId);
+                    train.DwellRemaining = FixedTimeStepSeconds;
+                    return;
+                }
+
+                train.TrackId = train.PendingDepartureTrackId ?? train.TrackId;
                 train.Phase = OperationalPhase.Accelerating;
                 AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 停站後發車。", train.Position, 0);
             }
 
+            return;
+        }
+
+        if (train.TailTrackMovement is not null)
+        {
+            UpdateAfterStationTailTrackMovement(train);
+            return;
+        }
+
+        if (train.SpatialTurnbackMovement is not null)
+        {
+            UpdateSpatialTurnbackMovement(train);
             return;
         }
 
@@ -971,13 +1464,20 @@ public sealed class SimulationWorld
             return;
         }
 
+        if (train.TerminalAction != TerminalAction.None)
+        {
+            CompleteTerminalStationWork(train);
+            return;
+        }
+
         var nextStation = Route.Stations[train.NextStationIndex];
         var stationInstruction = GetStationInstruction(train, nextStation);
-        var isScheduledStop = stationInstruction.Mode == StationServiceMode.Stop;
+        var enteredStationOvertake = TryEnterStationOvertake(train);
+        var isScheduledStop = stationInstruction.Mode is StationServiceMode.Stop or StationServiceMode.Turnback;
         var distanceToStation = ForwardDistance(train.Direction, train.Position, nextStation.PositionMeters);
         if (isScheduledStop
             && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
-            && distanceToStation <= ArrivalPositionToleranceMeters)
+            && distanceToStation <= StationStopSnapToleranceMeters)
         {
             ArriveAtStation(train, nextStation);
             return;
@@ -1035,8 +1535,25 @@ public sealed class SimulationWorld
                     effectiveServiceBraking,
                     performance.JerkMetersPerSecondCubed,
                     train.Speed,
-                    nextStation.PositionMeters,
-                    passingLimit));
+                nextStation.PositionMeters,
+                passingLimit));
+        }
+
+        StationStopControlOutput? stationStopControl = null;
+        if (isScheduledStop)
+        {
+            stationStopControl = StationStopController.Calculate(new StationStopControlInput(
+                distanceToStation,
+                train.Speed,
+                train.Acceleration,
+                permitted,
+                effectiveServiceBraking,
+                performance.JerkMetersPerSecondCubed,
+                FixedTimeStepSeconds,
+                ProfileMode == OperationProfileMode.RealisticOperations,
+                StationStopSnapToleranceMeters,
+                ArrivalSpeedToleranceMetersPerSecond));
+            permitted = Math.Min(permitted, stationStopControl.TargetSpeedMetersPerSecond);
         }
 
         var obstacleDistance = GetObstacleDistanceAhead(train);
@@ -1045,7 +1562,14 @@ public sealed class SimulationWorld
             permitted = Math.Min(permitted, CalculateStopCurveSpeed(train, obstacleDistance.Value));
         }
 
-        if (controlLimits.TryGetValue(train.VehicleId, out var movingBlockLimit))
+        var overtakeEntryDistance = GetStationOvertakeEntryDistance(train);
+        if (overtakeEntryDistance is { } entryDistance)
+        {
+            permitted = Math.Min(permitted, CalculateStopCurveSpeed(train, entryDistance));
+            train.Constraints |= OperationalConstraint.RouteResource;
+        }
+
+        if (!enteredStationOvertake && controlLimits.TryGetValue(train.VehicleId, out var movingBlockLimit))
         {
             if (movingBlockLimit + 0.05 < permitted)
             {
@@ -1075,19 +1599,13 @@ public sealed class SimulationWorld
 
         if (train.StationBrakingActive
             && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
-            && distanceToStation > ArrivalPositionToleranceMeters)
+            && distanceToStation > StationStopSnapToleranceMeters)
         {
             train.StationBrakingActive = false;
         }
 
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
-        if (isScheduledStop
-            && (train.StationBrakingActive
-                || ShouldBeginStationBraking(
-                    train,
-                    distanceToStation,
-                    desiredAcceleration,
-                    effectiveServiceBraking)))
+        if (isScheduledStop && stationStopControl is { RequiresServiceBraking: true })
         {
             train.StationBrakingActive = true;
             desiredAcceleration = -effectiveServiceBraking;
@@ -1098,7 +1616,7 @@ public sealed class SimulationWorld
             train.StationStopViolationRecorded = false;
         }
 
-        if (controlLimits.TryGetValue(train.VehicleId, out var protectionLimit)
+        if (!enteredStationOvertake && controlLimits.TryGetValue(train.VehicleId, out var protectionLimit)
             && train.Speed > protectionLimit + 0.03)
         {
             desiredAcceleration = -effectiveServiceBraking;
@@ -1141,10 +1659,21 @@ public sealed class SimulationWorld
             return;
         }
 
+        if (!enteredStationOvertake
+            && overtakeEntryDistance is { } pendingOvertakeEntryDistance
+            && traveled > pendingOvertakeEntryDistance + NumericalTolerance)
+        {
+            train.Position += Math.Max(0, pendingOvertakeEntryDistance) * (int)train.Direction;
+            train.Speed = 0;
+            train.Acceleration = 0;
+            train.Phase = OperationalPhase.Braking;
+            return;
+        }
+
         var remainingAfterMove = distanceToStation - traveled;
         if (isScheduledStop
             && newSpeed <= ArrivalSpeedToleranceMetersPerSecond
-            && remainingAfterMove <= ArrivalPositionToleranceMeters)
+            && remainingAfterMove <= StationStopSnapToleranceMeters)
         {
             ArriveAtStation(train, nextStation);
             return;
@@ -1343,27 +1872,33 @@ public sealed class SimulationWorld
         train.StationBrakingActive = false;
         train.StationStopViolationRecorded = false;
         train.CurrentStationIndex = train.NextStationIndex;
-        ReleaseRouteReservation(train);
+        RetainDestinationPlatformOrReleaseRoute(train);
         train.PlatformId = train.ExpectedDestinationPlatformId;
         train.ExpectedDestinationPlatformId = null;
+        AssignStationTrack(train, train.PlatformId);
+        train.WaitingForOvertakeEventEmitted = false;
         train.Phase = OperationalPhase.Arriving;
         AddEvent(SimulationEventType.Arrival, train, null, $"{train.ServiceRunId} 抵達 {station.StationId}。", train.Position, 0);
 
         var isTerminal = train.Direction == TrainDirection.Outbound
             ? train.CurrentStationIndex == Route.Stations.Count - 1
             : train.CurrentStationIndex == 0;
-        if (isTerminal)
+        var isVirtualTurnback = GetStationInstruction(train, station).Mode == StationServiceMode.Turnback;
+        if (isTerminal || isVirtualTurnback)
         {
-            train.TerminalAction = _dispatchPlan is not null && !train.ContinueAfterTerminal
-                ? TerminalAction.ExitService
-                : TerminalAction.Turnaround;
+            train.TerminalAction = isVirtualTurnback
+                ? TerminalAction.Turnaround
+                : _dispatchPlan is not null && !train.ContinueAfterTerminal
+                    ? TerminalAction.ExitService
+                    : TerminalAction.Turnaround;
             var spatialReference = Infrastructure.FindSpatialReferencePoint(station.StationId);
             var patternDwellSeconds = GetStationInstruction(train, station).DwellTimeSeconds;
             var stationDwellSeconds = GetConfiguredStationDwellSeconds(
                 spatialReference,
                 train.Direction,
                 patternDwellSeconds ?? station.DwellTimeSeconds);
-            train.DwellRemaining = train.TerminalAction == TerminalAction.Turnaround
+            train.DwellRemaining = !isVirtualTurnback
+                && train.TerminalAction == TerminalAction.Turnaround
                 && spatialReference?.Kind == SpatialReferencePointKind.BeforeStationTurnback
                     ? spatialReference.TurnbackDwellSeconds
                     : stationDwellSeconds;
@@ -1374,7 +1909,9 @@ public sealed class SimulationWorld
                     SimulationEventType.DwellStarted,
                     train,
                     null,
-                    $"{train.ServiceRunId} 在端點 {station.StationId} 停站／清車。",
+                    isVirtualTurnback
+                        ? $"{train.ServiceRunId} 在虛擬折返站 {station.StationId} 停站。"
+                        : $"{train.ServiceRunId} 在端點 {station.StationId} 停站／清車。",
                     train.Position,
                     0);
                 return;
@@ -1400,9 +1937,13 @@ public sealed class SimulationWorld
 
     private void PassStation(MutableTrain train, Station station)
     {
+        var facility = train.OvertakeFacilityId is null
+            ? null
+            : Infrastructure.StationOvertakeFacilities.FirstOrDefault(item =>
+                item.FacilityId.Equals(train.OvertakeFacilityId, StringComparison.OrdinalIgnoreCase));
         train.CurrentStationIndex = train.NextStationIndex;
-        ReleaseRouteReservation(train);
-        train.PlatformId = train.ExpectedDestinationPlatformId;
+        RetainDestinationPlatformOrReleaseRoute(train);
+        train.PlatformId = facility?.ExpressPlatformId ?? train.ExpectedDestinationPlatformId;
         train.ExpectedDestinationPlatformId = null;
         train.NextStationIndex += (int)train.Direction;
         AddEvent(
@@ -1412,48 +1953,60 @@ public sealed class SimulationWorld
             $"{train.ServiceRunId}（{train.ServiceClassId}）通過 {station.StationId}，速度 {train.Speed * 3.6:0.##} km/h。",
             station.PositionMeters,
             train.Speed);
+
+        if (facility is null)
+        {
+            return;
+        }
+
+        if (!TryReserveDepartureRoute(train))
+        {
+            train.Speed = 0;
+            train.Acceleration = 0;
+            train.Phase = OperationalPhase.Dwelling;
+            train.AwaitingPostPassRoute = true;
+            return;
+        }
+
+        CompleteStationOvertake(train, facility);
+    }
+
+    private void AssignStationTrack(MutableTrain train, string? platformId)
+    {
+        if (string.IsNullOrWhiteSpace(platformId))
+        {
+            return;
+        }
+
+        var platform = Infrastructure.Platforms.FirstOrDefault(item =>
+            item.PlatformId.Equals(platformId, StringComparison.OrdinalIgnoreCase));
+        var trackId = platform?.TrackSegmentIds.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(trackId))
+        {
+            train.TrackId = trackId;
+        }
+    }
+
+    private void CompleteStationOvertake(
+        MutableTrain expressTrain,
+        StationOvertakeFacilityDefinition facility)
+    {
+        AddEvent(
+            SimulationEventType.OvertakeCompleted,
+            expressTrain,
+            expressTrain.OvertakenVehicleId,
+            $"{expressTrain.ServiceRunId} 已在 {facility.StationId} 站內通過線跨越普通車，並匯回共線正線。",
+            expressTrain.Position,
+            expressTrain.Speed,
+            facility.FacilityId);
+        expressTrain.OvertakeFacilityId = null;
+        expressTrain.OvertakenVehicleId = null;
+        expressTrain.AwaitingPostPassRoute = false;
     }
 
     private void CompleteTurnaround(MutableTrain train)
     {
-        if (!train.TurnaroundPrepared)
-        {
-            train.Direction = train.Direction == TrainDirection.Outbound
-                ? TrainDirection.Inbound
-                : TrainDirection.Outbound;
-            train.TrackId = train.Direction == TrainDirection.Outbound ? "DOWN" : "UP";
-            train.ServiceNumber++;
-            train.PlannedDepartureTime = CurrentTimeSeconds;
-            if (_dispatchPlan is null)
-            {
-                ApplyServicePlan(train);
-            }
-            else if (train.ContinuationServiceRunId is { } targetRunId
-                && _dispatchRunsById.TryGetValue(targetRunId, out var targetRun))
-            {
-                train.ExplicitServiceRunId = targetRun.ServiceRunId;
-                train.DispatchServiceRunBaseId = targetRun.ServiceRunId;
-                train.ServiceClassId = targetRun.ServiceTypeId;
-                train.PatternId = targetRun.StopPatternId;
-                train.VehicleTypeId = targetRun.VehicleTypeId.Trim();
-                train.PlatformId = targetRun.OriginPlatformId;
-                train.PlannedDepartureTime = RelativeScheduleSeconds(
-                    targetRun.PlannedDepartureTime,
-                    _dispatchPlan.ScheduleAnchorTime);
-                train.ContinueAfterTerminal = targetRun.ContinueAfterTerminal;
-                train.ContinuationServiceRunId = targetRun.ContinuationServiceRunId;
-            }
-            else
-            {
-                train.ExplicitServiceRunId = $"{train.DispatchServiceRunBaseId}-R{train.ServiceNumber - 1:000}";
-                train.PlatformId = null;
-                train.PlannedDepartureTime = CurrentTimeSeconds;
-            }
-            train.NextStationIndex = train.CurrentStationIndex + (int)train.Direction;
-            train.StationBrakingActive = false;
-            train.StationStopViolationRecorded = false;
-            train.TurnaroundPrepared = true;
-        }
+        PrepareTurnaround(train);
 
         if (CurrentTimeSeconds + NumericalTolerance < train.PlannedDepartureTime)
         {
@@ -1492,12 +2045,69 @@ public sealed class SimulationWorld
         AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0);
     }
 
+    private void PrepareTurnaround(MutableTrain train)
+    {
+        if (train.TurnaroundPrepared)
+        {
+            return;
+        }
+
+        train.Direction = train.Direction == TrainDirection.Outbound
+            ? TrainDirection.Inbound
+            : TrainDirection.Outbound;
+        train.TrackId = train.Direction == TrainDirection.Outbound ? "DOWN" : "UP";
+        train.ServiceNumber++;
+        train.PlannedDepartureTime = CurrentTimeSeconds;
+        if (_dispatchPlan is null)
+        {
+            ApplyServicePlan(train);
+        }
+        else if (train.ContinuationServiceRunId is { } targetRunId
+            && _dispatchRunsById.TryGetValue(targetRunId, out var targetRun))
+        {
+            train.ExplicitServiceRunId = targetRun.ServiceRunId;
+            train.DispatchServiceRunBaseId = targetRun.ServiceRunId;
+            train.ServiceClassId = targetRun.ServiceTypeId;
+            train.PatternId = targetRun.StopPatternId;
+            train.VehicleTypeId = targetRun.VehicleTypeId.Trim();
+            train.PlatformId = targetRun.OriginPlatformId;
+            train.PlannedDepartureTime = RelativeScheduleSeconds(
+                targetRun.PlannedDepartureTime,
+                _dispatchPlan.ScheduleAnchorTime);
+            train.ContinueAfterTerminal = targetRun.ContinueAfterTerminal;
+            train.ContinuationServiceRunId = targetRun.ContinuationServiceRunId;
+        }
+        else
+        {
+            train.ExplicitServiceRunId = $"{train.DispatchServiceRunBaseId}-R{train.ServiceNumber - 1:000}";
+            train.PlatformId = null;
+            train.PlannedDepartureTime = CurrentTimeSeconds;
+        }
+
+        // 站後尾軌折返回站時，月台應由實體折返拓撲決定，而不是沿用到達側或
+        // 被未指定的自動派車覆蓋。這也讓後續出站進路以反方向月台為起點預約。
+        var station = Route.Stations[train.CurrentStationIndex];
+        var detailedTurnback = Infrastructure.TurnbackPlans.FirstOrDefault(plan =>
+            plan.Kind == TurnbackKind.AfterStation
+            && plan.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(detailedTurnback?.DeparturePlatformId))
+        {
+            train.PlatformId = detailedTurnback.DeparturePlatformId;
+        }
+
+        train.NextStationIndex = train.CurrentStationIndex + (int)train.Direction;
+        train.StationBrakingActive = false;
+        train.StationStopViolationRecorded = false;
+        train.TurnaroundPrepared = true;
+    }
+
     private void CompleteTerminalStationWork(MutableTrain train)
     {
         var action = train.TerminalAction;
-        train.TerminalAction = TerminalAction.None;
         if (action == TerminalAction.ExitService)
         {
+            ReleaseRouteReservation(train);
+            train.TerminalAction = TerminalAction.None;
             train.Speed = 0;
             train.Acceleration = 0;
             train.Phase = OperationalPhase.OutOfService;
@@ -1518,6 +2128,22 @@ public sealed class SimulationWorld
         var detailedTurnback = Infrastructure.TurnbackPlans.FirstOrDefault(plan =>
             plan.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)
             && plan.Kind != TurnbackKind.LegacyAbstract);
+        if (!TryReserveTurnbackResources(train, station, spatialReference, detailedTurnback))
+        {
+            return;
+        }
+
+        train.TerminalAction = TerminalAction.None;
+        if (TryStartAfterStationTailTrackMovement(train, spatialReference, detailedTurnback))
+        {
+            return;
+        }
+
+        if (TryStartSpatialTurnbackMovement(train, spatialReference))
+        {
+            return;
+        }
+
         train.TurnaroundRemaining = spatialReference?.IsTurnback == true
             ? spatialReference.AdditionalTurnbackSeconds + CalculateSpatialTurnbackTravelSeconds(train, spatialReference)
             : detailedTurnback?.TurnbackTimeSeconds
@@ -1538,6 +2164,459 @@ public sealed class SimulationWorld
         }
     }
 
+    private bool TryReserveTurnbackResources(
+        MutableTrain train,
+        Station station,
+        SpatialReferencePointDefinition? spatialReference,
+        TurnbackPlanDefinition? detailedTurnback)
+    {
+        var resources = new List<string>();
+        if (!string.IsNullOrWhiteSpace(train.PlatformId))
+        {
+            resources.Add($"PLATFORM:{train.PlatformId}");
+        }
+
+        resources.AddRange(detailedTurnback?.ResourceIds ?? Enumerable.Empty<string>());
+        if (!string.IsNullOrWhiteSpace(detailedTurnback?.ArrivalPlatformId))
+        {
+            resources.Add($"PLATFORM:{detailedTurnback.ArrivalPlatformId}");
+        }
+        if (!string.IsNullOrWhiteSpace(detailedTurnback?.DeparturePlatformId))
+        {
+            resources.Add($"PLATFORM:{detailedTurnback.DeparturePlatformId}");
+        }
+        var tailTrackLayout = detailedTurnback is null
+            ? null
+            : Infrastructure.FindAfterStationTailTrackLayout(detailedTurnback);
+        if (tailTrackLayout is not null)
+        {
+            foreach (var tailTrack in new[] { tailTrackLayout.OutboundTrack, tailTrackLayout.InboundTrack })
+            {
+                resources.Add($"TRACK:{tailTrack.TrackId}");
+                resources.AddRange(tailTrack.ConflictResourceIds);
+            }
+        }
+        if ((spatialReference?.Kind is SpatialReferencePointKind.BeforeStationTurnback
+             && spatialReference.AlternateBerthing)
+            || spatialReference?.Kind == SpatialReferencePointKind.CentralSidingTurnback)
+        {
+            resources.Add($"TURNBACK:{station.StationId}");
+        }
+
+        if (resources.Count == 0)
+        {
+            return true;
+        }
+
+        var reservationId = train.ReservationId
+            ?? $"{train.VehicleId}|{train.ServiceRunId}|{train.CurrentStationIndex}|TURNBACK";
+        if (!_resourceReservations.Reserve(reservationId, resources))
+        {
+            return MarkWaitingForResource(
+                train,
+                $"{station.StationId} 的折返資源正由其他列車使用。",
+                $"TURNBACK:{station.StationId}");
+        }
+
+        train.ReservationId = reservationId;
+        train.RoutePathId = null;
+        train.HasDestinationPlatformReservation = false;
+        train.HasStationReservation = true;
+        train.WaitingResourceEventEmitted = false;
+        AddEvent(
+            SimulationEventType.RouteReserved,
+            train,
+            null,
+            $"{train.ServiceRunId} 已鎖定 {station.StationId} 的折返資源。",
+            train.Position,
+            train.Speed,
+            $"TURNBACK:{station.StationId}",
+            resourceIds: _resourceReservations.GetResources(reservationId));
+        return true;
+    }
+
+    private bool TryStartAfterStationTailTrackMovement(
+        MutableTrain train,
+        SpatialReferencePointDefinition? spatialReference,
+        TurnbackPlanDefinition? detailedTurnback)
+    {
+        var tailTrackLayout = detailedTurnback is null
+            ? null
+            : Infrastructure.FindAfterStationTailTrackLayout(detailedTurnback);
+        if (tailTrackLayout is null)
+        {
+            return false;
+        }
+
+        var tailTrack = tailTrackLayout.GetTrack(train.Direction);
+        train.TailTrackMovement = new TailTrackMovement(
+            tailTrackLayout,
+            spatialReference?.AdditionalTurnbackSeconds ?? detailedTurnback!.TurnbackTimeSeconds);
+        train.TrackId = tailTrack.TrackId;
+        train.Speed = 0;
+        train.Acceleration = 0;
+        train.Phase = OperationalPhase.TailTrackOutbound;
+        AddEvent(
+            SimulationEventType.TurnaroundStarted,
+            train,
+            null,
+            $"{train.ServiceRunId} 離開端點站，經 {tailTrack.TrackId} 駛往尾軌虛擬節點 {tailTrackLayout.VirtualNodeId}。",
+            train.Position,
+            0,
+            tailTrack.TrackId);
+        return true;
+    }
+
+    private void UpdateAfterStationTailTrackMovement(MutableTrain train)
+    {
+        var movement = train.TailTrackMovement
+            ?? throw new InvalidOperationException("尾軌折返狀態遺失。");
+        if (movement.Stage == TailTrackMovementStage.WaitingAtVirtualNode)
+        {
+            movement.WaitRemainingSeconds = Math.Max(0, movement.WaitRemainingSeconds - FixedTimeStepSeconds);
+            train.Speed = 0;
+            train.Acceleration = MoveAccelerationTowardZero(train, train.Acceleration);
+            train.Phase = OperationalPhase.Turning;
+            if (movement.WaitRemainingSeconds > NumericalTolerance)
+            {
+                return;
+            }
+
+            PrepareTurnaround(train);
+            var returnTrack = movement.Layout.GetTrack(train.Direction);
+            train.TrackId = returnTrack.TrackId;
+            movement.Stage = TailTrackMovementStage.ReturningToStation;
+            movement.BrakingActive = false;
+            AddEvent(
+                SimulationEventType.TailTrackReturnStarted,
+                train,
+                null,
+                $"{train.ServiceRunId} 已在尾軌虛擬節點 {movement.Layout.VirtualNodeId} 完成折返，經 {returnTrack.TrackId} 駛回端點站。",
+                train.Position,
+                0,
+                returnTrack.TrackId);
+            return;
+        }
+
+        var targetPosition = movement.Stage == TailTrackMovementStage.RunningOutbound
+            ? movement.Layout.VirtualNodePositionMeters
+            : Route.Stations[train.CurrentStationIndex].PositionMeters;
+        var track = movement.Layout.GetTrack(train.Direction);
+        UpdateTailTrackMovementTowardTarget(train, movement, track, targetPosition);
+    }
+
+    private void UpdateTailTrackMovementTowardTarget(
+        MutableTrain train,
+        TailTrackMovement movement,
+        TrackSegmentDefinition track,
+        double targetPosition)
+    {
+        var distanceToTarget = ForwardDistance(train.Direction, train.Position, targetPosition);
+        if (train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && distanceToTarget <= StationStopSnapToleranceMeters)
+        {
+            CompleteTailTrackLeg(train, movement, targetPosition);
+            return;
+        }
+
+        if (movement.BrakingActive
+            && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && distanceToTarget > StationStopSnapToleranceMeters)
+        {
+            movement.BrakingActive = false;
+        }
+
+        var performance = GetVehiclePerformance(train);
+        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, track.SpeedLimitMetersPerSecond);
+        var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
+        if (movement.BrakingActive
+            || ShouldBeginStationBraking(
+                train,
+                distanceToTarget,
+                desiredAcceleration,
+                performance.ServiceBrakingMetersPerSecondSquared))
+        {
+            movement.BrakingActive = true;
+            desiredAcceleration = -performance.ServiceBrakingMetersPerSecondSquared;
+        }
+
+        if (ProfileMode == OperationProfileMode.RealisticOperations)
+        {
+            train.Acceleration = BrakingEnvelopeCalculator.MoveToward(
+                train.Acceleration,
+                desiredAcceleration,
+                performance.JerkMetersPerSecondCubed * FixedTimeStepSeconds);
+        }
+        else
+        {
+            train.Acceleration = desiredAcceleration;
+        }
+
+        var previousSpeed = train.Speed;
+        var newSpeed = Math.Max(0, train.Speed + train.Acceleration * FixedTimeStepSeconds);
+        newSpeed = Math.Min(newSpeed, track.SpeedLimitMetersPerSecond + 0.02);
+        var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
+        var remainingAfterMove = distanceToTarget - traveled;
+        if (newSpeed <= ArrivalSpeedToleranceMetersPerSecond
+            && remainingAfterMove <= StationStopSnapToleranceMeters)
+        {
+            CompleteTailTrackLeg(train, movement, targetPosition);
+            return;
+        }
+
+        if (traveled >= distanceToTarget - NumericalTolerance)
+        {
+            train.Position = targetPosition - (int)train.Direction * NumericalTolerance;
+            train.Speed = newSpeed;
+            train.Phase = movement.Stage == TailTrackMovementStage.RunningOutbound
+                ? OperationalPhase.TailTrackOutbound
+                : OperationalPhase.TailTrackReturn;
+            movement.BrakingActive = true;
+            return;
+        }
+
+        train.Position += traveled * (int)train.Direction;
+        train.Speed = newSpeed;
+        train.Phase = movement.Stage == TailTrackMovementStage.RunningOutbound
+            ? OperationalPhase.TailTrackOutbound
+            : OperationalPhase.TailTrackReturn;
+    }
+
+    private void CompleteTailTrackLeg(
+        MutableTrain train,
+        TailTrackMovement movement,
+        double targetPosition)
+    {
+        train.Position = targetPosition;
+        train.Speed = 0;
+        train.Acceleration = 0;
+        movement.BrakingActive = false;
+        if (movement.Stage == TailTrackMovementStage.RunningOutbound)
+        {
+            movement.Stage = TailTrackMovementStage.WaitingAtVirtualNode;
+            train.Phase = OperationalPhase.Turning;
+            AddEvent(
+                SimulationEventType.TailTrackReached,
+                train,
+                null,
+                $"{train.ServiceRunId} 抵達尾軌虛擬節點 {movement.Layout.VirtualNodeId}，開始折返停等。",
+                train.Position,
+                0,
+                movement.Layout.VirtualNodeId);
+            return;
+        }
+
+        train.TailTrackMovement = null;
+        var station = Route.Stations[train.CurrentStationIndex];
+        var detailedTurnback = Infrastructure.TurnbackPlans.FirstOrDefault(plan =>
+            plan.Kind == TurnbackKind.AfterStation
+            && plan.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(detailedTurnback?.DeparturePlatformId))
+        {
+            train.PlatformId = detailedTurnback.DeparturePlatformId;
+        }
+        AssignStationTrack(train, train.PlatformId);
+        AddEvent(
+            SimulationEventType.Arrival,
+            train,
+            null,
+            $"{train.ServiceRunId} 由尾軌返回 {station.StationId}，停靠反方向月台 {train.PlatformId ?? "（未指定）"}。",
+            train.Position,
+            0,
+            train.TrackId);
+        train.Phase = OperationalPhase.Turning;
+        CompleteTurnaround(train);
+    }
+
+    private bool TryStartSpatialTurnbackMovement(
+        MutableTrain train,
+        SpatialReferencePointDefinition? point)
+    {
+        if (point?.Kind is not (SpatialReferencePointKind.BeforeStationTurnback
+            or SpatialReferencePointKind.CentralSidingTurnback))
+        {
+            return false;
+        }
+
+        var oneWayDistance = GetSpatialTurnbackOneWayDistance(point);
+        if (oneWayDistance <= NumericalTolerance)
+        {
+            return false;
+        }
+
+        var virtualPosition = train.Position + (int)train.Direction * oneWayDistance;
+        train.SpatialTurnbackMovement = new SpatialTurnbackMovement(point, virtualPosition, point.AdditionalTurnbackSeconds);
+        train.TrackId = GetSpatialTurnbackTrackId(point, "OUT");
+        train.Speed = 0;
+        train.Acceleration = 0;
+        train.Phase = OperationalPhase.SpatialTurnbackOutbound;
+        AddEvent(
+            SimulationEventType.TurnaroundStarted,
+            train,
+            null,
+            $"{train.ServiceRunId} 離開 {point.StationId}，依序通過橫渡線／折返線駛往虛擬折返點。",
+            train.Position,
+            0,
+            train.TrackId);
+        return true;
+    }
+
+    private void UpdateSpatialTurnbackMovement(MutableTrain train)
+    {
+        var movement = train.SpatialTurnbackMovement
+            ?? throw new InvalidOperationException("空間折返分段狀態遺失。 ");
+        if (movement.Stage == SpatialTurnbackMovementStage.WaitingAtVirtualTurnbackPoint)
+        {
+            movement.WaitRemainingSeconds = Math.Max(0, movement.WaitRemainingSeconds - FixedTimeStepSeconds);
+            train.Speed = 0;
+            train.Acceleration = MoveAccelerationTowardZero(train, train.Acceleration);
+            train.Phase = OperationalPhase.Turning;
+            if (movement.WaitRemainingSeconds > NumericalTolerance)
+            {
+                return;
+            }
+
+            PrepareTurnaround(train);
+            train.TrackId = GetSpatialTurnbackTrackId(movement.Point, "RETURN");
+            movement.Stage = SpatialTurnbackMovementStage.ReturningToStation;
+            movement.BrakingActive = false;
+            return;
+        }
+
+        var targetPosition = movement.Stage == SpatialTurnbackMovementStage.RunningOutbound
+            ? movement.VirtualTurnbackPositionMeters
+            : Route.Stations[train.CurrentStationIndex].PositionMeters;
+        UpdateSpatialTurnbackMovementTowardTarget(train, movement, targetPosition);
+    }
+
+    private void UpdateSpatialTurnbackMovementTowardTarget(
+        MutableTrain train,
+        SpatialTurnbackMovement movement,
+        double targetPosition)
+    {
+        var distanceToTarget = ForwardDistance(train.Direction, train.Position, targetPosition);
+        if (train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && distanceToTarget <= StationStopSnapToleranceMeters)
+        {
+            CompleteSpatialTurnbackLeg(train, movement, targetPosition);
+            return;
+        }
+
+        var performance = GetVehiclePerformance(train);
+        var outward = movement.Stage == SpatialTurnbackMovementStage.RunningOutbound;
+        var grade = movement.Point.MainlineGradePermille * 0.009;
+        var acceleration = outward
+            ? performance.AccelerationMetersPerSecondSquared + grade
+            : performance.AccelerationMetersPerSecondSquared - grade;
+        var braking = outward
+            ? performance.ServiceBrakingMetersPerSecondSquared - grade
+            : performance.ServiceBrakingMetersPerSecondSquared + grade;
+        if (acceleration <= 0 || braking <= 0)
+        {
+            throw new SimulationValidationException([
+                $"空間參考點「{movement.Point.Name}」的坡度與列車加減速度組合會使折返有效加速度或減速度不大於 0。"
+            ]);
+        }
+
+        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, movement.Point.SwitchSpeedLimitMetersPerSecond);
+        var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
+        if (desiredAcceleration > NumericalTolerance)
+        {
+            desiredAcceleration = acceleration;
+        }
+
+        if (movement.BrakingActive
+            || ShouldBeginStationBraking(train, distanceToTarget, desiredAcceleration, braking))
+        {
+            movement.BrakingActive = true;
+            desiredAcceleration = -braking;
+        }
+
+        if (ProfileMode == OperationProfileMode.RealisticOperations)
+        {
+            train.Acceleration = BrakingEnvelopeCalculator.MoveToward(
+                train.Acceleration,
+                desiredAcceleration,
+                performance.JerkMetersPerSecondCubed * FixedTimeStepSeconds);
+        }
+        else
+        {
+            train.Acceleration = desiredAcceleration;
+        }
+
+        var previousSpeed = train.Speed;
+        var newSpeed = Math.Max(0, train.Speed + train.Acceleration * FixedTimeStepSeconds);
+        newSpeed = Math.Min(newSpeed, permitted + 0.02);
+        var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
+        var remainingAfterMove = distanceToTarget - traveled;
+        if (newSpeed <= ArrivalSpeedToleranceMetersPerSecond
+            && remainingAfterMove <= StationStopSnapToleranceMeters)
+        {
+            CompleteSpatialTurnbackLeg(train, movement, targetPosition);
+            return;
+        }
+
+        if (traveled >= distanceToTarget - NumericalTolerance)
+        {
+            train.Position = targetPosition - (int)train.Direction * NumericalTolerance;
+            train.Speed = newSpeed;
+            movement.BrakingActive = true;
+        }
+        else
+        {
+            train.Position += traveled * (int)train.Direction;
+            train.Speed = newSpeed;
+        }
+
+        train.Phase = outward
+            ? OperationalPhase.SpatialTurnbackOutbound
+            : OperationalPhase.SpatialTurnbackReturn;
+    }
+
+    private void CompleteSpatialTurnbackLeg(
+        MutableTrain train,
+        SpatialTurnbackMovement movement,
+        double targetPosition)
+    {
+        train.Position = targetPosition;
+        train.Speed = 0;
+        train.Acceleration = 0;
+        movement.BrakingActive = false;
+        if (movement.Stage == SpatialTurnbackMovementStage.RunningOutbound)
+        {
+            movement.Stage = SpatialTurnbackMovementStage.WaitingAtVirtualTurnbackPoint;
+            train.Phase = OperationalPhase.Turning;
+            return;
+        }
+
+        train.SpatialTurnbackMovement = null;
+        var station = Route.Stations[train.CurrentStationIndex];
+        AssignStationTrack(train, train.PlatformId);
+        AddEvent(
+            SimulationEventType.Arrival,
+            train,
+            null,
+            $"{train.ServiceRunId} 由折返線返回 {station.StationId}。",
+            train.Position,
+            0,
+            train.TrackId);
+        train.Phase = OperationalPhase.Turning;
+        CompleteTurnaround(train);
+    }
+
+    private static double GetSpatialTurnbackOneWayDistance(SpatialReferencePointDefinition point)
+    {
+        var distance = point.DistanceFromStopToCrossoverMeters + point.CrossoverLengthMeters;
+        if (point.Kind == SpatialReferencePointKind.CentralSidingTurnback)
+        {
+            distance += point.DistanceFromCrossoverToTurnbackStopMeters;
+        }
+        return distance;
+    }
+
+    private static string GetSpatialTurnbackTrackId(SpatialReferencePointDefinition point, string leg) =>
+        $"TURNBACK:{point.ReferencePointId}:{leg}";
+
     private static double GetConfiguredStationDwellSeconds(
         SpatialReferencePointDefinition? point,
         TrainDirection direction,
@@ -1555,9 +2634,8 @@ public sealed class SimulationWorld
 
     private double CalculateSpatialTurnbackTravelSeconds(MutableTrain train, SpatialReferencePointDefinition point)
     {
-        var oneWayDistance = point.DistanceFromStopToCrossoverMeters + point.CrossoverLengthMeters;
-        if (point.Kind is SpatialReferencePointKind.AfterStationTurnback
-            or SpatialReferencePointKind.CentralSidingTurnback)
+        var oneWayDistance = GetSpatialTurnbackOneWayDistance(point);
+        if (point.Kind == SpatialReferencePointKind.AfterStationTurnback)
         {
             oneWayDistance += point.DistanceFromCrossoverToTurnbackStopMeters;
         }
@@ -1927,7 +3005,7 @@ public sealed class SimulationWorld
     {
         foreach (var train in _trains.Where(train => train.Active))
         {
-            _trajectory.Add(new TrajectorySample(
+            var sample = new TrajectorySample(
                 CurrentTimeSeconds,
                 train.VehicleId,
                 train.ServiceRunId,
@@ -1946,7 +3024,8 @@ public sealed class SimulationWorld
                 false,
                 train.VehicleTypeId,
                 train.PlatformId,
-                train.Constraints));
+                train.Constraints);
+            _traceStore.Record(sample);
         }
     }
 
@@ -1989,7 +3068,8 @@ public sealed class SimulationWorld
         double position,
         double speed,
         string? resourceId = null,
-        double? delaySeconds = null)
+        double? delaySeconds = null,
+        IReadOnlyList<string>? resourceIds = null)
     {
         var item = new SimulationEvent(
             CurrentTimeSeconds,
@@ -2008,9 +3088,14 @@ public sealed class SimulationWorld
             train?.PlatformId,
             resourceId,
             train?.PlannedDepartureTime,
-            delaySeconds);
+            delaySeconds,
+            resourceIds);
         _events.Add(item);
         _newEvents.Add(item);
+        if (train is not null)
+        {
+            _traceStore.MarkEvent(train.VehicleId, train.ServiceRunId);
+        }
     }
 
     private static double ForwardDistance(TrainDirection direction, double fromPosition, double toPosition) =>
@@ -2081,11 +3166,27 @@ public sealed class SimulationWorld
 
         public string? RoutePathId { get; set; }
 
+        public string? PendingDepartureTrackId { get; set; }
+
         public string? ExpectedDestinationPlatformId { get; set; }
 
         public double ReservedAtPosition { get; set; }
 
+        public bool HasDestinationPlatformReservation { get; set; }
+
+        public bool HasStationReservation { get; set; }
+
         public bool WaitingResourceEventEmitted { get; set; }
+
+        public string? OvertakeFacilityId { get; set; }
+
+        public string? OvertakenVehicleId { get; set; }
+
+        public string? WaitingForOvertakeFacilityId { get; set; }
+
+        public bool WaitingForOvertakeEventEmitted { get; set; }
+
+        public bool AwaitingPostPassRoute { get; set; }
 
         public bool ContinueAfterTerminal { get; set; }
 
@@ -2098,6 +3199,46 @@ public sealed class SimulationWorld
         public bool Completed { get; set; }
 
         public TerminalAction TerminalAction { get; set; }
+
+        public TailTrackMovement? TailTrackMovement { get; set; }
+
+        public SpatialTurnbackMovement? SpatialTurnbackMovement { get; set; }
+    }
+
+    private sealed class TailTrackMovement(
+        AfterStationTailTrackLayout layout,
+        double waitRemainingSeconds)
+    {
+        public AfterStationTailTrackLayout Layout { get; } = layout;
+        public double WaitRemainingSeconds { get; set; } = waitRemainingSeconds;
+        public TailTrackMovementStage Stage { get; set; } = TailTrackMovementStage.RunningOutbound;
+        public bool BrakingActive { get; set; }
+    }
+
+    private sealed class SpatialTurnbackMovement(
+        SpatialReferencePointDefinition point,
+        double virtualTurnbackPositionMeters,
+        double waitRemainingSeconds)
+    {
+        public SpatialReferencePointDefinition Point { get; } = point;
+        public double VirtualTurnbackPositionMeters { get; } = virtualTurnbackPositionMeters;
+        public double WaitRemainingSeconds { get; set; } = waitRemainingSeconds;
+        public SpatialTurnbackMovementStage Stage { get; set; } = SpatialTurnbackMovementStage.RunningOutbound;
+        public bool BrakingActive { get; set; }
+    }
+
+    private enum TailTrackMovementStage
+    {
+        RunningOutbound,
+        WaitingAtVirtualNode,
+        ReturningToStation
+    }
+
+    private enum SpatialTurnbackMovementStage
+    {
+        RunningOutbound,
+        WaitingAtVirtualTurnbackPoint,
+        ReturningToStation
     }
 
     private enum TerminalAction
@@ -2111,6 +3252,15 @@ public sealed class SimulationWorld
         string VehicleId,
         int ServiceNumber,
         TrainDirection Direction);
+
+    private readonly record struct PlatformRotationKey(
+        string StationId,
+        TrainDirection Direction);
+
+    private readonly record struct StationOvertakeSelection(
+        Station Station,
+        StationOvertakeFacilityDefinition Facility,
+        MutableTrain LocalTrain);
 
     private sealed class ScheduledObstacle(string vehicleId, double triggerTimeSeconds)
     {

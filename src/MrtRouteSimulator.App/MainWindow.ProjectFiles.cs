@@ -11,6 +11,7 @@ namespace MrtRouteSimulator.App;
 public partial class MainWindow
 {
     private const long MaximumProjectFileBytes = SimulationProjectFormat.MaximumJsonCharacters * 4L;
+    private const long MaximumFixedTimetableArchiveBytes = FixedTimetableArchiveFormat.MaximumJsonCharacters * 4L;
 
     private void SaveProject_Click(object sender, RoutedEventArgs e)
     {
@@ -64,8 +65,8 @@ public partial class MainWindow
         HideValidation();
         var dialog = new OpenFileDialog
         {
-            Title = "讀取 MRT 模擬專案",
-            Filter = "MRT 模擬專案 (*.mrtsim.json)|*.mrtsim.json|JSON 檔案 (*.json)|*.json",
+            Title = "讀取 MRT 模擬專案或固定時刻表",
+            Filter = "MRT 模擬專案 (*.mrtsim.json)|*.mrtsim.json|固定時刻表封存 (*.mrttimetable.json)|*.mrttimetable.json|JSON 檔案 (*.json)|*.json",
             DefaultExt = ".mrtsim.json",
             CheckFileExists = true,
             Multiselect = false
@@ -79,18 +80,27 @@ public partial class MainWindow
         try
         {
             var fileInfo = new FileInfo(dialog.FileName);
-            if (fileInfo.Length > MaximumProjectFileBytes)
+            if (fileInfo.Length > MaximumFixedTimetableArchiveBytes)
             {
-                throw new SimulationValidationException([$"存檔超過 {MaximumProjectFileBytes / 1_000_000} MB 讀取上限。"]);
+                throw new SimulationValidationException([$"存檔超過 {MaximumFixedTimetableArchiveBytes / 1_000_000} MB 讀取上限。"]);
             }
 
             var json = File.ReadAllText(dialog.FileName, Encoding.UTF8);
-            var document = SimulationProjectFormat.Deserialize(json);
+            var archive = FixedTimetableArchiveFormat.IsFixedTimetableArchive(json)
+                ? FixedTimetableArchiveFormat.Deserialize(json)
+                : null;
+            var document = archive?.Project ?? SimulationProjectFormat.Deserialize(json);
             PausePlayback();
             ClearResults();
             ApplyProjectDocument(document);
+            if (archive is not null)
+            {
+                DisplayFixedTimetableArchive(archive);
+            }
             HideValidation();
-            StatusTextBlock.Text = $"專案已讀取：{dialog.FileName}；請按「計算並建立模擬」。";
+            StatusTextBlock.Text = archive is null
+                ? $"專案已讀取：{dialog.FileName}；請按「計算並建立模擬」。"
+                : $"固定時刻表已讀取：{dialog.FileName}；可直接查看完成模擬的凍結結果。";
         }
         catch (SimulationValidationException exception)
         {
@@ -106,6 +116,69 @@ public partial class MainWindow
         {
             ShowValidation([$"沒有權限讀取專案：{exception.Message}"]);
             StatusTextBlock.Text = "讀取專案失敗；目前設定未變更。";
+        }
+    }
+
+    private void ExportFixedTimetableArchive_Click(object sender, RoutedEventArgs e)
+    {
+        HideValidation();
+        try
+        {
+            if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null
+                || _activeSimulationProjectDocument is null)
+            {
+                throw new InvalidOperationException("請先建立 V2 寫實營運模擬。固定時刻表只會封存 SimulationWorld 的實際結果。");
+            }
+
+            if (!_v2World.IsComplete)
+            {
+                throw new InvalidOperationException("請先讓所有列車完成營運循環，再匯出固定時刻表。未完成的動態結果不可封存為固定時刻表。");
+            }
+
+            var entries = OperationsTimetable.Build(
+                _route,
+                _v2DispatchPlan,
+                _plannedTimetableEvents,
+                _v2World.Events);
+            var archive = FixedTimetableArchiveFormat.Create(_activeSimulationProjectDocument, entries);
+            var json = FixedTimetableArchiveFormat.Serialize(archive);
+            var dialog = new SaveFileDialog
+            {
+                Title = "匯出完成後固定時刻表",
+                Filter = "固定時刻表封存 (*.mrttimetable.json)|*.mrttimetable.json|JSON 檔案 (*.json)|*.json",
+                DefaultExt = ".mrttimetable.json",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = $"{SanitizeFileName(archive.Project.RouteName)}-固定時刻表.mrttimetable.json"
+            };
+            if (dialog.ShowDialog(this) != true)
+            {
+                StatusTextBlock.Text = "已取消匯出固定時刻表；原檔案未變更。";
+                return;
+            }
+
+            WriteProjectAtomically(dialog.FileName, json);
+            StatusTextBlock.Text = $"固定時刻表已匯出：{dialog.FileName}";
+        }
+        catch (SimulationValidationException exception)
+        {
+            ShowValidation(exception.Errors);
+            StatusTextBlock.Text = "固定時刻表驗證未通過，未寫入檔案。";
+        }
+        catch (InvalidOperationException exception)
+        {
+            ShowValidation([exception.Message]);
+            StatusTextBlock.Text = "無法匯出固定時刻表。";
+        }
+        catch (IOException exception)
+        {
+            ShowValidation([$"無法匯出固定時刻表：{exception.Message}"]);
+            StatusTextBlock.Text = "固定時刻表匯出失敗。";
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            ShowValidation([$"沒有權限匯出固定時刻表：{exception.Message}"]);
+            StatusTextBlock.Text = "固定時刻表匯出失敗。";
         }
     }
 
@@ -175,7 +248,8 @@ public partial class MainWindow
             engineKind);
         var vehicleTypes = VehicleTypeRows.Select(row => new ProjectVehicleType(
             row.Id, row.Name, row.LengthMeters, row.MaxSpeedKmh / 3.6, row.Acceleration,
-            row.ServiceBrake, row.EmergencyBrake, row.Jerk, row.TractionDecay, row.CoastingDeceleration)).ToArray();
+            row.ServiceBrake, row.EmergencyBrake, row.Jerk, row.TractionDecay, row.CoastingDeceleration,
+            EmptyToNull(row.DefaultStopPatternId))).ToArray();
         var serviceTypes = ServiceTypeRows.Select(row => new ProjectServiceType(
             row.Id, row.Name, row.ColorHex, row.RunPrefix, EmptyToNull(row.DefaultStopPatternId),
             EmptyToNull(row.DefaultVehicleTypeId), row.Priority, row.CanRequestOvertake,
@@ -210,8 +284,6 @@ public partial class MainWindow
             operations,
             speedLimits,
             simulation,
-            null,
-            null,
             vehicleTypes,
             serviceTypes,
             stopPatterns,

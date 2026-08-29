@@ -16,7 +16,8 @@ public sealed class VehicleTypeDefinition
         double emergencyBrakeDecelerationMetersPerSecondSquared,
         double jerkMetersPerSecondCubed,
         double tractionDecayPerSecond,
-        double coastingDecelerationMetersPerSecondSquared)
+        double coastingDecelerationMetersPerSecondSquared,
+        string? defaultStopPatternId = null)
     {
         var errors = new List<string>();
         Id = NormalizeRequired(id, "車型 ID", errors);
@@ -43,6 +44,7 @@ public sealed class VehicleTypeDefinition
         JerkMetersPerSecondCubed = jerkMetersPerSecondCubed;
         TractionDecayPerSecond = tractionDecayPerSecond;
         CoastingDecelerationMetersPerSecondSquared = coastingDecelerationMetersPerSecondSquared;
+        DefaultStopPatternId = NormalizeOptional(defaultStopPatternId, "車型預設停站模式 ID", errors);
         RouteValidator.ThrowIfAny(errors);
     }
 
@@ -56,6 +58,7 @@ public sealed class VehicleTypeDefinition
     public double JerkMetersPerSecondCubed { get; }
     public double TractionDecayPerSecond { get; }
     public double CoastingDecelerationMetersPerSecondSquared { get; }
+    public string? DefaultStopPatternId { get; }
 
     // 常用中文領域名稱的相容別名。
     public double DecelerationMetersPerSecondSquared => ServiceBrakeDecelerationMetersPerSecondSquared;
@@ -118,7 +121,8 @@ public sealed class ServiceTypeDefinition
 public enum StopPatternAction
 {
     Stop,
-    Pass
+    Pass,
+    Turnback
 }
 
 public sealed class StopPatternInstruction
@@ -133,7 +137,7 @@ public sealed class StopPatternInstruction
         StationId = NormalizeRequired(stationId, "停站模式車站 ID", errors);
         if (!Enum.IsDefined(action))
         {
-            errors.Add("停站模式動作只能是 Stop 或 Pass。");
+            errors.Add("停站模式動作只能是 Stop、Pass 或 Turnback。");
         }
 
         if (dwellTimeSeconds is not null)
@@ -163,7 +167,7 @@ public sealed class StopPatternInstruction
 
     public string StationId { get; }
     public StopPatternAction Action { get; }
-    public bool IsStop => Action == StopPatternAction.Stop;
+    public bool IsStop => Action is StopPatternAction.Stop or StopPatternAction.Turnback;
     public bool Stop => IsStop;
     public double? DwellTimeSeconds { get; }
     public double? PassingSpeedLimitMetersPerSecond { get; }
@@ -549,7 +553,11 @@ public static class DispatchPlanExpander
             var candidate = ordered[index];
             var service = Resolve(serviceCatalog, candidate.ServiceTypeId, "服務類型", errors);
             var vehicleTypeId = candidate.VehicleTypeId ?? service?.DefaultVehicleTypeId;
-            var stopPatternId = candidate.StopPatternId ?? service?.DefaultStopPatternId;
+            var vehicle = vehicleTypeId is not null && vehicleCatalog is not null
+                && vehicleCatalog.TryGetValue(vehicleTypeId, out var configuredVehicle)
+                ? configuredVehicle
+                : null;
+            var stopPatternId = candidate.StopPatternId ?? vehicle?.DefaultStopPatternId ?? service?.DefaultStopPatternId;
             RequireReference(vehicleCatalog, vehicleTypeId, "車型", errors);
             RequireReference(stopCatalog, stopPatternId, "停站模式", errors);
             if (service is null && serviceCatalog is not null) errors.Add($"找不到服務類型「{candidate.ServiceTypeId}」。");

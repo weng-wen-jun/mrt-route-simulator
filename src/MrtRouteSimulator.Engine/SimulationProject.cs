@@ -49,32 +49,12 @@ public sealed record ProjectRunSettings(
     BrakingEstimationMode BrakingEstimationMode,
     SimulationEngineKind EngineKind = SimulationEngineKind.V2RealisticOperations);
 
-public sealed record ProjectStationServiceInstruction(
-    string StationId,
-    StationServiceMode Mode,
-    double? SpeedLimitMetersPerSecond);
-
-public sealed record ProjectServicePattern(
-    string PatternId,
-    string PatternName,
-    ProjectStationServiceInstruction[] Instructions);
-
-public sealed record ProjectServiceRunPlan(
-    string VehicleId,
-    int ServiceNumber,
-    TrainDirection Direction,
-    string ServiceClassId,
-    string PatternId,
-    string VehicleTypeId = "DEFAULT_VEHICLE",
-    string? OriginPlatformId = null,
-    double? PlannedDepartureTimeSeconds = null,
-    string? ExplicitServiceRunId = null);
-
 public sealed record ProjectVehicleType(
     string Id, string DisplayName, double LengthMeters, double MaxSpeedMetersPerSecond,
     double AccelerationMetersPerSecondSquared, double ServiceBrakeDecelerationMetersPerSecondSquared,
     double EmergencyBrakeDecelerationMetersPerSecondSquared, double JerkMetersPerSecondCubed,
-    double TractionDecayPerSecond, double CoastingDecelerationMetersPerSecondSquared);
+    double TractionDecayPerSecond, double CoastingDecelerationMetersPerSecondSquared,
+    string? DefaultStopPatternId = null);
 
 public sealed record ProjectServiceType(
     string Id, string DisplayName, string ColorHex, string RunPrefix,
@@ -126,6 +106,18 @@ public sealed record ProjectStationYard(
     string[]? RoutePathIds = null, ProjectTurnbackPlan[]? TurnbackPlans = null,
     PlatformAllocationStrategy PlatformAllocationStrategy = PlatformAllocationStrategy.Automatic);
 
+public sealed record ProjectStationOvertakeFacility(
+    string FacilityId,
+    string StationId,
+    TrackDirection Direction,
+    string MainlineTrackSegmentId,
+    string LocalPlatformId,
+    string ExpressPlatformId,
+    string LocalTrackSegmentId,
+    string ExpressTrackSegmentId,
+    double EntryPositionMeters,
+    string[]? ResourceIds = null);
+
 public sealed record ProjectSpatialReferencePoint(
     string ReferencePointId,
     string StationId,
@@ -161,10 +153,45 @@ public sealed record ProjectSpatialReferencePoint(
     double StationReverseLaterCruiseSpeedMetersPerSecond = 80 / 3.6,
     double StationReverseSafetyFactor = 1.5);
 
+/// <summary>五類站場型式的新建站預設參數；不含實體站識別碼，避免範本回寫既有站場覆寫。</summary>
+public sealed record ProjectSpatialReferencePointTemplate(
+    SpatialReferencePointKind Kind,
+    bool AlternateBerthing = false,
+    double MainlineGradePermille = 0,
+    double BranchlineGradePermille = 0,
+    double DistanceFromStopToCrossoverMeters = 100,
+    double CrossoverLengthMeters = 100,
+    double DistanceFromCrossoverToTurnbackStopMeters = 100,
+    double TurnbackDwellSeconds = 30,
+    double SwitchSpeedLimitMetersPerSecond = 40 / 3.6,
+    double MainlineApproachCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double BranchlineApproachCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double MainlineSafetyFactor = 1.5,
+    double BranchlineSafetyFactor = 1.5,
+    double MainlineTrafficRatio = 0.5,
+    double StationForwardGradeInPermille = 0,
+    double StationForwardGradeOutPermille = 0,
+    double StationForwardDistanceToSignalMeters = 15,
+    double StationForwardOverlapMeters = 300,
+    double StationForwardDwellSeconds = 30,
+    double StationForwardEarlierCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double StationForwardLaterCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double StationForwardSafetyFactor = 1.5,
+    double StationReverseGradeInPermille = 0,
+    double StationReverseGradeOutPermille = 0,
+    double StationReverseDistanceToSignalMeters = 15,
+    double StationReverseOverlapMeters = 300,
+    double StationReverseDwellSeconds = 30,
+    double StationReverseEarlierCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double StationReverseLaterCruiseSpeedMetersPerSecond = 80 / 3.6,
+    double StationReverseSafetyFactor = 1.5);
+
 public sealed record ProjectInfrastructure(
     ProjectStationYard[] StationYards, ProjectTrackSegment[] TrackSegments, ProjectRoutePath[] Paths,
     ProjectTurnbackPlan[]? TurnbackPlans = null,
-    ProjectSpatialReferencePoint[]? SpatialReferencePoints = null);
+    ProjectSpatialReferencePoint[]? SpatialReferencePoints = null,
+    ProjectStationOvertakeFacility[]? StationOvertakeFacilities = null,
+    ProjectSpatialReferencePointTemplate[]? SpatialReferencePointTemplates = null);
 
 public sealed record SimulationProjectDocument(
     int SchemaVersion,
@@ -175,8 +202,6 @@ public sealed record SimulationProjectDocument(
     ProjectOperationalSettings Operations,
     ProjectSpeedLimit[] SpeedLimits,
     ProjectRunSettings Simulation,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProjectServicePattern[]? ServicePatterns = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] ProjectServiceRunPlan[]? ServiceRuns = null,
     ProjectVehicleType[]? VehicleTypes = null,
     ProjectServiceType[]? ServiceTypes = null,
     ProjectStopPattern[]? StopPatterns = null,
@@ -188,6 +213,8 @@ public static class SimulationProjectFormat
     public const int CurrentSchemaVersion = 7;
 
     public const int MaximumJsonCharacters = 2_000_000;
+
+    private static readonly string[] LegacyExecutionPropertyNames = ["servicePatterns", "serviceRuns"];
 
     private static readonly JsonSerializerOptions SerializerOptions = CreateSerializerOptions();
 
@@ -212,6 +239,7 @@ public static class SimulationProjectFormat
 
         try
         {
+            RejectLegacyExecutionSources(json);
             var document = JsonSerializer.Deserialize<SimulationProjectDocument>(json, SerializerOptions)
                 ?? throw new SimulationValidationException(["無法讀取存檔內容。"]);
             document = Normalize(document);
@@ -353,6 +381,18 @@ public static class SimulationProjectFormat
                 item.Id, item.DisplayName, item.ColorHex, item.RunPrefix, item.DefaultStopPatternId,
                 item.DefaultVehicleTypeId, item.Priority, item.CanRequestOvertake, item.PreferredPlatformIds)).ToArray();
             var stopCatalog = stopPatterns.Select(ToRuntime).ToArray();
+            var knownStopPatternIds = stopCatalog.Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var unknownDefaultPatterns = vehicleCatalog
+                .Where(item => item.DefaultStopPatternId is { } patternId && !knownStopPatternIds.Contains(patternId))
+                .Select(item => $"車型「{item.Id}」={item.DefaultStopPatternId}")
+                .Concat(serviceCatalog
+                    .Where(item => item.DefaultStopPatternId is { } patternId && !knownStopPatternIds.Contains(patternId))
+                    .Select(item => $"服務類型「{item.Id}」={item.DefaultStopPatternId}"))
+                .ToArray();
+            if (unknownDefaultPatterns.Length > 0)
+            {
+                throw new SimulationValidationException(["預設停站模式引用不存在：" + string.Join("、", unknownDefaultPatterns)]);
+            }
             var resolvedDispatch = DispatchPlanExpander.Expand(ToRuntime(document.Dispatch!), vehicleCatalog, serviceCatalog, stopCatalog);
             var infrastructure = ToRuntime(document.Infrastructure!, route);
             infrastructure.Validate();
@@ -411,13 +451,20 @@ public static class SimulationProjectFormat
                     pattern.DisplayName,
                     pattern.Instructions.Select(instruction => new StationServiceInstruction(
                         instruction.StationId,
-                        instruction.Action == StopPatternAction.Stop ? StationServiceMode.Stop : StationServiceMode.Pass,
+                        instruction.Action switch
+                        {
+                            StopPatternAction.Stop => StationServiceMode.Stop,
+                            StopPatternAction.Pass => StationServiceMode.Pass,
+                            StopPatternAction.Turnback => StationServiceMode.Turnback,
+                            _ => throw new SimulationValidationException(["停站模式動作無效。"])
+                        },
                         instruction.PassingSpeedLimitMetersPerSecond,
                         instruction.DwellTimeSeconds)).ToArray())),
                 serviceRunPlans: null,
                 resolvedDispatch,
                 vehicleCatalog,
-                infrastructure);
+                infrastructure,
+                serviceTypes: serviceCatalog);
         }
         catch (SimulationValidationException exception)
         {
@@ -437,85 +484,51 @@ public static class SimulationProjectFormat
         return options;
     }
 
+    private static void RejectLegacyExecutionSources(string json)
+    {
+        using var jsonDocument = JsonDocument.Parse(json);
+        if (jsonDocument.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        var legacyNames = jsonDocument.RootElement.EnumerateObject()
+            .Where(property => LegacyExecutionPropertyNames.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
+            .Select(property => property.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (legacyNames.Length > 0)
+        {
+            throw new SimulationValidationException([
+                $"Schema {CurrentSchemaVersion} 不支援舊執行資料來源：{string.Join("、", legacyNames)}。請改用 VehicleTypes、ServiceTypes、StopPatterns 與 Dispatch。"
+            ]);
+        }
+    }
+
     private static SimulationProjectDocument Normalize(SimulationProjectDocument document)
     {
         var infrastructure = document.Infrastructure;
         if (infrastructure is null && TryBuildRoute(document, out var route))
             infrastructure = FromRuntime(InfrastructureGraph.CreateLegacy(route));
         else if (infrastructure is not null)
+        {
             infrastructure = infrastructure with
             {
-                SpatialReferencePoints = infrastructure.SpatialReferencePoints ?? []
+                SpatialReferencePoints = infrastructure.SpatialReferencePoints ?? [],
+                StationOvertakeFacilities = infrastructure.StationOvertakeFacilities ?? [],
+                SpatialReferencePointTemplates = infrastructure.SpatialReferencePointTemplates
+                    ?? SpatialReferencePointTemplateDefinition.CreateDefaults().Select(FromRuntime).ToArray()
             };
+            if (TryBuildRoute(document, out route))
+            {
+                infrastructure = FromRuntime(ToRuntime(infrastructure, route));
+            }
+        }
 
         return document with
         {
             Infrastructure = infrastructure
         };
-    }
-
-    private static ProjectVehicleType DefaultVehicle(SimulationProjectDocument document) => new(
-        "DEFAULT_VEHICLE", "預設車型", document.Operations?.TrainLengthMeters ?? 140,
-        document.Train?.MaxSpeedMetersPerSecond ?? 22.22,
-        document.Train?.AccelerationMetersPerSecondSquared ?? 1,
-        document.Train?.DecelerationMetersPerSecondSquared ?? 1,
-        document.Operations?.EmergencyBrakingMetersPerSecondSquared ?? 1.2,
-        document.Operations?.JerkMetersPerSecondCubed ?? 0.8,
-        document.Operations?.TractionFadeRatio ?? 0,
-        0.05);
-
-    private static ProjectStopPattern[] BuildStopPatterns(SimulationProjectDocument document, ProjectServicePattern[] patterns)
-    {
-        var values = new List<ProjectStopPattern>
-        {
-            new("ALL_STOP", "普通車（全停站）", (document.Stations ?? []).Select(station =>
-                new ProjectStopPatternInstruction(station.StationId, StopPatternAction.Stop)).ToArray())
-        };
-        values.AddRange(patterns.Where(item => item is not null && item.Instructions is { Length: > 0 })
-            .Select(item => new ProjectStopPattern(item.PatternId, item.PatternName,
-                item.Instructions.Select(instruction => new ProjectStopPatternInstruction(
-                    instruction.StationId,
-                    instruction.Mode == StationServiceMode.Stop ? StopPatternAction.Stop : StopPatternAction.Pass,
-                    null, instruction.SpeedLimitMetersPerSecond)).ToArray())));
-        return values.GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase).Select(group => group.First()).ToArray();
-    }
-
-    private static ProjectServiceType[] BuildServiceTypes(ProjectServiceRunPlan[] runs, ProjectStopPattern[] stops, ProjectVehicleType[] vehicles)
-    {
-        var values = new List<ProjectServiceType> { new("LOCAL", "普通車", "#4472C4", "普通", "ALL_STOP", vehicles[0].Id) };
-        foreach (var run in runs.Where(item => item is not null))
-        {
-            var id = string.IsNullOrWhiteSpace(run.ServiceClassId) ? "LOCAL" : run.ServiceClassId.Trim();
-            if (values.Any(item => item.Id.Equals(id, StringComparison.OrdinalIgnoreCase))) continue;
-            var stopId = stops.FirstOrDefault(item => item.Id.Equals(run.PatternId, StringComparison.OrdinalIgnoreCase))?.Id ?? "ALL_STOP";
-            values.Add(new ProjectServiceType(id, id, "#4472C4", id, stopId, vehicles[0].Id));
-        }
-        return values.ToArray();
-    }
-
-    private static ProjectDispatchPlan BuildDispatch(SimulationProjectDocument document, ProjectServiceRunPlan[] runs, ProjectServiceType[] services, ProjectStopPattern[] stops, ProjectVehicleType[] vehicles)
-    {
-        var serviceId = services[0].Id;
-        if (runs.Length > 0)
-        {
-            var rows = runs.Select((item, index) => new ProjectManualTimetableRow(
-                item.PlannedDepartureTimeSeconds ?? document.Simulation.StartClockSeconds + (document.Simulation.HeadwaySeconds ?? 90) * index,
-                item.Direction,
-                services.FirstOrDefault(service => service.Id.Equals(item.ServiceClassId, StringComparison.OrdinalIgnoreCase))?.Id ?? serviceId,
-                item.VehicleTypeId,
-                stops.FirstOrDefault(stop => stop.Id.Equals(item.PatternId, StringComparison.OrdinalIgnoreCase))?.Id ?? "ALL_STOP",
-                item.OriginPlatformId, item.VehicleId, item.ExplicitServiceRunId,
-                ContinueAfterTerminal: true)).ToArray();
-            return new ProjectDispatchPlan(DispatchPlanningMode.ManualTimetable, VehicleAssignmentMode.Automatic, [], rows);
-        }
-
-        var headway = document.Simulation.HeadwaySeconds ?? 90;
-        var count = Math.Max(1, document.Simulation.TrainCount);
-        var outbound = Math.Max(1, (count + 1) / 2);
-        var inbound = Math.Max(1, count / 2);
-        return new ProjectDispatchPlan(DispatchPlanningMode.SimpleHeadway, VehicleAssignmentMode.Automatic,
-            [new ProjectHeadwayPlan(TrainDirection.Outbound, document.Simulation.StartClockSeconds, headway, outbound, serviceId, vehicles[0].Id, "ALL_STOP", ContinueAfterTerminal: true),
-             new ProjectHeadwayPlan(TrainDirection.Inbound, document.Simulation.StartClockSeconds, headway, inbound, serviceId, vehicles[0].Id, "ALL_STOP", ContinueAfterTerminal: true)], []);
     }
 
     private static bool TryBuildRoute(SimulationProjectDocument document, out Route route)
@@ -533,7 +546,7 @@ public static class SimulationProjectFormat
     private static VehicleTypeDefinition ToRuntime(ProjectVehicleType item) => new(item.Id, item.DisplayName, item.LengthMeters,
         item.MaxSpeedMetersPerSecond, item.AccelerationMetersPerSecondSquared, item.ServiceBrakeDecelerationMetersPerSecondSquared,
         item.EmergencyBrakeDecelerationMetersPerSecondSquared, item.JerkMetersPerSecondCubed, item.TractionDecayPerSecond,
-        item.CoastingDecelerationMetersPerSecondSquared);
+        item.CoastingDecelerationMetersPerSecondSquared, item.DefaultStopPatternId);
 
     private static StopPatternDefinition ToRuntime(ProjectStopPattern item) => new(item.Id, item.DisplayName,
         item.Instructions.Select(instruction => new StopPatternInstruction(instruction.StationId, instruction.Action,
@@ -559,7 +572,19 @@ public static class SimulationProjectFormat
             track.SpeedLimitMetersPerSecond, track.ConflictResourceIds)),
         item.Paths.Select(path => new RoutePathDefinition(path.PathId, path.FromPlatformId, path.ToPlatformId, path.Direction,
             path.TrackSegmentIds, path.ResourceIds)), item.TurnbackPlans?.Select(ToRuntime),
-        (item.SpatialReferencePoints ?? []).Select(ToRuntime));
+        (item.SpatialReferencePoints ?? []).Select(ToRuntime),
+        (item.StationOvertakeFacilities ?? []).Select(item => new StationOvertakeFacilityDefinition(
+            item.FacilityId,
+            item.StationId,
+            item.Direction,
+            item.MainlineTrackSegmentId,
+            item.LocalPlatformId,
+            item.ExpressPlatformId,
+            item.LocalTrackSegmentId,
+            item.ExpressTrackSegmentId,
+            item.EntryPositionMeters,
+            item.ResourceIds)),
+        (item.SpatialReferencePointTemplates ?? []).Select(ToRuntime));
 
     private static TurnbackPlanDefinition ToRuntime(ProjectTurnbackPlan item) => new(item.TurnbackId, item.Name, item.StationId, item.Kind,
         item.ArrivalPlatformId, item.DeparturePlatformId, item.TrackSegmentIds, item.ResourceIds, item.TurnbackTimeSeconds);
@@ -567,6 +592,22 @@ public static class SimulationProjectFormat
     private static SpatialReferencePointDefinition ToRuntime(ProjectSpatialReferencePoint item) => new(
         item.ReferencePointId, item.StationId, item.Name, item.Kind, item.AlternateBerthing,
         item.MainlineGradePermille, item.BranchlineGradePermille,
+        item.DistanceFromStopToCrossoverMeters, item.CrossoverLengthMeters,
+        item.DistanceFromCrossoverToTurnbackStopMeters, item.TurnbackDwellSeconds,
+        item.SwitchSpeedLimitMetersPerSecond, item.MainlineApproachCruiseSpeedMetersPerSecond,
+        item.BranchlineApproachCruiseSpeedMetersPerSecond, item.MainlineSafetyFactor,
+        item.BranchlineSafetyFactor, item.MainlineTrafficRatio,
+        item.StationForwardGradeInPermille, item.StationForwardGradeOutPermille,
+        item.StationForwardDistanceToSignalMeters, item.StationForwardOverlapMeters,
+        item.StationForwardDwellSeconds, item.StationForwardEarlierCruiseSpeedMetersPerSecond,
+        item.StationForwardLaterCruiseSpeedMetersPerSecond, item.StationForwardSafetyFactor,
+        item.StationReverseGradeInPermille, item.StationReverseGradeOutPermille,
+        item.StationReverseDistanceToSignalMeters, item.StationReverseOverlapMeters,
+        item.StationReverseDwellSeconds, item.StationReverseEarlierCruiseSpeedMetersPerSecond,
+        item.StationReverseLaterCruiseSpeedMetersPerSecond, item.StationReverseSafetyFactor);
+
+    private static SpatialReferencePointTemplateDefinition ToRuntime(ProjectSpatialReferencePointTemplate item) => new(
+        item.Kind, item.AlternateBerthing, item.MainlineGradePermille, item.BranchlineGradePermille,
         item.DistanceFromStopToCrossoverMeters, item.CrossoverLengthMeters,
         item.DistanceFromCrossoverToTurnbackStopMeters, item.TurnbackDwellSeconds,
         item.SwitchSpeedLimitMetersPerSecond, item.MainlineApproachCruiseSpeedMetersPerSecond,
@@ -592,7 +633,19 @@ public static class SimulationProjectFormat
             track.ConflictResourceIds.ToArray())).ToArray(),
         graph.Paths.Select(path => new ProjectRoutePath(path.PathId, path.FromPlatformId, path.ToPlatformId, path.Direction,
             path.TrackSegmentIds.ToArray(), path.ResourceIds.ToArray())).ToArray(), graph.TurnbackPlans.Select(FromRuntime).ToArray(),
-        graph.SpatialReferencePoints.Select(FromRuntime).ToArray());
+         graph.SpatialReferencePoints.Select(FromRuntime).ToArray(),
+         graph.StationOvertakeFacilities.Select(facility => new ProjectStationOvertakeFacility(
+            facility.FacilityId,
+            facility.StationId,
+            facility.Direction,
+            facility.MainlineTrackSegmentId,
+            facility.LocalPlatformId,
+            facility.ExpressPlatformId,
+            facility.LocalTrackSegmentId,
+            facility.ExpressTrackSegmentId,
+             facility.EntryPositionMeters,
+             facility.ResourceIds.ToArray())).ToArray(),
+         graph.SpatialReferencePointTemplates.Select(FromRuntime).ToArray());
 
     private static ProjectTurnbackPlan FromRuntime(TurnbackPlanDefinition item) => new(item.TurnbackId, item.Name, item.StationId, item.Kind,
         item.ArrivalPlatformId, item.DeparturePlatformId, item.TrackSegmentIds.ToArray(), item.ResourceIds.ToArray(), item.TurnbackTimeSeconds);
@@ -600,6 +653,22 @@ public static class SimulationProjectFormat
     private static ProjectSpatialReferencePoint FromRuntime(SpatialReferencePointDefinition item) => new(
         item.ReferencePointId, item.StationId, item.Name, item.Kind, item.AlternateBerthing,
         item.MainlineGradePermille, item.BranchlineGradePermille,
+        item.DistanceFromStopToCrossoverMeters, item.CrossoverLengthMeters,
+        item.DistanceFromCrossoverToTurnbackStopMeters, item.TurnbackDwellSeconds,
+        item.SwitchSpeedLimitMetersPerSecond, item.MainlineApproachCruiseSpeedMetersPerSecond,
+        item.BranchlineApproachCruiseSpeedMetersPerSecond, item.MainlineSafetyFactor,
+        item.BranchlineSafetyFactor, item.MainlineTrafficRatio,
+        item.StationForwardGradeInPermille, item.StationForwardGradeOutPermille,
+        item.StationForwardDistanceToSignalMeters, item.StationForwardOverlapMeters,
+        item.StationForwardDwellSeconds, item.StationForwardEarlierCruiseSpeedMetersPerSecond,
+        item.StationForwardLaterCruiseSpeedMetersPerSecond, item.StationForwardSafetyFactor,
+        item.StationReverseGradeInPermille, item.StationReverseGradeOutPermille,
+        item.StationReverseDistanceToSignalMeters, item.StationReverseOverlapMeters,
+        item.StationReverseDwellSeconds, item.StationReverseEarlierCruiseSpeedMetersPerSecond,
+        item.StationReverseLaterCruiseSpeedMetersPerSecond, item.StationReverseSafetyFactor);
+
+    private static ProjectSpatialReferencePointTemplate FromRuntime(SpatialReferencePointTemplateDefinition item) => new(
+        item.Kind, item.AlternateBerthing, item.MainlineGradePermille, item.BranchlineGradePermille,
         item.DistanceFromStopToCrossoverMeters, item.CrossoverLengthMeters,
         item.DistanceFromCrossoverToTurnbackStopMeters, item.TurnbackDwellSeconds,
         item.SwitchSpeedLimitMetersPerSecond, item.MainlineApproachCruiseSpeedMetersPerSecond,

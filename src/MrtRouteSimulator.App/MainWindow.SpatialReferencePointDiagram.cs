@@ -15,12 +15,23 @@ public partial class MainWindow
         double canvasWidth,
         double canvasHeight)
     {
-        if (_route is null || SpatialReferencePointRows.Count == 0)
+        if (_route is null)
         {
             return;
         }
 
-        foreach (var point in SpatialReferencePointRows)
+        IEnumerable<SpatialReferencePointInputRow> referencePoints = SpatialReferencePointRows.Count == 0
+            ? GetCompleteSpatialReferencePointRows()
+            : SpatialReferencePointRows;
+        if (!referencePoints.Any())
+        {
+            return;
+        }
+
+        var explicitTailTrackStations = GetAfterStationTailTrackVisualLayouts()
+            .Select(item => item.Station.StationId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var point in referencePoints)
         {
             var stationIndex = _route.Stations.ToList().FindIndex(station =>
                 station.StationId.Equals(point.StationId, StringComparison.OrdinalIgnoreCase));
@@ -46,6 +57,11 @@ public partial class MainWindow
                 _ => Color.FromRgb(42, 111, 162)
             };
             var tooltip = BuildSpatialReferencePointToolTip(point);
+
+            if (point.Kind == "站後折返" && explicitTailTrackStations.Contains(point.StationId))
+            {
+                continue;
+            }
 
             switch (point.Kind)
             {
@@ -161,12 +177,39 @@ public partial class MainWindow
         double outboundY,
         double inboundY)
     {
+        if (TryGetAfterStationTailTrackTrainPosition(
+                state,
+                left,
+                trackWidth,
+                outboundY,
+                inboundY,
+                out var tailTrackPosition))
+        {
+            return tailTrackPosition;
+        }
+
+        if (TryGetSpatialTurnbackTrainPosition(
+                state,
+                defaultX,
+                defaultY,
+                left,
+                trackWidth,
+                outboundY,
+                inboundY,
+                out var spatialTurnbackPosition))
+        {
+            return spatialTurnbackPosition;
+        }
+
         if (_route is null || state.Phase != OperationalPhase.Turning)
         {
             return (defaultX, defaultY);
         }
 
-        var point = SpatialReferencePointRows.FirstOrDefault(row =>
+        IEnumerable<SpatialReferencePointInputRow> referencePoints = SpatialReferencePointRows.Count == 0
+            ? GetCompleteSpatialReferencePointRows()
+            : SpatialReferencePointRows;
+        var point = referencePoints.FirstOrDefault(row =>
             row.StationId.Equals(state.CurrentStationId, StringComparison.OrdinalIgnoreCase));
         var stationIndex = _route.Stations.ToList().FindIndex(station =>
             station.StationId.Equals(state.CurrentStationId, StringComparison.OrdinalIgnoreCase));
@@ -182,6 +225,227 @@ public partial class MainWindow
         var offset = point.Kind == "中央避車線折返" ? 42 : 34;
         return (Math.Clamp(stationX + sign * offset, left, left + trackWidth), (outboundY + inboundY) / 2);
     }
+
+    private IReadOnlyList<AfterStationTailTrackVisualLayout> GetAfterStationTailTrackVisualLayouts()
+    {
+        if (_route is null || _v2World is null)
+        {
+            return [];
+        }
+
+        var result = new List<AfterStationTailTrackVisualLayout>();
+        foreach (var plan in _v2World.Infrastructure.TurnbackPlans.Where(item => item.Kind == TurnbackKind.AfterStation))
+        {
+            var layout = _v2World.Infrastructure.FindAfterStationTailTrackLayout(plan);
+            var stationIndex = _route.Stations.ToList().FindIndex(station =>
+                station.StationId.Equals(plan.StationId, StringComparison.OrdinalIgnoreCase));
+            if (layout is not null && stationIndex >= 0)
+            {
+                result.Add(new AfterStationTailTrackVisualLayout(plan, layout, _route.Stations[stationIndex], stationIndex));
+            }
+        }
+
+        return result;
+    }
+
+    private void DrawAfterStationTailTrackGeometry(
+        IReadOnlyList<AfterStationTailTrackVisualLayout> tailTrackLayouts,
+        double left,
+        double trackWidth,
+        double outboundY,
+        double inboundY,
+        double canvasWidth,
+        double canvasHeight)
+    {
+        var color = Color.FromRgb(188, 92, 52);
+        var middleY = (outboundY + inboundY) / 2;
+        foreach (var tailTrack in tailTrackLayouts)
+        {
+            var stationX = left + tailTrack.Station.PositionMeters / _route!.TotalLengthMeters * trackWidth;
+            var nodeX = GetAfterStationTailTrackNodeX(tailTrack, left, trackWidth, canvasWidth);
+            var tooltip = $"{tailTrack.Plan.Name}｜站後折返尾軌\n"
+                + $"虛擬節點 {tailTrack.Layout.VirtualNodeId}｜{tailTrack.Layout.VirtualNodePositionMeters / 1000:0.00} km\n"
+                + $"下行 {tailTrack.Layout.OutboundTrack.TrackId}｜上行 {tailTrack.Layout.InboundTrack.TrackId}";
+            AddTailLine(stationX, outboundY, nodeX, middleY, tooltip);
+            AddTailLine(stationX, inboundY, nodeX, middleY, tooltip);
+            var node = new Ellipse
+            {
+                Width = 16,
+                Height = 16,
+                Fill = Brushes.White,
+                Stroke = new SolidColorBrush(color),
+                StrokeThickness = 3,
+                ToolTip = tooltip
+            };
+            System.Windows.Controls.Canvas.SetLeft(node, nodeX - 8);
+            System.Windows.Controls.Canvas.SetTop(node, middleY - 8);
+            RouteCanvas.Children.Add(node);
+            AddCanvasText(
+                RouteCanvas,
+                $"{tailTrack.Layout.VirtualNodeId}\n尾軌折返",
+                Math.Clamp(nodeX - 38, 0, canvasWidth - 88),
+                Math.Min(canvasHeight - 34, middleY + 12),
+                9,
+                color);
+
+            void AddTailLine(double x1, double y1, double x2, double y2, string lineTooltip)
+            {
+                RouteCanvas.Children.Add(new Line
+                {
+                    X1 = x1,
+                    Y1 = y1,
+                    X2 = x2,
+                    Y2 = y2,
+                    Stroke = new SolidColorBrush(color),
+                    StrokeThickness = 3,
+                    StrokeStartLineCap = PenLineCap.Round,
+                    StrokeEndLineCap = PenLineCap.Round,
+                    ToolTip = lineTooltip
+                });
+            }
+        }
+    }
+
+    private bool TryGetAfterStationTailTrackTrainPosition(
+        WorldTrainState state,
+        double left,
+        double trackWidth,
+        double outboundY,
+        double inboundY,
+        out (double X, double Y) position)
+    {
+        position = default;
+        var tailTrack = GetAfterStationTailTrackVisualLayouts().FirstOrDefault(item =>
+            item.Layout.OutboundTrack.TrackId.Equals(state.TrackId, StringComparison.OrdinalIgnoreCase)
+            || item.Layout.InboundTrack.TrackId.Equals(state.TrackId, StringComparison.OrdinalIgnoreCase));
+        if (tailTrack is null)
+        {
+            return false;
+        }
+
+        var stationX = left + tailTrack.Station.PositionMeters / _route!.TotalLengthMeters * trackWidth;
+        var nodeX = GetAfterStationTailTrackNodeX(tailTrack, left, trackWidth, RouteCanvas.ActualWidth);
+        var length = Math.Abs(tailTrack.Layout.VirtualNodePositionMeters - tailTrack.Station.PositionMeters);
+        var progress = length <= 1e-7
+            ? 1
+            : Math.Clamp(Math.Abs(state.FrontPositionMeters - tailTrack.Station.PositionMeters) / length, 0, 1);
+        var middleY = (outboundY + inboundY) / 2;
+        var usesOutboundTrack = tailTrack.Layout.OutboundTrack.TrackId.Equals(state.TrackId, StringComparison.OrdinalIgnoreCase);
+        var y = usesOutboundTrack
+            ? outboundY + (middleY - outboundY) * progress
+            : inboundY + (middleY - inboundY) * progress;
+        position = (stationX + (nodeX - stationX) * progress, y);
+        return true;
+    }
+
+    private bool TryGetSpatialTurnbackTrainPosition(
+        WorldTrainState state,
+        double defaultX,
+        double defaultY,
+        double left,
+        double trackWidth,
+        double outboundY,
+        double inboundY,
+        out (double X, double Y) position)
+    {
+        position = default;
+        const string prefix = "TURNBACK:";
+        if (_route is null || !state.TrackId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        IEnumerable<SpatialReferencePointInputRow> referencePoints = SpatialReferencePointRows.Count == 0
+            ? GetCompleteSpatialReferencePointRows()
+            : SpatialReferencePointRows;
+        var point = referencePoints.FirstOrDefault(item =>
+            state.TrackId.StartsWith($"{prefix}{item.ReferencePointId}:", StringComparison.OrdinalIgnoreCase));
+        if (point is null || point.Kind is not ("站前折返" or "中央避車線折返"))
+        {
+            return false;
+        }
+
+        var station = _route.Stations.FirstOrDefault(item =>
+            item.StationId.Equals(point.StationId, StringComparison.OrdinalIgnoreCase));
+        if (station is null)
+        {
+            return false;
+        }
+
+        var oneWayDistance = point.DistanceFromStopToCrossoverMeters + point.CrossoverLengthMeters;
+        if (point.Kind == "中央避車線折返")
+        {
+            oneWayDistance += point.DistanceFromCrossoverToTurnbackStopMeters;
+        }
+
+        var progress = oneWayDistance <= 1e-7
+            ? 1
+            : Math.Clamp(Math.Abs(state.FrontPositionMeters - station.PositionMeters) / oneWayDistance, 0, 1);
+        var isOutboundLeg = state.TrackId.EndsWith(":OUT", StringComparison.OrdinalIgnoreCase);
+        var directionSign = isOutboundLeg ? (int)state.Direction : -(int)state.Direction;
+        var stationX = left + station.PositionMeters / _route.TotalLengthMeters * trackWidth;
+        var pixelDistance = Math.Clamp(
+            oneWayDistance / Math.Max(1, _route.TotalLengthMeters) * trackWidth,
+            point.Kind == "中央避車線折返" ? 38 : 28,
+            point.Kind == "中央避車線折返" ? 82 : 64);
+        var targetX = Math.Clamp(stationX + directionSign * pixelDistance, 10, RouteCanvas.ActualWidth - 10);
+        var middleY = (outboundY + inboundY) / 2;
+        var targetY = point.Kind == "中央避車線折返" ? middleY : (outboundY + inboundY) / 2;
+        position = (
+            defaultX + (targetX - defaultX) * progress,
+            defaultY + (targetY - defaultY) * progress);
+        return true;
+    }
+
+    private double GetAfterStationTailTrackNodeX(
+        AfterStationTailTrackVisualLayout tailTrack,
+        double left,
+        double trackWidth,
+        double canvasWidth)
+    {
+        var stationX = left + tailTrack.Station.PositionMeters / _route!.TotalLengthMeters * trackWidth;
+        var exteriorSign = tailTrack.StationIndex == _route.Stations.Count - 1 ? 1d : -1d;
+        var lengthPixels = Math.Clamp(
+            Math.Abs(tailTrack.Layout.VirtualNodePositionMeters - tailTrack.Station.PositionMeters)
+                / Math.Max(1, _route.TotalLengthMeters) * trackWidth,
+            48,
+            88);
+        return Math.Clamp(stationX + exteriorSign * lengthPixels, 12, canvasWidth - 12);
+    }
+
+    private string GetV2CurrentLocation(WorldTrainState state)
+    {
+        var tailTrack = GetAfterStationTailTrackVisualLayouts().FirstOrDefault(item =>
+            item.Layout.OutboundTrack.TrackId.Equals(state.TrackId, StringComparison.OrdinalIgnoreCase)
+            || item.Layout.InboundTrack.TrackId.Equals(state.TrackId, StringComparison.OrdinalIgnoreCase));
+        if (tailTrack is not null)
+        {
+            return $"{tailTrack.Layout.VirtualNodeId}（尾軌）";
+        }
+
+        const string prefix = "TURNBACK:";
+        if (state.TrackId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            IEnumerable<SpatialReferencePointInputRow> referencePoints = SpatialReferencePointRows.Count == 0
+                ? GetCompleteSpatialReferencePointRows()
+                : SpatialReferencePointRows;
+            var point = referencePoints
+                .FirstOrDefault(item => state.TrackId.StartsWith(
+                    $"{prefix}{item.ReferencePointId}:", StringComparison.OrdinalIgnoreCase));
+            if (point is not null)
+            {
+                return $"{point.Name}（折返線）";
+            }
+        }
+
+        return state.CurrentStationId;
+    }
+
+    private sealed record AfterStationTailTrackVisualLayout(
+        TurnbackPlanDefinition Plan,
+        AfterStationTailTrackLayout Layout,
+        Station Station,
+        int StationIndex);
 
     private static string BuildSpatialReferencePointToolTip(SpatialReferencePointInputRow point)
     {

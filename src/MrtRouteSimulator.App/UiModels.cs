@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace MrtRouteSimulator.App;
 
 public sealed record CatalogOption(string Id, string DisplayName);
@@ -46,6 +48,32 @@ public sealed record SegmentRow(
     string CoastingTime = "—",
     string ControlEvents = "—");
 
+public sealed record V1V2ComparisonRow(
+    string VehicleId,
+    string ServiceRunId,
+    string Direction,
+    string VehicleType,
+    string StopPattern,
+    string Station,
+    string TheoreticalArrival,
+    string TheoreticalDeparture,
+    string TheoreticalDwell,
+    string ActualArrival,
+    string ActualDeparture,
+    string ActualDwell,
+    string ArrivalDifference,
+    string DepartureDifference,
+    string DepartureDifferencePercent,
+    string Status);
+
+public sealed record ResourceOccupancyRow(
+    string ResourceId,
+    string OccupiedTime,
+    string Utilization,
+    string ReservationCount,
+    string ObservedReservationsPerHour,
+    string MinimumReleaseHeadway);
+
 public sealed record CurrentTrainRow(
     string TrainId,
     string Direction,
@@ -68,11 +96,24 @@ public sealed class SpeedLimitInputRow
     public string Note { get; set; } = string.Empty;
 }
 
-public sealed class ServicePatternInputRow
+public sealed class ServicePatternInputRow : INotifyPropertyChanged
 {
+    private string _patternName = "快速車";
+
     public string PatternId { get; set; } = "EXPRESS";
 
-    public string PatternName { get; set; } = "快速車";
+    public string PatternName
+    {
+        get => _patternName;
+        set
+        {
+            if (_patternName == value) return;
+            _patternName = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PatternName)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public string StationId { get; set; } = string.Empty;
 
@@ -126,6 +167,7 @@ public sealed class VehicleTypeInputRow
     public double Jerk { get; set; } = 0.65;
     public double TractionDecay { get; set; } = 0.45;
     public double CoastingDeceleration { get; set; } = 0.05;
+    public string DefaultStopPatternId { get; set; } = string.Empty;
 }
 
 public sealed class ServiceTypeInputRow
@@ -218,6 +260,20 @@ public sealed class TurnbackInputRow
     public string TrackSegmentIds { get; set; } = string.Empty;
     public string ResourceIds { get; set; } = string.Empty;
     public double TurnbackTimeSeconds { get; set; }
+}
+
+public sealed class StationOvertakeFacilityInputRow
+{
+    public string FacilityId { get; set; } = string.Empty;
+    public string StationId { get; set; } = string.Empty;
+    public string Direction { get; set; } = "下行";
+    public string MainlineTrackSegmentId { get; set; } = string.Empty;
+    public string LocalPlatformId { get; set; } = string.Empty;
+    public string ExpressPlatformId { get; set; } = string.Empty;
+    public string LocalTrackSegmentId { get; set; } = string.Empty;
+    public string ExpressTrackSegmentId { get; set; } = string.Empty;
+    public double EntryKm { get; set; }
+    public string ResourceIds { get; set; } = string.Empty;
 }
 
 public sealed class SpatialReferencePointInputRow

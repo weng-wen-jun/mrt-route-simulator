@@ -33,7 +33,6 @@ public partial class MainWindow : Window
     private double _playbackTimeSeconds;
     private double _playbackDurationSeconds;
     private double _startClockSeconds;
-
     public MainWindow()
     {
         InitializeComponent();
@@ -116,6 +115,7 @@ public partial class MainWindow : Window
     private void LoadSampleData()
     {
         PausePlayback();
+        StationOvertakeFacilityRows.Clear();
         RouteIdTextBox.Text = "O";
         RouteNameTextBox.Text = "橘色示範線";
         MaxSpeedTextBox.Text = "80";
@@ -698,6 +698,8 @@ public partial class MainWindow : Window
         _playbackDurationSeconds = 0;
         TimetableRows.Clear();
         SegmentRows.Clear();
+        V1V2ComparisonRows.Clear();
+        ResourceOccupancyRows.Clear();
         CurrentTrainRows.Clear();
         RouteSummaryText.Text = "—";
         OneWaySummaryText.Text = "—";
