@@ -25,55 +25,26 @@ public partial class MainWindow
     private string? _v2InboundPreviewRunId;
     private double? _v2PlannedMinimumIntervalSeconds;
 
-    public ObservableCollection<SpeedLimitInputRow> SpeedLimitRows { get; } = [];
-
     public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
 
     public ObservableCollection<SafetyRow> SafetyRows { get; } = [];
 
     public ObservableCollection<EventRow> EventRows { get; } = [];
 
-    public IReadOnlyList<string> SpeedLimitDirectionOptions { get; } = ["雙向", "下行", "上行"];
-
     private void LoadSampleV2Data()
     {
-        SpeedLimitRows.Clear();
         ServicePatternRows.Clear();
         LoadSampleInputCatalogs();
-        SpeedLimitRows.Add(new SpeedLimitInputRow
-        {
-            StartKm = 1.25,
-            EndKm = 1.87,
-            LimitKmh = 45,
-            Direction = "雙向",
-            Note = "示範彎道路段"
-        });
-        SpeedLimitRows.Add(new SpeedLimitInputRow
-        {
-            StartKm = 3.30,
-            EndKm = 4.20,
-            LimitKmh = 55,
-            Direction = "下行",
-            Note = "示範方向別速限"
-        });
-        JerkTextBox.Text = "0.65";
         CoastingRatioTextBox.Text = "0.15";
         ApproachDistanceTextBox.Text = "180";
         ApproachSpeedTextBox.Text = "0";
-        TrainLengthTextBox.Text = "92";
         ReactionTimeTextBox.Text = "1.5";
-        ServiceBrakeTextBox.Text = "0.9";
-        EmergencyBrakeTextBox.Text = "1.3";
         OperationModeComboBox.SelectedIndex = 1;
         MovingBlockModeComboBox.SelectedIndex = 2;
         BrakingModeComboBox.SelectedIndex = 0;
-        SpeedLimitWarningText.Text = string.Empty;
     }
 
-    private void ConfigureV2World(
-        int trainCount,
-        double? specifiedHeadwaySeconds,
-        ResolvedDispatchPlan? resolvedDispatchPlan = null)
+    private void ConfigureV2World()
     {
         _v2Enabled = EngineModeComboBox.SelectedItem is ComboBoxItem item
             && string.Equals(item.Tag?.ToString(), "V2RealisticOperations", StringComparison.Ordinal);
@@ -92,100 +63,11 @@ public partial class MainWindow
             return;
         }
 
-        if (_route is null || _parameters is null)
-        {
-            throw new InvalidOperationException("請先建立有效的 V1 基準路線與列車性能。");
-        }
-
-        SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        var dispatchPlan = resolvedDispatchPlan ?? BuildResolvedDispatchPlan();
-        var baselineVehicle = ResolveBaselineVehicle(dispatchPlan);
-        var operational = new OperationalParameters(
-            baselineVehicle.JerkMetersPerSecondCubed,
-            ParseNonNegative(CoastingRatioTextBox, "惰行比例"),
-            ParseNonNegative(ApproachDistanceTextBox, "進站控制距離"),
-            ParseNonNegative(ApproachSpeedTextBox, "進站控制速度") / 3.6,
-            tractionFadeRatio: 0.45,
-            baselineVehicle.LengthMeters,
-            baselineVehicle.ServiceBrakeDecelerationMetersPerSecondSquared,
-            baselineVehicle.EmergencyBrakeDecelerationMetersPerSecondSquared,
-            ParseNonNegative(ReactionTimeTextBox, "控制反應時間"),
-            brakeBuildUpTimeSeconds: 0.8,
-            positioningErrorMeters: 3,
-            safetyMarginMeters: 25,
-            absoluteMinimumGapMeters: 15);
-        var limits = SpeedLimitRows.Select((row, index) =>
-        {
-            if (!double.IsFinite(row.StartKm)
-                || !double.IsFinite(row.EndKm)
-                || !double.IsFinite(row.LimitKmh))
-            {
-                throw new InvalidOperationException($"速限第 {index + 1} 列必須使用有限數值。");
-            }
-
-            return new SpeedLimitSegment(
-                row.StartKm * 1000,
-                row.EndKm * 1000,
-                row.LimitKmh / 3.6,
-                ParseSpeedLimitDirection(row.Direction, index + 1),
-                row.Note?.Trim() ?? string.Empty);
-        }).ToArray();
-        var servicePatterns = BuildServicePatterns();
-        var serviceTypes = BuildServiceTypeDefinitions();
-        _v2DispatchPlan = dispatchPlan;
-        var vehicleTypes = BuildVehicleTypeDefinitions();
-        var infrastructure = BuildInfrastructureGraph(_route);
-        var movingBlockMode = ParseMovingBlockMode();
-        var operationProfile = GetSelectedTag(OperationModeComboBox) == "Basic"
-            ? OperationProfileMode.BasicPhysics
-            : OperationProfileMode.RealisticOperations;
-        var brakingMode = ParseBrakingEstimationMode();
-        var actualOptions = new SimulationWorldOptions(
-            Route: _route,
-            TrainParameters: _parameters,
-            OperationalParameters: operational,
-            TrainCount: dispatchPlan.Runs.Count,
-            InitialDepartureIntervalSeconds: specifiedHeadwaySeconds,
-            SpeedLimits: limits,
-            ProfileMode: operationProfile,
-            MovingBlockMode: movingBlockMode,
-            ServicePatterns: servicePatterns,
-            DispatchPlan: dispatchPlan,
-            VehicleTypes: vehicleTypes,
-            Infrastructure: infrastructure,
-            InitialBrakingEstimationMode: brakingMode,
-            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full,
-            ServiceTypes: serviceTypes);
-        var plannedOptions = actualOptions with
-        {
-            SpeedLimits = null,
-            ProfileMode = OperationProfileMode.BasicPhysics,
-            MovingBlockMode = MovingBlockMode.Independent,
-            InitialBrakingEstimationMode = BrakingEstimationMode.Service
-        };
-        _v2Session = new SimulationSession(actualOptions, plannedOptions);
-        _v2PlannedMinimumIntervalSeconds = GetMinimumPlannedIntervalSeconds(dispatchPlan);
-        var lastPlannedStart = dispatchPlan.Runs.Max(run =>
-            RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime));
-        _playbackDurationSeconds = lastPlannedStart + _v2Session.ActualWorld.BaselineCycleTimeSeconds * 1.5;
-        _v2Session.PreparePlannedTimeline(_playbackDurationSeconds);
-        _plannedTimetableEvents = _v2Session.PlannedEvents;
-        BuildV2SpeedPreviews(
-            operational,
-            limits,
-            operationProfile,
-            movingBlockMode,
-            servicePatterns,
-            dispatchPlan,
-            vehicleTypes,
-            infrastructure,
-            brakingMode);
-        ObstacleStopButton.IsEnabled = true;
-        SpeedLimitWarningText.Text = string.Join("　", _v2Session.ActualWorld.SpeedLimits.GetOverlapWarnings());
-        PopulateFilterControls(dispatchPlan);
-        // 匯出固定時刻表時必須使用建立此世界當下的設定，不能誤用之後才被使用者修改的輸入欄位。
-        _activeSimulationProjectDocument = CaptureProjectDocument();
+        // 主畫面的線性欄位只作為一次性的 quick builder；V2 runtime 一律建立 Schema 8
+        // physical graph。建立後，唯一可編輯資料來源是 Schema 8 專案工作區。
+        ConfigureTopologyProjectForPlayback(
+            TopologyProjectFactory.CreateLinearDraft(CaptureProjectDocument()),
+            lockLegacyInputs: true);
     }
 
     private void PopulateV2Results()
@@ -227,7 +109,9 @@ public partial class MainWindow
                 state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
                 state.IsActive ? DirectionToChinese(state.Direction) : "—",
                 state.IsActive ? PhaseToChinese(state.Phase) : "待發",
-                $"{state.FrontPositionMeters / 1000:0.00}",
+                session.ActualWorld.GetTrainCenterPosition(state.VehicleId) is { } center
+                    && _stationChainageProjection?.ToChainage(center) is { } centerChainage
+                        ? $"{centerChainage / 1000:0.000}" : "—",
                 $"{state.SpeedMetersPerSecond * 3.6:0.#}",
                 GetV2CurrentLocation(state),
                 state.NextStationId ?? "—"));
@@ -293,9 +177,12 @@ public partial class MainWindow
 
     private void ClearV2Results()
     {
+        // 結束 topology 執行狀態後，使用者必須能重新編輯表單或切換引擎。
+        SetQuickBuilderState(locked: false, collapsed: false);
         _v2Session = null;
         _v2DispatchPlan = null;
         _activeSimulationProjectDocument = null;
+        _activeTopologyProjectDocument = null;
         _plannedTimetableEvents = [];
         _v2Enabled = false;
         _v2OutboundSpeedPreview = [];
@@ -318,32 +205,6 @@ public partial class MainWindow
         IntervalSummaryText.Text = "目前不是 V2 模擬。";
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
-    }
-
-    private void AddSpeedLimit_Click(object sender, RoutedEventArgs e)
-    {
-        SpeedLimitRows.Add(new SpeedLimitInputRow
-        {
-            StartKm = 0,
-            EndKm = _route is null ? 0.10 : Math.Min(0.10, _route.TotalLengthMeters / 1000),
-            LimitKmh = 45,
-            Direction = "雙向"
-        });
-        SpeedLimitDataGrid.SelectedIndex = SpeedLimitRows.Count - 1;
-        SpeedLimitDataGrid.ScrollIntoView(SpeedLimitRows[^1]);
-    }
-
-    private void RemoveSpeedLimit_Click(object sender, RoutedEventArgs e)
-    {
-        var index = SpeedLimitDataGrid.SelectedIndex;
-        if (index < 0)
-        {
-            ShowValidation(["請先選取要刪除的速限列。"]);
-            return;
-        }
-
-        SpeedLimitRows.RemoveAt(index);
-        HideValidation();
     }
 
     private ServicePattern[] BuildServicePatterns() => BuildStopPatternDefinitions()
@@ -474,7 +335,7 @@ public partial class MainWindow
             DefaultExt = ".png",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = $"{_route!.RouteName}_列車運行圖.png"
+            FileName = $"{GetActiveRouteDisplayName()}_列車運行圖.png"
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -506,7 +367,7 @@ public partial class MainWindow
             DefaultExt = ".pdf",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = $"{_route!.RouteName}_列車運行圖.pdf"
+            FileName = $"{GetActiveRouteDisplayName()}_列車運行圖.pdf"
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -531,7 +392,7 @@ public partial class MainWindow
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)
     {
-        if (_v2World is null || _route is null || _v2World.Trajectory.Count == 0)
+        if (_v2World is null || _v2World.Trajectory.Count == 0)
         {
             ShowValidation(["請先播放 V2 模擬，產生軌跡後再匯出 CSV。"]);
             return;
@@ -544,7 +405,7 @@ public partial class MainWindow
             DefaultExt = ".csv",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = $"{_route.RouteName}_軌跡事件.csv"
+            FileName = $"{GetActiveRouteDisplayName()}_軌跡事件.csv"
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -553,7 +414,7 @@ public partial class MainWindow
 
         try
         {
-            var csv = TrajectoryAnalysis.BuildCsv(_route, _v2World.Trajectory, _v2World.Events, _startClockSeconds);
+            var csv = TrajectoryAnalysis.BuildCsv(_v2World.Trajectory, _v2World.Events, _startClockSeconds);
             File.WriteAllText(dialog.FileName, csv, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             StatusTextBlock.Text = $"CSV 已匯出：{dialog.FileName}";
         }
@@ -568,7 +429,24 @@ public partial class MainWindow
         RouteCanvas.Children.Clear();
         var width = RouteCanvas.ActualWidth;
         var height = RouteCanvas.ActualHeight;
-        if (width < 100 || height < 100 || _route is null)
+        if (width < 100 || height < 100)
+        {
+            return;
+        }
+
+        if (_v2World is { } topologyWorld)
+        {
+            DrawTopologyGraphRoute(
+                topologyWorld.TopologyInfrastructure,
+                _activeTopologyProjectDocument,
+                snapshot ?? topologyWorld.GetSnapshot(),
+                width,
+                height,
+                topologyWorld);
+            return;
+        }
+
+        if (_route is null)
         {
             return;
         }
@@ -700,6 +578,435 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// V4 路線圖直接根據 node/edge/platform 繪製。主線依 Outbound ServiceRoute 的 traversal
+    /// 次序排為長直線，其他支線、渡線及尾軌再由主線岔出；座標只屬於視覺 layout，
+    /// 不改寫 Engine 的 edge-local offset。
+    /// </summary>
+    private void DrawTopologyGraphRoute(
+        InfrastructureGraphV4 infrastructure,
+        TopologyProjectDocument? topologyProject,
+        SimulationSnapshot snapshot,
+        double width,
+        double height,
+        SimulationWorld world)
+    {
+        var stationChainage = topologyProject is null ? null : StationChainageProjection.TryCreate(topologyProject);
+        var nodes = infrastructure.Nodes.Values
+            .OrderBy(node => node.NodeId, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (nodes.Length == 0)
+        {
+            AddCanvasText(RouteCanvas, "此拓撲尚未定義軌道節點。", 24, 24, 14, Color.FromRgb(102, 112, 133));
+            return;
+        }
+
+        ServiceRouteDefinition? outboundServiceRoute = null;
+        ServiceRouteDefinition? inboundServiceRoute = null;
+        if (topologyProject is not null)
+        {
+            foreach (var binding in topologyProject.DirectionRouteBindings)
+            {
+                var serviceRoute = topologyProject.ServiceRoutes.FirstOrDefault(route =>
+                    route.ServiceRouteId.Equals(binding.ServiceRouteId, StringComparison.OrdinalIgnoreCase));
+                if (serviceRoute is null)
+                {
+                    continue;
+                }
+
+                if (binding.Direction == TrainDirection.Outbound)
+                {
+                    outboundServiceRoute = serviceRoute;
+                }
+                else if (binding.Direction == TrainDirection.Inbound)
+                {
+                    inboundServiceRoute = serviceRoute;
+                }
+            }
+
+            outboundServiceRoute ??= topologyProject.ServiceRoutes.FirstOrDefault();
+        }
+
+        var mainlineNodeDistances = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var mainlineLengthMeters = 0d;
+        if (outboundServiceRoute is not null)
+        {
+            foreach (var traversal in outboundServiceRoute.Traversals)
+            {
+                if (!infrastructure.TryGetEdge(traversal.TrackEdgeId, out var edge))
+                {
+                    continue;
+                }
+
+                var (startNodeId, endNodeId) = GetTraversalEndpoints(edge, traversal.Direction);
+                mainlineNodeDistances.TryAdd(startNodeId, mainlineLengthMeters);
+                mainlineLengthMeters += edge.LengthMeters;
+                mainlineNodeDistances.TryAdd(endNodeId, mainlineLengthMeters);
+            }
+        }
+
+        var left = 108d;
+        var right = 108d;
+        var top = 30d;
+        var bottom = 28d;
+        var usableWidth = Math.Max(1, width - left - right);
+        var mainlineY = height * 0.52;
+        var trackSpacing = inboundServiceRoute is null ? 0 : Math.Clamp(height * 0.18, 30, 46);
+        var outboundTrackY = mainlineY + trackSpacing / 2;
+        var inboundTrackY = mainlineY - trackSpacing / 2;
+        var nodePoints = new Dictionary<string, Point>(StringComparer.OrdinalIgnoreCase);
+
+        if (mainlineNodeDistances.Count > 0 && mainlineLengthMeters > 0)
+        {
+            foreach (var (nodeId, distanceMeters) in mainlineNodeDistances)
+            {
+                nodePoints[nodeId] = new Point(
+                    left + distanceMeters / mainlineLengthMeters * usableWidth,
+                    mainlineY);
+            }
+        }
+        else
+        {
+            // 不完整 topology 仍採水平保底排列，不能再把未排序的 nodeId 畫成圓形散點。
+            for (var index = 0; index < nodes.Length; index++)
+            {
+                var ratio = nodes.Length == 1 ? 0.5 : (double)index / (nodes.Length - 1);
+                nodePoints[nodes[index].NodeId] = new Point(left + ratio * usableWidth, mainlineY);
+            }
+        }
+
+        var unplacedNodes = new HashSet<string>(
+            nodes.Select(node => node.NodeId).Where(nodeId => !nodePoints.ContainsKey(nodeId)),
+            StringComparer.OrdinalIgnoreCase);
+        var branchIndex = 0;
+        while (unplacedNodes.Count > 0)
+        {
+            var placedAny = false;
+            foreach (var edge in infrastructure.Edges.Values
+                         .OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
+            {
+                var fromPlaced = nodePoints.TryGetValue(edge.FromNodeId, out var from);
+                var toPlaced = nodePoints.TryGetValue(edge.ToNodeId, out var to);
+                if (fromPlaced == toPlaced)
+                {
+                    continue;
+                }
+
+                var known = fromPlaced ? from : to;
+                var unknownNodeId = fromPlaced ? edge.ToNodeId : edge.FromNodeId;
+                if (!unplacedNodes.Contains(unknownNodeId))
+                {
+                    continue;
+                }
+
+                var isTail = edge.Kind is TrackEdgeKind.TailTrack or TrackEdgeKind.Turnback;
+                var isVerticalBranch = edge.Kind is TrackEdgeKind.PassingTrack
+                    or TrackEdgeKind.PocketTrack
+                    or TrackEdgeKind.Crossover
+                    or TrackEdgeKind.Siding
+                    or TrackEdgeKind.DepotLead
+                    or TrackEdgeKind.Approach;
+                var direction = known.X <= width * 0.5 ? -1d : 1d;
+                var branchDirection = branchIndex++ % 2 == 0 ? -1d : 1d;
+                var x = isTail
+                    ? known.X + direction * Math.Min(96, usableWidth * 0.14)
+                    : known.X + (isVerticalBranch ? 0 : direction * Math.Min(90, usableWidth * 0.12));
+                var y = isTail
+                    ? known.Y
+                    : known.Y + branchDirection * Math.Min(72, Math.Max(42, height * 0.18));
+                nodePoints[unknownNodeId] = new Point(
+                    Math.Clamp(x, 22, width - 22),
+                    Math.Clamp(y, top, height - bottom));
+                unplacedNodes.Remove(unknownNodeId);
+                placedAny = true;
+            }
+
+            if (placedAny)
+            {
+                continue;
+            }
+
+            // 與主線不連通的獨立子圖也以整齊的水平列呈現，並明確保留其孤立性。
+            var remaining = unplacedNodes.OrderBy(nodeId => nodeId, StringComparer.OrdinalIgnoreCase).ToArray();
+            for (var index = 0; index < remaining.Length; index++)
+            {
+                var ratio = (double)(index + 1) / (remaining.Length + 1);
+                nodePoints[remaining[index]] = new Point(left + ratio * usableWidth, top + 24);
+                unplacedNodes.Remove(remaining[index]);
+            }
+        }
+
+        var outboundEdgeIds = outboundServiceRoute?.Traversals
+            .Select(traversal => traversal.TrackEdgeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var inboundEdgeIds = inboundServiceRoute?.Traversals
+            .Select(traversal => traversal.TrackEdgeId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var rawEdgePoints = new Dictionary<string, (Point From, Point To)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var edge in infrastructure.Edges.Values)
+        {
+            var from = nodePoints[edge.FromNodeId];
+            var to = nodePoints[edge.ToNodeId];
+            if (outboundEdgeIds.Contains(edge.TrackEdgeId))
+            {
+                from.Y = outboundTrackY;
+                to.Y = outboundTrackY;
+            }
+            else if (inboundEdgeIds.Contains(edge.TrackEdgeId))
+            {
+                from.Y = inboundTrackY;
+                to.Y = inboundTrackY;
+            }
+            rawEdgePoints[edge.TrackEdgeId] = (from, to);
+        }
+
+        // 尾軌沿「抵達股道」的主線方向直線延伸。若回程要切到另一股道，僅由
+        // DirectedConnection 畫出真正的橫渡線，不能把尾軌置中後畫成 Y 字。
+        if (topologyProject is not null)
+        {
+            foreach (var facility in topologyProject.Topology.TurnbackFacilities
+                         .Where(item => item.Kind == TurnbackFacilityKind.TailTrack))
+            {
+                if (!infrastructure.TryGetEdge(facility.ArrivalTrackEdgeId, out var arrivalEdge)
+                    || !rawEdgePoints.TryGetValue(arrivalEdge.TrackEdgeId, out var arrivalPoints))
+                {
+                    continue;
+                }
+
+                foreach (var traversal in facility.Traversals)
+                {
+                    if (!infrastructure.TryGetEdge(traversal.TrackEdgeId, out var tailEdge)
+                        || tailEdge.Kind != TrackEdgeKind.TailTrack
+                        || !rawEdgePoints.TryGetValue(tailEdge.TrackEdgeId, out var tailPoints))
+                    {
+                        continue;
+                    }
+
+                    var sharedNodeId = tailEdge.FromNodeId.Equals(arrivalEdge.FromNodeId, StringComparison.OrdinalIgnoreCase)
+                        || tailEdge.ToNodeId.Equals(arrivalEdge.FromNodeId, StringComparison.OrdinalIgnoreCase)
+                            ? arrivalEdge.FromNodeId
+                            : arrivalEdge.ToNodeId;
+                    var arrivalY = sharedNodeId.Equals(arrivalEdge.FromNodeId, StringComparison.OrdinalIgnoreCase)
+                        ? arrivalPoints.From.Y
+                        : arrivalPoints.To.Y;
+                    rawEdgePoints[tailEdge.TrackEdgeId] = (
+                        new Point(tailPoints.From.X, arrivalY),
+                        new Point(tailPoints.To.X, arrivalY));
+                }
+            }
+        }
+
+        if (topologyProject is not null)
+            StationSchematicPresentation.LayoutLinearTurnbacks(rawEdgePoints, infrastructure.Edges.Values,
+                topologyProject.Topology.TurnbackFacilities, width);
+        StationSchematicPresentation.ApplyNodeLayout(rawEdgePoints, infrastructure.Nodes.Values,
+            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), 60, width - 120);
+        var edgeGeometries = TopologySchematicGeometry.Build(
+            infrastructure.Edges.Values.Select(edge =>
+            {
+                var points = rawEdgePoints[edge.TrackEdgeId];
+                return (edge.TrackEdgeId, points.From, points.To);
+            }));
+
+        edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
+            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2));
+        edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
+        var railColor = Color.FromRgb(25, 96, 125);
+        StationSchematicPresentation.DrawLegend(RouteCanvas);
+        var platformVisuals = new List<(
+            PlatformDefinitionV4 Platform,
+            TrackEdgeDefinition Edge,
+            TopologySchematicEdgeGeometry Geometry,
+            Point Start,
+            Point End,
+            Point Stop)>();
+        foreach (var platform in infrastructure.Platforms.Values)
+        {
+            if (!edgeGeometries.TryGetValue(platform.TrackEdgeId, out var geometry)
+                || !infrastructure.TryGetEdge(platform.TrackEdgeId, out var edge))
+            {
+                continue;
+            }
+
+            var startRatio = edge.LengthMeters <= 0 ? 0 : platform.PlatformStartOffsetMeters / edge.LengthMeters;
+            var endRatio = edge.LengthMeters <= 0 ? 0 : platform.PlatformEndOffsetMeters / edge.LengthMeters;
+            var stopRatio = edge.LengthMeters <= 0 ? 0 : platform.StopPositionOffsetMeters / edge.LengthMeters;
+            platformVisuals.Add((
+                platform,
+                edge,
+                geometry,
+                geometry.PointAt(startRatio),
+                geometry.PointAt(endRatio),
+                geometry.PointAt(stopRatio)));
+        }
+
+        var stationCenters = StationSchematicPresentation.DrawPlatforms(RouteCanvas, infrastructure.Platforms.Values,
+            infrastructure.Edges.Values, edgeGeometries, mainlineY);
+        var stationVisuals = infrastructure.Stations.Values
+            .Select(station =>
+            {
+                var platforms = platformVisuals
+                    .Where(item => item.Platform.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(item => item.Platform.PlatformId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                var anchorX = stationCenters.GetValueOrDefault(station.StationId, double.NaN);
+                var minY = platforms.Length == 0 ? outboundTrackY : platforms.Min(item => item.Geometry.Points.Min(p => p.Y));
+                var maxY = platforms.Length == 0 ? inboundTrackY : platforms.Max(item => item.Geometry.Points.Max(p => p.Y));
+                return (Station: station, Platforms: platforms, AnchorX: anchorX, MinY: minY, MaxY: maxY);
+            })
+            .Where(item => double.IsFinite(item.AnchorX))
+            .OrderBy(item => item.AnchorX)
+            .ToArray();
+
+
+        // 主線分成上下行兩條水平軌後，facility edge 仍以 topology node 為端點。
+        // 把 directed connection 畫成實線接軌，避免尾軌／袋狀軌看起來懸空；這些
+        // connector 只表示已允許的轉向，不會把幾何相交誤當成 graph adjacency。
+        foreach (var connection in infrastructure.DirectedConnections)
+        {
+            if (!edgeGeometries.TryGetValue(connection.FromTrackEdgeId, out var fromGeometry)
+                || !edgeGeometries.TryGetValue(connection.ToTrackEdgeId, out var toGeometry))
+            {
+                continue;
+            }
+
+            var from = connection.FromDirection == TraversalDirection.Forward
+                ? fromGeometry.To
+                : fromGeometry.From;
+            var to = connection.ToDirection == TraversalDirection.Forward
+                ? toGeometry.From
+                : toGeometry.To;
+
+
+            if (connection.FromTrackEdgeId == connection.ToTrackEdgeId) continue;
+            var incoming = connection.FromDirection == TraversalDirection.Forward
+                ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
+            var outgoing = connection.ToDirection == TraversalDirection.Forward
+                ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+            StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
+                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})");
+        }
+
+        foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
+        {
+            var geometry = edgeGeometries[edge.TrackEdgeId];
+            RouteCanvas.Children.Add(new Polyline
+            {
+                Points = new PointCollection(geometry.Points),
+                Stroke = new SolidColorBrush(railColor),
+                StrokeThickness = 5,
+                StrokeLineJoin = PenLineJoin.Round,
+                ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)} · {edge.LengthMeters:0.#} m · 預設 {edge.DefaultSpeedLimitMetersPerSecond * 3.6:0.#} km/h"
+            });
+            if (edge.Directionality != TrackDirectionality.Bidirectional)
+            {
+                var arrowCenter = geometry.PointAt(0.38);
+                var tangent = geometry.PointAt(0.40) - geometry.PointAt(0.36);
+                if (edge.Directionality == TrackDirectionality.ReverseOnly) tangent = -tangent;
+                if (tangent.Length > 0.01)
+                {
+                    tangent.Normalize();
+                    var normal = new Vector(-tangent.Y, tangent.X);
+                    RouteCanvas.Children.Add(new Polygon
+                    {
+                        Points = new PointCollection { arrowCenter + tangent * 7, arrowCenter - tangent * 5 + normal * 5, arrowCenter - tangent * 5 - normal * 5 },
+                        Fill = new SolidColorBrush(railColor),
+                        IsHitTestVisible = false
+                    });
+                }
+            }
+
+        }
+
+        foreach (var node in nodes.Where(node => node.Kind == TrackNodeKind.BufferStop))
+        {
+            var edge = infrastructure.Edges.Values.FirstOrDefault(item =>
+                item.FromNodeId.Equals(node.NodeId, StringComparison.OrdinalIgnoreCase)
+                || item.ToNodeId.Equals(node.NodeId, StringComparison.OrdinalIgnoreCase));
+            if (edge is null || !edgeGeometries.TryGetValue(edge.TrackEdgeId, out var geometry))
+            {
+                continue;
+            }
+
+            var atStart = edge.FromNodeId.Equals(node.NodeId, StringComparison.OrdinalIgnoreCase);
+            var point = atStart ? geometry.Points[0] : geometry.Points[^1];
+            var inner = atStart ? geometry.Points[Math.Min(1, geometry.Points.Count - 1)] : geometry.Points[Math.Max(0, geometry.Points.Count - 2)];
+            var tangent = point - inner;
+            if (tangent.Length <= double.Epsilon)
+            {
+                continue;
+            }
+
+            tangent.Normalize();
+            var normal = new Vector(-tangent.Y, tangent.X) * 8;
+            RouteCanvas.Children.Add(new Line
+            {
+                X1 = point.X - normal.X,
+                Y1 = point.Y - normal.Y,
+                X2 = point.X + normal.X,
+                Y2 = point.Y + normal.Y,
+                Stroke = new SolidColorBrush(railColor),
+                StrokeThickness = 5,
+                ToolTip = $"{node.Name} · 止衝\n中心基準里程 {stationChainage?.ToChainage(new(edge.TrackEdgeId, atStart ? 0 : edge.LengthMeters)) / 1000:0.000}K"
+            });
+        }
+
+        StationSchematicPresentation.DrawStationNames(RouteCanvas, stationVisuals.Select(s => (s.Station.StationId,
+            s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
+        StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
+
+        foreach (var state in snapshot.Trains.Where(train => train.IsActive))
+        {
+            var centerPosition = world.GetTrainCenterPosition(state.VehicleId);
+            if (centerPosition is not { } center || !edgeGeometries.TryGetValue(center.TrackEdgeId, out var geometry)
+                || !infrastructure.TryGetEdge(center.TrackEdgeId, out var edge))
+            {
+                continue;
+            }
+            var offset = center.OffsetMeters;
+            var ratio = Math.Clamp(offset / edge.LengthMeters, 0, 1);
+            var point = geometry.PointAt(ratio);
+            var index = ParseVehicleIndex(state.VehicleId);
+            var marker = new Border
+            {
+                Width = 24,
+                Height = 16,
+                CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(state.Phase is OperationalPhase.Collided or OperationalPhase.EmergencyStopped
+                    ? Color.FromRgb(196, 48, 48)
+                    : TrainColors[index % TrainColors.Length]),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(2),
+                Child = new TextBlock
+                {
+                    Text = VehicleMarkerLabel(state.VehicleId),
+                    Foreground = Brushes.White,
+                    FontSize = 9,
+                    FontWeight = FontWeights.Bold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                },
+                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
+            };
+            Canvas.SetLeft(marker, Math.Clamp(point.X - 12, 0, width - 24));
+            Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
+            RouteCanvas.Children.Add(marker);
+        }
+
+        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, height - 38);
+        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, height - 21, 9, Color.FromRgb(108, 119, 132));
+
+        static (string StartNodeId, string EndNodeId) GetTraversalEndpoints(
+            TrackEdgeDefinition edge,
+            TraversalDirection direction) => direction == TraversalDirection.Forward
+                ? (edge.FromNodeId, edge.ToNodeId)
+                : (edge.ToNodeId, edge.FromNodeId);
+
+    }
+
     private void DrawV2SpeedProfile()
     {
         DrawV2SpeedProfile(
@@ -787,10 +1094,7 @@ public partial class MainWindow
             var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
             var y = top + plotHeight - sample.SpeedMetersPerSecond * 3.6 / maxSpeed * plotHeight;
             speedLine.Points.Add(new Point(x, y));
-            var limit = _v2World.SpeedLimits.GetCurrentLimitMetersPerSecond(
-                sample.PositionMeters,
-                sample.Direction,
-                _parameters.MaxSpeedMetersPerSecond) * 3.6;
+            var limit = GetDisplaySpeedLimitMetersPerSecond(sample) * 3.6;
             limitLine.Points.Add(new Point(x, top + plotHeight - limit / maxSpeed * plotHeight));
         }
 
@@ -833,51 +1137,57 @@ public partial class MainWindow
         }
     }
 
-    private void BuildV2SpeedPreviews(
+    /// <summary>
+    /// Schema 8 的尚未播放速度預覽以獨立、單一車次的 topology world 產生；
+    /// 不會為了預覽還原 compatibility Route 或 virtual track。
+    /// </summary>
+    private static (string? OutboundRunId, IReadOnlyList<TrajectorySample> OutboundSamples,
+        string? InboundRunId, IReadOnlyList<TrajectorySample> InboundSamples) BuildTopologyV2SpeedPreviews(
+        TrainParameters trainParameters,
+        TopologySimulationDefinition topology,
         OperationalParameters operational,
-        IReadOnlyList<SpeedLimitSegment> limits,
         OperationProfileMode operationProfile,
-        MovingBlockMode movingBlockMode,
         IReadOnlyList<ServicePattern> servicePatterns,
         ResolvedDispatchPlan dispatchPlan,
         IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
-        InfrastructureGraph infrastructure,
+        IReadOnlyList<ServiceTypeDefinition> serviceTypes,
         BrakingEstimationMode brakingMode)
     {
-        (_v2OutboundPreviewRunId, _v2OutboundSpeedPreview) = BuildV2SpeedPreview(
+        var outbound = BuildTopologyV2SpeedPreview(
+            trainParameters,
             TrainDirection.Outbound,
+            topology,
             operational,
-            limits,
             operationProfile,
-            movingBlockMode,
             servicePatterns,
             dispatchPlan,
             vehicleTypes,
-            infrastructure,
+            serviceTypes,
             brakingMode);
-        (_v2InboundPreviewRunId, _v2InboundSpeedPreview) = BuildV2SpeedPreview(
+        var inbound = BuildTopologyV2SpeedPreview(
+            trainParameters,
             TrainDirection.Inbound,
+            topology,
             operational,
-            limits,
             operationProfile,
-            movingBlockMode,
             servicePatterns,
             dispatchPlan,
             vehicleTypes,
-            infrastructure,
+            serviceTypes,
             brakingMode);
+        return (outbound.RunId, outbound.Samples, inbound.RunId, inbound.Samples);
     }
 
-    private (string? RunId, IReadOnlyList<TrajectorySample> Samples) BuildV2SpeedPreview(
+    private static (string? RunId, IReadOnlyList<TrajectorySample> Samples) BuildTopologyV2SpeedPreview(
+        TrainParameters trainParameters,
         TrainDirection direction,
+        TopologySimulationDefinition topology,
         OperationalParameters operational,
-        IReadOnlyList<SpeedLimitSegment> limits,
         OperationProfileMode operationProfile,
-        MovingBlockMode movingBlockMode,
         IReadOnlyList<ServicePattern> servicePatterns,
         ResolvedDispatchPlan dispatchPlan,
         IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
-        InfrastructureGraph infrastructure,
+        IReadOnlyList<ServiceTypeDefinition> serviceTypes,
         BrakingEstimationMode brakingMode)
     {
         var firstRun = dispatchPlan.Runs
@@ -885,34 +1195,45 @@ public partial class MainWindow
             .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
             .ThenBy(run => run.Sequence)
             .FirstOrDefault();
-        if (firstRun is null || _route is null || _parameters is null)
+        if (firstRun is null)
         {
             return (null, []);
         }
 
+        var previewDispatchPlan = new ResolvedDispatchPlan(
+            dispatchPlan.ActiveMode,
+            dispatchPlan.VehicleAssignmentMode,
+            dispatchPlan.ScheduleAnchorTime,
+            [firstRun]);
         var preview = new SimulationWorldOptions(
-            Route: _route,
-            TrainParameters: _parameters,
+            Route: null,
+            TrainParameters: trainParameters,
             OperationalParameters: operational,
-            TrainCount: dispatchPlan.Runs.Count,
-            SpeedLimits: limits,
+            TrainCount: 1,
             ProfileMode: operationProfile,
-            MovingBlockMode: movingBlockMode,
+            MovingBlockMode: MovingBlockMode.Independent,
             ServicePatterns: servicePatterns,
-            DispatchPlan: dispatchPlan,
+            DispatchPlan: previewDispatchPlan,
             VehicleTypes: vehicleTypes,
-            Infrastructure: infrastructure,
+            ServiceTypes: serviceTypes,
+            Topology: topology,
             InitialBrakingEstimationMode: brakingMode,
-            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full,
-            ServiceTypes: BuildServiceTypeDefinitions()).CreateWorld();
-
+            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full).CreateWorld();
+        var previewRoute = direction == TrainDirection.Outbound
+            ? topology.OutboundServiceRoute : topology.InboundServiceRoute;
+        var terminal = ResolvedStopResolver.Resolve(topology.Infrastructure, previewRoute)[^1];
+        var terminalHead = PlatformStopPositionResolver.ResolveHeadPosition(
+            topology.Infrastructure.Platforms[terminal.PlatformId],
+            previewRoute.Traversals[terminal.TraversalIndex].Direction,
+            vehicleTypes.Single(v => v.Id == firstRun.VehicleTypeId).LengthMeters);
         var plannedStart = RelativeDispatchSeconds(firstRun.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
-        var terminalPosition = direction == TrainDirection.Outbound ? _route.TotalLengthMeters : 0;
         var deadline = plannedStart + Math.Max(3600, preview.BaselineCycleTimeSeconds * 2);
         while (preview.CurrentTimeSeconds < deadline
             && !preview.Events.Any(item => item.EventType == SimulationEventType.Arrival
                 && item.ServiceRunId == firstRun.ServiceRunId
-                && Math.Abs(item.PositionMeters - terminalPosition) <= 0.5))
+                && string.Equals(item.TrackEdgeId, terminalHead.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+                && item.OffsetMeters is { } offset
+                && Math.Abs(offset - terminalHead.OffsetMeters) <= 0.5))
         {
             preview.Tick();
         }
@@ -941,6 +1262,21 @@ public partial class MainWindow
             .Min() is var minimum && minimum > 1e-7
                 ? minimum
                 : null;
+    }
+
+    private double GetDisplaySpeedLimitMetersPerSecond(TrajectorySample sample)
+    {
+        if (_activeTopologyProjectDocument is not null
+            && sample.TrackEdgeId is { Length: > 0 } edgeId
+            && _v2World!.TopologyInfrastructure.Edges.TryGetValue(edgeId, out var edge))
+        {
+            return Math.Min(edge.DefaultSpeedLimitMetersPerSecond, _parameters!.MaxSpeedMetersPerSecond);
+        }
+
+        return _v2World!.SpeedLimits.GetCurrentLimitMetersPerSecond(
+            sample.PositionMeters,
+            sample.Direction,
+            _parameters!.MaxSpeedMetersPerSecond);
     }
 
     private static double RelativeDispatchSeconds(TimeSpan value, TimeSpan anchor)
@@ -1036,17 +1372,23 @@ public partial class MainWindow
         TimeDistanceCanvas.Children.Clear();
         var width = Math.Max(760, TimeDistanceCanvas.ActualWidth);
         var height = Math.Max(380, TimeDistanceCanvas.ActualHeight);
-        if (_route is null || _v2World is null || _plannedWorld is null)
+        if ((_route is null && _activeTopologyProjectDocument is null) || _v2World is null || _plannedWorld is null)
         {
             AddCanvasText(TimeDistanceCanvas, "建立並播放 V2 模擬後顯示時間－里程運行圖。", 22, 22, 13, Color.FromRgb(102, 112, 133));
             return;
         }
 
+        (string StationId, string StationName, double PositionMeters)[] displayStations = _activeTopologyProjectDocument is null
+            ? _route!.Stations.Select(station => (station.StationId, station.StationName, station.PositionMeters)).ToArray()
+            : _v2World.GetTopologyResultContext().GetStops(TrainDirection.Outbound)
+                .Select(stop => (stop.StationId, stop.StationName, stop.ProjectedChainageMeters)).ToArray();
+        var displayRouteName = _activeTopologyProjectDocument?.ProjectName ?? _route!.RouteName;
+
         var actual = ShowActualCheckBox?.IsChecked == true ? _v2World.Trajectory : [];
         var planned = ShowPlannedCheckBox?.IsChecked == true ? _plannedWorld.Trajectory : [];
         if (actual.Count == 0 && planned.Count == 0)
         {
-            AddCanvasText(TimeDistanceCanvas, "播放後即時建立運行圖；空圖不會啟動零列車 Engine。", 22, 22, 13, Color.FromRgb(102, 112, 133));
+            AddCanvasText(TimeDistanceCanvas, "播放後即時建立運行圖；空圖不會啟動零列車模擬引擎。", 22, 22, 13, Color.FromRgb(102, 112, 133));
             return;
         }
 
@@ -1066,8 +1408,10 @@ public partial class MainWindow
         startTime = Math.Clamp(startTime, 0, availableMaxTime);
         endTime = Math.Clamp(endTime, startTime + 0.1, Math.Max(startTime + 0.1, availableMaxTime));
         var visibleDuration = Math.Max(0.1, endTime - startTime);
-        var tailTrackLayouts = GetAfterStationTailTrackVisualLayouts();
-        var positions = _route.Stations.Select(station => station.PositionMeters)
+        var tailTrackLayouts = _activeTopologyProjectDocument is null
+            ? GetAfterStationTailTrackVisualLayouts()
+            : [];
+        var positions = displayStations.Select(station => station.PositionMeters)
             .Concat(actual.Select(sample => sample.PositionMeters))
             .Concat(planned.Select(sample => sample.PositionMeters))
             .Concat(tailTrackLayouts.Select(item => item.Layout.VirtualNodePositionMeters))
@@ -1087,13 +1431,14 @@ public partial class MainWindow
             "時間");
         AddCanvasText(
             TimeDistanceCanvas,
-            $"{_route.RouteName}｜計畫／理論與 V2 模擬實際運行圖｜{_v2World.MovingBlockMode}｜速限 {_v2World.SpeedLimits.Limits.Count} 段｜固定 Tick 0.1 s",
+            $"{displayRouteName}｜計畫／理論與 V2 模擬實際運行圖｜{UiDisplayText.Enum(_v2World.MovingBlockMode)}｜"
+                + $"{(_activeTopologyProjectDocument is null ? $"速限 {_v2World.SpeedLimits.Limits.Count} 段" : "拓撲軌道區段速限")}｜固定時間步進 0.1 秒",
             left,
             8,
             14,
             Color.FromRgb(34, 43, 60));
 
-        foreach (var station in _route.Stations)
+        foreach (var station in displayStations)
         {
             var y = ToDiagramY(station.PositionMeters);
             TimeDistanceCanvas.Children.Add(new Line
@@ -1273,7 +1618,7 @@ public partial class MainWindow
             }
             else if (_v2World.CurrentTimeSeconds <= 0.001)
             {
-                SafetySummaryText.Text = "模擬尚未播放；第一個 0.1 秒 Tick 後才會建立相鄰配對。";
+                SafetySummaryText.Text = "模擬尚未播放；第一個 0.1 秒時間步進後才會建立相鄰配對。";
             }
             else
             {
@@ -1375,17 +1720,25 @@ public partial class MainWindow
 
     private void UpdateV2ActualSummary()
     {
-        if (_v2World is null || _v2DispatchPlan is null || _route is null || _parameters is null)
+        if (_v2World is null || _v2DispatchPlan is null || _parameters is null)
         {
             return;
         }
 
         var events = _v2World.Events;
+        var topologyResults = _activeTopologyProjectDocument is null
+            ? null
+            : _v2World.GetTopologyResultContext();
         var completedTrips = new List<double>();
         foreach (var run in _v2DispatchPlan.Runs)
         {
-            var originPosition = run.Direction == TrainDirection.Outbound ? 0 : _route.TotalLengthMeters;
-            var terminalPosition = run.Direction == TrainDirection.Outbound ? _route.TotalLengthMeters : 0;
+            var routeStops = topologyResults?.GetStops(run.Direction);
+            var originPosition = routeStops is { Count: > 0 }
+                ? routeStops[0].ProjectedChainageMeters
+                : run.Direction == TrainDirection.Outbound ? 0 : _route!.TotalLengthMeters;
+            var terminalPosition = routeStops is { Count: > 0 }
+                ? routeStops[^1].ProjectedChainageMeters
+                : run.Direction == TrainDirection.Outbound ? _route!.TotalLengthMeters : 0;
             var departure = events.Where(item => item.EventType == SimulationEventType.Departure
                     && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
                     && item.Direction == run.Direction
@@ -1406,7 +1759,9 @@ public partial class MainWindow
 
         OneWaySummaryText.Text = completedTrips.Count > 0
             ? $"{FormatDuration(completedTrips.Average())}（V2 實際平均）"
-            : $"{FormatDuration(_cycle?.OutboundTrip.TotalRunTimeSeconds ?? 0)}（無干擾基準）";
+            : _cycle is not null
+                ? $"{FormatDuration(_cycle.OutboundTrip.TotalRunTimeSeconds)}（無干擾基準）"
+                : "尚無完成行程";
 
         var actualDepartures = events.Where(item => item.EventType == SimulationEventType.Departure)
             .OrderBy(item => item.SimulationTimeSeconds)
@@ -1434,8 +1789,15 @@ public partial class MainWindow
             .ToArray();
         CycleSummaryText.Text = outcomeTimes.Length > 0
             ? $"{FormatDuration(outcomeTimes.Max())}（端點結果）"
-            : $"{FormatDuration(_cycle?.CycleTimeSeconds ?? 0)}（無干擾基準）";
+            : _cycle is not null
+                ? $"{FormatDuration(_cycle.CycleTimeSeconds)}（無干擾基準）"
+                : "尚無端點結果";
     }
+
+    private string GetActiveRouteDisplayName() =>
+        _activeTopologyProjectDocument?.ProjectName
+        ?? _route?.RouteName
+        ?? "拓撲路線";
 
     private bool HasPendingV2TerminalOutcomes()
     {
@@ -1513,14 +1875,6 @@ public partial class MainWindow
         return status == "All"
             || string.Equals(status, observation.Status.ToString(), StringComparison.Ordinal);
     }
-
-    private static SpeedLimitDirection ParseSpeedLimitDirection(string value, int rowNumber) => value switch
-    {
-        "雙向" => SpeedLimitDirection.Both,
-        "下行" => SpeedLimitDirection.Outbound,
-        "上行" => SpeedLimitDirection.Inbound,
-        _ => throw new InvalidOperationException($"速限第 {rowNumber} 列方向無效，請選擇雙向、下行或上行。")
-    };
 
     private static string GetSelectedTag(ComboBox comboBox) =>
         comboBox.SelectedItem is ComboBoxItem item ? item.Tag?.ToString() ?? string.Empty : string.Empty;
@@ -1644,7 +1998,7 @@ public partial class MainWindow
         SimulationEventType.OvertakeCompleted => "待避完成",
         SimulationEventType.OvertakeCancelled => "待避取消",
         SimulationEventType.ServiceEnded => "退出營運",
-        _ => type.ToString()
+        _ => "其他事件"
     };
 
     private static Polyline CreateChartLine(Color color, double thickness, DoubleCollection? dash = null) => new()

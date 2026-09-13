@@ -228,6 +228,37 @@ public static class IntervalStatistics
         IntervalStatisticsFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(route);
+        return AnalyzeCore(
+            direction => direction == TrainDirection.Outbound
+                ? route.Stations.ToArray()
+                : route.Stations.Reverse().ToArray(),
+            samples,
+            events,
+            speedLimits,
+            filter);
+    }
+
+    /// <summary>
+    /// Schema 8 區間統計直接由 topology resolved stop context 建立。顯示座標是 cursor 對
+    /// ServiceRoute 的衍生 chainage；本 overload 不建立 compatibility Route。
+    /// </summary>
+    public static IntervalStatisticsResult Analyze(
+        TopologyResultContext topology,
+        IEnumerable<TrajectorySample> samples,
+        IEnumerable<SimulationEvent>? events = null,
+        IntervalStatisticsFilter? filter = null)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        return AnalyzeCore(topology.GetDisplayStations, samples, events, [], filter);
+    }
+
+    private static IntervalStatisticsResult AnalyzeCore(
+        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
+        IEnumerable<TrajectorySample> samples,
+        IEnumerable<SimulationEvent>? events,
+        IEnumerable<SpeedLimitSegment>? speedLimits,
+        IntervalStatisticsFilter? filter)
+    {
         ArgumentNullException.ThrowIfNull(samples);
         filter ??= new IntervalStatisticsFilter();
         var allSamples = samples.ToArray();
@@ -247,9 +278,7 @@ public static class IntervalStatistics
             }
 
             var direction = run.Key.Direction;
-            var stations = direction == TrainDirection.Outbound
-                ? route.Stations.ToArray()
-                : route.Stations.Reverse().ToArray();
+            var stations = stationResolver(direction).ToArray();
             for (var index = 0; index + 1 < stations.Length; index++)
             {
                 var from = stations[index];
@@ -339,7 +368,7 @@ public static class IntervalStatistics
             .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId)
                 && !string.IsNullOrWhiteSpace(item.ServiceRunId))
             .GroupBy(item => (item.VehicleId, item.ServiceRunId, item.Direction))
-            .Select(run => CreateJourneyStatistic(route, run.OrderBy(item => item.SimulationTimeSeconds).ToArray(), allEvents))
+            .Select(run => CreateJourneyStatistic(stationResolver, run.OrderBy(item => item.SimulationTimeSeconds).ToArray(), allEvents))
             .Where(item => item is not null)
             .Cast<JourneyStatistic>()
             .Where(filter.Matches)
@@ -532,7 +561,7 @@ public static class IntervalStatistics
     }
 
     private static JourneyStatistic? CreateJourneyStatistic(
-        Route route,
+        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
         IReadOnlyList<TrajectorySample> samples,
         IReadOnlyList<SimulationEvent> events)
     {
@@ -542,8 +571,14 @@ public static class IntervalStatistics
         }
 
         var direction = samples[0].Direction;
-        var origin = direction == TrainDirection.Outbound ? route.Stations[0] : route.Stations[^1];
-        var terminal = direction == TrainDirection.Outbound ? route.Stations[^1] : route.Stations[0];
+        var stations = stationResolver(direction);
+        if (stations.Count == 0)
+        {
+            return null;
+        }
+
+        var origin = stations[0];
+        var terminal = stations[^1];
         var departure = FindDeparture(samples, events, origin, direction);
         var arrival = departure is null
             ? null

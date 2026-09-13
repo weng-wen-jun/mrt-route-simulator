@@ -53,12 +53,10 @@ public static class TrajectoryAnalysis
     }
 
     public static string BuildCsv(
-        Route route,
         IEnumerable<TrajectorySample> samples,
         IEnumerable<SimulationEvent> events,
         double displayClockStartSeconds)
     {
-        ArgumentNullException.ThrowIfNull(route);
         var eventLookup = events
             .GroupBy(item => (item.VehicleId, RoundedTime: Math.Round(item.SimulationTimeSeconds, 1)))
             .ToDictionary(group => group.Key, group => string.Join('|', group.Select(item => item.EventType)));
@@ -90,6 +88,17 @@ public static class TrajectoryAnalysis
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>供 V1 / 舊呼叫端保留的 facade；CSV 本身只消費 V2 trajectory/event。 </summary>
+    public static string BuildCsv(
+        Route route,
+        IEnumerable<TrajectorySample> samples,
+        IEnumerable<SimulationEvent> events,
+        double displayClockStartSeconds)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        return BuildCsv(samples, events, displayClockStartSeconds);
     }
 
     public static string FormatClock(double totalSeconds)

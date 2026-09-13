@@ -1,5 +1,162 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 建立與讀檔接軌防堵（2026-09-13）
+
+- 新增獨立實體接軌側別與共用 `TrackPortRules`。同節點同側轉向拒絕，加入 ServiceRoute 或移除 directedConnections 不可繞過；合法備用連接與原地換端保留。Schema 8 讀寫、WPF 編輯器及失敗讀檔交易保護納入回歸。
+- 模板不再枚舉所有共享節點組合。站後折返 X1／X2 端點及兩條 facility traversal 修正；兩份 V3.3 範例及 baseline 增設實體 ENTRY／EXIT 軌道，baseline 移除西端直接跨股道捷徑並校正中央上行月台。13份範例均補入固定側別。
+- 快速建線、軌道分割及設施精靈延續側別；尾軌精靈改為進軌、同軌去回、出軌四段路徑。新建尾軌／袋狀軌的進出渡線各25m，範例遷移的進出軌各180m，均屬實體運行距離。
+- 全13檔主圖／編輯器於720／1200px無配線警告，折線內部及有向接軌突折檢核通過；完整範例0／120／311.5秒停靠仍與月台中心對位。另目視站前／站後及baseline輸出。輸出位於 `artifacts/station-rules-visual/`。
+- Release build：0 warnings／0 errors。Engine：135/135；WPF runner：通過，含全部範例載入、計畫時間軸、雙向預覽、側別保存，以及無效接軌保留既有專案／會話／檔名／標題。
+- 相容性邊界：兩端皆未填側別的舊軌道仍可載入，不宣稱已驗證其實體轉向方向；不在讀檔時從示意位置猜測側別。舊檔引導遷移、不同DPI及全程桌面連續播放仍待辦。以上離屏WPF檢核不是完整桌面人工驗收。
+
+## 全範例轉角盤點與問題清單（2026-09-12）
+
+- 新增 `ROUTE_LAYOUT_ISSUES.md`，列出9類易復發問題、13個範例的結果，以及建立路線／讀檔防堵入口；TODO保留根源修正未完成。
+- WPF共用最終幾何使用水平切線與平滑側線過渡，單軌折返展開示意喉區並統一防出界；明確節點配置不再被中心里程映射覆蓋。模型、JSON範例及模擬距離本輪未修改。
+- 全13檔、主圖／編輯器、720／1200px驗證已繪出rail內部及跨edge接點突折角小於45度（不把止衝標記及合法停車換端算為彎軌），並保留三站實際停靠對位。不能呈現的轉向顯示配線待修，不以垂直線或回頭曲線掩蓋。
+- PDF-CentralPocket、PDF-FrontTurnback、PDF-RearTurnback、V4 baseline仍有配置警告；警告項目未計作合法配置通過，具體清單見新文件。模板自動組合所有共享端點traversal是後續優先調查入口。
+- Release build 0 warnings／0 errors；WPF runner通過（含上述已知配置警告）；Engine完整回歸127/127。原執行目錄已更新。離屏目視及程式檢核不等同不同DPI／全程播放人工驗收。
+
+## 新增中央待轉軌示範列車（2026-09-12）
+
+- 完整 topology 範例新增 POCKET-02／POCKET-DEMO-DOWN，400秒發車，使用 POCKET-TURNBACK 停站模式；原有班次保留，simulation.trainCount同步7筆派車。
+- 回歸按VehicleId確認新增列車：553.3秒在POCKET-M抵達停點，583.3秒於同軌開始反向返回，軌跡實際進入UP-M-W，完整情境3000秒後全部退出且無碰撞。全部範例3600秒有界運行與多車長換端回歸通過。
+- Release build 0 warnings／0 errors；Engine 127/127；WPF全範例載入、雙向預覽及版面runner通過。此輪新增範例與驗證，未變更模擬核心。
+
+## 端點月台 5 px 偏移補正（2026-09-12）
+
+- 使用者回報 311.5 秒東站停靠仍未對齊。根因為 DrawPlatforms 將月台限制在軌道端點內縮 5 px 的範圍，導致西站月台右移、東站月台左移，而列車仍依物理中心呈現；上一輪僅測中央站未涵蓋此情境。
+- 移除端點內縮造成的整體平移；最小顯示寬度仍以真實中心向兩側展開。未修改 Engine、範例或停車位置。
+- 新增 0／120／311.5 秒與 720／1200 px 組合，先確認實體車體中心，再於 Measure／Arrange 後以 TranslatePoint 取得實際圖示與月台中心。修正前測試重現 -5 px；修正後六組均小於 0.51 px，13 範例主圖／編輯器與載入矩陣通過。
+- Release build 0 warnings／0 errors；完整 Engine 127/127。修正版已建置回原執行目錄；已檢視 311.5 秒東站 WPF 輸出圖，新版桌面及不同 DPI 尚未重驗。
+
+## A～D 配置及停靠對位修正（2026-09-12）
+
+- 完整 topology 範例：中央站上行月台移至 UP-M-W 的 130–270 m，與下行同一站中心；全部月台採 TrainCenter，同步設施到發錨點。中央袋狀軌新增實體進出道岔軌段，雙端 crossover 長度改為 180 m，保留站外喉區及尾軌。
+- 主畫面與編輯器共用 StationChainageProjection 的 edge-offset 映射，軌道、月台、列車使用同一位置函式；明確的四段折返進路以平滑曲線銜接，連接點位於軌道端點而非月台停車標。
+- 原目錄 Release build：0 warnings／0 errors；完整 Engine runner：127/127 通過（擴充既有站中心測試）。WPF runner：PASS，13 範例 × 主圖／編輯器 × 720／1200 px，共 52 圖。
+- 新增完整範例回歸：所有月台中心里程及畫面 X 一致、全部有向接軌端點直接重合、渡線及袋狀軌無垂直／逆向反折、120 秒中央站停靠列車的實體中心與圖示皆對齊月台。既有多車長換端、完整越行／折返與全部範例有界運行亦通過。
+- 抽查修正版 720 px 主圖及 1200 px 編輯器 PNG；使用者關閉舊程式後已建置回原執行目錄。新版桌面互動及不同 DPI 尚未重驗，下節先前桌面抽查不代表本次幾何已完成全部人工驗收。
+
+## 桌面實機驗收進度（2026-09-11～12）
+
+- 使用既有 Release WPF 執行檔，透過 Windows 檔案對話框實際讀取 baseline 與完整 topology 範例；本輪未儲存或改寫範例。
+- baseline：已檢視主畫面一般／窄視窗（擷取寬度約 1426／1166 px）、編輯器一般／窄視窗（約 1346／974 px）。站名、月台及設施圖例在抽查畫面可辨識；窄主視窗另抽查 00:00:04、00:01:22、暫停於 00:02:35 的列車標記，未見站名遭遮擋。
+- 完整 topology：已檢視窄主視窗（約 1166 px）及最大化主視窗（1920 px）。抽查普通車停站與快速車越行（00:00:42、00:02:08、00:03:18）、袋狀軌車次（00:13:00、00:15:08）、尾軌停留與返回上行（00:26:24、暫停於 00:27:34）；上述畫面未見站名與列車標記互相遮擋。
+- 完整 topology 編輯器：2026-09-12 已補驗一般／窄視窗（約 1346／974 px），站名、月台及四項設施圖例可辨識，抽查畫面未見標籤重疊。取消編輯後返回原專案。
+- 修正窄主視窗頂端摘要卡長文字硬裁切：五個動態摘要值使用換行，摘要列高度自適應並保留 100 DIP 最小高度。新版實機約 1166 px 窄視窗已確認路網與播放後速度摘要完整換行；未改 Engine 或範例資料。
+- 修正後驗證：Release build 0 warnings／0 errors；Engine 127/127；WPF runner 回報 PASS WPF visual rules。
+- 工具限制複核（2026-09-12）：嘗試啟動 Windows SystemSettings.exe 後，桌面工具回報 launched app did not expose a targetable window；重新列舉仍無設定視窗，未變更顯示縮放。另實測完整範例切至 1 倍速，00:05:01 到站減速、00:05:11 停站、00:05:22.7 暫停的畫面未見標記遮擋；但工具提供離散截圖，且 accessibility 時鐘與影像存在時間差，故不視為逐幀通過。
+- 本節為目前桌面縮放下的畫面抽查，並非全程逐幀、不同 DPI 的完整通過證明。兩範例主畫面／編輯器一般及窄視窗均已有實機抽查；仍須補足不同 DPI 與折返／交會關鍵畫面的連續檢查，因此 `V4-UI-TRACK-DIAGRAM-MANUAL-01` 保留未勾選。
+
+## 現行驗證（2026-09-11）：站中心里程與完整車體折返
+
+- `tests/ValidateStationConstruction.ps1` 完整通過：Release build 0 warnings／0 errors，Engine **127/127**；13檔主圖／編輯器各720／1200 px，共52圖的實體月台對位與版面檢核通過；13檔完整載入、計畫時間軸、雙向預覽及無效專案保留原會話通過。
+- 新增起始站中心0K、負尾軌及終點外延伸里程。七PDF月台使用車體中心錨點，runtime保留車頭cursor；即時標記與位置欄位改顯示實際車體中心。
+- 80／120／140 m車長、前後折返兩條進路、完整範例尾軌／袋狀軌及車尾恰落節點，共18個完整運行情境逐次驗證換端前後逐edge占用相等，且完整退出、無碰撞／停站違規。新增 TURN-004／005 及月台 STATION-002／003，拒絕不足整車的停靠及反向返回進路。
+- 修正26個PDF端點月台虛報有效長度、12個舊範例起點車尾超出月台、完整V4尾軌／袋狀軌容量不足、越行入口cursor正規化漏接，以及中心停點造成速度預覽未判定終點。逐檔資料見 `samples/AUDIT-2026-09-11.md`。
+- 13範例加預設六站各推進3,600秒：全部列車退出、碰撞0、停站違規0；三／四股道及舊越行情境確有完成超越，完整V4尾軌與袋狀軌合計3次換向。紀錄為 `artifacts/station-layout-qa/sample-audit.tsv`。
+- 已檢視本輪前／後折返窄版PNG，站名及0K對準月台本體。自動化為WPF程序內驗證，未代替桌面檔案對話框、所有DPI及逐幀人工驗收；未重啟使用者目前執行中的程式。
+
+## 歷史驗證（2026-09-09）：PDF 站型與模擬
+
+- 建置規則化：新增 STATION-001／TURN-001～003 共用驗證，原地折返停點／月台／首末站不一致即拒絕；新增正式 WPF 測試專案及 `tests/ValidateStationConstruction.ps1`。Release build 零警告／零錯誤，Engine 121/121；WPF 七站型 × 兩寬度、故意錯位／重疊／越界、20 設施圖例、13 個範例完整載入與無效專案保留會話均通過。規則及未涵蓋範圍見 `STATION_CONSTRUCTION_RULES.md`。
+
+- 站前折返站內定位：修正 PDF-FrontTurnback 的兩座月台、折返點與反向發車點，全部使用月台中心的實體 offset；新增同 edge 同位置原地折返處理。實際／計畫模式及第二月台進路 regression 確認整段停等速度零、offset 不變。262.7 秒 WPF 主畫面已檢視，列車與 A 站月台中心對齊。120/120 完整測試通過，Release 零警告／零錯誤；全部範例讀檔初始化通過。
+
+- 讀檔追修：實際呼叫 `ConfigureTopologyProjectForPlayback` 重現 PDF-FrontTurnback／PDF-RearTurnback 在 `PreparePlannedTimeline` 的「topology 折返列車缺少 runtime cursor」。停車超越保護原以顯示里程回推位置，會在反向停點遺失 cursor；改以 resolved stop 的實體 traversal／offset 定位並保留速度繼續煞車。修正後 13 個範例及啟動六站全部通過讀檔初始化、計畫時間軸與速度預覽。
+- 新增 BasicPhysics／Independent 計畫模式的站前與站後折返回歸，驗證完成接續退出且無 LEGACY 軌道。Release build 零警告／零錯誤，完整測試 120/120。此次未操作桌面檔案選擇對話框。
+
+- 全範例合理性追修：逐檔結果見 `samples/AUDIT.md`。13 個 JSON 加預設六站均推進 3,600 秒，全部退出、零碰撞／停站違規；補舊範例股道／月台編號、三股道及站後折返名稱，修正水平袋狀軌和設施標籤重疊。
+- 發現預設六站上行起站錯選 O01，修正線性轉換依進路首停點選 O06；另發現 541.2 秒對向列車假碰撞，修正 graph-distance 尋路兩端轉向限制及 incoming traversal 搜尋狀態，保留合法繞行距離。新增回歸後完整測試 119/119；Release build 0 警告／0 錯誤。
+
+- 站名對齊追修：主畫面及編輯器改用實際月台符號的外框中心定位站名，不再使用停車點 X；端點文字區域對稱縮窄而不平移。已檢視預設六站主畫面 1200 px 與編輯器 720 px 的 WPF 圖像，確認 O01～O06 站名與月台垂直對齊。Release build 0 警告／0 錯誤；不改變停車點或運行資料。
+
+- 使用者截圖追修：預設 O01～O06 六站、10 節點／16 edges 的三段式單尾軌折返，原自動排版把兩條 crossover 擠在相同 X 座標，平行線錯開後形成直立迴圈。主畫面與編輯器現在共用折返路徑展開：去程及尾軌沿抵達股道水平向外，回程斜接出發股道。未新增軌道或修改運行資料，因此不是 PDF 雙尾軌＋交叉渡線的自動轉換。
+- 直接從 MainWindow 預設設定建立六站專案並擷取 720／1200 px 圖像，已檢視主畫面 1200 px 及編輯器 720 px，確認兩端無直立迴圈；Release build 0 警告／0 錯誤，完整測試仍為 118/118。尚未重啟使用者目前開啟的程式。
+
+- Release build：0 warnings、0 errors；完整自動化測試 118/118 通過，0 失敗（命令同下方歷史紀錄）。
+- 新增七種 PDF 站型，連同原六個範例共 13 個 Schema 8 專案均可往返、建立 world、推進 3,600 秒並完成退出，無碰撞與停站違規。
+- 新增八項回歸，涵蓋示意欄位往返／非法值／不影響運行、七站型運行、站前及站後兩組折返進路與同車接續、三／四股道側線及實際越行、中央袋狀軌停靠，以及對向互斥、車尾淨空釋放和重設重現性。三股道完成上行越行，四股道完成雙向越行。
+- WPF 程式內驗證：直接呼叫主畫面和編輯器的繪圖程式，在 720／1200 px 寬產生七個新範例與五個根目錄既有範例的圖像；已抽查主畫面四股道窄圖、站後折返寬圖、編輯器站前折返及中央袋狀軌圖。主畫面使用實際 90 秒快照。擷取時隔離 SizeChanged 的重新繪圖事件，避免驗證畫布被清空。
+- 編輯控制項驗證：七選項下拉選單、重新起稿按鈕、草稿不污染原專案、示意欄位提交保留、袋狀軌下行通過進路綁定與 runtime 建立均通過。
+- 限制：本輪為 WPF 程式內控制項與離屏繪圖驗證，未完成桌面手動的讀取／儲存／播放流程、參數對話框輸入或匯出驗收。舊完整範例密集標籤與全寬窄矩陣的人工驗收仍待完成。
+- 未 commit、tag、push、發布或調整版本。
+
+## 歷史驗證（2026-09-08）
+
+- Release：`dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore`，0 warnings、0 errors。
+- 完整測試：`dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore`，110/110 通過、0 失敗；新增三組驗證目標 metadata regression，涵蓋舊 API、物件／欄位解析、dispatch 與 route 目標。
+- UI：主選單直接開啟工作區對應頁；快速起稿收合後播放倍率仍可操作，錯誤訊息在主內容區。工作區共用驗證訊息，依可辨識 metadata 定位頁面、物件及欄位；沒有穩定列 ID 的派車錯誤僅定位頁面。
+- Windows 實測：六站範例建立後側欄收合，倍率由 20× 改為 1×，播放至 06:00:13.9 後暫停，列車標記位於軌道上。
+- Windows 實測：車長輸入 abc 後，驗證顯示錯誤、切頁被阻擋、套用提示未變更；點擊錯誤回到 DEFAULT_VEHICLE 的長度欄。改回 92 後錯誤清除；點擊未使用軌道警告可定位對應軌道。取消後重開保留原始車長 92。
+- 參考圖樣式：主畫面及編輯器改為棕紅色 5 px 軌道、方向箭頭、實心矩形月台及平滑支線轉角；月台仍由實際 edge offset 決定，短符號使用最小寬度並提供 tooltip。列車與軌道共用同一幾何，不改變 runtime 或 Schema。
+- Windows 視覺檢查：六站編輯器於約 1682 px 與 1250 px 視窗寬度均可辨識所有站名、月台及尾軌；已修正右側站點被壓縮至同一位置的問題。完整 topology 範例成功載入，主畫面顯示 9 節點／13 軌道區段，並檢視編輯器示意圖。
+- 未完成：完整範例密集設施附近仍有站名／設施標籤重疊；baseline 與完整範例完整的寬窄視窗矩陣及動態列車遮擋需續驗。彎曲軌道上的月台符號仍為起訖點之間的直線矩形。本輪未重測匯出，不代表全部 WPF 驗收完成。
+- 未執行 commit、tag、push、Release 或版本調整。
+
+## 歷史驗證（2026-09-05）
+
+- Release build：0 warnings、0 errors。
+- 自動化測試：107/107 通過，0 失敗。
+- 六個 Schema 8 範例均推進 3,600 秒：沒有未使用 edge、legacy facility edge 欄位、未具名續行、碰撞或停站違規，且所有列車均完成退出；V3.4 範例實際產生快速車越行事件，V3.3 折返範例實際完成袋狀軌折返與指定反向接續。
+- 範例尾軌／袋狀軌改為同一實體 edge 的正反向 traversal，移除孤立分支與重複回程 edge；facility 精靈會保留節點原有自然轉向，validator 會拒絕不連續或以中段停點跳接其他 edge 的折返。
+- Windows WPF 實機載入並播放完整 topology 範例，確認平行主線／待避線可辨識，設施支線以實線連接器接回既有軌道，列車位置取自同一 edge-local 幾何。本輪未重做三種匯出。
+- 依軌道配線圖參考重整主畫面與 topology editor：軌道統一為青色實線、移除每站假性垂直連線與畫面上的 edge ID，月台依實際起訖 offset 畫成長色帶，站碼／站名成為主要標籤；尾軌沿抵達方向主線股道直線延伸並以止衝結束，回程切換股道才畫實際轉向。列車仍依同一 edge-local 幾何定位。
+- 新配線圖程式已完成 Release build 與 107/107 regression；本次執行環境未提供原生 Windows App 控制介面，因此尚未對新樣式完成不同視窗寬度、完整範例與 topology editor 的實機視覺複核。
+- 未執行 Git commit、tag、推送或 Release 發布。
+
+## V4.0.1 完整 topology 情境驗證（2026-08-31）
+
+結論：新增的完整 Schema 8 情境會把快速越行、中央袋狀軌折返及雙端 crossover 尾軌折返放入同一個 world，推進至所有車次退出。首次執行發現快速車合流時會把停在平行 local edge 的普通車誤判為負間距；已改為保持普通車待避至快速車車尾 rear-clear，並排除平行 edge 的假性共線安全配對。
+
+- 完整範例：`V4.0.0-完整拓撲執行驗證範例.mrtsim.json` 使用 `DirectedTrackConnectionDefinition`、`TrackPosition` 中段折返停點、tail／pocket／passing traversal 及手動接續車次。
+- runtime regression：驗證快速車確實走過 `PASS-M`、袋狀軌與雙端尾軌抵達實體停等位置、四類 resource 皆於 rear-clear 後釋放、無 `LEGACY:` identity 或碰撞、所有車次完成，且時刻表／區間統計／CSV 可直接消費 topology 結果。
+- 建置：Release 0 warnings、0 errors；自動化：100/100 通過，0 失敗。
+- 本輪未重做 Windows UI 手動驗收；未執行 Git commit、tag、推送或 Release 發布。
+
+## V4.0.0 topology-native 驗證（2026-08-31）
+
+結論：V2 `SimulationWorld` 已以 Schema 8 topology 取代 Route／legacy Infrastructure runtime。Release build 為 0 warnings、0 errors；自動化測試 99/99 通過；Windows WPF 的 Schema 8 讀檔、播放、結果與三種匯出均已實測通過。
+
+- Topology model：`InfrastructureGraphV4` 使用 node／edge dictionary 與 outgoing、incoming、station-platform、edge-platform index；`TrackEdgeDefinition` 不引用 StationId，`PlatformDefinitionV4` 以 `TrackEdgeId + local offset` 定位，ServiceRoute 使用有序 `DirectedTrackTraversal`。
+- Validator：會拒絕不存在 node、無效 edge 長度／速限、無效月台 offset、缺漏 traversal edge、edge 方向不相容、相鄰 traversal 不連續，以及錯誤 station／platform／route 參照。
+- 道岔轉向：`DirectedTrackConnectionDefinition` 讓 switch／crossing node 可拒絕未宣告的 edge-to-edge transition；path finder、service route 驗證與 runtime movement 使用相同規則。沒有宣告限制的普通連接點仍維持一般連通性。
+- Linear builder／projection：三站線會建立四條逐區間雙向 edge，而非 legacy 全線兩條 edge；forward／reverse offset 可投影為 route-local chainage，重複 edge 的 loop 必須傳入 traversal index，避免歧義。
+- Transitional state／主線 movement：`WorldTrainState`、`TrajectorySample`、`SimulationEvent` 均輸出同步的 `TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex`；正常主線依該 cursor 推進，跨 edge 後可由 route projection 回驗至相同 chainage，`PositionMeters` 為 projection cache。
+- Resolved stop：`ServiceRouteStop` 的 candidate platform 會解析為有序 traversal 上的 `TrackPosition`；正常主線的煞車距離／到站吸附消費它，上行中間站 stop 固定在抵達 edge 的終端。
+- Runtime：V2 world 不提供 compatibility `Route` 或 legacy `InfrastructureGraph`；快速表單 Route 只在建構前轉成含實體尾軌／resource／turnback operation 的 Schema 8 draft。
+- Facility／safety：tail、pocket、turnback、passing 均採 physical traversal；快速線性起稿的 terminal turnback 含 crossover edge／switch resource。折返停點可精確定位到 `TrackPosition`，中段停點只允許同一 edge 的立即反向 traversal；footprint、rear-clear resource release、parallel edge isolation 及 graph safety 都有 regression。
+- Results：時刻表、區間統計、運行圖與 CSV 不要求 Route，WPF 的 Schema 8 讀取、圖形與匯出路徑均已改為 topology context。
+- Windows UI：載入 `V4.0.0-topology-baseline.mrtsim.json` 後建立 6 列車／3 站 topology world，播放至 06:02:37.7，路線圖顯示實體 edge cursor、時刻表顯示實際到離站／退出事件；CSV、PNG、PDF 均成功匯出並讀回。未執行 V4 Git commit、tag、推送或 Release 發布。
+
+### V4 正式案例覆蓋
+
+下表列出本輪自動化可證明的 topology acceptance。
+
+| V4 topology 驗收案例 | 目前狀態 | 尚缺驗收 |
+|---|---|---|
+| Schema 8 round-trip／reference rejection | 通過 | 自動化 |
+| 道岔有向轉向／physical turnback 中段折返 | 通過 | 自動化 |
+| 無 Route V2 world | 通過 | world.Route／Infrastructure 會拒絕 |
+| 尾軌、袋狀軌與 facility continuation | 通過 | 實體 traversal／VehicleId regression |
+| 平行 passing edge 與快車越行 | 通過 | footprint、rear-clear、graph safety regression |
+| 結果／CSV 無 Route | 通過 | topology result context regression |
+| Windows UI 操作 | 通過 | Schema 8 讀檔、播放、時刻表、CSV／PNG／PDF |
+
+上述 Schema 8 round-trip、V4 baseline sample 與已完成的 Windows topology UI 操作均保留為歷史通過紀錄；目前 `TODO.md` 仍有唯一未完成項目 `V4-UI-TRACK-DIAGRAM-MANUAL-01`，一般及窄視窗已有本輪桌面抽查，仍須補足不同 DPI 與關鍵畫面的連續驗收。
+
+### 現行建置與自動化
+
+- 方案：`MrtRouteSimulator.slnx`
+- 版本來源：`Directory.Build.props` 的 `MrtVersion = 4.0.0`
+- 存檔格式：`schemaVersion = 8`（V2 topology）
+- 建置：`dotnet build MrtRouteSimulator.slnx -c Release --no-restore --artifacts-path artifacts/v4-phase-a-c`
+- 結果：Engine、Tests、App 全部成功，0 warnings、0 errors
+- 測試：99/99 通過，0 失敗
+
+自動化覆蓋 Schema 7 往返、舊雙資料源拒絕、進站控制、派車／接續／退出、資源、折返、越行、統計、完整範例與 10 項 topology regression；再以本節 Windows 操作確認 Schema 8 的實際資料流與三種匯出。這不表示本程式具備安全認證或超出 scope 的完整聯鎖模型。
+
 ## V3.4.2 進站精停驗證（2026-08-29）
 
 結論：V3.4.2 的 `StationStopController` 已接入 `SimulationWorld` 排定停站。高速段採距離－速度煞車曲線，並以 Jerk 受限煞車包絡線預測停點；最後 12 m 以終端速度曲線收斂至 2 m 近停吸附邊界。Release build 為 0 warnings、0 errors；自動化測試 96/96 通過。
@@ -38,25 +195,7 @@
 
 結論：V3.3.0 的 Schema 7、停站模式、發車計畫、車型性能、端點退出／折返接續、五類空間參考點、速度曲線與 V3.3 區間統計已通過自動化及 Windows 桌面實測。隔離 Release 建置為 0 警告、0 錯誤；自動化測試 75/75 通過。
 
-## 建置與自動化
-
-- 方案：`MrtRouteSimulator.slnx`
-- 版本來源：`Directory.Build.props` 的 `MrtVersion = 3.4.2`
-- 存檔格式：`schemaVersion = 7`
-- 建置：`dotnet build MrtRouteSimulator.slnx -c Release --artifacts-path TestResults/V3.3.0-final`
-- 結果：Engine、Tests、App 全部成功，0 warnings、0 errors
-- 測試：96/96 通過，0 失敗
-
-自動化覆蓋下列高風險情境：
-
-- Schema 7 完整往返、不寫出舊 `ServicePatterns／ServiceRuns`，Schema 1～6 明確拒絕。
-- 停站秒數覆寫、跨站通過速限及折返後停站模式。
-- 各車次車型控制最高速度、加速度、營運／緊急煞車、Jerk、牽引衰減、惰行減速度及車長。
-- 上下行派車、指定反向車次接續、未續行端點退出、重複車輛拒絕與資源鎖定。
-- V2 區間統計完整篩選、完成／運行中分離、移動閉塞受限秒數及 P95。
-- 完整範例實際建立 `SimulationWorld` 並推進 2,400 秒，確認跨站、換向、接續、退出與主要結果資料。
-
-## Windows 桌面實測
+## Windows 桌面實測（V3.3 歷史驗收）
 
 使用隔離建置的 `MRT路線進出站時間模擬器.exe` 載入 `samples/V3.3.0-完整功能驗證範例.mrtsim.json`，實際操作讀檔、設定檢視、建立、播放、暫停及結果分頁。
 
@@ -79,10 +218,12 @@
 
 ## 驗收界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。以下為遠期修正目標或非產品目標，不構成現行交付阻擋：
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，唯一尚未完成的 V4 交付項目是 `V4-UI-TRACK-DIAGRAM-MANUAL-01`，一般及窄視窗已有本輪桌面抽查，尚待不同 DPI 與關鍵畫面的連續驗收。
 
-- 真實路線坡度、曲率、黏著、車型與時刻資料校準。
-- 單線共用、交叉渡線、道岔與聯鎖失效模型。
+以下屬遠期修正或非產品目標：
+
+- 指定真實路線的坡度、曲率、黏著、車型與時刻資料校準，以及高負載效能測試。
+- 完整單線共用運轉、聯鎖失效模型與營運最佳化。
 - ATP／ATO／ATS、安全完整性等級或現場設備認證。
 
-現行待辦已清空；真實路線校準與高負載效能驗證已列為 `TODO.md` 的遠期修正目標，待取得指定路線資料後再執行。歷史需求已移至 `TODO_ARCHIVE.md`。
+歷史需求已移至 `TODO_ARCHIVE.md`。

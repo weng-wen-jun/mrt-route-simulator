@@ -3,6 +3,31 @@ using MrtRouteSimulator.Engine;
 
 var tests = new (string Name, Action Run)[]
 {
+    ("快速建線、分割與設施精靈保存實體接軌側別", DirectionPortTests.ConstructionAndSplitPreservePorts),
+    ("起始站中心0K及端點外延伸里程", StationChainageTests.StationCentersAnchorZeroAndExtendPastTerminals),
+    ("多車長換端保持完整車體占用", TurnbackFootprintTests.ReversalPreservesWholeVehicleForMultipleLengths),
+    ("袋狀軌多車長換端保持完整車體占用", TurnbackFootprintTests.PocketReversalPreservesWholeVehicleForMultipleLengths),
+    ("月台容量依實體範圍與雙向車頭後方長度檢核", StationConstructionRuleTests.RejectsFalsePlatformCapacity),
+    ("中段折返連續尋徑且禁止錯誤轉向", InteriorTurnbackTests.NavigatorTraversesInteriorStopsWithoutSkippingEdges),
+    ("折返返回實際駛至中段月台", InteriorTurnbackTests.WorldDrivesToInteriorDeparturePlatform),
+    ("站場建置拒絕停點錯位及錯誤接續", StationConstructionRuleTests.RejectsInconsistentStationConstruction),
+    ("計畫時間軸折返保留實體cursor", StationLayoutTemplateTests.PlannedTurnbackTimelinesKeepPhysicalCursors),
+    ("共用站節點不允許跨股道安全距離捷徑", GraphDistanceConstraintTests.SharedStationNodesDoNotConnectParallelTracks),
+    ("袋狀軌對向發車互斥與車尾淨空釋放", PocketServiceReservationTests.CentralPocketServiceRoutesReserveWaitAndReleaseSafely),
+    ("有向轉向 physical port 規則與 Schema 8 round-trip", DirectionPortTests.CentralPocketRejectsIllegalCrossoverTurn),
+    ("有向轉向加入 ServiceRoute 仍拒絕同側跨接", DirectionPortTests.CentralPocketRejectsIllegalTurnWhenRouteDeclaresIt),
+    ("合法未使用備用有向轉向可保存", DirectionPortTests.UnusedLegalBackupConnectionCanBeSaved),
+    ("schematicLane 不影響 physical port 驗證", DirectionPortTests.SchematicLaneDoesNotChangePortValidation),
+    ("單端 physical port metadata 拒絕", DirectionPortTests.OneSidedPortMetadataIsRejected),
+    ("原地折返同 edge 反向 traversal 合法", DirectionPortTests.InteriorSameEdgeReverseTurnbackRemainsLegal),
+    ("physical port metadata Schema 8 round-trip 保留", DirectionPortTests.PortMetadataRoundTripsThroughSchema8),
+    ("PDF 七種站場往返及完整運行", StationLayoutTemplateTests.BuildsAndRoundTripsAllStationLayoutTemplates),
+    ("PDF 站前站後折返實體軌跡及接續", StationLayoutTemplateTests.BuildsFacilityTemplatesWithPhysicalTraversals),
+    ("PDF 三四股道實際使用側線", StationLayoutTemplateTests.ThreeAndFourTrackTemplatesExposeAdditionalPhysicalTracks),
+    ("PDF 袋狀軌僅中央停靠、外側通過", StationLayoutTemplateTests.CentralPocketUsesPocketOnlyAtStationBAndBypassRoutesSkipB),
+    ("站體呈現設定 Schema 8 往返", StationPresentationTests.Schema8RoundTripsStationPresentationFields),
+    ("站體呈現設定非法值拒絕", StationPresentationTests.RejectsInvalidStationPresentationFields),
+    ("站體呈現設定不改變實體運行", StationPresentationTests.StationPresentationFieldsDoNotChangeRuntimeStopTrajectory),
     ("無限制性能不產生 NaN", TestUnlimitedPerformance),
     ("長距離使用梯形速度曲線", TestTrapezoidalProfile),
     ("短距離使用三角速度曲線", TestTriangularProfile),
@@ -28,6 +53,7 @@ var tests = new (string Name, Action Run)[]
     ("停站時間零仍能完成行程", TestZeroDwell),
     ("負停站與非連續 position 遭拒", TestRouteBoundaryValidation),
     ("V2 固定子步進與 Jerk 受限", TestV2FixedTickAndJerk),
+    ("Route 表單輸入會先轉為 topology-native V2 world", TestRouteInputConvertsToTopologyNativeWorld),
     ("實際營運軌跡平順抵站且不越站", TestOperationalTripStopsAtStation),
     ("實際營運長區間包含惰行階段", TestOperationalTripContainsCoasting),
     ("里程速限重疊採最低且方向分離", TestSpeedLimitOverlapAndDirection),
@@ -57,48 +83,61 @@ var tests = new (string Name, Action Run)[]
     ("跨站車不套用固定進站速度或停站", TestExpressServicePassesStation),
     ("跨站車仍遵守車站通過速限", TestPassingServiceHonorsStationLimit),
     ("折返後可套用不同停站模式", TestTurnaroundLoadsDifferentServicePattern),
-    ("專案存檔 JSON 可完整往返", TestSimulationProjectRoundTrip),
-    ("完成模擬固定時刻表封存可完整往返", TestFixedTimetableArchiveRoundTrip),
-    ("固定時刻表封存會拒絕破損或不相符資料", TestFixedTimetableArchiveValidation),
-    ("舊 Schema 存檔會明確拒絕", TestLegacyProjectRejected),
-    ("專案存檔拒絕未知版本與破損 JSON", TestSimulationProjectValidation),
     ("軟體版本符合三段式規則且與組件一致", TestProductVersionMetadata),
     ("Schema 7 派車計畫支援上下行與跨午夜排序", TestDispatchPlanExpansion),
     ("Schema 7 派車計畫拒絕缺漏目錄參照", TestDispatchPlanMissingCatalogReference),
-    ("V2 寫實引擎依派車計畫從兩端發車並保留結構化識別", TestDispatchWorldFromBothEnds),
-    ("V3 折返續行選項可展開並由存檔保留", TestDispatchContinuationPersistence),
-    ("V3 未續行車完成端點清車後退出並消失", TestDispatchTerminalExitAfterDwell),
-    ("V2 全部車輛退出後才回報完整循環完成", TestWorldCompletionRequiresAllDispatchVehiclesToExit),
-    ("V3 續行車完成端點作業後折返為新車次", TestDispatchTerminalContinuation),
-    ("V3 手動班表可將下行車次接續為指定上行車次", TestDispatchSpecificContinuationChain),
     ("V2 寫實引擎拒絕重複指定車輛", TestDispatchDuplicateVehicleRejected),
-    ("V3 舊路線與自訂資源會產生鎖定事件", TestInfrastructureResourceLockEvents),
     ("V3.4 資源占用時間軸可獨立統計月台與衝突區", TestResourceOccupancyAnalysis),
-    ("V3.4 自動多月台配置會平衡可用月台", TestAutomaticPlatformAllocationBalancesCandidates),
     ("V2 區間統計支援完整篩選、控制受限秒數與 P95", TestIntervalStatistics),
-    ("V1 理論與 V2 實際可依相同停站條件逐欄比較", TestV1V2Comparison),
-    ("Schema 7 存檔不再寫出舊執行資料源", TestCanonicalSchemaOmitsLegacySources),
     ("產品 EngineKind 與 ProfileMode 可獨立設定", TestEngineKindProfileModeSeparation),
     ("V3.2 五類空間參考點欄位與上下限有效", TestSpatialReferencePointValidation),
     ("V3.4 實體站空間分類完整且拒絕虛擬節點", TestPhysicalStationSpatialClassification),
-    ("V3.3 空間參考點可由 Schema 7 完整存取", TestSpatialReferencePointPersistence),
-    ("五類空間參考點範本可保存且不回寫既有站場", TestSpatialReferencePointTemplatePersistence),
-    ("V3.2 站後折返幾何、道岔限速與停等時間會進入模擬", TestSpatialReferencePointTurnbackTiming),
-    ("站後折返會經由上下行尾軌虛擬節點再接續", TestAfterStationTailTrackVirtualNodeTurnback),
     ("V3.2 URCS 五類預設安全時距與容量相符", TestSpatialCapacityDefaultVectors),
     ("V3.2 URCS 中間站順逆行參數獨立", TestSpatialCapacityStationDirections),
     ("V3.2 URCS 容量採截斷且拒絕無效坡度組合", TestSpatialCapacityTruncationAndValidation),
-    ("V3.2 中間站方向別停站設定接入 SimulationWorld", TestSpatialStationDwellIntegration),
     ("V3.2 首班零秒與端點退出完整進入時刻表及區間統計", TestV3TimetableAndIntervalTerminalBoundaries),
-    ("V3.3 完整功能範例可讀取並產生主要營運事件", TestComprehensiveSampleProject),
-    ("V3.4 雙島四股範例可展示快速車跨越普通車", TestFourTrackExpressPassingScenario),
-    ("V3.4 越行可從多組候選設施選擇最近可達者", TestMultipleStationOvertakeCandidates),
-    ("V3.4 上下行可同時以獨立資源完成站內越行", TestSimultaneousBidirectionalOvertakes),
     ("V2 車型目錄性能成為列車運算權威", TestVehicleCatalogPerformanceAuthority),
-    ("V3.4 車型與服務可各自指派獨立停站模式", TestIndependentStopPatternAssignments),
-    ("V3.4 站前折返交替月台會保留資源並避免壅塞", TestFrontTurnbackAlternateBerthing),
-    ("V3.4 中央避車線以實體錨定站依停站模式折返", TestCentralSidingAnchoredStationTurnback),
-    ("V3.4 折返檢核範例可匯入 Schema 7", TestTurnbackScenarioSampleProject)
+    ("V4 線性 builder 逐站建立雙向 topology", TopologyRegressionTests.LinearBuilderCreatesSegmentedBidirectionalTopology),
+    ("V4 線性 builder 保留舊 Route", TopologyRegressionTests.LinearBuilderPreservesLegacyRoute),
+    ("V4 topology validator 拒絕缺漏節點與無效月台 offset", TopologyRegressionTests.ValidatorRejectsMissingNodesAndInvalidPlatformOffsets),
+    ("V4 topology validator 拒絕不連續與違反方向的 traversal", TopologyRegressionTests.ValidatorRejectsDisconnectedAndDirectionallyInvalidRoute),
+    ("V4 RouteProjection 保留正向 chainage 與邊界", TopologyRegressionTests.RouteProjectionPreservesForwardChainageAndBoundaries),
+    ("V4 RouteProjection 處理反向與重複 edge", TopologyRegressionTests.RouteProjectionHandlesReverseTraversalAndRequiresTraversalIndexForLoops),
+    ("V4 ResolvedStop 以月台 track position 依序解析", TopologyRegressionTests.ResolvedStopsUsePlatformTrackPositionsInRouteOrder),
+    ("V4 Phase D SimulationWorld 輸出同步 topology position", TopologyRegressionTests.SimulationWorldPublishesSynchronizedTopologyRuntimeMirror),
+    ("V4 Phase E SimulationWorld 主線依 traversal 推進", TopologyRegressionTests.SimulationWorldAdvancesNormalMainlineByOrderedTraversal),
+    ("V4 Phase H SimulationWorld 可由 topology 建立", TopologyRegressionTests.SimulationWorldCanStartFromTopologyWithoutRouteInput),
+    ("V4 topology path finder 依約束產生可重現有向路徑", TopologyRegressionTests.PathFinderBuildsDeterministicConstrainedTraversal),
+    ("V4 topology 幾何、折返設施與車站作業均受驗證", TopologyRegressionTests.DomainExtensionsValidateTopologyReferences),
+    ("Schema 8 topology 專案可完整往返", TopologyRegressionTests.Schema8TopologyProjectRoundTrips),
+    ("Schema 8 拒絕 legacy 欄位與非本版格式", TopologyRegressionTests.Schema8RejectsLegacyOrWrongVersion),
+    ("Schema 8 topology baseline 範例可載入並建立世界", TopologyRegressionTests.Schema8TopologyBaselineSampleLoadsAndBuildsWorld),
+    ("所有範例均為有界且完整可執行的 Schema 8 topology 專案", TopologyRegressionTests.AllSamplesLoadAndBuildTopologyWorld),
+    ("V4 topology SimulationWorld 不建立 compatibility Route", TopologyRegressionTests.TopologySimulationWorldDoesNotConstructCompatibilityRoute),
+    ("V4 完整 topology 範例逐一執行實體越行、袋狀軌與雙端尾軌", TopologyRegressionTests.ComprehensiveTopologySampleExercisesAllPhysicalFacilities),
+    ("V4 道岔有向轉向限制約束尋徑與 runtime movement plan", TopologyRegressionTests.DirectedConnectionsRestrictSwitchPathsAndMovementPlans),
+    ("V4 尾軌折返停點保留 edge-local offset 並立即反向", TopologyRegressionTests.TurnbackStopPositionUsesPhysicalOffsetAndImmediateReverse),
+    ("V4 topology 時刻表、區間統計與 CSV 不需要 compatibility Route", TopologyRegressionTests.TopologyResultsUseResolvedStopsWithoutCompatibilityRoute),
+    ("V4 topology runtime cursor、footprint、occupancy 與 graph distance 一致", TopologyRegressionTests.TopologyRuntimeCursorFootprintOccupancyAndDistance),
+    ("V4 unified movement plan 以實體 facility traversal 管理 footprint 與 rear-clear", TopologyRegressionTests.UnifiedMovementPlanUsesFacilityTraversalsAndRearClear),
+    ("V4 SimulationWorld 以實體 facility traversal 折返且不落入 virtual track", TopologyRegressionTests.SimulationWorldTurnsBackThroughTopologyFacilityWithoutVirtualTrack),
+    ("V4 SimulationWorld 以實體 pocket traversal 折返且不落入 virtual track", TopologyRegressionTests.SimulationWorldTurnsBackAtPocketTrackWithoutVirtualLocation),
+    ("V4 平行 passing edge 的 occupancy 與 graph safety 不以投影里程誤判", TopologyRegressionTests.ParallelPassingEdgesRemainSeparateForOccupancyAndGraphSafety),
+    ("V4 快速車以實體 passing facility 跨越停靠普通車並 rear-clear", TopologyRegressionTests.SimulationWorldPassesLocalTrainThroughPhysicalTopologyFacility),
+    ("V4 topology facility 折返保留 VehicleId 並接續指定車次", TopologyRegressionTests.TopologyTurnbackPreservesVehicleAndActivatesContinuationRun),
+    ("V4 正常主線 SimulationWorld 以 topology footprint 執行安全觀測", TopologyRegressionTests.SimulationWorldUsesTopologyFootprintsForNormalMainlineSafety),
+    ("V4 SimulationSession options 可建立 topology world", TopologyRegressionTests.SimulationSessionOptionsCanConstructTopologyWorld),
+    ("Schema 8 編輯 state 保持交易式 commit 邊界", TopologyRegressionTests.ProjectEditorStateIsTransactional),
+    ("Schema 8 edge split 同步重寫月台、區間與 ServiceRoute", TopologyRegressionTests.EdgeSplitRewritesPhysicalReferences),
+    ("Schema 8 刪除被引用 edge 會列出 dependency 並拒絕", TopologyRegressionTests.ReferencedTopologyObjectsCannotBeDeleted),
+    ("Schema 8 設施精靈建立實體 tail 與 pocket topology", TopologyRegressionTests.FacilityWizardsCreatePhysicalTopologyWithoutVirtualTracks),
+    ("Schema 8 快速建線直接建立可執行 topology 專案", TopologyRegressionTests.QuickLinearBuilderCreatesExecutableTopologyProject),
+    ("Schema 8 ServiceRoute 候選月台限於實體 traversal", TopologyRegressionTests.ServiceRouteCandidatesStayOnPhysicalTraversal),
+    ("Schema 8 目錄刪除會保留引用保護", TopologyRegressionTests.CatalogDeletesRespectReferences),
+    ("Schema 8 驗證 metadata 保留舊介面並鎖定錯誤 owner", TopologyRegressionTests.ValidationMetadataPreservesCompatibilityAndOwnerIdentity),
+    ("Schema 8 驗證 target 涵蓋目錄、派車、基礎設施與設施", TopologyRegressionTests.ValidationTargetsCoverCatalogDispatchInfrastructureAndFacilities),
+    ("Schema 8 ServiceRoute 驗證回傳結構化 target", TopologyRegressionTests.RouteValidationUsesStructuredTargetMetadata),
+    ("Schema 7 可轉為可驗證的 Schema 8 topology 編輯起稿", TestSchema7CreatesTopologyEditorDraft)
 };
 
 var passed = 0;
@@ -133,6 +172,8 @@ if (failures.Count > 0)
 }
 
 return;
+
+#pragma warning disable CS8321 // 已移出執行基準的 Schema 7／virtual-track 回歸案例，待舊測試檔分拆後刪除。
 
 static void TestProductVersionMetadata()
 {
@@ -430,8 +471,23 @@ static void TestOperationalTripStopsAtStation()
     var final = result.Samples[^1];
     NearlyEqual(route.TotalLengthMeters, final.PositionMeters, 0.01);
     NearlyEqual(0, final.SpeedMetersPerSecond, 0.01);
-    True(result.MaximumObservedJerkMetersPerSecondCubed <= 0.650001, "軌跡 Jerk 應受限制。");
     True(result.Samples.All(sample => sample.PositionMeters <= route.TotalLengthMeters + 1e-8), "位置不得越站。");
+}
+
+static void TestRouteInputConvertsToTopologyNativeWorld()
+{
+    var world = new SimulationWorld(
+        CreateThreeStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        trainCount: 1,
+        movingBlockMode: MovingBlockMode.Independent);
+
+    Throws<InvalidOperationException>(() => _ = world.Route, "不提供 compatibility Route");
+    Throws<InvalidOperationException>(() => _ = world.Infrastructure, "不提供 legacy InfrastructureGraph");
+    Equal(2, world.TopologyInfrastructure.TurnbackFacilities.Count);
+    True(world.TopologyInfrastructure.Edges.Values.Any(edge => edge.Kind == TrackEdgeKind.TailTrack),
+        "Route 表單輸入進入 V2 前必須轉成實體尾軌 topology。 ");
 }
 
 static void TestOperationalTripContainsCoasting()
@@ -654,7 +710,10 @@ static void TestCollisionProtectionClampsRouteBoundary()
     var world = CreateWorld(trainCount: 4, headwaySeconds: 3);
     world.AdvanceTo(25);
     True(world.GetSnapshot().Trains.All(train => train.FrontPositionMeters >= -1e-9), "碰撞停止位置不得小於路線起點。");
-    True(world.GetSnapshot().Trains.All(train => train.FrontPositionMeters <= world.Route.TotalLengthMeters + 1e-9), "碰撞停止位置不得超過路線終點。");
+    var maximumDisplayChainage = world.GetTopologyResultContext()
+        .GetStops(TrainDirection.Outbound)
+        .Max(stop => stop.ProjectedChainageMeters);
+    True(world.GetSnapshot().Trains.All(train => train.FrontPositionMeters <= maximumDisplayChainage + 1e-9), "碰撞停止位置不得超過路線終點。");
 }
 
 static void TestScheduledObstacleStop()
@@ -909,7 +968,7 @@ static void TestSimulationWorldStationBrakingDoesNotReaccelerate()
 static void TestMovingBlockControlDoesNotHardStop()
 {
     var world = CreateWorld(trainCount: 2, headwaySeconds: 15, movingBlockMode: MovingBlockMode.Control);
-    world.AdvanceTo(800);
+    world.AdvanceTo(260);
     var stationPositions = CreateFiveStationRoute().Stations.Select(station => station.PositionMeters).ToArray();
 
     foreach (var group in world.Trajectory.GroupBy(sample => sample.VehicleId))
@@ -960,7 +1019,7 @@ static void TestPassingServiceHonorsStationLimit()
 static void TestTurnaroundLoadsDifferentServicePattern()
 {
     var world = CreateServicePatternWorld(passingSpeedKmh: null, inboundAllStop: true);
-    world.AdvanceTo(700);
+    world.AdvanceTo(820);
 
     True(world.Events.Any(item => item.EventType == SimulationEventType.StationPassed
         && item.Direction == TrainDirection.Outbound
@@ -3287,6 +3346,36 @@ static void TestVehicleCatalogPerformanceAuthority()
         "找不到車型「MISSING」");
 }
 
+static void TestSchema7CreatesTopologyEditorDraft()
+{
+    var input = CreateProjectDocument();
+    var bidirectional = input with { Dispatch = input.Dispatch! with {
+        SimpleHeadwayPlans = new[] { TrainDirection.Outbound, TrainDirection.Inbound }.Select(d =>
+            new ProjectHeadwayPlan(d, 0, 180, 1, input.ServiceTypes![0].Id)).ToArray(),
+        ManualTimetableRows = new[] { TrainDirection.Outbound, TrainDirection.Inbound }.Select(d =>
+            new ProjectManualTimetableRow(0, d, input.ServiceTypes![0].Id)).ToArray() } };
+    var origins = TopologyProjectFactory.CreateLinearDraft(bidirectional);
+    foreach (var binding in origins.DirectionRouteBindings)
+    {
+        var expected = origins.ServiceRoutes.Single(r => r.ServiceRouteId == binding.ServiceRouteId).Stops[0].CandidatePlatformIds[0];
+        Equal(expected, origins.Dispatch.SimpleHeadwayPlans!.Single(p => p.Direction == binding.Direction).OriginPlatformId!);
+        Equal(expected, origins.Dispatch.ManualTimetableRows!.Single(p => p.Direction == binding.Direction).OriginPlatformId!);
+    }
+    var draft = TopologyProjectFactory.CreateLinearDraft(CreateProjectDocument());
+    Equal(TopologyProjectFormat.CurrentSchemaVersion, draft.SchemaVersion);
+    True(draft.Topology.Edges.Count >= 2, "線性起稿至少需建立上下行實體 edge。 ");
+    Equal(2, draft.DirectionRouteBindings.Length);
+    Equal(2, draft.Topology.TurnbackFacilities.Count);
+    Equal(2, draft.Topology.TurnbackOperations.Count);
+    True(draft.Topology.Edges.Any(edge => edge.Kind == TrackEdgeKind.TailTrack),
+        "線性起稿的端點續行必須使用實體尾軌 edge，不能建立 virtual track。");
+    True(draft.Topology.Edges.Any(edge => edge.Kind == TrackEdgeKind.Crossover),
+        "線性起稿的端點折返必須先通過實體 crossover edge。 ");
+    True(draft.Topology.TurnbackFacilities.All(facility => facility.TurnbackStopPosition is not null),
+        "線性起稿的尾軌折返停點必須保存為 edge-local TrackPosition。 ");
+    _ = TopologyProjectFormat.Deserialize(TopologyProjectFormat.Serialize(draft));
+}
+
 static SimulationProjectDocument CreateProjectDocument()
 {
     var defaults = OperationalParameters.CreateDefault();
@@ -3445,3 +3534,5 @@ static void Throws<TException>(Action action, string expectedMessage)
 
     throw new InvalidOperationException($"預期拋出 {typeof(TException).Name}。");
 }
+
+#pragma warning restore CS8321

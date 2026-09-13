@@ -83,19 +83,6 @@ public sealed record CurrentTrainRow(
     string CurrentStation,
     string NextStation);
 
-public sealed class SpeedLimitInputRow
-{
-    public double StartKm { get; set; }
-
-    public double EndKm { get; set; }
-
-    public double LimitKmh { get; set; }
-
-    public string Direction { get; set; } = "雙向";
-
-    public string Note { get; set; } = string.Empty;
-}
-
 public sealed class ServicePatternInputRow : INotifyPropertyChanged
 {
     private string _patternName = "快速車";

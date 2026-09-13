@@ -5,6 +5,15 @@ public sealed class SpeedLimitService
     private const double PositionEpsilon = 1e-6;
     private readonly IReadOnlyList<SpeedLimitSegment> _limits;
 
+    /// <summary>
+    /// 只供 topology-native V2 的相容輸出欄位使用。V2 的實際速限一律由
+    /// <see cref="TrackSpeedLimitService"/> 評估，因此這個空實例不建立 Route adapter。
+    /// </summary>
+    internal SpeedLimitService(IEnumerable<SpeedLimitSegment>? limits = null)
+    {
+        _limits = limits?.ToArray() ?? [];
+    }
+
     public SpeedLimitService(Route route, IEnumerable<SpeedLimitSegment>? limits = null)
     {
         Route = route ?? throw new ArgumentNullException(nameof(route));
@@ -12,7 +21,7 @@ public sealed class SpeedLimitService
         V2Validator.ValidateSpeedLimits(route, _limits);
     }
 
-    public Route Route { get; }
+    public Route? Route { get; }
 
     public IReadOnlyList<SpeedLimitSegment> Limits => _limits;
 
@@ -118,7 +127,7 @@ public sealed class SpeedLimitService
             }
 
             var insidePosition = direction == TrainDirection.Outbound
-                ? Math.Min(Route.TotalLengthMeters, boundary + PositionEpsilon * 10)
+                ? Math.Min(Route?.TotalLengthMeters ?? double.PositiveInfinity, boundary + PositionEpsilon * 10)
                 : Math.Max(0, boundary - PositionEpsilon * 10);
             var targetSpeed = GetCurrentLimitMetersPerSecond(
                 insidePosition,

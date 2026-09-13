@@ -85,7 +85,7 @@ public partial class MainWindow
 
     private IntervalStatisticsResult BuildIntervalStatisticsResult()
     {
-        if (_v2World is null || _route is null)
+        if (_v2World is null)
         {
             throw new InvalidOperationException("請先建立 V2 模擬。");
         }
@@ -112,12 +112,18 @@ public partial class MainWindow
         {
             throw new InvalidOperationException("篩選開始秒不可大於結束秒。");
         }
-        return IntervalStatistics.Analyze(
-            _route,
-            _v2World.Trajectory,
-            _v2World.Events,
-            _v2World.SpeedLimits.Limits,
-            filter);
+        return _activeTopologyProjectDocument is null
+            ? IntervalStatistics.Analyze(
+                _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
+                _v2World.Trajectory,
+                _v2World.Events,
+                _v2World.SpeedLimits.Limits,
+                filter)
+            : IntervalStatistics.Analyze(
+                _v2World.GetTopologyResultContext(),
+                _v2World.Trajectory,
+                _v2World.Events,
+                filter);
     }
 
     private void RefreshIntervalFilterOptions()

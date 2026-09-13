@@ -236,7 +236,11 @@ public sealed record WorldTrainState(
     string? PlatformId = null,
     double? PlannedDepartureTimeSeconds = null,
     double? ActualDepartureTimeSeconds = null,
-    OperationalConstraint Constraints = OperationalConstraint.None);
+    OperationalConstraint Constraints = OperationalConstraint.None,
+    string? TrackEdgeId = null,
+    double? OffsetMeters = null,
+    int? ServiceRouteTraversalIndex = null,
+    double? ProjectedChainageMeters = null);
 
 public sealed record SafetyObservation(
     double SimulationTimeSeconds,
@@ -275,7 +279,11 @@ public sealed record TrajectorySample(
     bool IsPlanned,
     string VehicleTypeId = "DEFAULT_VEHICLE",
     string? PlatformId = null,
-    OperationalConstraint Constraints = OperationalConstraint.None);
+    OperationalConstraint Constraints = OperationalConstraint.None,
+    string? TrackEdgeId = null,
+    double? OffsetMeters = null,
+    int? ServiceRouteTraversalIndex = null,
+    double? ProjectedChainageMeters = null);
 
 public sealed record SimulationEvent(
     double SimulationTimeSeconds,
@@ -295,7 +303,11 @@ public sealed record SimulationEvent(
     string? ResourceId = null,
     double? PlannedTimeSeconds = null,
     double? DelaySeconds = null,
-    IReadOnlyList<string>? ResourceIds = null);
+    IReadOnlyList<string>? ResourceIds = null,
+    string? TrackEdgeId = null,
+    double? OffsetMeters = null,
+    int? ServiceRouteTraversalIndex = null,
+    double? ProjectedChainageMeters = null);
 
 public sealed record SimulationSnapshot(
     double SimulationTimeSeconds,

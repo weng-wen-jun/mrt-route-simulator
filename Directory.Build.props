@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- This is the single source of truth for the software version. -->
-    <MrtVersion>3.4.2</MrtVersion>
+    <MrtVersion>4.0.1</MrtVersion>
     <MrtDisplayVersion>V$(MrtVersion)</MrtDisplayVersion>
     <Version>$(MrtVersion)</Version>
     <VersionPrefix>$(MrtVersion)</VersionPrefix>

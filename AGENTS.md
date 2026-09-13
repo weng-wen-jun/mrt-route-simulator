@@ -1,8 +1,8 @@
-# MRT 路線進出站時間模擬器 V3.3.0 — Codex 專案導覽與修改規則
+# MRT 路線進出站時間模擬器 — Codex 專案導覽與修改規則
 
 > 用途：供 Codex / 自動化程式代理在修改本專案前快速判斷「功能屬於哪一層、先讀哪些檔案、哪些資料是權威來源、修改後必須驗證什麼」。
 >
-> 基準：`main` 分支、commit `c9e5f93`、產品版本 `V3.3.0`、專案格式 `schemaVersion = 7`。
+> 版本、格式與驗收基準不在本檔寫死：產品版本以 `Directory.Build.props` 為準；現行 topology 專案格式以 `TopologyProjectFormat.CurrentSchemaVersion` 為準；legacy 線性輸入格式以 `SimulationProjectFormat.CurrentSchemaVersion` 為準；最近驗收結果看 `QA_REPORT.md`。
 >
 > 本檔是**導覽與修改邊界**，不是完整模型規格。公式、資料型別、API 與邊界條件仍以 `MODEL_SPEC.md` 為準；版本變更看 `CHANGELOG.md`；驗收狀態看 `QA_REPORT.md`。
 
@@ -10,14 +10,27 @@
 
 ## 0. Codex 先讀這裡
 
+### 子代理模型預設
+
+- 開立子代理時，預設使用 `gpt-5.6-luna`，思考強度設為 `xhigh`。
+- 只有任務確實需要較強的推理、跨領域判斷或高風險審核時，才提高模型能力；回報時應說明升級原因。
+
 ### 修改前的最短流程
 
 1. 先用本檔「功能 → 所屬模組 → 主要檔案」定位責任範圍。
 2. 若涉及物理公式、模擬狀態、容量或安全距離，先讀 `MODEL_SPEC.md` 對應章節。
-3. 若涉及專案檔，確認 `SimulationProject.cs`、`MainWindow.ProjectFiles.cs`、Schema 7 驗證與測試同步。
+3. 若涉及專案檔，確認 `TopologyProject.cs`、`SimulationProject.cs`、`MainWindow.ProjectFiles.cs`、Schema 8／legacy Schema 7 驗證與測試同步。
 4. 若涉及 UI，不要直接在 UI 重算 Engine 已提供的結果。
 5. 修改完成後執行 Release build 與完整自動化測試。
 6. 不要因檔名含 `V2` 或 UI 標籤含 `V3.2` 就判定它是舊引擎；這些是歷史命名。
+
+### Topology runtime 現況
+
+- V2 `SimulationWorld` 的正式輸入是 `TopologySimulationDefinition`；world 不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
+- Schema 8 是可編輯、可儲存及可直接執行的 topology 專案格式。舊線性表單與合法 Schema 7 專案只在建立 world 前轉為 Schema 8 draft，不再輸出新的 Schema 7 專案。
+- 正常主線、尾軌、袋狀軌、crossover、折返與 passing facility 共用 topology movement plan；權威位置為 edge-local cursor，安全與資源生命週期使用 footprint、occupancy 與 rear-clear。
+- 時刻表、區間統計、運行圖、CSV／PNG／PDF 與 WPF topology 工作區均消費 topology context，不得重新引入 Route 作為 V2 runtime 權威來源。
+- V4 架構契約以 `MODEL_SPEC.md` 為準，驗收案例落在 tests 與 `QA_REPORT.md`；現行待辦只看 `TODO.md`，不要把已完成的歷史實作稿或 Phase 名稱當成待辦清單。
 
 ### 不要做的事
 
@@ -101,7 +114,11 @@ WPF Results / Export
 - `src/MrtRouteSimulator.App/MainWindow.V3Results.cs`
 - `src/MrtRouteSimulator.App/MainWindow.IntervalStatistics.cs`
 - `src/MrtRouteSimulator.App/MainWindow.ProjectFiles.cs`
+- `src/MrtRouteSimulator.App/MainWindow.Topology.cs`
+- `src/MrtRouteSimulator.App/TopologyEditorWindow.cs`
+- `src/MrtRouteSimulator.App/TopologyEditorViewModels.cs`
 - `src/MrtRouteSimulator.App/UiModels.cs`
+- `src/MrtRouteSimulator.App/UiDisplayText.cs`
 
 ### M1 可以做
 
@@ -129,10 +146,21 @@ WPF Results / Export
 - `src/MrtRouteSimulator.Engine/PlanningModels.cs`
 - `src/MrtRouteSimulator.Engine/InfrastructureModels.cs`
 - `src/MrtRouteSimulator.Engine/SpatialReferencePointModels.cs`
+- `src/MrtRouteSimulator.Engine/TopologyModels.cs`
+- `src/MrtRouteSimulator.Engine/InfrastructureGraphV4.cs`
+- `src/MrtRouteSimulator.Engine/InfrastructureValidator.cs`
+- `src/MrtRouteSimulator.Engine/ServiceRouteModels.cs`
+- `src/MrtRouteSimulator.Engine/LinearInfrastructureBuilder.cs`
+- `src/MrtRouteSimulator.Engine/RouteProjection.cs`
+- `src/MrtRouteSimulator.Engine/TopologyRuntime.cs`
+- `src/MrtRouteSimulator.Engine/TopologyProject.cs`
+- `src/MrtRouteSimulator.Engine/TopologyProjectFactory.cs`
+- `src/MrtRouteSimulator.Engine/TopologyEditingServices.cs`
+- `src/MrtRouteSimulator.Engine/TopologyResultContext.cs`
 
 ### 權威來源
 
-V3.3 V2 寫實引擎的正式規劃資料來源為：
+現行 V2 寫實引擎的正式營運規劃資料來源為：
 
 ```text
 VehicleTypes
@@ -154,41 +182,47 @@ VehicleTypes
 
 ## M3 — Project Persistence / Schema
 
-**用途**：`.mrtsim.json` 專案格式、序列化、反序列化與完整驗證。
+**用途**：`.mrtsim.json` topology 專案、legacy 線性專案匯入、序列化、反序列化與完整驗證。
 
 主要檔案：
 
+- `src/MrtRouteSimulator.Engine/TopologyProject.cs`
+- `src/MrtRouteSimulator.Engine/TopologyProjectFactory.cs`
 - `src/MrtRouteSimulator.Engine/SimulationProject.cs`
 - `src/MrtRouteSimulator.App/MainWindow.ProjectFiles.cs`
+- `src/MrtRouteSimulator.App/MainWindow.Topology.cs`
 
-目前規格：
+目前契約：
 
 ```text
-schemaVersion = 7
+TopologyProjectFormat.CurrentSchemaVersion = 8
+SimulationProjectFormat.CurrentSchemaVersion = 7（legacy 匯入／固定時刻表相容資料）
 ```
 
 目前政策：
 
-- Schema 1～6 明確拒絕，不做移轉。
-- 未知／未來 Schema 拒絕。
+- WPF 新建、編輯與儲存 `.mrtsim.json` 一律使用 Schema 8。
+- 合法 Schema 7 專案可讀取並一次性轉成 Schema 8 draft；Schema 1～6 明確拒絕。
+- Schema 8 不接受 Route、legacy Infrastructure 或舊執行資料源欄位；未知／未來 Schema 拒絕。
 - 破損 JSON、缺欄位、無效列舉、目錄參照失效或數值越界均應拒絕。
 - 必須整份驗證通過後才替換 UI 目前設定。
 - 儲存採暫存檔後原子取代。
 
 ### 修改 Schema 時必查
 
-1. `SimulationProject.cs`
-2. `MainWindow.ProjectFiles.cs`
-3. `tests/MrtRouteSimulator.Tests/Program.cs`
-4. `samples/V3.3.0-完整功能驗證範例.mrtsim.json`
-5. `MODEL_SPEC.md`
-6. 必要時 `README.md` / `CHANGELOG.md`
+1. `TopologyProject.cs`／`TopologyProjectFactory.cs`
+2. `SimulationProject.cs`（若影響 legacy 匯入或固定時刻表）
+3. `MainWindow.ProjectFiles.cs`／`MainWindow.Topology.cs`
+4. `tests/MrtRouteSimulator.Tests/Program.cs`／`TopologyRegressionTests.cs`
+5. `samples/V4.0.0-topology-baseline.mrtsim.json` 與完整 topology 範例
+6. `MODEL_SPEC.md`
+7. 必要時 `README.md`／`CHANGELOG.md`
 
 ---
 
 ## M4 — Simulation Core
 
-**用途**：V2 寫實營運狀態、固定時間步進、停站、折返、接續、退出營運、資源與安全控制。
+**用途**：V2 topology-native 寫實營運狀態、固定時間步進、停站、實體設施 traversal、折返、接續、退出營運、資源與安全控制。
 
 主要檔案：
 
@@ -286,14 +320,17 @@ SimulationWorld.Tick() = 固定 0.1 s
 ### Automated tests
 
 - `tests/MrtRouteSimulator.Tests/Program.cs`
+- `tests/MrtRouteSimulator.Tests/TopologyRegressionTests.cs`
 
-V3.3.0 驗收基準：`75/75` tests 通過。
+測試清單以 runner 原始碼為準；最近一次完整執行的通過數與建置結果以 `QA_REPORT.md` 為準，不在本導覽固定寫死數量。
 
-### Full sample
+### Topology samples
 
-- `samples/V3.3.0-完整功能驗證範例.mrtsim.json`
+- `samples/V4.0.0-topology-baseline.mrtsim.json`
+- `samples/V4.0.0-完整拓撲執行驗證範例.mrtsim.json`
+- `samples/README.md`
 
-用途：Schema 7 完整功能人工／自動化驗證基準。
+用途：Schema 8 基線與完整 physical facility 情境驗證；`samples` 內舊 V3.x 檔名只保留情境沿革，內容仍是 Schema 8。
 
 ---
 
@@ -315,8 +352,8 @@ MainWindow.ProjectFiles.cs
 
 歷史命名注意：
 
-- `MainWindow.V2.cs` 仍是 V3.3.0 寫實模擬主要 UI / 執行入口之一。
-- `V2Models.cs` 仍是 V3.3.0 使用中的核心資料結構。
+- `MainWindow.V2.cs` 仍是現行寫實模擬主要 UI / 執行入口之一。
+- `V2Models.cs` 仍是現行使用中的核心資料結構。
 - 某些 UI 顯示 `【V3.2】` 只表示功能首次導入版本，不代表資料仍走 V3.2 Schema 或舊核心。
 
 不要為了「讓檔名看起來更新」任意改名；若要重構 partial class，必須先確認 XAML event handler、partial method 與所有參照。
@@ -381,12 +418,15 @@ Junction              銜接點
 |---|---|---|---|
 | 主畫面配置、按鈕、欄位 | `MainWindow.xaml` | 對應 `MainWindow.*.cs` | Engine |
 | 路線／車型／服務／停站／派車輸入 | `MainWindow.InputEditors.cs` | `PlanningModels.cs` | 結果頁 |
-| 月台／股道／進路／折返資源 | `MainWindow.InputEditors.cs` | `InfrastructureModels.cs`、`SimulationWorld.cs` | `UiModels.cs` |
+| legacy 線性表單／Schema 7 匯入 | `MainWindow.InputEditors.cs`、`SimulationProject.cs` | `TopologyProjectFactory.cs` | 直接建立第二套 V2 runtime |
+| topology node／edge／platform／resource | `TopologyModels.cs`、`TopologyEditingServices.cs` | `TopologyEditorWindow.cs`、`InfrastructureValidator.cs` | 舊 `InfrastructureModels.cs` |
+| ServiceRoute／projection／resolved stop | `ServiceRouteModels.cs`、`RouteProjection.cs` | `TopologyRuntime.cs`、`SimulationWorld.cs` | legacy `RoutePathDefinition` |
+| 實體折返／尾軌／袋狀軌／越行 | `TopologyModels.cs`、`TopologyRuntime.cs` | `SimulationWorld.cs`、`TopologyEditingServices.cs` | virtual-track adapter |
 | 建立／播放／暫停／重設 | `MainWindow.xaml.cs`、`MainWindow.V2.cs` | `SimulationWorld.cs` | 分析服務 |
 | 列車移動 | `SimulationWorld.cs` | `V2Models.cs`、煞車／速限服務 | WPF 圖表 |
 | 到站／停站／跨站 | `SimulationWorld.cs` | `PlanningModels.cs` | 結果表硬算 |
 | 端點退出／折返／續行 | `SimulationWorld.cs` | `PlanningModels.cs`、`InfrastructureModels.cs` | 時刻表硬補 |
-| 方向別速限 | `SpeedLimitService.cs` | `SimulationWorld.cs`、`MainWindow.V2.cs` | Project model |
+| 方向別速限 | `TrackSpeedLimitService.cs`、`SpeedLimitService.cs` | `SimulationWorld.cs`、`MainWindow.V2.cs` | Project model |
 | 煞車包絡／安全距離 | `BrakingEnvelopeCalculator.cs` | `SimulationWorld.cs`、`V2Models.cs` | UI 重算 |
 | 移動閉塞 | `SimulationWorld.cs` | `BrakingEnvelopeCalculator.cs`、`V2Models.cs` | `OperationsTimetable.cs` |
 | 障礙物急停 | `SimulationWorld.cs` | `V2Models.cs`、結果 UI | Spatial model |
@@ -406,17 +446,21 @@ Junction              銜接點
 # 6. 主要執行資料流
 
 ```text
-使用者輸入
+使用者輸入／專案檔
+  ├─ Schema 8 ──────────────────────────────→ TopologyProjectDocument
+  └─ legacy Schema 7／快速線性表單 ── TopologyProjectFactory ──→ TopologyProjectDocument
   ↓
-MainWindow.xaml / InputEditors / Spatial editors
-  ↓
-PlanningModels + InfrastructureModels + SpatialReferencePointModels
+TopologyProjectFormat.CreateRuntime
+  ├─ InfrastructureGraphV4 + ServiceRoutes + RouteProjection
+  └─ VehicleTypes + ServiceTypes + StopPatterns + Dispatch
   ↓
 DispatchPlanExpander（班距／手動班表 → 可執行車次）
   ↓
 MainWindow.V2.cs 建立 SimulationWorld
   ↓
 SimulationWorld.Tick() 固定 0.1 s
+  ├─ 正常主線與實體 facility：統一 movement plan
+  └─ TrackEdgeId + OffsetMeters + traversal index + footprint／occupancy
   ↓
 TrajectorySample / SimulationEvent / Snapshot / SafetyObservation
   ↓
@@ -453,7 +497,7 @@ PNG / PDF / CSV
 - 指定接續既有反向車次時，不應另生成目標車次。
 - 退出營運車不應再進入安全配對。
 
-## V3.3 規劃來源
+## 現行規劃來源
 
 - 車型性能：`VehicleTypeDefinition`。
 - 服務：`ServiceTypes`。
@@ -463,7 +507,8 @@ PNG / PDF / CSV
 
 ## Project
 
-- Schema 7 是目前唯一支援格式。
+- Schema 8 是現行可編輯、可儲存與可執行的專案格式。
+- Schema 7 僅保留合法舊專案匯入與固定時刻表相容資料；匯入後轉成 Schema 8，不得再另存新 Schema 7 專案。
 - 讀檔要先完整驗證，失敗不可污染目前 UI 狀態。
 
 ## V1 / V2 相容
@@ -492,7 +537,7 @@ dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 
 ```text
 Release build
-+ 75 tests
++ 全部現行 tests
 + 對應完整 sample 往返或建立 SimulationWorld
 ```
 
@@ -513,11 +558,11 @@ Release build
 必須驗證：
 
 ```text
-1. Schema 7 round-trip
-2. 非 Schema 7 拒絕
-3. 無效 reference 拒絕
+1. Schema 8 round-trip 與新存檔格式
+2. Schema 7 合法匯入轉換，以及舊／未知 Schema 拒絕
+3. 無效 topology／catalog reference 與 legacy 欄位拒絕
 4. 取消／讀檔失敗不污染現有 UI
-5. 完整 V3.3 sample 可載入並建立世界
+5. 所有 sample 可載入並建立 topology-native SimulationWorld
 ```
 
 ## E. 結果頁／統計
@@ -536,14 +581,7 @@ dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 ```
 
-V3.3.0 已知驗收基準：
-
-```text
-Release build: 0 warnings / 0 errors
-Automated tests: 75 / 75 passed
-```
-
-若修改後基準下降，不要直接更新文件宣稱新基準；先判斷是否 regression。
+目前測試數與最近通過結果以 `tests/MrtRouteSimulator.Tests/Program.cs`、`TopologyRegressionTests.cs` 與 `QA_REPORT.md` 為準。若修改後基準下降，不要直接更新文件宣稱新基準；先判斷是否 regression。
 
 ---
 
@@ -584,10 +622,11 @@ AGENTS.md
 
 ```text
 AGENTS.md
-→ SimulationProject.cs
-→ MainWindow.ProjectFiles.cs
+→ TopologyProject.cs / TopologyProjectFactory.cs
+→ MainWindow.ProjectFiles.cs / MainWindow.Topology.cs
+→ SimulationProject.cs（legacy Schema 7／固定時刻表相容時）
 → sample JSON
-→ tests
+→ tests/TopologyRegressionTests.cs
 → MODEL_SPEC.md 專案存檔格式
 ```
 
@@ -677,24 +716,23 @@ MainWindow 對應結果頁
 
 ---
 
-# 14. 現階段明確不在 V3.3.0 完整模型範圍
+# 14. 產品邊界與非目標
 
 除非使用者明確要求擴充，Codex 不應假設下列功能已存在：
 
 - 真實路線坡度、曲率、黏著、車型與時刻資料校準。
-- 完整連續折返幾何。
 - 單線共用完整運轉。
-- 交叉渡線與完整聯鎖失效模型。
-- 多月台最佳化。
-- 普通／快速車追越執行。
+- 完整聯鎖失效模型與營運最佳化。
+- 真實軌道平面、設備配置或可直接用於工程設計的幾何；現有 tail／pocket／crossover／passing 是概念性實體 topology。
 - ATP / ATO / ATS 或安全完整性認證。
 
 本程式定位為**營運與號誌概念模擬器**，不是可部署的鐵路安全系統。
 
 ---
 
-# 15. 最重要的三個架構判斷
+# 15. 最重要的四個架構判斷
 
 1. **`MainWindow.*` 是 Presentation partial class 集合，不是多個真正獨立模組。**
-2. **`SimulationWorld` 是 V2/V3 寫實營運的核心狀態機；結果頁應消費它的輸出，而不是各自重跑。**
+2. **`SimulationWorld` 是 V2 寫實營運的核心狀態機；結果頁應消費它的輸出，而不是各自重跑。**
 3. **五類空間參考點是一個垂直子系統，跨 UI → Model → Capacity → Simulation / Persistence，修改時不能只看單一檔案。**
+4. **V2 runtime 的位置、設施 traversal、安全與資源權威均在 Schema 8 topology；Schema 7 只可作 legacy 匯入來源，不得重新引入 Route／virtual-track 作為 world 內部權威。**

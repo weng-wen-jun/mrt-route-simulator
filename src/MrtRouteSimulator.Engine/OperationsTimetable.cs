@@ -31,6 +31,35 @@ public static class OperationsTimetable
         IEnumerable<SimulationEvent>? actualEvents)
     {
         ArgumentNullException.ThrowIfNull(route);
+        return BuildCore(
+            direction => direction == TrainDirection.Outbound
+                ? route.Stations.ToArray()
+                : route.Stations.Reverse().ToArray(),
+            dispatchPlan,
+            plannedEvents,
+            actualEvents);
+    }
+
+    /// <summary>
+    /// Schema 8 時刻表直接使用 topology resolved stops。顯示公里里程只是 context 提供的
+    /// projection derivative；此結果層不建立或查詢 compatibility Route。
+    /// </summary>
+    public static IReadOnlyList<OperationsTimetableEntry> Build(
+        TopologyResultContext topology,
+        ResolvedDispatchPlan dispatchPlan,
+        IEnumerable<SimulationEvent>? plannedEvents,
+        IEnumerable<SimulationEvent>? actualEvents)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        return BuildCore(topology.GetDisplayStations, dispatchPlan, plannedEvents, actualEvents);
+    }
+
+    private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
+        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
+        ResolvedDispatchPlan dispatchPlan,
+        IEnumerable<SimulationEvent>? plannedEvents,
+        IEnumerable<SimulationEvent>? actualEvents)
+    {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
         var actual = actualEvents?.ToArray() ?? [];
@@ -38,9 +67,7 @@ public static class OperationsTimetable
 
         foreach (var run in dispatchPlan.Runs.OrderBy(item => item.Sequence))
         {
-            var stations = run.Direction == TrainDirection.Outbound
-                ? route.Stations.ToArray()
-                : route.Stations.Reverse().ToArray();
+            var stations = stationResolver(run.Direction).ToArray();
             var runPlannedEvents = planned.Where(item => SameRun(item, run)).ToArray();
             var runActualEvents = actual.Where(item => SameRun(item, run)).ToArray();
             var scheduledOriginDeparture = RelativeSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);

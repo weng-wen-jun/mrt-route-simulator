@@ -5,7 +5,7 @@ namespace MrtRouteSimulator.Engine;
 /// from owning the engine constructor's cross-cutting settings.
 /// </summary>
 public sealed record SimulationWorldOptions(
-    Route Route,
+    Route? Route,
     TrainParameters TrainParameters,
     OperationalParameters OperationalParameters,
     int TrainCount,
@@ -20,26 +20,46 @@ public sealed record SimulationWorldOptions(
     InfrastructureGraph? Infrastructure = null,
     BrakingEstimationMode InitialBrakingEstimationMode = BrakingEstimationMode.Service,
     SimulationTraceRetentionPolicy? TraceRetentionPolicy = null,
-    IReadOnlyList<ServiceTypeDefinition>? ServiceTypes = null)
+    IReadOnlyList<ServiceTypeDefinition>? ServiceTypes = null,
+    TopologySimulationDefinition? Topology = null)
 {
     public SimulationWorld CreateWorld()
     {
-        var world = new SimulationWorld(
-            Route,
-            TrainParameters,
-            OperationalParameters,
-            TrainCount,
-            InitialDepartureIntervalSeconds,
-            SpeedLimits,
-            ProfileMode,
-            MovingBlockMode,
-            ServicePatterns,
-            ServiceRunPlans,
-            DispatchPlan,
-            VehicleTypes,
-            Infrastructure,
-            TraceRetentionPolicy,
-            ServiceTypes);
+        var world = Topology is null
+            ? new SimulationWorld(
+                Route ?? throw new SimulationValidationException([
+                    "非 topology V2 world 必須提供 Route；Schema 8 請提供 TopologySimulationDefinition。"
+                ]),
+                TrainParameters,
+                OperationalParameters,
+                TrainCount,
+                InitialDepartureIntervalSeconds,
+                SpeedLimits,
+                ProfileMode,
+                MovingBlockMode,
+                ServicePatterns,
+                ServiceRunPlans,
+                DispatchPlan,
+                VehicleTypes,
+                Infrastructure,
+                TraceRetentionPolicy,
+                ServiceTypes)
+            : new SimulationWorld(
+                Topology,
+                TrainParameters,
+                OperationalParameters,
+                TrainCount,
+                InitialDepartureIntervalSeconds,
+                SpeedLimits,
+                ProfileMode,
+                MovingBlockMode,
+                ServicePatterns,
+                ServiceRunPlans,
+                DispatchPlan,
+                VehicleTypes,
+                Infrastructure,
+                TraceRetentionPolicy,
+                ServiceTypes);
         if (InitialBrakingEstimationMode != BrakingEstimationMode.Service)
         {
             world.SetBrakingEstimationMode(InitialBrakingEstimationMode);

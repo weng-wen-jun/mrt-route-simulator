@@ -39,7 +39,7 @@ public partial class MainWindow
         }
 
         TimetableSourceText.Text =
-            $"固定時刻表封存（格式 {archive.ArchiveFormatVersion}）：已完成 SimulationWorld 的實際到離站事件；重新計算會依隨附 Schema 7 專案設定建立新的動態模擬。";
+            $"固定時刻表封存（格式 {archive.ArchiveFormatVersion}）：已完成模擬世界的實際到離站事件；重新計算會依隨附格式版本 7 專案設定建立新的動態模擬。";
 
         string DisplayClock(double? seconds) => seconds is { } value
             ? FormatClock(startClockSeconds + value)

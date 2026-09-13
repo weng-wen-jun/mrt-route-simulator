@@ -84,6 +84,13 @@ public partial class MainWindow
 
     private void FocusRouteInput_Click(object sender, RoutedEventArgs e)
     {
+        if (_activeTopologyProjectDocument is not null)
+        {
+            OpenTopologyWorkspace(ProjectWorkspacePage.QuickBuilder);
+            return;
+        }
+
+        SetQuickBuilderState(locked: false, collapsed: false);
         StationDataGrid.BringIntoView();
         StationDataGrid.Focus();
     }
@@ -103,7 +110,7 @@ public partial class MainWindow
             TextColumn("加速度", nameof(VehicleTypeInputRow.Acceleration), 75),
             TextColumn("營運煞車", nameof(VehicleTypeInputRow.ServiceBrake), 85),
             TextColumn("緊急煞車", nameof(VehicleTypeInputRow.EmergencyBrake), 85),
-            TextColumn("Jerk", nameof(VehicleTypeInputRow.Jerk), 70),
+            TextColumn("加加速度（m/s³）", nameof(VehicleTypeInputRow.Jerk), 100),
             TextColumn("牽引衰減", nameof(VehicleTypeInputRow.TractionDecay), 85),
             TextColumn("惰行減速度", nameof(VehicleTypeInputRow.CoastingDeceleration), 95),
             OptionComboColumn("車型預設停站模式", nameof(VehicleTypeInputRow.DefaultStopPatternId), StopPatternOptions, 155)
@@ -157,7 +164,7 @@ public partial class MainWindow
             foreach (var row in draft.Where(item => item.PatternId.Equals(selected.PatternId, StringComparison.OrdinalIgnoreCase)))
                 row.PatternName = editor.Text;
         };
-        var window = CreateEditorWindow("停站模式管理【V3.4】", 780, 600);
+        var window = CreateEditorWindow("停站模式管理", 780, 600);
         RegisterEditorWindow("StopPatterns", window);
         window.Owner = this;
         var root = (DockPanel)window.Content;
@@ -298,7 +305,7 @@ public partial class MainWindow
         mode.SelectionChanged += (_, _) =>
             tabs.SelectedIndex = mode.SelectedItem?.ToString() == "手動班表" ? 1 : 0;
 
-        var window = CreateEditorWindow("發車計畫【V3.4】", 1050, 620);
+        var window = CreateEditorWindow("發車計畫", 1050, 620);
         RegisterEditorWindow("DispatchPlan", window);
         var root = (DockPanel)window.Content;
         var settings = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(12) };

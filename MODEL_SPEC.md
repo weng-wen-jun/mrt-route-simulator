@@ -1,8 +1,48 @@
-# MRT Route Simulation Engine - Model Specification V3.4.2
+# MRT Route Simulation Engine - Model Specification V4.0.1
 
-> 現行規格（2026-08-29）。V3.0～V3.3 章節保留作核心演進說明；V3.4 以單一營運資料來源、逐車型性能、完整區間統計、目的月台資源保留、虛擬站／尾軌折返、StationStopController 與 Schema 7 為準。
+> 現行規格（2026-08-31）。V3.0～V3.4 章節僅保留歷史模型說明；V2 寫實運行已改為 topology-native runtime。
 
-產品版本、引擎與存檔格式分開表述：產品版本為 V3.4.2，`SimulationEngineKind` 可選 V1 基礎引擎或 V2 寫實引擎，現行專案格式為 `schemaVersion = 7`。本階段僅供內部測試，不移轉舊專案；Schema 1～6 會明確拒絕。
+產品版本為 V4.0.1。V1 解析模型可保留 `Route` 作為輸入 adapter；V2 `SimulationWorld` 一律使用 Schema 8 的 `InfrastructureGraphV4 + ServiceRoute`，不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
+
+## V4.0.1 Track-first topology 執行契約
+
+V2 的權威位置與資料流：
+
+```text
+TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex
+```
+
+`WorldTrainState`、`TrajectorySample` 與 `SimulationEvent` 都輸出這些欄位。所有移動、停站、速限、資源、footprint 與 safety 判定均以 cursor／physical traversal 為準；`PositionMeters` 和 `ProjectedChainageMeters` 僅為結果顯示衍生值。
+
+V2 的實體移動流程：
+
+```text
+DirectedTrackTraversal + traversal index + edge-local offset
+    ↓
+TopologyResultContext / RouteProjection（顯示用）
+    ↓
+結果頁、CSV 與圖表
+```
+
+Phase F 以 `ResolvedStopResolver` 將每個 `ServiceRouteStop` 的候選月台解析為有序的 `ResolvedStop`：
+
+```text
+StationId + PlatformId + TrackPosition + traversal index + chainage
+```
+
+正常主線與所有 facility 的進站距離、煞車、到站吸附及通過速限都消費該 resolved stop。`TrackSpeedLimitService` 以 edge-local interval 評估速限及提前煞車。
+
+`TopologySimulationDefinition` 是 V2 的唯一 world 輸入。舊表單 Route 若被傳入 V2，僅在建構前由 `TopologyProjectFactory.CreateLinearRuntimeTopology()` 轉成 Schema 8 graph；轉換會補上兩端實體 crossover、尾軌、switch／tail resource 與 `TurnbackOperation`，world 本身不保留 Route。
+
+- 新增 `InfrastructureGraphV4`，其索引資料由 `TopologyInfrastructureDefinition` 驗證後建立。`TrackEdgeDefinition` 只引用 `FromNodeId`／`ToNodeId`，不含 StationId 或 global position；`PlatformDefinitionV4` 以 `TrackEdgeId + local offset` 定位，`StationDefinitionV4` 僅保存邏輯月台群組。
+- `InfrastructureValidator` 驗證 ID、node/edge/resource 參照、edge 長度與速限、月台 offset、ServiceRoute traversal 連續與方向、以及停靠候選月台的 station／route 歸屬。`DirectedTrackConnectionDefinition` 可在 switch／crossing node 限制合法 edge-to-edge transition，並由 path finder 與 runtime navigator 使用。`ServiceRouteDefinition.Traversals` 是有序 list，允許 loop 重複 edge。
+- `LinearInfrastructureBuilder.Build(Route)` 是現有快速線性輸入的 adapter：每一站間建立獨立上下行 edge、方向別月台及 ordered ServiceRoute；它不修改傳入的 legacy `Route`。
+- `RouteProjection` 把單一 ServiceRoute 映射為 route-local chainage；forward/reverse offset 可逆。相同 edge 重複出現時，`ToChainage(TrackPosition)` 會拒絕歧義，必須使用帶 traversal index 的 overload。
+- **V2 權威位置：**`TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex`。
+- **實體設施：**尾軌、袋狀軌、crossover／turnback 與 passing facility 均由有序 `DirectedTrackTraversal` 表示；`TurnbackStopPosition` 是 edge-local `TrackPosition`，若停在 edge 中段，返回 traversal 必須從同一物理位置立即反向開始；資源在車尾 footprint 淨空後才釋放。
+- **passing rear-clear：**快速車車頭已離開 passing edge、但車尾仍在該設施時，停在平行 local edge 的普通車必須保持待避；不得把兩條平行 edge 投影成負 safety gap。普通車僅能在 passing movement rear-clear 後匯入正線。
+- **結果邊界：**`TopologyResultContext`、`RouteProjection`、`PositionMeters` 僅能用於 UI、統計與匯出，不能用於物理、occupancy、safety 或 routing。
+- **V1 邊界：**V1 analytical API 可以使用 Route；不得由 V1 Route 回灌 V2 runtime。
 
 ## V3.4.2 本輪變更
 
@@ -277,7 +317,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ## 8. 自動化測試
 
-測試執行器包含 65 項案例，其中前 24 項為 V1.0 相容性測試：
+測試執行器目前包含 107 項案例。Topology regression 驗證 domain、projection、正常主線、topology-first entry、有向道岔轉向、完整 physical facilities、passing rear-clear、edge-local physical turnback、Schema 8 編輯交易、dependency guard 與 legacy Schema 7 匯入轉換。
 
 - 無限制性能、零距離及非法性能。
 - 5000 m 長距離梯形速度曲線。
@@ -296,8 +336,9 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 - 動態 Jerk 煞車包絡線、到站前低速連續性，以及移動閉塞控制不瞬間歸零。
 - 普通停站、跨站、車站通過速限、折返換用不同模式及舊版存檔升級。
 - 三段式軟體版本格式及組件版本一致性。
-- V3 雙向／跨午夜派車、目錄參照驗證、雙端發車、重複車輛拒絕、資源鎖定事件、區間統計 P95、schema 1 → 4 串接升級，以及 EngineKind／ProfileMode 分離。
+- V3 雙向／跨午夜派車、目錄參照驗證、雙端發車、重複車輛拒絕、資源鎖定事件、區間統計 P95、Schema 7 persistence 與舊／未知 Schema 拒絕，以及 EngineKind／ProfileMode 分離。
 - V3.1 端點停站／清車後退出、一般折返續行、手動指定反向接續車次，以及折返設定的專案檔往返與舊檔預設行為。
+- V4 topology 的逐站雙向 builder、Schema 7 一次性轉換、node／platform／traversal validation、forward／reverse projection、resolved stop、統一 movement plan、physical facility、footprint／occupancy／rear-clear、安全、結果資料流與 Schema 8 編輯操作。
 
 最新結果記錄於 `QA_REPORT.md`。
 
@@ -440,18 +481,16 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 15. 專案存檔格式
 
-`SimulationProjectFormat` 使用版本化 UTF-8 JSON，預設副檔名為 `.mrtsim.json`，目前 `schemaVersion = 7`。現階段不支援舊存檔移轉；Schema 1～6、未知版本及未來版本都會拒絕。內容包含：
+`TopologyProjectFormat` 是現行 `.mrtsim.json` 的 persistence／runtime boundary，使用版本化 UTF-8 JSON，目前 `schemaVersion = 8`。WPF 新建、編輯與儲存一律輸出 Schema 8；內容包含：
 
-- 路線編號、名稱、車站順序、站間距離與個別停站時間。
-- 列車性能、起終點折返時間，以及全部 V2 營運與安全參數。
-- 任意里程速限、播放倍率及引擎／營運模式選擇；V2 發車完全由發車計畫決定，不使用 V1 的列車數、指定班距與首班時刻。
-- 車型、服務類型、停站模式目錄，以及簡易班距／手動班表、端點續行與車輛配置模式。
-- 停站模式的逐站停／跨／中央避車線虛擬站折返、停站秒數覆寫及通過速限。
-- 月台、股道、路徑、折返設施與站場配置。
-- 五類空間參考點，以及中間站順／逆行獨立參數。
-- 明確的 `SimulationEngineKind`，與 V2 的 `OperationProfileMode` 分開保存。
+- 專案識別、`TopologyInfrastructureDefinition` 的 node／edge／station／platform／resource、edge-local 速限與坡度。
+- 有序 `ServiceRoute`、方向綁定、resolved stop 所需月台候選、實體 turnback／passing facility 與有向轉向。
+- `VehicleTypes + ServiceTypes + StopPatterns + Dispatch` 單一營運資料來源。
+- V2 營運、安全、播放與輸出所需設定；權威物理位置不使用 global `PositionMeters`。
 
-讀取時先限制檔案大小，再反序列化並做完整語意驗證；只有整份通過後 UI 才會替換目前設定。非 Schema 7、破損 JSON、舊 `servicePatterns`／`serviceRuns` 雙資料源、缺欄位、無效列舉、目錄參照失效或超出模型範圍都會拒絕。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
+`SimulationProjectFormat` 的 Schema 7 只保留為 legacy 線性專案匯入與固定時刻表相容資料。合法 Schema 7 專案會在建立 world 前一次性轉為 Schema 8 topology draft；Schema 1～6、未知／未來版本、Schema 8 legacy root fields、舊 `servicePatterns`／`serviceRuns`、缺欄位、無效列舉與失效參照均拒絕。
+
+讀取時先限制檔案大小，再反序列化並做完整語意驗證；只有整份通過後 UI 才替換目前設定。儲存採同目錄暫存檔寫入後原子取代目標，降低中途失敗留下半份檔案的風險。
 
 專案檔保存可重建模擬的設定，不保存播放到一半的列車瞬時位置、速度或事件歷史。
 
@@ -459,7 +498,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 16. 輸入驗證與邊界
 
-| 輸入／情境 | V3.3.0 行為 |
+| 輸入／情境 | V4.0.1 現行保留行為 |
 |---|---|
 | 速限起點大於等於終點 | validation error |
 | 速限超過全線或不是 10 m 精度 | validation error |
@@ -524,13 +563,34 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 21. 產品版本、引擎與 UI 邊界
 
-V3.4.1 是產品版本，不是第三套模擬引擎。`SimulationEngineKind` 決定本次執行建立 V1 基礎引擎或 V2 寫實引擎；`OperationProfileMode` 只決定 V2 世界內的軌跡曲線，Schema 7 則只代表存檔契約，三者不可互相推導。V1 專案不建立 `SimulationWorld`；V2 編輯確認、引擎切換或專案讀取後會清除舊世界與區間統計。
+產品版本以 `Directory.Build.props` 為唯一來源，不代表第三套模擬引擎。`SimulationEngineKind` 決定本次執行建立 V1 基礎引擎或 V2 寫實引擎；`OperationProfileMode` 只決定 V2 世界內的軌跡曲線；Schema 8 是現行 topology 專案契約，Schema 7 是 legacy 匯入契約，彼此不可互相推導。V1 專案不建立 `SimulationWorld`；V2 編輯確認、引擎切換或專案讀取後會清除舊世界與區間統計。
 
 ## 22. 已知限制與後續擴充
 
-- 僅支援抽象單一直線；不是地理地圖，也不宣稱完整空間幾何。
-- 預設上下行不同軌道，尚未建立單線共用、交叉渡線、道岔與聯鎖。
+- V4 topology 是抽象軌道圖，不是地理地圖或可直接用於工程設計的真實軌道平面。尾軌、袋狀軌、crossover、passing 與折返均有實體 edge／traversal，但幾何仍是概念模型。
+- 預設上下行使用不同軌道；尚未建立完整單線共用運轉與聯鎖失效模型。有向道岔轉向與 conflict resource 只提供概念層約束。
 - 尚未以逐段坡度、曲線阻力、超高、黏著變化及乘客上下車量動態修正列車性能；不同車型的額定性能已能逐車次套用，服務類型仍只表示普通／快速等營運身分。
 - 未以真實路線資料校準；人工輸入結果不能宣稱重現特定捷運路線。
 - 移動閉塞為概念模型，未涵蓋通訊失效、列車完整性、ATP／ATO／ATS 或安全完整性認證。
-- V3 已提供區間統計、中文 CSV 與設定式雙島四股站內越行；仍不宣稱全線自動超車排程、多月台最佳化或安全認證。
+- V4 已提供區間統計、中文 CSV、概念層多月台配置與實體 passing facility 越行；仍不宣稱全線自動超車排程、全域營運最佳化或安全認證。
+## PDF 站型補充契約（2026-09-09）
+
+- 站內原地折返可位於 edge 中段：僅限 Crossover 設施的兩個同 edge 反向 traversal，arrival／turnback／departure 使用同一中心錨點，月台須採 `StopPositionReference.TrainCenter`。runtime cursor 始終代表行進車頭：到站車頭為中心沿行車方向加半車長，換端後原車尾成為新車頭，整段 footprint 不變。PDF 站前折返 A:D 中心為 D0:180 m，A:U 為 U0:420 m；120 m列車在D0占用120–240 m，換端不再平移120 m。其餘尾軌／袋狀軌也須保持換端占用連續，並由 TURN-005 檢查停點前有足夠反向返回軌道涵蓋整車。
+- 新建七種 PDF 站型採車體中心定位；舊專案未填 `StopPositionReference` 時維持 `TrainFront`。月台有效長度不可超過非零實體範圍，依每班車型及方向解析車頭後，完整車體須位於月台範圍內。中段尾軌銜接僅允許與月台停點一致且有向端點連續的進路，列車須實際走完剩餘到達軌道及返回出發月台。
+- `StationChainageProjection` 是顯示里程：主下行起始站月台中心為0K，上下行同站中心對齊；起站外側尾軌負值，終點外側超過終點中心里程。路線圖站名、尾軌提示及即時車體中心欄位使用此投影。它不改變edge長度、車頭cursor、安全距離或既有進路距離統計；`GetTrainCenterPosition` 從movement navigator沿車頭後退半車長取得真實車體中心，可跨edge。
+- 建置時以 `StationConstructionRules` 強制原地折返停點等於月台停點並位於其範圍內，到達末站及出發首站候選須包含同一月台；同站非空月台號碼不可重複。規則代碼及 WPF 驗收入口見 `STATION_CONSTRUCTION_RULES.md`。
+
+- 線性專案轉換的方向別起站月台取自該 ServiceRoute 第一停點，不按站碼排序。安全 graph-distance 在跨 movement plan 或 ServiceRoute 尋路時，必須同時檢查起點 incoming traversal 與終點 outgoing traversal 的合法轉向；搜尋狀態包含進入節點的 traversal。共用 node 不能跳過 directedConnections 當成零距離跨股道捷徑。
+
+- Schema 8 的 node 可選 `SchematicPosition`／`SchematicLane`、edge 可選 `SchematicLane`；platform 可選 `PlatformNumber`、`PlatformBodyId`、`DisplaySide`（Auto／Above／Below）。缺省保留自動呈現，同站相同 BodyId 合併成共用站體。示意位置須有限且絕對值不超過 1,000,000，股道須有限且絕對值不超過 8，無效列舉拒絕。
+- 以上只供 WPF 繪圖與編輯保存，不改變 edge 長度、連通性、stop offset、footprint 或運行物理；Engine 權威仍是 topology cursor 和 directed connections。
+- `StationLayoutTemplateService` 建立七種站場的實體 edges、platforms、routes、設施、目錄與派車。站前折返在月台停點原地反向，渡線在站外；站後折返實際駛入尾軌後返回。三／四股道以既有 PassingFacility 執行越行。
+- 一般 ServiceRoute 若將經過雙向 PocketTrack 的 conflict resource，發車前預約整組剩餘相關資源，與既有設施共用 reservation manager；失敗時留下 WaitingForResource。頭部越過最後受保護 traversal 且所有 footprint 車尾淨空後釋放；Reset 清除預約。這是保守的發車互斥策略，並非完整單線區間調度或逐道岔進路最佳化。
+
+### 實體接軌側別與建立防堵（2026-09-13）
+
+TrackEdgeDefinition 的可選 FromPortSide／ToPortSide 表示節點局部 A/B 兩侧。兩端各屬不同節點，不要求同一 edge 的兩個值必定相反；同節點的行進接續必須由不同側相接。TrackPortRules 同時檢查顯式連接、ServiceRoute、facility traversal，尋徑也套用同規則。既有同 edge 停車換端及 footprint 驗證不變。
+
+CONNECTION-001 表示同側回頭或有側別與無側別混接；CONNECTION-002 表示只填單端或非法列舉。側別是獨立保存的建置資料，不由 runtime 的 schematic 座標、股道或站點里程反推。站型模板在固定藍圖建置時寫入側別，後續移動示意位置不會重算；快速建線、分割及設施精靈延續此契約。尾軌／袋狀軌精靈的進出渡線各25m，使用者指定長度仍為折返軌主體長度。
+
+Schema 8 維持向後相容：兩端皆未指定的舊 edge 仍採原有結構與有向轉向驗證，不能視為通過側別方向檢查；一般讀檔不猜值、不刪除連接。13份已檢視範例已完整補入側別。缺資料舊檔的引導式遷移另列 TODO。

@@ -10,6 +10,7 @@ release/
 *.user
 *.suo
 TestResults/
+artifacts/
 
 # NuGet packages
 *.nupkg

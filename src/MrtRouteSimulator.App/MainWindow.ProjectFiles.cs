@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -12,14 +13,39 @@ public partial class MainWindow
 {
     private const long MaximumProjectFileBytes = SimulationProjectFormat.MaximumJsonCharacters * 4L;
     private const long MaximumFixedTimetableArchiveBytes = FixedTimetableArchiveFormat.MaximumJsonCharacters * 4L;
+    private string? _currentProjectFilePath;
+
+    private void SetCurrentProjectFile(string? filePath)
+    {
+        _currentProjectFilePath = string.IsNullOrWhiteSpace(filePath)
+            ? null
+            : Path.GetFullPath(filePath);
+        var baseTitle = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
+        if (_currentProjectFilePath is null)
+        {
+            Title = baseTitle;
+            CurrentProjectFileTextBlock.Text = "目前存檔：尚未讀取（示範資料）";
+            CurrentProjectFileTextBlock.ToolTip = "目前使用示範資料，尚未從存檔讀取。";
+            return;
+        }
+
+        var fileName = Path.GetFileName(_currentProjectFilePath);
+        Title = $"{baseTitle} — {fileName}";
+        CurrentProjectFileTextBlock.Text = $"目前存檔：{fileName}";
+        CurrentProjectFileTextBlock.ToolTip = _currentProjectFilePath;
+    }
 
     private void SaveProject_Click(object sender, RoutedEventArgs e)
     {
         HideValidation();
         try
         {
-            var document = CaptureProjectDocument();
-            var json = SimulationProjectFormat.Serialize(document);
+            // Schema 8 是唯一 UI editable / persistence format。尚未建立 topology 時，
+            // 舊線性欄位只會被快速轉成一次性的 Schema 8 draft，絕不再輸出 Schema 7。
+            var topologyDocument = _activeTopologyProjectDocument
+                ?? TopologyProjectFactory.CreateLinearDraft(CaptureProjectDocument());
+            var json = TopologyProjectFormat.Serialize(topologyDocument);
+            var projectName = topologyDocument.ProjectName;
             var dialog = new SaveFileDialog
             {
                 Title = "儲存 MRT 模擬專案",
@@ -27,7 +53,7 @@ public partial class MainWindow
                 DefaultExt = ".mrtsim.json",
                 AddExtension = true,
                 OverwritePrompt = true,
-                FileName = $"{SanitizeFileName(document.RouteName)}.mrtsim.json"
+                FileName = $"{SanitizeFileName(projectName)}.mrtsim.json"
             };
             if (dialog.ShowDialog(this) != true)
             {
@@ -36,6 +62,7 @@ public partial class MainWindow
             }
 
             WriteProjectAtomically(dialog.FileName, json);
+            SetCurrentProjectFile(dialog.FileName);
             StatusTextBlock.Text = $"專案已儲存：{dialog.FileName}";
         }
         catch (SimulationValidationException exception)
@@ -86,10 +113,29 @@ public partial class MainWindow
             }
 
             var json = File.ReadAllText(dialog.FileName, Encoding.UTF8);
+            if (IsSchema8TopologyProject(json))
+            {
+                var topologyDocument = TopologyProjectFormat.Deserialize(json);
+                ConfigureTopologyProjectForPlayback(topologyDocument);
+                HideValidation();
+                SetCurrentProjectFile(dialog.FileName);
+                StatusTextBlock.Text = $"拓撲專案已讀取：{dialog.FileName}；可直接播放、查看路線圖並原樣存檔。快速起稿欄已收合。";
+                return;
+            }
+
             var archive = FixedTimetableArchiveFormat.IsFixedTimetableArchive(json)
                 ? FixedTimetableArchiveFormat.Deserialize(json)
                 : null;
             var document = archive?.Project ?? SimulationProjectFormat.Deserialize(json);
+            if (archive is null)
+            {
+                var topologyDocument = TopologyProjectFactory.CreateLinearDraft(document);
+                ConfigureTopologyProjectForPlayback(topologyDocument);
+                HideValidation();
+                SetCurrentProjectFile(dialog.FileName);
+                StatusTextBlock.Text = $"已將舊格式版本 {document.SchemaVersion} 專案轉為拓撲專案；請由專案工作區繼續編輯並另存。";
+                return;
+            }
             PausePlayback();
             ClearResults();
             ApplyProjectDocument(document);
@@ -98,6 +144,7 @@ public partial class MainWindow
                 DisplayFixedTimetableArchive(archive);
             }
             HideValidation();
+            SetCurrentProjectFile(dialog.FileName);
             StatusTextBlock.Text = archive is null
                 ? $"專案已讀取：{dialog.FileName}；請按「計算並建立模擬」。"
                 : $"固定時刻表已讀取：{dialog.FileName}；可直接查看完成模擬的凍結結果。";
@@ -106,6 +153,11 @@ public partial class MainWindow
         {
             ShowValidation(exception.Errors);
             StatusTextBlock.Text = "存檔驗證未通過；目前設定未變更。";
+        }
+        catch (InvalidOperationException exception)
+        {
+            ShowValidation([$"專案模擬準備失敗：{exception.Message}"]);
+            StatusTextBlock.Text = "專案未能建立模擬；目前設定未變更。";
         }
         catch (IOException exception)
         {
@@ -119,6 +171,16 @@ public partial class MainWindow
         }
     }
 
+    private static bool IsSchema8TopologyProject(string json)
+    {
+        using var root = JsonDocument.Parse(json);
+        return root.RootElement.ValueKind == JsonValueKind.Object
+            && root.RootElement.TryGetProperty("schemaVersion", out var version)
+            && version.ValueKind == JsonValueKind.Number
+            && version.TryGetInt32(out var schemaVersion)
+            && schemaVersion == TopologyProjectFormat.CurrentSchemaVersion;
+    }
+
     private void ExportFixedTimetableArchive_Click(object sender, RoutedEventArgs e)
     {
         HideValidation();
@@ -127,7 +189,7 @@ public partial class MainWindow
             if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null
                 || _activeSimulationProjectDocument is null)
             {
-                throw new InvalidOperationException("請先建立 V2 寫實營運模擬。固定時刻表只會封存 SimulationWorld 的實際結果。");
+                throw new InvalidOperationException("請先建立 V2 寫實營運模擬。固定時刻表只會封存模擬世界的實際結果。");
             }
 
             if (!_v2World.IsComplete)
@@ -186,8 +248,6 @@ public partial class MainWindow
     {
         StationDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
         StationDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
-        SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Cell, true);
-        SpeedLimitDataGrid.CommitEdit(DataGridEditingUnit.Row, true);
 
         var defaultDwell = ParseNonNegative(DefaultDwellTextBox, "預設停站時間");
         var stations = StationRows.Select(row => new ProjectStation(
@@ -210,25 +270,23 @@ public partial class MainWindow
             ParseNonNegative(OriginTurnaroundTextBox, "起點折返時間") * 60,
             ParseNonNegative(TerminalTurnaroundTextBox, "終點折返時間") * 60);
         var operations = new ProjectOperationalSettings(
-            baselineVehicle?.JerkMetersPerSecondCubed ?? ParsePositive(JerkTextBox, "Jerk"),
+            baselineVehicle?.JerkMetersPerSecondCubed ?? 0.65,
             ParseNonNegative(CoastingRatioTextBox, "惰行比例"),
             ParseNonNegative(ApproachDistanceTextBox, "進站控制距離"),
             ParseNonNegative(ApproachSpeedTextBox, "進站控制速度") / 3.6,
             0.45,
-            baselineVehicle?.LengthMeters ?? ParsePositive(TrainLengthTextBox, "車長"),
-            baselineVehicle?.ServiceBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(ServiceBrakeTextBox, "營運煞車減速度"),
-            baselineVehicle?.EmergencyBrakeDecelerationMetersPerSecondSquared ?? ParsePositive(EmergencyBrakeTextBox, "緊急煞車減速度"),
+            baselineVehicle?.LengthMeters ?? 92,
+            baselineVehicle?.ServiceBrakeDecelerationMetersPerSecondSquared ?? 0.9,
+            baselineVehicle?.EmergencyBrakeDecelerationMetersPerSecondSquared ?? 1.3,
             ParseNonNegative(ReactionTimeTextBox, "控制反應時間"),
             0.8,
             3,
             25,
             15);
-        var speedLimits = SpeedLimitRows.Select((row, index) => new ProjectSpeedLimit(
-            row.StartKm * 1000,
-            row.EndKm * 1000,
-            row.LimitKmh / 3.6,
-            ParseSpeedLimitDirection(row.Direction, index + 1),
-            row.Note.Trim())).ToArray();
+        // Schema 8 quick builder 的線性表只提供一次性的 station-distance 起稿；里程
+        // speed-limit rows 不再是可保存的 physical authority。建立 topology 後，速限
+        // 一律由工作區以 TrackEdgeId + edge-local offset 編輯。
+        var speedLimits = Array.Empty<ProjectSpeedLimit>();
         var profileMode = GetSelectedTag(OperationModeComboBox) == "Basic"
             ? OperationProfileMode.BasicPhysics
             : OperationProfileMode.RealisticOperations;
@@ -293,6 +351,7 @@ public partial class MainWindow
 
     private void ApplyProjectDocument(SimulationProjectDocument document)
     {
+        SetQuickBuilderState(locked: false, collapsed: false);
         RouteIdTextBox.Text = document.RouteId;
         RouteNameTextBox.Text = document.RouteName;
         StationRows.Clear();
@@ -314,27 +373,10 @@ public partial class MainWindow
         OriginTurnaroundTextBox.Text = FormatProjectNumber(document.Train.OriginTurnaroundTimeSeconds / 60);
         TerminalTurnaroundTextBox.Text = FormatProjectNumber(document.Train.TerminalTurnaroundTimeSeconds / 60);
 
-        JerkTextBox.Text = FormatProjectNumber(document.Operations.JerkMetersPerSecondCubed);
         CoastingRatioTextBox.Text = FormatProjectNumber(document.Operations.CoastingRatio);
         ApproachDistanceTextBox.Text = FormatProjectNumber(document.Operations.ApproachDistanceMeters);
         ApproachSpeedTextBox.Text = FormatProjectNumber(document.Operations.ApproachSpeedMetersPerSecond * 3.6);
-        TrainLengthTextBox.Text = FormatProjectNumber(document.Operations.TrainLengthMeters);
         ReactionTimeTextBox.Text = FormatProjectNumber(document.Operations.ControlReactionTimeSeconds);
-        ServiceBrakeTextBox.Text = FormatProjectNumber(document.Operations.ServiceBrakingMetersPerSecondSquared);
-        EmergencyBrakeTextBox.Text = FormatProjectNumber(document.Operations.EmergencyBrakingMetersPerSecondSquared);
-
-        SpeedLimitRows.Clear();
-        foreach (var limit in document.SpeedLimits)
-        {
-            SpeedLimitRows.Add(new SpeedLimitInputRow
-            {
-                StartKm = limit.StartPositionMeters / 1000,
-                EndKm = limit.EndPositionMeters / 1000,
-                LimitKmh = limit.LimitMetersPerSecond * 3.6,
-                Direction = SpeedLimitDirectionToChinese(limit.Direction),
-                Note = limit.Note
-            });
-        }
 
         ServicePatternRows.Clear();
 
@@ -355,7 +397,6 @@ public partial class MainWindow
             PlaybackSpeedComboBox.SelectedIndex = 0;
         }
 
-        SpeedLimitWarningText.Text = string.Empty;
         ApplyExtendedProjectInputs(document);
         DrawRoute();
         DrawSpeedProfile();

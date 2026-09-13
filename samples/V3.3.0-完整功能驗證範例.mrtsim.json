@@ -1,55 +1,23 @@
 {
-  "schemaVersion": 7,
-  "routeId": "V",
-  "routeName": "V3.3 完整功能驗證線",
-  "stations": [
-    {
-      "stationId": "V01",
-      "stationName": "驗證起點站",
-      "distanceFromPreviousMeters": 0,
-      "dwellTimeSeconds": 35
-    },
-    {
-      "stationId": "V02",
-      "stationName": "東城站",
-      "distanceFromPreviousMeters": 1200,
-      "dwellTimeSeconds": 30
-    },
-    {
-      "stationId": "V03",
-      "stationName": "中央轉接站",
-      "distanceFromPreviousMeters": 1000,
-      "dwellTimeSeconds": 35
-    },
-    {
-      "stationId": "V04",
-      "stationName": "西園站",
-      "distanceFromPreviousMeters": 1400,
-      "dwellTimeSeconds": 30
-    },
-    {
-      "stationId": "V05",
-      "stationName": "驗證終點站",
-      "distanceFromPreviousMeters": 1100,
-      "dwellTimeSeconds": 35
-    }
-  ],
+  "schemaVersion": 8,
+  "projectId": "V4-FULL-FUNCTION",
+  "projectName": "V4 \u5B8C\u6574\u529F\u80FD\u9A57\u8B49\u7DDA\uFF08\u539F V3.3 \u7BC4\u4F8B\uFF09",
   "train": {
-    "maxSpeedMetersPerSecond": 22.22222222222222,
+    "maxSpeedMetersPerSecond": 22.2222222,
     "accelerationMetersPerSecondSquared": 1,
     "decelerationMetersPerSecondSquared": 1,
     "defaultDwellTimeSeconds": 30,
-    "originTurnaroundTimeSeconds": 180,
-    "terminalTurnaroundTimeSeconds": 240
+    "originTurnaroundTimeSeconds": 80,
+    "terminalTurnaroundTimeSeconds": 95
   },
   "operations": {
-    "jerkMetersPerSecondCubed": 0.65,
+    "jerkMetersPerSecondCubed": 1,
     "coastingRatio": 0.15,
-    "approachDistanceMeters": 180,
-    "approachSpeedMetersPerSecond": 0,
+    "approachDistanceMeters": 350,
+    "approachSpeedMetersPerSecond": 10,
     "tractionFadeRatio": 0.45,
     "trainLengthMeters": 140,
-    "serviceBrakingMetersPerSecondSquared": 0.9,
+    "serviceBrakingMetersPerSecondSquared": 1,
     "emergencyBrakingMetersPerSecondSquared": 1.3,
     "controlReactionTimeSeconds": 1.5,
     "brakeBuildUpTimeSeconds": 1.2,
@@ -57,34 +25,11 @@
     "safetyMarginMeters": 5,
     "absoluteMinimumGapMeters": 10
   },
-  "speedLimits": [
-    {
-      "startPositionMeters": 500,
-      "endPositionMeters": 900,
-      "limitMetersPerSecond": 15.27777777777778,
-      "direction": "Both",
-      "note": "雙向彎道速限 55 km/h"
-    },
-    {
-      "startPositionMeters": 1500,
-      "endPositionMeters": 2050,
-      "limitMetersPerSecond": 12.5,
-      "direction": "Outbound",
-      "note": "下行進站控制 45 km/h"
-    },
-    {
-      "startPositionMeters": 3100,
-      "endPositionMeters": 3550,
-      "limitMetersPerSecond": 13.88888888888889,
-      "direction": "Inbound",
-      "note": "上行進站控制 50 km/h"
-    }
-  ],
   "simulation": {
     "trainCount": 6,
     "headwaySeconds": null,
     "startClockSeconds": 21600,
-    "playbackSpeed": 20,
+    "playbackSpeed": 1,
     "profileMode": "RealisticOperations",
     "movingBlockMode": "Control",
     "brakingEstimationMode": "Service",
@@ -93,33 +38,35 @@
   "vehicleTypes": [
     {
       "id": "EMU-6",
-      "displayName": "六節標準電聯車",
-      "lengthMeters": 140,
-      "maxSpeedMetersPerSecond": 22.22222222222222,
+      "displayName": "\u516D\u7BC0\u666E\u901A\u5217\u8ECA",
+      "lengthMeters": 120,
+      "maxSpeedMetersPerSecond": 22.2222222,
       "accelerationMetersPerSecondSquared": 1,
       "serviceBrakeDecelerationMetersPerSecondSquared": 1,
       "emergencyBrakeDecelerationMetersPerSecondSquared": 1.3,
-      "jerkMetersPerSecondCubed": 0.65,
+      "jerkMetersPerSecondCubed": 1,
       "tractionDecayPerSecond": 0.45,
-      "coastingDecelerationMetersPerSecondSquared": 0.05
+      "coastingDecelerationMetersPerSecondSquared": 0,
+      "defaultStopPatternId": "ALL_STOP"
     },
     {
       "id": "EMU-8",
-      "displayName": "八節快速電聯車",
-      "lengthMeters": 180,
-      "maxSpeedMetersPerSecond": 25,
-      "accelerationMetersPerSecondSquared": 1.05,
-      "serviceBrakeDecelerationMetersPerSecondSquared": 1.1,
-      "emergencyBrakeDecelerationMetersPerSecondSquared": 1.4,
-      "jerkMetersPerSecondCubed": 0.7,
-      "tractionDecayPerSecond": 0.4,
-      "coastingDecelerationMetersPerSecondSquared": 0.04
+      "displayName": "\u516B\u7BC0\u5FEB\u901F\u5217\u8ECA",
+      "lengthMeters": 140,
+      "maxSpeedMetersPerSecond": 22.2222222,
+      "accelerationMetersPerSecondSquared": 1,
+      "serviceBrakeDecelerationMetersPerSecondSquared": 1,
+      "emergencyBrakeDecelerationMetersPerSecondSquared": 1.3,
+      "jerkMetersPerSecondCubed": 1,
+      "tractionDecayPerSecond": 0.45,
+      "coastingDecelerationMetersPerSecondSquared": 0,
+      "defaultStopPatternId": "EXPRESS"
     }
   ],
   "serviceTypes": [
     {
       "id": "LOCAL",
-      "displayName": "普通車",
+      "displayName": "\u666E\u901A\u8ECA",
       "colorHex": "#4472C4",
       "runPrefix": "LOC",
       "defaultStopPatternId": "ALL_STOP",
@@ -130,7 +77,7 @@
     },
     {
       "id": "EXPRESS",
-      "displayName": "快速車",
+      "displayName": "\u5FEB\u901F\u8ECA",
       "colorHex": "#E86D2D",
       "runPrefix": "EXP",
       "defaultStopPatternId": "EXPRESS",
@@ -143,7 +90,7 @@
   "stopPatterns": [
     {
       "id": "ALL_STOP",
-      "displayName": "普通車（全停站）",
+      "displayName": "\u666E\u901A\u8ECA\u5168\u505C",
       "instructions": [
         {
           "stationId": "V01",
@@ -179,7 +126,7 @@
     },
     {
       "id": "EXPRESS",
-      "displayName": "快速車（V02／V04 跨站）",
+      "displayName": "\u5FEB\u901F\u8ECA\u8DE8 V02\uFF0FV04",
       "instructions": [
         {
           "stationId": "V01",
@@ -191,7 +138,7 @@
           "stationId": "V02",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 13.88888888888889
+          "passingSpeedLimitMetersPerSecond": 13.8888889
         },
         {
           "stationId": "V03",
@@ -244,7 +191,7 @@
         "continuationServiceRunId": null
       },
       {
-        "plannedDepartureTimeSeconds": 21780,
+        "plannedDepartureTimeSeconds": 22080,
         "direction": "Outbound",
         "serviceTypeId": "EXPRESS",
         "vehicleTypeId": "EMU-8",
@@ -256,7 +203,7 @@
         "continuationServiceRunId": null
       },
       {
-        "plannedDepartureTimeSeconds": 21840,
+        "plannedDepartureTimeSeconds": 22140,
         "direction": "Inbound",
         "serviceTypeId": "EXPRESS",
         "vehicleTypeId": "EMU-8",
@@ -268,7 +215,7 @@
         "continuationServiceRunId": null
       },
       {
-        "plannedDepartureTimeSeconds": 21960,
+        "plannedDepartureTimeSeconds": 22560,
         "direction": "Outbound",
         "serviceTypeId": "LOCAL",
         "vehicleTypeId": "EMU-6",
@@ -280,7 +227,7 @@
         "continuationServiceRunId": null
       },
       {
-        "plannedDepartureTimeSeconds": 22320,
+        "plannedDepartureTimeSeconds": 22620,
         "direction": "Inbound",
         "serviceTypeId": "LOCAL",
         "vehicleTypeId": "EMU-6",
@@ -293,639 +240,886 @@
       }
     ]
   },
-  "infrastructure": {
-    "stationYards": [
+  "topology": {
+    "nodes": [
+      {
+        "nodeId": "N1",
+        "name": "V01",
+        "kind": "Boundary",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N2",
+        "name": "V02",
+        "kind": "Junction",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N3",
+        "name": "V03",
+        "kind": "Junction",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N4",
+        "name": "V04",
+        "kind": "Junction",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N5",
+        "name": "V05",
+        "kind": "Boundary",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NTW",
+        "name": "\u897F\u7AEF\u5C3E\u8ECC",
+        "kind": "BufferStop",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NTE",
+        "name": "\u6771\u7AEF\u5C3E\u8ECC",
+        "kind": "BufferStop",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "TEO:THROAT",
+        "name": "V05 \u6771\u7AEF\u5C3E\u8ECC\u6298\u8FD4\u9053\u5C94",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "TWO:THROAT",
+        "name": "V01 \u897F\u7AEF\u5C3E\u8ECC\u6298\u8FD4\u9053\u5C94",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      }
+    ],
+    "edges": [
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "D12",
+        "fromNodeId": "N1",
+        "toNodeId": "N2",
+        "lengthMeters": 1200,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "D23",
+        "fromNodeId": "N2",
+        "toNodeId": "N3",
+        "lengthMeters": 1000,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "D34",
+        "fromNodeId": "N3",
+        "toNodeId": "N4",
+        "lengthMeters": 1400,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "D45",
+        "fromNodeId": "N4",
+        "toNodeId": "N5",
+        "lengthMeters": 1100,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "U54",
+        "fromNodeId": "N5",
+        "toNodeId": "N4",
+        "lengthMeters": 1100,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "U43",
+        "fromNodeId": "N4",
+        "toNodeId": "N3",
+        "lengthMeters": 1400,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "U32",
+        "fromNodeId": "N3",
+        "toNodeId": "N2",
+        "lengthMeters": 1000,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "U21",
+        "fromNodeId": "N2",
+        "toNodeId": "N1",
+        "lengthMeters": 1200,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.2222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "TEO",
+        "fromNodeId": "TEO:THROAT",
+        "toNodeId": "NTE",
+        "lengthMeters": 180,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TE"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "TWO",
+        "fromNodeId": "TWO:THROAT",
+        "toNodeId": "NTW",
+        "lengthMeters": 180,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TW"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "TEO:ENTRY",
+        "fromNodeId": "N5",
+        "toNodeId": "TEO:THROAT",
+        "lengthMeters": 180,
+        "directionality": "ForwardOnly",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TE"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "TEO:EXIT",
+        "fromNodeId": "TEO:THROAT",
+        "toNodeId": "N5",
+        "lengthMeters": 180,
+        "directionality": "ForwardOnly",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TE"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "TWO:ENTRY",
+        "fromNodeId": "N1",
+        "toNodeId": "TWO:THROAT",
+        "lengthMeters": 180,
+        "directionality": "ForwardOnly",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TW"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "TWO:EXIT",
+        "fromNodeId": "TWO:THROAT",
+        "toNodeId": "N1",
+        "lengthMeters": 180,
+        "directionality": "ForwardOnly",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "conflictResourceIds": [
+          "RES-TW"
+        ]
+      }
+    ],
+    "stations": [
       {
         "stationId": "V01",
-        "name": "驗證起點站站場",
-        "platforms": [
-          {
-            "platformId": "V01-D",
-            "stationId": "V01",
-            "name": "驗證起點站 下行月台",
-            "direction": "Outbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "DOWN-MAIN"
-            ]
-          },
-          {
-            "platformId": "V01-U",
-            "stationId": "V01",
-            "name": "驗證起點站 上行月台",
-            "direction": "Inbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "UP-MAIN"
-            ]
-          }
-        ],
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "routePathIds": [
-          "PATH-D-V01-V02"
-        ],
-        "turnbackPlans": [],
-        "platformAllocationStrategy": "Automatic"
+        "name": "\u9A57\u8B49\u8D77\u9EDE\u7AD9",
+        "defaultDwellTimeSeconds": 35,
+        "platformIds": [
+          "V01-D",
+          "V01-U"
+        ]
       },
       {
         "stationId": "V02",
-        "name": "東城站站場",
-        "platforms": [
-          {
-            "platformId": "V02-D",
-            "stationId": "V02",
-            "name": "東城站 下行月台",
-            "direction": "Outbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "DOWN-MAIN"
-            ]
-          },
-          {
-            "platformId": "V02-U",
-            "stationId": "V02",
-            "name": "東城站 上行月台",
-            "direction": "Inbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "UP-MAIN"
-            ]
-          }
-        ],
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "routePathIds": [
-          "PATH-U-V02-V01",
-          "PATH-D-V02-V03"
-        ],
-        "turnbackPlans": [],
-        "platformAllocationStrategy": "Automatic"
+        "name": "\u6771\u57CE\u7AD9",
+        "defaultDwellTimeSeconds": 30,
+        "platformIds": [
+          "V02-D",
+          "V02-U"
+        ]
       },
       {
         "stationId": "V03",
-        "name": "中央轉接站站場",
-        "platforms": [
-          {
-            "platformId": "V03-D",
-            "stationId": "V03",
-            "name": "中央轉接站 下行月台",
-            "direction": "Outbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "DOWN-MAIN"
-            ]
-          },
-          {
-            "platformId": "V03-U",
-            "stationId": "V03",
-            "name": "中央轉接站 上行月台",
-            "direction": "Inbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "UP-MAIN"
-            ]
-          }
-        ],
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "routePathIds": [
-          "PATH-U-V03-V02",
-          "PATH-D-V03-V04"
-        ],
-        "turnbackPlans": [],
-        "platformAllocationStrategy": "Automatic"
+        "name": "\u4E2D\u592E\u8F49\u63A5\u7AD9",
+        "defaultDwellTimeSeconds": 35,
+        "platformIds": [
+          "V03-D",
+          "V03-U"
+        ]
       },
       {
         "stationId": "V04",
-        "name": "西園站站場",
-        "platforms": [
-          {
-            "platformId": "V04-D",
-            "stationId": "V04",
-            "name": "西園站 下行月台",
-            "direction": "Outbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "DOWN-MAIN"
-            ]
-          },
-          {
-            "platformId": "V04-U",
-            "stationId": "V04",
-            "name": "西園站 上行月台",
-            "direction": "Inbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "UP-MAIN"
-            ]
-          }
-        ],
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "routePathIds": [
-          "PATH-U-V04-V03",
-          "PATH-D-V04-V05"
-        ],
-        "turnbackPlans": [],
-        "platformAllocationStrategy": "Automatic"
+        "name": "\u897F\u5712\u7AD9",
+        "defaultDwellTimeSeconds": 30,
+        "platformIds": [
+          "V04-D",
+          "V04-U"
+        ]
       },
       {
         "stationId": "V05",
-        "name": "驗證終點站站場",
-        "platforms": [
-          {
-            "platformId": "V05-D",
-            "stationId": "V05",
-            "name": "驗證終點站 下行月台",
-            "direction": "Outbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "DOWN-MAIN"
-            ]
-          },
-          {
-            "platformId": "V05-U",
-            "stationId": "V05",
-            "name": "驗證終點站 上行月台",
-            "direction": "Inbound",
-            "effectiveLengthMeters": 220,
-            "stoppingPositionMeters": 110,
-            "allowsPassengerService": true,
-            "allowedVehicleTypeIds": [
-              "EMU-6",
-              "EMU-8"
-            ],
-            "allowedServiceTypeIds": [
-              "LOCAL",
-              "EXPRESS"
-            ],
-            "trackSegmentIds": [
-              "UP-MAIN"
-            ]
-          }
-        ],
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "routePathIds": [
-          "PATH-U-V05-V04"
-        ],
-        "turnbackPlans": [],
-        "platformAllocationStrategy": "Automatic"
-      }
-    ],
-    "trackSegments": [
-      {
-        "trackId": "DOWN-MAIN",
-        "fromStationId": "V01",
-        "toStationId": "V05",
-        "startPositionMeters": 0,
-        "endPositionMeters": 4700,
-        "direction": "Outbound",
-        "kind": "Mainline",
-        "effectiveLengthMeters": 4700,
-        "speedLimitMetersPerSecond": 25,
-        "conflictResourceIds": [
-          "BLOCK-DOWN-MAIN"
-        ]
-      },
-      {
-        "trackId": "UP-MAIN",
-        "fromStationId": "V05",
-        "toStationId": "V01",
-        "startPositionMeters": 4700,
-        "endPositionMeters": 0,
-        "direction": "Inbound",
-        "kind": "Mainline",
-        "effectiveLengthMeters": 4700,
-        "speedLimitMetersPerSecond": 25,
-        "conflictResourceIds": [
-          "BLOCK-UP-MAIN"
-        ]
-      },
-      {
-        "trackId": "V03-SIDING",
-        "fromStationId": "V02",
-        "toStationId": "V04",
-        "startPositionMeters": 1900,
-        "endPositionMeters": 3100,
-        "direction": "Both",
-        "kind": "Siding",
-        "effectiveLengthMeters": 1200,
-        "speedLimitMetersPerSecond": 11.11111111111111,
-        "conflictResourceIds": [
-          "V03-SIDING-RESOURCE"
+        "name": "\u9A57\u8B49\u7D42\u9EDE\u7AD9",
+        "defaultDwellTimeSeconds": 35,
+        "platformIds": [
+          "V05-D",
+          "V05-U"
         ]
       }
     ],
-    "paths": [
+    "platforms": [
       {
-        "pathId": "PATH-D-V01-V02",
-        "fromPlatformId": "V01-D",
-        "toPlatformId": "V02-D",
-        "direction": "Outbound",
-        "trackSegmentIds": [
-          "DOWN-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-D-V01-V02"
-        ]
-      },
-      {
-        "pathId": "PATH-U-V02-V01",
-        "fromPlatformId": "V02-U",
-        "toPlatformId": "V01-U",
-        "direction": "Inbound",
-        "trackSegmentIds": [
-          "UP-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-U-V02-V01"
-        ]
-      },
-      {
-        "pathId": "PATH-D-V02-V03",
-        "fromPlatformId": "V02-D",
-        "toPlatformId": "V03-D",
-        "direction": "Outbound",
-        "trackSegmentIds": [
-          "DOWN-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-D-V02-V03"
-        ]
-      },
-      {
-        "pathId": "PATH-U-V03-V02",
-        "fromPlatformId": "V03-U",
-        "toPlatformId": "V02-U",
-        "direction": "Inbound",
-        "trackSegmentIds": [
-          "UP-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-U-V03-V02"
-        ]
-      },
-      {
-        "pathId": "PATH-D-V03-V04",
-        "fromPlatformId": "V03-D",
-        "toPlatformId": "V04-D",
-        "direction": "Outbound",
-        "trackSegmentIds": [
-          "DOWN-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-D-V03-V04"
-        ]
-      },
-      {
-        "pathId": "PATH-U-V04-V03",
-        "fromPlatformId": "V04-U",
-        "toPlatformId": "V03-U",
-        "direction": "Inbound",
-        "trackSegmentIds": [
-          "UP-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-U-V04-V03"
-        ]
-      },
-      {
-        "pathId": "PATH-D-V04-V05",
-        "fromPlatformId": "V04-D",
-        "toPlatformId": "V05-D",
-        "direction": "Outbound",
-        "trackSegmentIds": [
-          "DOWN-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-D-V04-V05"
-        ]
-      },
-      {
-        "pathId": "PATH-U-V05-V04",
-        "fromPlatformId": "V05-U",
-        "toPlatformId": "V04-U",
-        "direction": "Inbound",
-        "trackSegmentIds": [
-          "UP-MAIN"
-        ],
-        "resourceIds": [
-          "BLOCK-U-V05-V04"
-        ]
-      }
-    ],
-    "turnbackPlans": [
-      {
-        "turnbackId": "TB-V01-BEFORE",
-        "name": "起點站前折返",
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "1",
+        "platformBodyId": "",
+        "displaySide": "Below",
+        "platformId": "V01-D",
         "stationId": "V01",
-        "kind": "BeforeStation",
-        "arrivalPlatformId": "V01-U",
-        "departurePlatformId": "V01-D",
-        "trackSegmentIds": [
-          "UP-MAIN",
-          "DOWN-MAIN"
-        ],
-        "resourceIds": [
-          "TURNBACK-V01"
-        ],
-        "turnbackTimeSeconds": 80
+        "name": "V01 \u4E0B\u884C",
+        "trackEdgeId": "D12",
+        "platformStartOffsetMeters": 0,
+        "platformEndOffsetMeters": 140,
+        "stopPositionOffsetMeters": 140,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
       },
       {
-        "turnbackId": "TB-V05-AFTER",
-        "name": "終點站後折返",
-        "stationId": "V05",
-        "kind": "AfterStation",
-        "arrivalPlatformId": "V05-D",
-        "departurePlatformId": "V05-U",
-        "trackSegmentIds": [
-          "DOWN-MAIN",
-          "UP-MAIN"
-        ],
-        "resourceIds": [
-          "TURNBACK-V05"
-        ],
-        "turnbackTimeSeconds": 95
-      }
-    ],
-    "spatialReferencePoints": [
-      {
-        "alternateBerthing": false,
-        "mainlineGradePermille": 0.5,
-        "branchlineGradePermille": 0,
-        "distanceFromStopToCrossoverMeters": 90,
-        "crossoverLengthMeters": 110,
-        "distanceFromCrossoverToTurnbackStopMeters": 120,
-        "turnbackDwellSeconds": 35,
-        "switchSpeedLimitMetersPerSecond": 9.722222222222221,
-        "mainlineApproachCruiseSpeedMetersPerSecond": 16.66666666666667,
-        "branchlineApproachCruiseSpeedMetersPerSecond": 16.66666666666667,
-        "mainlineSafetyFactor": 1.5,
-        "branchlineSafetyFactor": 1.5,
-        "mainlineTrafficRatio": 0.5,
-        "stationForwardGradeInPermille": 0,
-        "stationForwardGradeOutPermille": 0,
-        "stationForwardDistanceToSignalMeters": 15,
-        "stationForwardOverlapMeters": 300,
-        "stationForwardDwellSeconds": 30,
-        "stationForwardEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardSafetyFactor": 1.5,
-        "stationReverseGradeInPermille": 0,
-        "stationReverseGradeOutPermille": 0,
-        "stationReverseDistanceToSignalMeters": 15,
-        "stationReverseOverlapMeters": 300,
-        "stationReverseDwellSeconds": 30,
-        "stationReverseEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseSafetyFactor": 1.5,
-        "referencePointId": "REF-V01-FRONT",
-        "stationId": "V01",
-        "name": "起點站前折返",
-        "kind": "BeforeStationTurnback"
-      },
-      {
-        "alternateBerthing": false,
-        "mainlineGradePermille": 0,
-        "branchlineGradePermille": 0,
-        "distanceFromStopToCrossoverMeters": 100,
-        "crossoverLengthMeters": 100,
-        "distanceFromCrossoverToTurnbackStopMeters": 100,
-        "turnbackDwellSeconds": 30,
-        "switchSpeedLimitMetersPerSecond": 11.11111111111111,
-        "mainlineApproachCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "branchlineApproachCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "mainlineSafetyFactor": 1.5,
-        "branchlineSafetyFactor": 1.5,
-        "mainlineTrafficRatio": 0.5,
-        "stationForwardGradeInPermille": 1.5,
-        "stationForwardGradeOutPermille": -0.8,
-        "stationForwardDistanceToSignalMeters": 20,
-        "stationForwardOverlapMeters": 280,
-        "stationForwardDwellSeconds": 42,
-        "stationForwardEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardLaterCruiseSpeedMetersPerSecond": 19.44444444444444,
-        "stationForwardSafetyFactor": 1.6,
-        "stationReverseGradeInPermille": -2,
-        "stationReverseGradeOutPermille": 1,
-        "stationReverseDistanceToSignalMeters": 25,
-        "stationReverseOverlapMeters": 240,
-        "stationReverseDwellSeconds": 11,
-        "stationReverseEarlierCruiseSpeedMetersPerSecond": 18.05555555555556,
-        "stationReverseLaterCruiseSpeedMetersPerSecond": 20.83333333333333,
-        "stationReverseSafetyFactor": 1.7,
-        "referencePointId": "REF-V02-STATION",
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "1",
+        "platformBodyId": "",
+        "displaySide": "Below",
+        "platformId": "V02-D",
         "stationId": "V02",
-        "name": "東城順逆行中間站",
-        "kind": "IntermediateStation"
+        "name": "V02 \u4E0B\u884C",
+        "trackEdgeId": "D12",
+        "platformStartOffsetMeters": 1060,
+        "platformEndOffsetMeters": 1200,
+        "stopPositionOffsetMeters": 1200,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
       },
       {
-        "alternateBerthing": false,
-        "mainlineGradePermille": 0.2,
-        "branchlineGradePermille": -1.2,
-        "distanceFromStopToCrossoverMeters": 100,
-        "crossoverLengthMeters": 150,
-        "distanceFromCrossoverToTurnbackStopMeters": 100,
-        "turnbackDwellSeconds": 30,
-        "switchSpeedLimitMetersPerSecond": 12.5,
-        "mainlineApproachCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "branchlineApproachCruiseSpeedMetersPerSecond": 16.66666666666667,
-        "mainlineSafetyFactor": 1.5,
-        "branchlineSafetyFactor": 1.7,
-        "mainlineTrafficRatio": 0.65,
-        "stationForwardGradeInPermille": 0,
-        "stationForwardGradeOutPermille": 0,
-        "stationForwardDistanceToSignalMeters": 15,
-        "stationForwardOverlapMeters": 300,
-        "stationForwardDwellSeconds": 30,
-        "stationForwardEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardSafetyFactor": 1.5,
-        "stationReverseGradeInPermille": 0,
-        "stationReverseGradeOutPermille": 0,
-        "stationReverseDistanceToSignalMeters": 15,
-        "stationReverseOverlapMeters": 300,
-        "stationReverseDwellSeconds": 30,
-        "stationReverseEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseSafetyFactor": 1.5,
-        "referencePointId": "REF-V03-JUNCTION",
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "1",
+        "platformBodyId": "",
+        "displaySide": "Below",
+        "platformId": "V03-D",
         "stationId": "V03",
-        "name": "中央主支線銜接點",
-        "kind": "Junction"
+        "name": "V03 \u4E0B\u884C",
+        "trackEdgeId": "D23",
+        "platformStartOffsetMeters": 860,
+        "platformEndOffsetMeters": 1000,
+        "stopPositionOffsetMeters": 1000,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
       },
       {
-        "alternateBerthing": true,
-        "mainlineGradePermille": 1,
-        "branchlineGradePermille": 0,
-        "distanceFromStopToCrossoverMeters": 100,
-        "crossoverLengthMeters": 120,
-        "distanceFromCrossoverToTurnbackStopMeters": 140,
-        "turnbackDwellSeconds": 30,
-        "switchSpeedLimitMetersPerSecond": 9.722222222222221,
-        "mainlineApproachCruiseSpeedMetersPerSecond": 19.44444444444444,
-        "branchlineApproachCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "mainlineSafetyFactor": 1.5,
-        "branchlineSafetyFactor": 1.5,
-        "mainlineTrafficRatio": 0.5,
-        "stationForwardGradeInPermille": 0,
-        "stationForwardGradeOutPermille": 0,
-        "stationForwardDistanceToSignalMeters": 15,
-        "stationForwardOverlapMeters": 300,
-        "stationForwardDwellSeconds": 30,
-        "stationForwardEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardSafetyFactor": 1.5,
-        "stationReverseGradeInPermille": 0,
-        "stationReverseGradeOutPermille": 0,
-        "stationReverseDistanceToSignalMeters": 15,
-        "stationReverseOverlapMeters": 300,
-        "stationReverseDwellSeconds": 30,
-        "stationReverseEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseSafetyFactor": 1.5,
-        "referencePointId": "REF-V04-POCKET",
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "1",
+        "platformBodyId": "",
+        "displaySide": "Below",
+        "platformId": "V04-D",
         "stationId": "V04",
-        "name": "西園中央避車線折返",
-        "kind": "CentralSidingTurnback"
+        "name": "V04 \u4E0B\u884C",
+        "trackEdgeId": "D34",
+        "platformStartOffsetMeters": 1260,
+        "platformEndOffsetMeters": 1400,
+        "stopPositionOffsetMeters": 1400,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
       },
       {
-        "alternateBerthing": true,
-        "mainlineGradePermille": -0.5,
-        "branchlineGradePermille": 0,
-        "distanceFromStopToCrossoverMeters": 150,
-        "crossoverLengthMeters": 120,
-        "distanceFromCrossoverToTurnbackStopMeters": 180,
-        "turnbackDwellSeconds": 45,
-        "switchSpeedLimitMetersPerSecond": 11.11111111111111,
-        "mainlineApproachCruiseSpeedMetersPerSecond": 19.44444444444444,
-        "branchlineApproachCruiseSpeedMetersPerSecond": 19.44444444444444,
-        "mainlineSafetyFactor": 1.5,
-        "branchlineSafetyFactor": 1.5,
-        "mainlineTrafficRatio": 0.5,
-        "stationForwardGradeInPermille": 0,
-        "stationForwardGradeOutPermille": 0,
-        "stationForwardDistanceToSignalMeters": 15,
-        "stationForwardOverlapMeters": 300,
-        "stationForwardDwellSeconds": 30,
-        "stationForwardEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationForwardSafetyFactor": 1.5,
-        "stationReverseGradeInPermille": 0,
-        "stationReverseGradeOutPermille": 0,
-        "stationReverseDistanceToSignalMeters": 15,
-        "stationReverseOverlapMeters": 300,
-        "stationReverseDwellSeconds": 30,
-        "stationReverseEarlierCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseLaterCruiseSpeedMetersPerSecond": 22.22222222222222,
-        "stationReverseSafetyFactor": 1.5,
-        "referencePointId": "REF-V05-REAR",
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "1",
+        "platformBodyId": "",
+        "displaySide": "Below",
+        "platformId": "V05-D",
         "stationId": "V05",
-        "name": "終點站後尾軌折返",
-        "kind": "AfterStationTurnback"
+        "name": "V05 \u4E0B\u884C",
+        "trackEdgeId": "D45",
+        "platformStartOffsetMeters": 960,
+        "platformEndOffsetMeters": 1100,
+        "stopPositionOffsetMeters": 1100,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "2",
+        "platformBodyId": "",
+        "displaySide": "Above",
+        "platformId": "V05-U",
+        "stationId": "V05",
+        "name": "V05 \u4E0A\u884C",
+        "trackEdgeId": "U54",
+        "platformStartOffsetMeters": 0,
+        "platformEndOffsetMeters": 140,
+        "stopPositionOffsetMeters": 140,
+        "allowedDirection": "Inbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "2",
+        "platformBodyId": "",
+        "displaySide": "Above",
+        "platformId": "V04-U",
+        "stationId": "V04",
+        "name": "V04 \u4E0A\u884C",
+        "trackEdgeId": "U54",
+        "platformStartOffsetMeters": 960,
+        "platformEndOffsetMeters": 1100,
+        "stopPositionOffsetMeters": 1100,
+        "allowedDirection": "Inbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "2",
+        "platformBodyId": "",
+        "displaySide": "Above",
+        "platformId": "V03-U",
+        "stationId": "V03",
+        "name": "V03 \u4E0A\u884C",
+        "trackEdgeId": "U43",
+        "platformStartOffsetMeters": 1260,
+        "platformEndOffsetMeters": 1400,
+        "stopPositionOffsetMeters": 1400,
+        "allowedDirection": "Inbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "2",
+        "platformBodyId": "",
+        "displaySide": "Above",
+        "platformId": "V02-U",
+        "stationId": "V02",
+        "name": "V02 \u4E0A\u884C",
+        "trackEdgeId": "U32",
+        "platformStartOffsetMeters": 860,
+        "platformEndOffsetMeters": 1000,
+        "stopPositionOffsetMeters": 1000,
+        "allowedDirection": "Inbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainFront",
+        "platformNumber": "2",
+        "platformBodyId": "",
+        "displaySide": "Above",
+        "platformId": "V01-U",
+        "stationId": "V01",
+        "name": "V01 \u4E0A\u884C",
+        "trackEdgeId": "U21",
+        "platformStartOffsetMeters": 1060,
+        "platformEndOffsetMeters": 1200,
+        "stopPositionOffsetMeters": 1200,
+        "allowedDirection": "Inbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      }
+    ],
+    "resources": [
+      {
+        "resourceId": "RES-TE",
+        "name": "\u6771\u7AEF\u5C3E\u8ECC",
+        "kind": "TailTrack"
+      },
+      {
+        "resourceId": "RES-TW",
+        "name": "\u897F\u7AEF\u5C3E\u8ECC",
+        "kind": "TailTrack"
+      }
+    ],
+    "speedLimits": [
+      {
+        "speedLimitId": "L-D23",
+        "trackEdgeId": "D23",
+        "startOffsetMeters": 300,
+        "endOffsetMeters": 850,
+        "limitMetersPerSecond": 12.5,
+        "direction": "Forward"
+      },
+      {
+        "speedLimitId": "L-U43",
+        "trackEdgeId": "U43",
+        "startOffsetMeters": 500,
+        "endOffsetMeters": 950,
+        "limitMetersPerSecond": 13.8888889,
+        "direction": "Forward"
+      }
+    ],
+    "gradients": [
+      {
+        "gradientId": "G-D12",
+        "trackEdgeId": "D12",
+        "startOffsetMeters": 0,
+        "endOffsetMeters": 1200,
+        "gradePermille": 0.5
+      }
+    ],
+    "curves": [
+      {
+        "curveId": "C-D12",
+        "trackEdgeId": "D12",
+        "startOffsetMeters": 500,
+        "endOffsetMeters": 900,
+        "radiusMeters": 400
+      }
+    ],
+    "directedConnections": [
+      {
+        "fromTrackEdgeId": "D12",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "D23",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "D23",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "D34",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "D34",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "D45",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "D45",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TEO:ENTRY",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TEO",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TEO",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "TEO:EXIT",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "U54",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "U54",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "U43",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "U43",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "U32",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "U32",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "U21",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "U21",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TWO:ENTRY",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TWO",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TWO",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "TWO:EXIT",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "D12",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TEO:ENTRY",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TEO",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TEO",
+        "fromDirection": "Reverse",
+        "toTrackEdgeId": "TEO:EXIT",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TWO:ENTRY",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TWO",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TWO",
+        "fromDirection": "Reverse",
+        "toTrackEdgeId": "TWO:EXIT",
+        "toDirection": "Forward"
+      }
+    ],
+    "turnbackFacilities": [
+      {
+        "facilityId": "TB-E",
+        "name": "V05 \u6771\u7AEF\u5C3E\u8ECC\u6298\u8FD4",
+        "kind": "TailTrack",
+        "arrivalTrackEdgeId": "D45",
+        "arrivalStopOffsetMeters": 1100,
+        "departureTrackEdgeId": "U54",
+        "departureStartOffsetMeters": 140,
+        "traversals": [
+          {
+            "trackEdgeId": "TEO:ENTRY",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TEO",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TEO",
+            "direction": "Reverse"
+          },
+          {
+            "trackEdgeId": "TEO:EXIT",
+            "direction": "Forward"
+          }
+        ],
+        "facilityTrackEdgeIds": [],
+        "turnbackStopAfterTraversalIndex": null,
+        "turnbackStopPosition": {
+          "trackEdgeId": "TEO",
+          "offsetMeters": 160
+        },
+        "conflictResourceIds": [
+          "RES-TE"
+        ]
+      },
+      {
+        "facilityId": "TB-W",
+        "name": "V01 \u897F\u7AEF\u5C3E\u8ECC\u6298\u8FD4",
+        "kind": "TailTrack",
+        "arrivalTrackEdgeId": "U21",
+        "arrivalStopOffsetMeters": 1200,
+        "departureTrackEdgeId": "D12",
+        "departureStartOffsetMeters": 140,
+        "traversals": [
+          {
+            "trackEdgeId": "TWO:ENTRY",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TWO",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TWO",
+            "direction": "Reverse"
+          },
+          {
+            "trackEdgeId": "TWO:EXIT",
+            "direction": "Forward"
+          }
+        ],
+        "facilityTrackEdgeIds": [],
+        "turnbackStopAfterTraversalIndex": null,
+        "turnbackStopPosition": {
+          "trackEdgeId": "TWO",
+          "offsetMeters": 160
+        },
+        "conflictResourceIds": [
+          "RES-TW"
+        ]
+      }
+    ],
+    "turnbackOperations": [
+      {
+        "operationId": "TURN-E",
+        "facilityId": "TB-E",
+        "arrivalServiceRouteId": "DOWN",
+        "departureServiceRouteId": "UP",
+        "minimumDwellTimeSeconds": 95
+      },
+      {
+        "operationId": "TURN-W",
+        "facilityId": "TB-W",
+        "arrivalServiceRouteId": "UP",
+        "departureServiceRouteId": "DOWN",
+        "minimumDwellTimeSeconds": 80
+      }
+    ],
+    "passingFacilities": [],
+    "passingOperations": [],
+    "stationOperations": [
+      {
+        "stationOperationId": "OP-V01",
+        "stationId": "V01",
+        "arrivalPlatformIds": [
+          "V01-U"
+        ],
+        "departurePlatformIds": [
+          "V01-D"
+        ],
+        "turnbackOperationIds": [
+          "TURN-W"
+        ],
+        "passingOperationIds": [],
+        "defaultDwellTimeSeconds": 35
+      },
+      {
+        "stationOperationId": "OP-V05",
+        "stationId": "V05",
+        "arrivalPlatformIds": [
+          "V05-D"
+        ],
+        "departurePlatformIds": [
+          "V05-U"
+        ],
+        "turnbackOperationIds": [
+          "TURN-E"
+        ],
+        "passingOperationIds": [],
+        "defaultDwellTimeSeconds": 35
       }
     ]
-  }
+  },
+  "serviceRoutes": [
+    {
+      "serviceRouteId": "DOWN",
+      "name": "\u4E0B\u884C\u4E94\u7AD9\u4E3B\u7DDA",
+      "traversals": [
+        {
+          "trackEdgeId": "D12",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "D23",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "D34",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "D45",
+          "direction": "Forward"
+        }
+      ],
+      "stops": [
+        {
+          "stationId": "V01",
+          "candidatePlatformIds": [
+            "V01-D"
+          ]
+        },
+        {
+          "stationId": "V02",
+          "candidatePlatformIds": [
+            "V02-D"
+          ]
+        },
+        {
+          "stationId": "V03",
+          "candidatePlatformIds": [
+            "V03-D"
+          ]
+        },
+        {
+          "stationId": "V04",
+          "candidatePlatformIds": [
+            "V04-D"
+          ]
+        },
+        {
+          "stationId": "V05",
+          "candidatePlatformIds": [
+            "V05-D"
+          ]
+        }
+      ]
+    },
+    {
+      "serviceRouteId": "UP",
+      "name": "\u4E0A\u884C\u4E94\u7AD9\u4E3B\u7DDA",
+      "traversals": [
+        {
+          "trackEdgeId": "U54",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "U43",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "U32",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "U21",
+          "direction": "Forward"
+        }
+      ],
+      "stops": [
+        {
+          "stationId": "V05",
+          "candidatePlatformIds": [
+            "V05-U"
+          ]
+        },
+        {
+          "stationId": "V04",
+          "candidatePlatformIds": [
+            "V04-U"
+          ]
+        },
+        {
+          "stationId": "V03",
+          "candidatePlatformIds": [
+            "V03-U"
+          ]
+        },
+        {
+          "stationId": "V02",
+          "candidatePlatformIds": [
+            "V02-U"
+          ]
+        },
+        {
+          "stationId": "V01",
+          "candidatePlatformIds": [
+            "V01-U"
+          ]
+        }
+      ]
+    }
+  ],
+  "directionRouteBindings": [
+    {
+      "direction": "Outbound",
+      "serviceRouteId": "DOWN"
+    },
+    {
+      "direction": "Inbound",
+      "serviceRouteId": "UP"
+    }
+  ]
 }

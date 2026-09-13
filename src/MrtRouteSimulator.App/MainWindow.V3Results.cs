@@ -7,16 +7,22 @@ public partial class MainWindow
 {
     private void PopulateV3Timetable()
     {
-        if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null)
+        if (!_v2Enabled || _v2World is null || _v2DispatchPlan is null)
         {
             return;
         }
 
-        var entries = OperationsTimetable.Build(
-            _route,
-            _v2DispatchPlan,
-            _plannedTimetableEvents,
-            _v2World.Events);
+        var entries = _activeTopologyProjectDocument is null
+            ? OperationsTimetable.Build(
+                _route ?? throw new InvalidOperationException("相容 V2 時刻表需要路線資料。"),
+                _v2DispatchPlan,
+                _plannedTimetableEvents,
+                _v2World.Events)
+            : OperationsTimetable.Build(
+                _v2World.GetTopologyResultContext(),
+                _v2DispatchPlan,
+                _plannedTimetableEvents,
+                _v2World.Events);
         TimetableRows.Clear();
         foreach (var entry in entries)
         {
@@ -47,7 +53,9 @@ public partial class MainWindow
 
         if (TimetableSourceText is not null)
         {
-            TimetableSourceText.Text = "Schema 7 派車計畫＋V2 SimulationWorld 計畫／實際事件；播放、重設與折返接續會同步更新";
+            TimetableSourceText.Text = _activeTopologyProjectDocument is null
+                ? "格式版本 7 派車計畫＋V2 模擬世界的計畫／實際事件；播放、重設與折返接續會同步更新"
+                : "格式版本 8 拓撲發車計畫＋V2 拓撲游標的計畫／實際事件；里程僅為衍生顯示。";
         }
 
         string DisplayClock(double? seconds) => seconds is { } value
@@ -57,17 +65,23 @@ public partial class MainWindow
 
     private void PopulateV3SegmentDetails()
     {
-        if (!_v2Enabled || _route is null || _v2World is null)
+        if (!_v2Enabled || _v2World is null)
         {
             return;
         }
 
-        var result = IntervalStatistics.Analyze(
-            _route,
-            _v2World.Trajectory,
-            _v2World.Events,
-            _v2World.SpeedLimits.Limits,
-            new IntervalStatisticsFilter(IncludeInProgress: true));
+        var result = _activeTopologyProjectDocument is null
+            ? IntervalStatistics.Analyze(
+                _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
+                _v2World.Trajectory,
+                _v2World.Events,
+                _v2World.SpeedLimits.Limits,
+                new IntervalStatisticsFilter(IncludeInProgress: true))
+            : IntervalStatistics.Analyze(
+                _v2World.GetTopologyResultContext(),
+                _v2World.Trajectory,
+                _v2World.Events,
+                new IntervalStatisticsFilter(IncludeInProgress: true));
         SegmentRows.Clear();
         foreach (var item in result.AllIntervals
                      .OrderBy(value => value.DepartureTimeSeconds ?? value.FirstObservedTimeSeconds)
@@ -80,7 +94,7 @@ public partial class MainWindow
             SegmentRows.Add(new SegmentRow(
                 $"{item.FromStationId} → {item.ToStationId}",
                 (item.DistanceMeters / 1000).ToString("0.###", CultureInfo.InvariantCulture),
-                "V2 實際（Jerk／速限／控制）",
+                "V2 實際（加加速度／速限／控制）",
                 item.PeakSpeedMetersPerSecond is { } peak ? (peak * 3.6).ToString("0.##", CultureInfo.InvariantCulture) : "—",
                 item.TravelTimeSeconds is { } travel ? $"{travel:0.0} s" : "—",
                 $"{accelerating:0.0} s",
@@ -99,8 +113,8 @@ public partial class MainWindow
         if (SegmentSourceText is not null)
         {
             SegmentSourceText.Text = result.AllIntervals.Count == 0
-                ? "V2 實際資料：請播放模擬；第一個 0.1 秒 Tick 後開始產生區間軌跡"
-                : $"V2 實際資料：完成 {result.CompletedCount}、運行中 {result.InProgressCount}；包含 Jerk、惰行、速限與移動閉塞事件";
+                ? "V2 實際資料：請播放模擬；第一個 0.1 秒時間步進後開始產生區間軌跡"
+                : $"V2 實際資料：完成 {result.CompletedCount}、運行中 {result.InProgressCount}；包含加加速度、惰行、速限與移動閉塞事件";
         }
 
         static double Phase(IntervalStatistic item, OperationalPhase phase) =>
@@ -171,7 +185,7 @@ public partial class MainWindow
         if (ResourceOccupancySummaryText is not null)
         {
             ResourceOccupancySummaryText.Text = result.Resources.Count == 0
-                ? "播放模擬後，將依 RouteReserved／RouteReleased 顯示各資源的獨立占用時間軸。"
+                ? "播放模擬後，將依進路鎖定／進路釋放事件顯示各資源的獨立占用時間軸。"
                 : $"觀測窗 {result.WindowEndSeconds - result.WindowStartSeconds:0.0} s；共 {result.Intervals.Count} 段資源占用。容量欄位是此排程的觀測值，不是安全認證容量。";
         }
     }

@@ -1,6 +1,61 @@
-# V3.4.2 交付狀態與後續清單
+# V4.0.1 交付狀態與後續清單
 
-> 只有本檔的「現行待辦」核取方塊用來判定目前完成狀態。過往需求已移至 `TODO_ARCHIVE.md`，不再納入待修數量。
+> 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
+
+## V4.0.1 工作區與參考圖樣式（2026-09-08）
+
+- [x] 2026-09-09：依 PDF 加入七種可執行站場、方向及月台配置、進路綁定、模擬參數設定與袋狀軌對向互斥；118/118 自動化通過，完成 WPF 離屏繪圖及站型按鈕／草稿隔離驗證。桌面手動驗收仍依現行待辦執行。
+
+- [x] 主選單直達路網、營運及模擬設定；建立／讀取 topology 後收合快速起稿，播放倍率與驗證訊息留在主內容區。
+- [x] 驗證訊息帶有物件及欄位目標，支援點擊與鍵盤定位；修正 DataGrid 綁定錯誤未阻擋套用、失焦後遺失欄位定位的問題。
+- [x] 依使用者參考圖加入棕紅軌道、方向箭頭、實心矩形月台與平滑轉角；修正編輯器多站被壓至右側及短月台與端點連線重疊。
+- [x] Release build 0 警告、0 錯誤，完整測試 110/110；Windows 實测播放倍率、錯誤阻擋／定位／取消、六站示意圖一般及窄視窗，以及完整範例主畫面與編輯器。
+
+## V4.0.1 軌道配線圖 UI（2026-09-05）
+
+- [x] 【V4-UI-TRACK-DIAGRAM-01】主畫面與 topology editor 改採鐵路配線圖風格：上下行固定分線、軌道統一青色實線，只有實際 directed connection 才畫轉向連線，不再於每個主線節點畫假性垂直連通。
+- [x] 【V4-UI-PLATFORM-01】月台依 `PlatformStartOffsetMeters`／`PlatformEndOffsetMeters` 畫成沿軌道的長色帶，站碼與站名取代畫面上的 edge ID；技術 ID 保留於 tooltip。
+- [x] 【V4-UI-TAIL-01】尾軌沿抵達方向的主線股道直線往端點外延伸；回程若需切換股道才顯示實際 directed connection，避免置中形成 Y 字。`BufferStop` 節點顯示垂直止衝，尾軌列車位置仍直接使用 edge-local cursor。
+- [x] 【V4-UI-TRACK-DIAGRAM-BUILD-01】Release build 0 警告、0 錯誤；完整自動化 107/107 通過，確認 presentation 改動未改變 topology runtime。
+
+## V4.0.1 範例拓撲與運行修整（2026-09-04）
+
+- [x] 【V4-SAMPLE-TOPO-01】盤點六個 Schema 8 範例；移除孤立分支、無使用 edge 與 legacy facility edge 欄位，尾軌／袋狀軌改為單一實體 edge 的正反向 traversal，保留端點安全餘量。
+- [x] 【V4-SAMPLE-OPS-01】修整碰撞、停站控制、無限續行及「名義上有越行但實際未發生」的班次設定；所有範例推進 3,600 秒後均有界完成。
+- [x] 【V4-UI-SCHEMATIC-01】主路線圖與 topology editor 共用平行 edge 幾何；明確繪出 directed connection，設施支線可見地接回既有軌道，節點與支線標籤依上下側錯開。
+- [x] 【V4-FACILITY-VALIDATE-01】精靈新增設施時保留既有節點的自然合法轉向；validator 拒絕未直接接上服務路線或中段停點未立即沿同 edge 反向的折返。
+- [x] 【V4-SAMPLE-VERIFY-01】Release build 0 警告、0 錯誤；107/107 通過；Windows WPF 實機載入並播放完整 topology 範例，三種匯出未於本輪重測。
+
+## V4.0.1 修正驗證（2026-08-31）
+
+- [x] 【V4-TOPO-COMPLETE-SAMPLE-01】新增完整 Schema 8 topology 執行範例，覆蓋 directed switch、passing、pocket、雙端 crossover tail、edge-local turnback stop、rear-clear 與接續車次。
+- [x] 【V4-TOPO-PASSING-SAFETY-01】快速車匯入正線、車尾仍在 passing edge 時，普通車會保持待避；避免平行 edge 被錯算為負間距或發生碰撞。
+- [x] 【V4-TOPO-VERIFY-02】Release build 0 警告、0 錯誤；自動化 100/100 通過。此輪未重做 Windows UI 手動驗收。
+
+## V4.0.0 已完成範圍（2026-08-31）
+
+- [x] 【V4-TOPO-ABC-01】完成 Track-first topology domain model、集中 `InfrastructureValidator`、`LinearInfrastructureBuilder` 與 route-local `RouteProjection`；linear quick builder 會建立逐站雙向 edge 與有序 ServiceRoute。
+- [x] 【V4-TOPO-D】`WorldTrainState`、trajectory 與 event 已輸出同步的 `TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex` transitional state。
+- [x] 【V4-TOPO-E-MAINLINE】正常主線列車已依有序 `DirectedTrackTraversal` 前進；`PositionMeters` 在正常主線僅作 topology cursor 的相容投影快取。
+- [x] 【V4-TOPO-F-MAINLINE】正常主線停靠已由 `ResolvedStop` 解析至 platform 的 `TrackPosition`，進站剩餘距離與到站吸附消費相同停點。
+- [x] 【V4-TOPO-G-MAINLINE】正常主線的即時速限與提前煞車已改由 `TrackSpeedLimitService` 使用 edge-local interval 計算；Schema 7 里程速限目前只作 runtime 轉換來源。
+- [x] 【V4-TOPO-FACILITY】tail／pocket／turnback／passing facility 均以實體 edge 與 ordered traversal 執行；footprint、rear-clear resource release 及平行 edge safety 均有 regression。
+- [x] 【V4-TOPO-H-CORE】`SimulationWorld` V2 runtime 不持有 compatibility `Route`、legacy `InfrastructureGraph` 或 `SpeedLimitService(route)`；表單 Route 僅在建構前一次性轉成實體 Schema 8 topology。
+- [x] 【V4-SCHEMA8-01】Schema 8 topology 專案已具 round-trip、reference validation、legacy field／版本拒絕與 topology-native runtime factory。
+- [x] 【V4-UI-TOPOLOGY】WPF 可讀取、編輯及播放 Schema 8 topology；運行圖、結果頁和 CSV／PNG／PDF 匯出不要求 Route。
+- [x] 【V4-TOPO-VERIFY-01】Release build 為 0 警告、0 錯誤；自動化測試 99/99 通過，含有向道岔轉向與 edge-local 折返停點 regression。（V4.0.0 歷史基準）
+- [x] 【V4-DOC-01】統一現行文件的版本、測試數、完成邊界與待辦；不再使用「Phase A～H 全部完成」代表完整 topology migration。
+
+## V4.0.0 桌面人工驗收（2026-08-31）
+
+- [x] 【V4-UI-MANUAL-01】以 Windows WPF 實際讀取 `V4.0.0-topology-baseline.mrtsim.json`、建立與播放 Schema 8 topology 世界、檢視實際進出站時刻表，並完成 CSV／PNG／PDF 匯出與讀回。輸出位於 `artifacts/V4.0.0-topology-manual-ui.*`。
+
+## 現行待辦
+
+- [x] 【V4-ROUTE-CONSTRUCTION-GUARDS】已實作明確有向轉向產生器、實體接軌側別共用檢核、編輯器保存與讀檔交易保護；快速建線、分割及設施精靈接入，13份範例遷移且主圖／編輯器零配線警告。詳見 [路線圖常見問題清單](ROUTE_LAYOUT_ISSUES.md)。
+- [ ] 【V4-LEGACY-PORT-MIGRATION】舊檔兩端皆未填實體接軌側別仍維持相容讀取；補上引導式確認側別與是否全面強制的遷移流程。不可從示意位置直接推定實體方向；現有讀檔不宣稱已檢查這類缺資料軌道的轉向方向。
+
+- [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。另修正窄視窗摘要卡文字裁切並完成新版目視複核。仍須補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
 
 ## V3.4.2 已完成（2026-08-29）
 
@@ -38,11 +93,9 @@
 - [x] 【首次發現：V3.2.0／V3.2-SAMPLE-01】【修正版本：V3.3.0】新增 `V3.3.0-完整功能驗證範例.mrtsim.json`，直接驗證停站秒數覆寫、跨站速限、單一資料來源、雙向派車、折返接續與五類空間參考點。
 - [x] 【驗證版本：V3.3.0】隔離 Release 建置 0 警告、0 錯誤；自動化測試 75/75 通過；Windows UI 已載入完整範例、建立並播放至端點作業完成，確認退出列車消失且指定反向車次接續。原 Release 輸出因正在執行的 V3.2.0 程式鎖定 DLL，故未強制關閉程式覆寫。
 
-## 現行待辦
+## 已完成的既有 UI 修正
 
 - [x] 【首次發現：V3.4.0／V3.4-UI-03】【修正版本：V3.4.1】所有管理／編輯視窗以共用登錄表阻擋同類第二實例；車型、服務類型、停站模式、發車計畫、基礎設施與空間參考點入口均先啟用既有視窗。Release 實機確認車型目錄連續觸發維持同一視窗、最小化後還原同一視窗、取消關閉後才建立新視窗，且草稿未被第二實例取代。
-目前無現行待辦。現行交付項目均已完成驗證。
-
 ## 遠期修正目標
 
 - 【首次保留：V3.0.0／V3.3-CAL-01】待取得指定真實路線的坡度、曲率、黏著、車型性能與實測資料後，進行校準，並執行長時間、多月台與大量列車效能測試。本項目前不計入現行交付阻擋。
@@ -54,7 +107,7 @@
 ## 標籤規則
 
 - 待辦使用 `【首次發現／問題 ID】`；完成時保留原標籤並追加 `【修正版本：Vx.x.x】`。
-- 產品版本、引擎與存檔格式分開表述：`V3.4.2` 是產品版本，`V1／V2` 是引擎，`Schema 7` 是存檔格式。
+- 產品版本、引擎與存檔格式分開表述：產品版本以 `Directory.Build.props` 為準，`V1／V2` 是引擎，現行可編輯與儲存格式為 Schema 8；Schema 7 只保留 legacy 匯入與固定時刻表相容資料。
 - 既有 V3.1／V3.2 完成明細見 `CHANGELOG.md`、`QA_REPORT.md` 與 `TODO_ARCHIVE.md`。
 
 ---
