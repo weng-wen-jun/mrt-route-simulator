@@ -491,7 +491,7 @@ internal static class TopologyRegressionTests
         var samplePaths = Directory.EnumerateFiles(sampleDirectory, "*.mrtsim.json", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        Equal(13, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
+        Equal(12, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
 
         foreach (var samplePath in samplePaths)
         {

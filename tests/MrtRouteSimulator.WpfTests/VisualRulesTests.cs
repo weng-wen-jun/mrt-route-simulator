@@ -40,7 +40,7 @@ internal static class VisualRulesTests
         var output = System.IO.Path.Combine(root, "artifacts", "station-rules-visual");
         Directory.CreateDirectory(output);
         var paths = Directory.GetFiles(System.IO.Path.Combine(root, "samples"), "*.mrtsim.json", SearchOption.AllDirectories);
-        Require(paths.Length >= 13, "完整範例矩陣不可缺少檔案。");
+        Require(paths.Length >= 12, "完整範例矩陣不可缺少檔案。");
         var main = new MainWindow();
         try
         {

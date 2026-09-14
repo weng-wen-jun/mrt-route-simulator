@@ -4,7 +4,7 @@
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前自動化基準為 `127/127 tests`、Release build `0 warnings / 0 errors`（2026-09-11），另有13範例×主圖／編輯器×兩寬度的52圖版面檢核及完整載入測試。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；桌面手動驗收及匯出邊界見 `QA_REPORT.md`。
+目前自動化基準為 `127/127 tests`、Release build `0 warnings / 0 errors`（2026-09-11），另有12範例×主圖／編輯器×兩寬度的48圖版面檢核及完整載入測試。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；桌面手動驗收及匯出邊界見 `QA_REPORT.md`。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
