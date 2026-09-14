@@ -57,16 +57,6 @@ public partial class MainWindow
         var candidateDurationSeconds = latestDispatchOffsetSeconds
             + candidateSession.ActualWorld.BaselineCycleTimeSeconds * 1.5;
         candidateSession.PreparePlannedTimeline(candidateDurationSeconds);
-        var candidatePreviews = BuildTopologyV2SpeedPreviews(
-            runtime.TrainParameters,
-            runtime.Topology,
-            runtime.OperationalParameters,
-            document.Simulation.ProfileMode,
-            runtime.ServicePatterns,
-            runtime.DispatchPlan,
-            runtime.VehicleTypes,
-            runtime.ServiceTypes,
-            document.Simulation.BrakingEstimationMode);
         var candidateStationRows = new List<StationInputRow>();
         var outboundStops = candidateSession.ActualWorld.GetTopologyResultContext().GetStops(TrainDirection.Outbound);
         for (var index = 0; index < outboundStops.Count; index++)
@@ -101,8 +91,6 @@ public partial class MainWindow
         _playbackDurationSeconds = candidateDurationSeconds;
         _plannedTimetableEvents = candidateSession.PlannedEvents;
         _v2PlannedMinimumIntervalSeconds = document.Simulation.HeadwaySeconds;
-        (_v2OutboundPreviewRunId, _v2OutboundSpeedPreview,
-            _v2InboundPreviewRunId, _v2InboundSpeedPreview) = candidatePreviews;
         PopulateFilterControls(runtime.DispatchPlan);
         RouteIdTextBox.Text = document.ProjectId;
         RouteNameTextBox.Text = document.ProjectName;
@@ -120,7 +108,6 @@ public partial class MainWindow
         ObstacleStopButton.IsEnabled = true;
         PlayButton.IsEnabled = true;
         PlaybackStatusText.Text = "拓撲專案已就緒，按「播放」查看列車運行。";
-        DrawV2Route();
-        DrawV2SpeedProfile();
+        PopulateV2Results();
     }
 }

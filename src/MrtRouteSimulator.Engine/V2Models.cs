@@ -283,7 +283,8 @@ public sealed record TrajectorySample(
     string? TrackEdgeId = null,
     double? OffsetMeters = null,
     int? ServiceRouteTraversalIndex = null,
-    double? ProjectedChainageMeters = null);
+    double? ProjectedChainageMeters = null,
+    double? TrackSpeedLimitMetersPerSecond = null);
 
 public sealed record SimulationEvent(
     double SimulationTimeSeconds,
@@ -307,7 +308,8 @@ public sealed record SimulationEvent(
     string? TrackEdgeId = null,
     double? OffsetMeters = null,
     int? ServiceRouteTraversalIndex = null,
-    double? ProjectedChainageMeters = null);
+    double? ProjectedChainageMeters = null,
+    string? StationId = null);
 
 public sealed record SimulationSnapshot(
     double SimulationTimeSeconds,

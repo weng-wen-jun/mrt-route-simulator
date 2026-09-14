@@ -19,10 +19,7 @@ public partial class MainWindow
     private SimulationProjectDocument? _activeSimulationProjectDocument;
     private IReadOnlyList<SimulationEvent> _plannedTimetableEvents = [];
     private bool _v2Enabled;
-    private IReadOnlyList<TrajectorySample> _v2OutboundSpeedPreview = [];
-    private string? _v2OutboundPreviewRunId;
-    private IReadOnlyList<TrajectorySample> _v2InboundSpeedPreview = [];
-    private string? _v2InboundPreviewRunId;
+    private bool _updatingSpeedProfileSelection;
     private double? _v2PlannedMinimumIntervalSeconds;
 
     public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
@@ -54,10 +51,6 @@ public partial class MainWindow
             _v2DispatchPlan = null;
             _activeSimulationProjectDocument = null;
             _plannedTimetableEvents = [];
-            _v2OutboundSpeedPreview = [];
-            _v2OutboundPreviewRunId = null;
-            _v2InboundSpeedPreview = [];
-            _v2InboundPreviewRunId = null;
             _v2PlannedMinimumIntervalSeconds = null;
             ObstacleStopButton.IsEnabled = false;
             return;
@@ -143,7 +136,7 @@ public partial class MainWindow
                 simulationEvent.Message));
         }
 
-        RefreshPairFilter(snapshot.SafetyObservations);
+        RefreshPairFilter(session.ActualWorld.SafetyHistory.Where(MatchesSafetyFilters));
         UpdateSafetySummary();
         SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
         DrawV2Route(snapshot);
@@ -185,10 +178,6 @@ public partial class MainWindow
         _activeTopologyProjectDocument = null;
         _plannedTimetableEvents = [];
         _v2Enabled = false;
-        _v2OutboundSpeedPreview = [];
-        _v2OutboundPreviewRunId = null;
-        _v2InboundSpeedPreview = [];
-        _v2InboundPreviewRunId = null;
         _v2PlannedMinimumIntervalSeconds = null;
         SafetyRows.Clear();
         EventRows.Clear();
@@ -199,7 +188,7 @@ public partial class MainWindow
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
         SpeedProfileRunComboBox.Items.Clear();
-        InboundSpeedProfileRunComboBox.Items.Clear();
+
         ObstacleStopButton.IsEnabled = false;
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         IntervalSummaryText.Text = "目前不是 V2 模擬。";
@@ -1009,30 +998,8 @@ public partial class MainWindow
 
     private void DrawV2SpeedProfile()
     {
-        DrawV2SpeedProfile(
-            TrainDirection.Outbound,
-            SpeedCanvas,
-            SpeedProfileRunComboBox,
-            SpeedProfileSourceText,
-            _v2OutboundPreviewRunId,
-            _v2OutboundSpeedPreview);
-        DrawV2SpeedProfile(
-            TrainDirection.Inbound,
-            InboundSpeedCanvas,
-            InboundSpeedProfileRunComboBox,
-            InboundSpeedProfileSourceText,
-            _v2InboundPreviewRunId,
-            _v2InboundSpeedPreview);
-    }
-
-    private void DrawV2SpeedProfile(
-        TrainDirection direction,
-        Canvas canvas,
-        ComboBox runComboBox,
-        TextBlock sourceText,
-        string? previewRunId,
-        IReadOnlyList<TrajectorySample> previewSamples)
-    {
+        if (_updatingSpeedProfileSelection) return;
+        var canvas = SpeedCanvas;
         canvas.Children.Clear();
         var width = canvas.ActualWidth;
         var height = canvas.ActualHeight;
@@ -1041,28 +1008,45 @@ public partial class MainWindow
             return;
         }
 
-        var directionLabel = DirectionToChinese(direction);
-        var selectedRunId = runComboBox.SelectedItem?.ToString() ?? previewRunId;
+        var selectedVehicleId = SpeedProfileRunComboBox.SelectedItem?.ToString();
+        _updatingSpeedProfileSelection = true;
+        try
+        {
+            foreach (var vehicleId in _v2World.GetSnapshot().Trains.Select(train => train.VehicleId)
+                         .Distinct(StringComparer.Ordinal))
+            {
+                if (!SpeedProfileRunComboBox.Items.Contains(vehicleId)) SpeedProfileRunComboBox.Items.Add(vehicleId);
+            }
+            if (selectedVehicleId is null && SpeedProfileRunComboBox.Items.Count > 0)
+            {
+                SpeedProfileRunComboBox.SelectedIndex = 0;
+                selectedVehicleId = SpeedProfileRunComboBox.SelectedItem?.ToString();
+            }
+        }
+        finally { _updatingSpeedProfileSelection = false; }
         var actualSamples = _v2World.Trajectory
-            .Where(sample => sample.Direction == direction
-                && (selectedRunId is null || sample.ServiceRunId == selectedRunId))
+            .Where(sample => sample.VehicleId == selectedVehicleId)
             .ToArray();
         var useActual = actualSamples.Length >= 2;
         var samples = useActual
             ? actualSamples
-            : selectedRunId == previewRunId && previewSamples.Count >= 2
-                ? previewSamples.ToArray()
-                : [];
+            : (_v2Session?.PlannedTrajectory ?? [])
+                .Where(sample => sample.VehicleId == selectedVehicleId)
+                .ToArray();
         if (samples.Length < 2)
         {
-            sourceText.Text = selectedRunId is null ? $"沒有{directionLabel}車次" : $"{selectedRunId} 尚未產生實際軌跡";
-            AddCanvasText(canvas, $"所選{directionLabel}車次尚未播放，或沒有可完成的單程軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
+            SpeedProfileSourceText.Text = selectedVehicleId is null ? "尚無列車" : $"{selectedVehicleId} · 尚無軌跡";
+            AddCanvasText(canvas, "播放後顯示所選列車的上下行、停站及折返軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
             return;
         }
 
-        sourceText.Text = useActual
-            ? $"{selectedRunId} · V2 實際"
-            : $"{selectedRunId} · 計畫預覽";
+        var sourceEvents = useActual ? _v2World.Events : _v2Session!.PlannedEvents;
+        var complete = sourceEvents.Any(item => item.VehicleId == selectedVehicleId && item.EventType == SimulationEventType.ServiceEnded);
+        SpeedProfileSourceText.Text = useActual
+            ? complete ? "V2 實際" : "實際（截至目前）"
+            : complete ? "計畫預覽" : "計畫預覽（尚未完成）";
+        SpeedProfileSourceText.ToolTip = $"{selectedVehicleId} · 同一列車上下行及折返接續軌跡；"
+            + (useActual ? "顯示截至目前的實際運行。" : "顯示計畫模擬時間範圍內的運行。");
 
         var left = 42d;
         var top = 14d;
@@ -1072,15 +1056,14 @@ public partial class MainWindow
         var plotHeight = height - top - bottom;
         var minTime = samples[0].SimulationTimeSeconds;
         var maxTime = Math.Max(minTime + 1, samples[^1].SimulationTimeSeconds);
-        var maxSpeed = _parameters.MaxSpeedMetersPerSecond * 3.6 * 1.1;
+        var maxSpeed = Math.Max(_parameters.MaxSpeedMetersPerSecond,
+            samples.Max(sample => Math.Max(sample.SpeedMetersPerSecond, GetDisplaySpeedLimitMetersPerSecond(sample)))) * 3.6 * 1.1;
         DrawAxes(canvas, left, top, plotWidth, plotHeight, "km/h", string.Empty);
         DrawSpeedTimeAxisTicks(canvas, left, top, plotWidth, plotHeight, minTime, maxTime);
 
         var speedLine = new Polyline
         {
-            Stroke = new SolidColorBrush(direction == TrainDirection.Outbound
-                ? Color.FromRgb(232, 109, 45)
-                : Color.FromRgb(34, 126, 173)),
+            Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
             StrokeThickness = 2.4
         };
         var limitLine = new Polyline
@@ -1100,7 +1083,23 @@ public partial class MainWindow
 
         canvas.Children.Add(limitLine);
         canvas.Children.Add(speedLine);
-        AddCanvasText(canvas, "— 實際速度　- - 里程速限", left + 8, top + 2, 10, Color.FromRgb(85, 94, 112));
+        var previousDirection = samples[0].Direction;
+        var directionChangeIndex = 0;
+        foreach (var sample in samples.Skip(1))
+        {
+            if (sample.Direction == previousDirection) continue;
+            previousDirection = sample.Direction;
+            var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
+            canvas.Children.Add(new Line
+            {
+                X1 = x, X2 = x, Y1 = top + 16, Y2 = top + plotHeight,
+                Stroke = Brushes.SlateGray, StrokeDashArray = [2, 3],
+                ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + sample.SimulationTimeSeconds)} 換向為{DirectionToChinese(sample.Direction)} · {sample.ServiceRunId}"
+            });
+            AddCanvasText(canvas, $"轉{DirectionToChinese(sample.Direction)}", Math.Clamp(x + 3, left, left + plotWidth - 45),
+                top + 18 + directionChangeIndex++ % 2 * 15, 10, Color.FromRgb(85, 94, 112));
+        }
+        AddCanvasText(canvas, useActual ? "— 實際速度　- - 軌道速限" : "— 計畫速度　- - 軌道速限", left + 8, top + 2, 10, Color.FromRgb(85, 94, 112));
     }
 
     private void DrawSpeedTimeAxisTicks(
@@ -1137,135 +1136,20 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>
-    /// Schema 8 的尚未播放速度預覽以獨立、單一車次的 topology world 產生；
-    /// 不會為了預覽還原 compatibility Route 或 virtual track。
-    /// </summary>
-    private static (string? OutboundRunId, IReadOnlyList<TrajectorySample> OutboundSamples,
-        string? InboundRunId, IReadOnlyList<TrajectorySample> InboundSamples) BuildTopologyV2SpeedPreviews(
-        TrainParameters trainParameters,
-        TopologySimulationDefinition topology,
-        OperationalParameters operational,
-        OperationProfileMode operationProfile,
-        IReadOnlyList<ServicePattern> servicePatterns,
-        ResolvedDispatchPlan dispatchPlan,
-        IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
-        IReadOnlyList<ServiceTypeDefinition> serviceTypes,
-        BrakingEstimationMode brakingMode)
-    {
-        var outbound = BuildTopologyV2SpeedPreview(
-            trainParameters,
-            TrainDirection.Outbound,
-            topology,
-            operational,
-            operationProfile,
-            servicePatterns,
-            dispatchPlan,
-            vehicleTypes,
-            serviceTypes,
-            brakingMode);
-        var inbound = BuildTopologyV2SpeedPreview(
-            trainParameters,
-            TrainDirection.Inbound,
-            topology,
-            operational,
-            operationProfile,
-            servicePatterns,
-            dispatchPlan,
-            vehicleTypes,
-            serviceTypes,
-            brakingMode);
-        return (outbound.RunId, outbound.Samples, inbound.RunId, inbound.Samples);
-    }
-
-    private static (string? RunId, IReadOnlyList<TrajectorySample> Samples) BuildTopologyV2SpeedPreview(
-        TrainParameters trainParameters,
-        TrainDirection direction,
-        TopologySimulationDefinition topology,
-        OperationalParameters operational,
-        OperationProfileMode operationProfile,
-        IReadOnlyList<ServicePattern> servicePatterns,
-        ResolvedDispatchPlan dispatchPlan,
-        IReadOnlyList<VehicleTypeDefinition> vehicleTypes,
-        IReadOnlyList<ServiceTypeDefinition> serviceTypes,
-        BrakingEstimationMode brakingMode)
-    {
-        var firstRun = dispatchPlan.Runs
-            .Where(run => run.Direction == direction)
-            .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
-            .ThenBy(run => run.Sequence)
-            .FirstOrDefault();
-        if (firstRun is null)
-        {
-            return (null, []);
-        }
-
-        var previewDispatchPlan = new ResolvedDispatchPlan(
-            dispatchPlan.ActiveMode,
-            dispatchPlan.VehicleAssignmentMode,
-            dispatchPlan.ScheduleAnchorTime,
-            [firstRun]);
-        var preview = new SimulationWorldOptions(
-            Route: null,
-            TrainParameters: trainParameters,
-            OperationalParameters: operational,
-            TrainCount: 1,
-            ProfileMode: operationProfile,
-            MovingBlockMode: MovingBlockMode.Independent,
-            ServicePatterns: servicePatterns,
-            DispatchPlan: previewDispatchPlan,
-            VehicleTypes: vehicleTypes,
-            ServiceTypes: serviceTypes,
-            Topology: topology,
-            InitialBrakingEstimationMode: brakingMode,
-            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full).CreateWorld();
-        var previewRoute = direction == TrainDirection.Outbound
-            ? topology.OutboundServiceRoute : topology.InboundServiceRoute;
-        var terminal = ResolvedStopResolver.Resolve(topology.Infrastructure, previewRoute)[^1];
-        var terminalHead = PlatformStopPositionResolver.ResolveHeadPosition(
-            topology.Infrastructure.Platforms[terminal.PlatformId],
-            previewRoute.Traversals[terminal.TraversalIndex].Direction,
-            vehicleTypes.Single(v => v.Id == firstRun.VehicleTypeId).LengthMeters);
-        var plannedStart = RelativeDispatchSeconds(firstRun.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
-        var deadline = plannedStart + Math.Max(3600, preview.BaselineCycleTimeSeconds * 2);
-        while (preview.CurrentTimeSeconds < deadline
-            && !preview.Events.Any(item => item.EventType == SimulationEventType.Arrival
-                && item.ServiceRunId == firstRun.ServiceRunId
-                && string.Equals(item.TrackEdgeId, terminalHead.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
-                && item.OffsetMeters is { } offset
-                && Math.Abs(offset - terminalHead.OffsetMeters) <= 0.5))
-        {
-            preview.Tick();
-        }
-
-        return (firstRun.ServiceRunId, preview.Trajectory
-            .Where(sample => sample.ServiceRunId == firstRun.ServiceRunId
-                && sample.Direction == direction)
-            .ToArray());
-    }
-
     private static double? GetMinimumPlannedIntervalSeconds(ResolvedDispatchPlan dispatchPlan)
     {
         var starts = dispatchPlan.Runs
             .Select(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
-            .Distinct()
-            .OrderBy(value => value)
-            .ToArray();
-        if (starts.Length < 2)
-        {
-            return null;
-        }
-
+            .Distinct().OrderBy(value => value).ToArray();
+        if (starts.Length < 2) return null;
         return starts.Zip(starts.Skip(1), (first, second) => second - first)
-            .Where(interval => interval > 1e-7)
-            .DefaultIfEmpty()
-            .Min() is var minimum && minimum > 1e-7
-                ? minimum
-                : null;
+            .Where(interval => interval > 1e-7).DefaultIfEmpty().Min() is var minimum && minimum > 1e-7
+                ? minimum : null;
     }
 
     private double GetDisplaySpeedLimitMetersPerSecond(TrajectorySample sample)
     {
+        if (sample.TrackSpeedLimitMetersPerSecond is { } limit) return limit;
         if (_activeTopologyProjectDocument is not null
             && sample.TrackEdgeId is { Length: > 0 } edgeId
             && _v2World!.TopologyInfrastructure.Edges.TryGetValue(edgeId, out var edge))
@@ -1315,6 +1199,7 @@ public partial class MainWindow
             .ToArray();
         if (history.Length == 0)
         {
+            AddCanvasText(SafetyDistanceCanvas, "所選配對在此時間範圍沒有資料；可切換上下行或選擇「全部時間」。", 18, 18, 12, Color.FromRgb(102, 112, 133));
             return;
         }
 
@@ -1370,7 +1255,7 @@ public partial class MainWindow
         }
 
         TimeDistanceCanvas.Children.Clear();
-        var width = Math.Max(760, TimeDistanceCanvas.ActualWidth);
+        var width = targetWidth;
         var height = Math.Max(380, TimeDistanceCanvas.ActualHeight);
         if ((_route is null && _activeTopologyProjectDocument is null) || _v2World is null || _plannedWorld is null)
         {
@@ -1630,14 +1515,15 @@ public partial class MainWindow
             return;
         }
 
-        if (SafetyRows.Count == 0)
+        var filteredHistory = _v2World.SafetyHistory.Where(MatchesSafetyFilters).ToArray();
+        if (filteredHistory.Length == 0)
         {
             SafetySummaryText.Text = "已有安全觀測，但目前的方向／狀態篩選沒有符合資料。";
             return;
         }
 
-        var minimum = _v2World.SafetyHistory.MinBy(item => item.SafetyMarginMeters)!;
-        SafetySummaryText.Text = $"全程最低安全裕度 {minimum.SafetyMarginMeters:0.0} m，"
+        var minimum = filteredHistory.MinBy(item => item.SafetyMarginMeters)!;
+        SafetySummaryText.Text = $"所選方向／狀態全程最低安全裕度 {minimum.SafetyMarginMeters:0.0} m，"
             + $"{ShortVehicle(minimum.FollowerVehicleId)} → {ShortVehicle(minimum.LeaderVehicleId)}，"
             + $"發生於 {minimum.SimulationTimeSeconds:0.0} s；目前估算採用"
             + $"{(_v2World.BrakingEstimationMode == BrakingEstimationMode.Service ? "營運" : "緊急")}煞車。";
@@ -1667,7 +1553,6 @@ public partial class MainWindow
     {
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
-        SpeedProfileRunComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Add("全部");
         foreach (var vehicleId in dispatchPlan.Runs.Select(run => run.VehicleId)
                      .Where(value => !string.IsNullOrWhiteSpace(value))
@@ -1681,36 +1566,24 @@ public partial class MainWindow
 
         DiagramVehicleComboBox.SelectedIndex = 0;
         ObstacleTrainComboBox.SelectedIndex = 0;
-        foreach (var serviceRunId in dispatchPlan.Runs
-                     .Where(run => run.Direction == TrainDirection.Outbound)
-                     .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
-                     .ThenBy(run => run.Sequence)
-                     .Select(run => run.ServiceRunId))
+        _updatingSpeedProfileSelection = true;
+        try
         {
-            SpeedProfileRunComboBox.Items.Add(serviceRunId);
+            SpeedProfileRunComboBox.Items.Clear();
+            foreach (var vehicleId in dispatchPlan.Runs.Select(run => run.VehicleId)
+                         .Concat((_v2Session?.PlannedTrajectory ?? []).Select(sample => sample.VehicleId))
+                         .Where(id => !string.IsNullOrWhiteSpace(id))
+                         .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
+            {
+                SpeedProfileRunComboBox.Items.Add(vehicleId);
+            }
+            SpeedProfileRunComboBox.SelectedIndex = SpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
         }
-        SpeedProfileRunComboBox.SelectedIndex = SpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
-        foreach (var serviceRunId in dispatchPlan.Runs
-                     .Where(run => run.Direction == TrainDirection.Inbound)
-                     .OrderBy(run => RelativeDispatchSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime))
-                     .ThenBy(run => run.Sequence)
-                     .Select(run => run.ServiceRunId))
-        {
-            InboundSpeedProfileRunComboBox.Items.Add(serviceRunId);
-        }
-        InboundSpeedProfileRunComboBox.SelectedIndex = InboundSpeedProfileRunComboBox.Items.Count > 0 ? 0 : -1;
+        finally { _updatingSpeedProfileSelection = false; }
         ObstacleDelayTextBox.Text = "0";
     }
 
     private void SpeedProfileRun_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (IsLoaded)
-        {
-            DrawV2SpeedProfile();
-        }
-    }
-
-    private void InboundSpeedProfileRun_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (IsLoaded)
         {
@@ -1732,29 +1605,41 @@ public partial class MainWindow
         var completedTrips = new List<double>();
         foreach (var run in _v2DispatchPlan.Runs)
         {
-            var routeStops = topologyResults?.GetStops(run.Direction);
+            var routeStops = topologyResults?.GetDisplayStations(run.Direction);
             var originPosition = routeStops is { Count: > 0 }
-                ? routeStops[0].ProjectedChainageMeters
+                ? routeStops[0].PositionMeters
                 : run.Direction == TrainDirection.Outbound ? 0 : _route!.TotalLengthMeters;
             var terminalPosition = routeStops is { Count: > 0 }
-                ? routeStops[^1].ProjectedChainageMeters
+                ? routeStops[^1].PositionMeters
                 : run.Direction == TrainDirection.Outbound ? _route!.TotalLengthMeters : 0;
             var departure = events.Where(item => item.EventType == SimulationEventType.Departure
                     && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
                     && item.Direction == run.Direction
-                    && Math.Abs(item.PositionMeters - originPosition) <= 0.6)
+                    && MatchesRunVehicle(item)
+                    && MatchesStation(item, routeStops?.FirstOrDefault()?.StationId, originPosition))
                 .OrderBy(item => item.SimulationTimeSeconds)
                 .FirstOrDefault();
             var arrival = events.Where(item => item.EventType == SimulationEventType.Arrival
                     && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
                     && item.Direction == run.Direction
-                    && Math.Abs(item.PositionMeters - terminalPosition) <= 0.6)
+                    && MatchesRunVehicle(item)
+                    && MatchesStation(item, routeStops?.LastOrDefault()?.StationId, terminalPosition))
                 .OrderBy(item => item.SimulationTimeSeconds)
                 .FirstOrDefault();
             if (departure is not null && arrival is not null && arrival.SimulationTimeSeconds >= departure.SimulationTimeSeconds)
             {
                 completedTrips.Add(arrival.SimulationTimeSeconds - departure.SimulationTimeSeconds);
             }
+
+            bool MatchesRunVehicle(SimulationEvent item) => string.IsNullOrWhiteSpace(run.VehicleId)
+                || string.Equals(item.VehicleId, run.VehicleId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        bool MatchesStation(SimulationEvent item, string? stationId, double legacyPosition)
+        {
+            if (topologyResults is not null)
+                return stationId is not null && topologyResults.MatchesStationEvent(item.Direction, stationId, item);
+            return Math.Abs(item.PositionMeters - legacyPosition) <= .6;
         }
 
         OneWaySummaryText.Text = completedTrips.Count > 0
@@ -1763,13 +1648,16 @@ public partial class MainWindow
                 ? $"{FormatDuration(_cycle.OutboundTrip.TotalRunTimeSeconds)}（無干擾基準）"
                 : "尚無完成行程";
 
-        var actualDepartures = events.Where(item => item.EventType == SimulationEventType.Departure)
-            .OrderBy(item => item.SimulationTimeSeconds)
-            .Select(item => item.SimulationTimeSeconds)
-            .Distinct()
-            .ToArray();
-        var intervals = actualDepartures.Zip(actualDepartures.Skip(1), (first, second) => second - first)
-            .Where(value => value > 1e-7)
+        var originDepartures = events.Where(item => item.EventType == SimulationEventType.Departure
+            && (topologyResults is null
+                ? Math.Abs(item.PositionMeters - (item.Direction == TrainDirection.Outbound ? 0 : _route!.TotalLengthMeters)) <= .6
+                : topologyResults.MatchesStationEvent(item.Direction,
+                    topologyResults.GetStops(item.Direction)[0].StationId, item)));
+        var intervals = originDepartures.GroupBy(item => item.Direction).SelectMany(group =>
+        {
+            var times = group.Select(item => item.SimulationTimeSeconds).Distinct().Order().ToArray();
+            return times.Zip(times.Skip(1), (first, second) => second - first);
+        }).Where(value => value > 1e-7)
             .ToArray();
         HeadwaySummaryText.Text = intervals.Length > 0
             ? $"{FormatDuration(intervals.Min())}（V2 實際最短）"
@@ -1784,14 +1672,21 @@ public partial class MainWindow
             ? $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} / {peakSpeed:0.#} km/h（V2 實際）"
             : $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} km/h（尚未播放）";
 
-        var outcomeTimes = events.Where(item => item.EventType is SimulationEventType.ServiceEnded or SimulationEventType.DirectionChanged)
-            .Select(item => item.SimulationTimeSeconds)
+        var outcomeTimes = events.Where(item => item.EventType == SimulationEventType.ServiceEnded)
+            .GroupBy(item => item.VehicleId)
+            .Select(group =>
+            {
+                var departure = events.Where(item => item.EventType == SimulationEventType.Departure && item.VehicleId == group.Key)
+                    .MinBy(item => item.SimulationTimeSeconds);
+                return departure is null ? (double?)null : group.Max(item => item.SimulationTimeSeconds) - departure.SimulationTimeSeconds;
+            })
+            .Where(value => value.HasValue).Select(value => value!.Value)
             .ToArray();
         CycleSummaryText.Text = outcomeTimes.Length > 0
-            ? $"{FormatDuration(outcomeTimes.Max())}（端點結果）"
+            ? $"{FormatDuration(outcomeTimes.Average())}（已完成列車平均）"
             : _cycle is not null
                 ? $"{FormatDuration(_cycle.CycleTimeSeconds)}（無干擾基準）"
-                : "尚無端點結果";
+                : "尚無完成全程";
     }
 
     private string GetActiveRouteDisplayName() =>
@@ -1887,7 +1782,7 @@ public partial class MainWindow
     }
 
     private static string PairKey(SafetyObservation item) =>
-        $"{ShortVehicle(item.FollowerVehicleId)} → {ShortVehicle(item.LeaderVehicleId)}｜{item.TrackId}";
+        $"{ShortVehicle(item.FollowerVehicleId)} → {ShortVehicle(item.LeaderVehicleId)}｜{DirectionToChinese(item.Direction)}｜{item.TrackId}";
 
     private static string ShortVehicle(string vehicleId) => vehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal);
 

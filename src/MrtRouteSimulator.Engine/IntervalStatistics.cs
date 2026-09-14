@@ -235,7 +235,8 @@ public static class IntervalStatistics
             samples,
             events,
             speedLimits,
-            filter);
+            filter,
+            stationEventMatcher: null);
     }
 
     /// <summary>
@@ -249,7 +250,14 @@ public static class IntervalStatistics
         IntervalStatisticsFilter? filter = null)
     {
         ArgumentNullException.ThrowIfNull(topology);
-        return AnalyzeCore(topology.GetDisplayStations, samples, events, [], filter);
+        return AnalyzeCore(
+            topology.GetDisplayStations,
+            samples,
+            events,
+            [],
+            filter,
+            (direction, stationId, simulationEvent) =>
+                topology.MatchesStationEvent(direction, stationId, simulationEvent));
     }
 
     private static IntervalStatisticsResult AnalyzeCore(
@@ -257,7 +265,8 @@ public static class IntervalStatistics
         IEnumerable<TrajectorySample> samples,
         IEnumerable<SimulationEvent>? events,
         IEnumerable<SpeedLimitSegment>? speedLimits,
-        IntervalStatisticsFilter? filter)
+        IntervalStatisticsFilter? filter,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
     {
         ArgumentNullException.ThrowIfNull(samples);
         filter ??= new IntervalStatisticsFilter();
@@ -283,9 +292,9 @@ public static class IntervalStatistics
             {
                 var from = stations[index];
                 var to = stations[index + 1];
-                var departure = FindDeparture(ordered, allEvents, from, direction);
+                var departure = FindDeparture(ordered, allEvents, from, direction, stationEventMatcher);
                 var arrival = departure is not null
-                    ? FindArrival(ordered, allEvents, to, direction, departure.TimeSeconds)
+                    ? FindArrival(ordered, allEvents, to, direction, departure.TimeSeconds, stationEventMatcher)
                     : null;
 
                 var currentSegment = ordered.Where(item =>
@@ -332,6 +341,7 @@ public static class IntervalStatistics
                         phaseSeconds,
                         allEvents,
                         limits,
+                        stationEventMatcher,
                         startPosition,
                         endPosition,
                         isComplete: false,
@@ -356,6 +366,7 @@ public static class IntervalStatistics
                     phases,
                     allEvents,
                     limits,
+                    stationEventMatcher,
                     from.PositionMeters,
                     to.PositionMeters,
                     isComplete: true,
@@ -368,7 +379,11 @@ public static class IntervalStatistics
             .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId)
                 && !string.IsNullOrWhiteSpace(item.ServiceRunId))
             .GroupBy(item => (item.VehicleId, item.ServiceRunId, item.Direction))
-            .Select(run => CreateJourneyStatistic(stationResolver, run.OrderBy(item => item.SimulationTimeSeconds).ToArray(), allEvents))
+            .Select(run => CreateJourneyStatistic(
+                stationResolver,
+                run.OrderBy(item => item.SimulationTimeSeconds).ToArray(),
+                allEvents,
+                stationEventMatcher))
             .Where(item => item is not null)
             .Cast<JourneyStatistic>()
             .Where(filter.Matches)
@@ -499,6 +514,7 @@ public static class IntervalStatistics
         IReadOnlyDictionary<OperationalPhase, double> phaseSeconds,
         IReadOnlyList<SimulationEvent> events,
         IReadOnlyList<SpeedLimitSegment> speedLimits,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
         double startPosition,
         double endPosition,
         bool isComplete,
@@ -563,7 +579,8 @@ public static class IntervalStatistics
     private static JourneyStatistic? CreateJourneyStatistic(
         Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
         IReadOnlyList<TrajectorySample> samples,
-        IReadOnlyList<SimulationEvent> events)
+        IReadOnlyList<SimulationEvent> events,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
     {
         if (samples.Count == 0)
         {
@@ -579,10 +596,10 @@ public static class IntervalStatistics
 
         var origin = stations[0];
         var terminal = stations[^1];
-        var departure = FindDeparture(samples, events, origin, direction);
+        var departure = FindDeparture(samples, events, origin, direction, stationEventMatcher);
         var arrival = departure is null
             ? null
-            : FindArrival(samples, events, terminal, direction, departure.TimeSeconds);
+            : FindArrival(samples, events, terminal, direction, departure.TimeSeconds, stationEventMatcher);
         var firstObserved = samples[0];
         var lastObserved = samples[^1];
         double? travelTime = departure is { } start && arrival is { } end
@@ -646,18 +663,28 @@ public static class IntervalStatistics
         IReadOnlyList<TrajectorySample> samples,
         IReadOnlyList<SimulationEvent> events,
         Station station,
-        TrainDirection direction)
+        TrainDirection direction,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
     {
         var exact = events.Where(item => item.VehicleId == samples[0].VehicleId
                 && item.ServiceRunId == samples[0].ServiceRunId
                 && item.Direction == direction
                 && item.EventType == SimulationEventType.Departure
-                && Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionEpsilon
+                && (stationEventMatcher is not null
+                    ? stationEventMatcher(direction, station.StationId, item)
+                    : Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionEpsilon)
                 && item.SimulationTimeSeconds <= samples[^1].SimulationTimeSeconds + TimeEpsilon)
             .OrderBy(item => item.SimulationTimeSeconds)
             .Select(item => new Boundary(item.SimulationTimeSeconds, item.SpeedMetersPerSecond, null))
             .FirstOrDefault();
-        return exact ?? FindBoundary(samples, station.PositionMeters, direction, departure: true);
+        // A topology result must be event-authoritative. The train head can pass
+        // the projected center before a TrainCenter stop has actually generated
+        // its Arrival/Departure event, so a positional fallback would mark an
+        // incomplete interval as finished. Legacy Route results retain the
+        // trajectory-only fallback for backward compatibility.
+        return stationEventMatcher is not null
+            ? exact
+            : exact ?? FindBoundary(samples, station.PositionMeters, direction, departure: true);
     }
 
     private static Boundary? FindArrival(
@@ -665,13 +692,16 @@ public static class IntervalStatistics
         IReadOnlyList<SimulationEvent> events,
         Station station,
         TrainDirection direction,
-        double departureTime)
+        double departureTime,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
     {
         var exact = events.Where(item => item.VehicleId == samples[0].VehicleId
                 && item.ServiceRunId == samples[0].ServiceRunId
                 && item.Direction == direction
                 && (item.EventType == SimulationEventType.Arrival || item.EventType == SimulationEventType.StationPassed)
-                && Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionEpsilon
+                && (stationEventMatcher is not null
+                    ? stationEventMatcher(direction, station.StationId, item)
+                    : Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionEpsilon)
                 && item.SimulationTimeSeconds >= departureTime - TimeEpsilon)
             .OrderBy(item => item.SimulationTimeSeconds)
             .Select(item => new Boundary(
@@ -679,7 +709,9 @@ public static class IntervalStatistics
                 item.SpeedMetersPerSecond,
                 item.EventType == SimulationEventType.Arrival))
             .FirstOrDefault();
-        return exact ?? FindBoundary(samples, station.PositionMeters, direction, departure: false, departureTime);
+        return stationEventMatcher is not null
+            ? exact
+            : exact ?? FindBoundary(samples, station.PositionMeters, direction, departure: false, departureTime);
     }
 
     private static Boundary? FindBoundary(

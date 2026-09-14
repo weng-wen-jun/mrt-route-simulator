@@ -37,7 +37,8 @@ public static class OperationsTimetable
                 : route.Stations.Reverse().ToArray(),
             dispatchPlan,
             plannedEvents,
-            actualEvents);
+            actualEvents,
+            stationEventMatcher: null);
     }
 
     /// <summary>
@@ -51,14 +52,21 @@ public static class OperationsTimetable
         IEnumerable<SimulationEvent>? actualEvents)
     {
         ArgumentNullException.ThrowIfNull(topology);
-        return BuildCore(topology.GetDisplayStations, dispatchPlan, plannedEvents, actualEvents);
+        return BuildCore(
+            topology.GetDisplayStations,
+            dispatchPlan,
+            plannedEvents,
+            actualEvents,
+            (direction, stationId, simulationEvent) =>
+                topology.MatchesStationEvent(direction, stationId, simulationEvent));
     }
 
     private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
         Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
-        IEnumerable<SimulationEvent>? actualEvents)
+        IEnumerable<SimulationEvent>? actualEvents,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
     {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
@@ -75,12 +83,15 @@ public static class OperationsTimetable
             for (var index = 0; index < stations.Length; index++)
             {
                 var station = stations[index];
-                var plannedArrival = Find(runPlannedEvents, station, SimulationEventType.Arrival, SimulationEventType.StationPassed);
+                var plannedArrival = Find(runPlannedEvents, station, run.Direction, stationEventMatcher,
+                    SimulationEventType.Arrival, SimulationEventType.StationPassed);
                 var plannedDeparture = index == 0
                     ? scheduledOriginDeparture
-                    : Find(runPlannedEvents, station, SimulationEventType.Departure);
-                var actualArrival = Find(runActualEvents, station, SimulationEventType.Arrival, SimulationEventType.StationPassed);
-                var actualDeparture = Find(runActualEvents, station, SimulationEventType.Departure);
+                    : Find(runPlannedEvents, station, run.Direction, stationEventMatcher, SimulationEventType.Departure);
+                var actualArrival = Find(runActualEvents, station, run.Direction, stationEventMatcher,
+                    SimulationEventType.Arrival, SimulationEventType.StationPassed);
+                var actualDeparture = Find(runActualEvents, station, run.Direction, stationEventMatcher,
+                    SimulationEventType.Departure);
                 double? actualDwell = actualArrival is { } arrival && actualDeparture is { } departure
                     ? (double?)Math.Max(0, departure - arrival)
                     : null;
@@ -118,9 +129,16 @@ public static class OperationsTimetable
         && (string.IsNullOrWhiteSpace(run.VehicleId)
             || item.VehicleId.Equals(run.VehicleId, StringComparison.OrdinalIgnoreCase));
 
-    private static double? Find(IEnumerable<SimulationEvent> events, Station station, params SimulationEventType[] types) =>
+    private static double? Find(
+        IEnumerable<SimulationEvent> events,
+        Station station,
+        TrainDirection direction,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
+        params SimulationEventType[] types) =>
         events.Where(item => types.Contains(item.EventType)
-                && Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters)
+                && (stationEventMatcher is not null
+                    ? stationEventMatcher(direction, station.StationId, item)
+                    : Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters))
             .OrderBy(item => item.SimulationTimeSeconds)
             .Select(item => (double?)item.SimulationTimeSeconds)
             .FirstOrDefault();

@@ -724,7 +724,6 @@ public partial class MainWindow : Window
 
     private void SpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 
-    private void InboundSpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 
     private void ClearResults()
     {

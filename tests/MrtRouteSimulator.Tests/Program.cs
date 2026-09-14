@@ -3,6 +3,10 @@ using MrtRouteSimulator.Engine;
 
 var tests = new (string Name, Action Run)[]
 {
+    ("V4 尾軌折返後反向終點月台停站與首站", TopologyTurnbackRegressionTests.PhysicalTailTurnbackStopsAtFirstReverseStation),
+    ("V4 尾軌折返 0 秒停站仍等待接續班表", TopologyTurnbackRegressionTests.PhysicalTailTurnbackWaitsForScheduledDepartureWithZeroDwell),
+    ("V4 topology 上行結果輸出與方向篩選", TopologyResultsOutputTests.InboundTopologyResultsUseGlobalDisplayPositions),
+    ("V4 中心停點須真正到站才完成區間", TopologyResultsOutputTests.TrainCenterResultsRequireStationEvents),
     ("快速建線、分割與設施精靈保存實體接軌側別", DirectionPortTests.ConstructionAndSplitPreservePorts),
     ("起始站中心0K及端點外延伸里程", StationChainageTests.StationCentersAnchorZeroAndExtendPastTerminals),
     ("多車長換端保持完整車體占用", TurnbackFootprintTests.ReversalPreservesWholeVehicleForMultipleLengths),
@@ -640,6 +644,14 @@ static void TestTrajectoryDecimation()
     NearlyEqual(source[0].SimulationTimeSeconds, decimated[0].SimulationTimeSeconds, 1e-9);
     NearlyEqual(source[^1].SimulationTimeSeconds, decimated[^1].SimulationTimeSeconds, 1e-9);
     True(decimated.Select(sample => sample.Phase).Distinct().Count() >= 2, "相位轉折應保留。");
+    var speedLimits = Enumerable.Range(0, 100).Select(index => source[0] with
+    {
+        SimulationTimeSeconds = index * .1,
+        TrackSpeedLimitMetersPerSecond = index == 37 ? 5 : 20
+    }).ToArray();
+    var reducedLimits = TrajectoryAnalysis.DecimatePreservingCriticalPoints(speedLimits, 8);
+    foreach (var index in new[] { 36, 37, 38 })
+        True(reducedLimits.Contains(speedLimits[index]), "短速限區段的進出邊界不可被抽樣省略。");
 }
 
 static void TestTraceRetentionPolicies()
@@ -685,6 +697,9 @@ static void TestSimulationSession()
     var session = new SimulationSession(actualOptions, plannedOptions);
 
     session.PreparePlannedTimeline(180);
+    var previewSamples = session.PlannedTrajectory.ToArray();
+    True(previewSamples.Length > 0 && previewSamples[^1].SimulationTimeSeconds > 100,
+        "計畫速度預覽必須保留準備完成的時間軸。");
     True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.Departure),
         "模擬會話應先建立獨立的計畫事件時間線。" );
     var snapshot = session.AdvanceTo(10);
@@ -694,6 +709,7 @@ static void TestSimulationSession()
     NearlyEqual(0, session.ActualWorld.CurrentTimeSeconds, 1e-9);
     NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
     True(session.PlannedEvents.Count > 0, "重設播放不應遺失已建立的計畫事件時間線。" );
+    True(session.PlannedTrajectory.SequenceEqual(previewSamples), "推進和重設不可覆寫完整計畫軌跡。");
 }
 
 static void TestInitialV2Departure()

@@ -123,18 +123,44 @@ public partial class MainWindow
 
     private void PopulateV1V2Comparison()
     {
-        if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null || _parameters is null)
+        if (!_v2Enabled || _v2World is null || _v2DispatchPlan is null || _parameters is null)
         {
             return;
         }
 
-        var result = V1V2Comparison.Analyze(
-            _route,
-            _v2DispatchPlan,
-            BuildVehicleTypeDefinitions(),
-            BuildStopPatternDefinitions(),
-            _parameters,
-            _v2World.Events);
+        var result = _activeTopologyProjectDocument is null
+            ? V1V2Comparison.Analyze(
+                _route ?? throw new InvalidOperationException("相容 V1/V2 比較需要路線資料。"),
+                _v2DispatchPlan,
+                BuildVehicleTypeDefinitions(),
+                BuildStopPatternDefinitions(),
+                _parameters,
+                _v2World.Events)
+            : V1V2Comparison.Analyze(
+                _v2World.GetTopologyResultContext(),
+                _v2DispatchPlan,
+                _activeTopologyProjectDocument.VehicleTypes.Select(item => new VehicleTypeDefinition(
+                    item.Id,
+                    item.DisplayName,
+                    item.LengthMeters,
+                    item.MaxSpeedMetersPerSecond,
+                    item.AccelerationMetersPerSecondSquared,
+                    item.ServiceBrakeDecelerationMetersPerSecondSquared,
+                    item.EmergencyBrakeDecelerationMetersPerSecondSquared,
+                    item.JerkMetersPerSecondCubed,
+                    item.TractionDecayPerSecond,
+                    item.CoastingDecelerationMetersPerSecondSquared,
+                    item.DefaultStopPatternId)),
+                _activeTopologyProjectDocument.StopPatterns.Select(pattern => new StopPatternDefinition(
+                    pattern.Id,
+                    pattern.DisplayName,
+                    pattern.Instructions.Select(instruction => new StopPatternInstruction(
+                        instruction.StationId,
+                        instruction.Action,
+                        instruction.DwellTimeSeconds,
+                        instruction.PassingSpeedLimitMetersPerSecond)))),
+                _parameters,
+                _v2World.Events);
         V1V2ComparisonRows.Clear();
         foreach (var item in result.Stations)
         {

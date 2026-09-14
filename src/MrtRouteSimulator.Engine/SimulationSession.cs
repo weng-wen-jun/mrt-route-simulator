@@ -89,6 +89,8 @@ public sealed class SimulationSession
 
     public IReadOnlyList<SimulationEvent> PlannedEvents { get; private set; } = [];
 
+    public IReadOnlyList<TrajectorySample> PlannedTrajectory { get; private set; } = [];
+
     public SimulationSnapshot AdvanceTo(double targetTimeSeconds)
     {
         ActualWorld.AdvanceTo(targetTimeSeconds);
@@ -105,6 +107,7 @@ public sealed class SimulationSession
 
         PlannedWorld.AdvanceTo(durationSeconds);
         PlannedEvents = PlannedWorld.Events.ToArray();
+        PlannedTrajectory = PlannedWorld.Trajectory.ToArray();
         PlannedWorld.Reset();
     }
 

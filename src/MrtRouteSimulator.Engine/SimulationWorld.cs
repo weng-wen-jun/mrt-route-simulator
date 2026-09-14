@@ -1973,6 +1973,17 @@ public sealed class SimulationWorld
             train.Phase = OperationalPhase.Dwelling;
             if (train.DwellRemaining <= NumericalTolerance)
             {
+                if (train.AwaitingTopologyTurnbackDeparture)
+                {
+                    train.Phase = OperationalPhase.Turning;
+                    if (CompleteTurnaround(train))
+                    {
+                        train.AwaitingTopologyTurnbackDeparture = false;
+                    }
+
+                    return;
+                }
+
                 if (train.TerminalAction != TerminalAction.None)
                 {
                     CompleteTerminalStationWork(train);
@@ -2003,6 +2014,19 @@ public sealed class SimulationWorld
                 train.TrackId = train.PendingDepartureTrackId ?? train.TrackId;
                 train.Phase = OperationalPhase.Accelerating;
                 AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 停站後發車。", train.Position, 0);
+            }
+
+            return;
+        }
+
+        if (train.AwaitingTopologyTurnbackDeparture)
+        {
+            train.Speed = 0;
+            train.Acceleration = MoveAccelerationTowardZero(train, train.Acceleration);
+            train.Phase = OperationalPhase.Turning;
+            if (CompleteTurnaround(train))
+            {
+                train.AwaitingTopologyTurnbackDeparture = false;
             }
 
             return;
@@ -2655,20 +2679,20 @@ public sealed class SimulationWorld
         expressTrain.AwaitingPostPassRoute = false;
     }
 
-    private void CompleteTurnaround(MutableTrain train)
+    private bool CompleteTurnaround(MutableTrain train)
     {
         PrepareTurnaround(train);
 
         if (CurrentTimeSeconds + NumericalTolerance < train.PlannedDepartureTime)
         {
-            return;
+            return false;
         }
 
         if (!TryReserveDepartureRoute(train)
             || (MovingBlockMode == MovingBlockMode.Control && !HasDepartureClearance(train)))
         {
             train.Constraints |= OperationalConstraint.RouteResource | OperationalConstraint.Platform;
-            return;
+            return false;
         }
 
         train.TurnaroundPrepared = false;
@@ -2694,6 +2718,7 @@ public sealed class SimulationWorld
             train.Position,
             0);
         AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0);
+        return true;
     }
 
     private void PrepareTurnaround(
@@ -3327,8 +3352,37 @@ public sealed class SimulationWorld
             train.Position,
             0,
             train.TrackId);
+
+        // 尾軌返回後，列車已到達反方向終點月台（例如 E/P-E-U），
+        // 必須先完成該側正常停站，再依接續車次的計畫時間發車。
+        // 折返設施 movement 仍保留到車尾淨空，故使用獨立旗標銜接
+        // CompleteTurnaround，不能把 TerminalAction 再設回 Turnaround，
+        // 否則 CompleteTerminalStationWork 會重新尋找同一個折返作業。
+        var departureStation = GetRuntimeStation(train, train.CurrentStationIndex);
+        var departurePatternDwell = GetStationInstruction(train, departureStation).DwellTimeSeconds;
+        train.DwellRemaining = GetConfiguredStationDwellSeconds(
+            null,
+            train.Direction,
+            departurePatternDwell ?? departureStation.DwellTimeSeconds);
+        train.AwaitingTopologyTurnbackDeparture = true;
+        if (train.DwellRemaining > NumericalTolerance)
+        {
+            train.Phase = OperationalPhase.Dwelling;
+            AddEvent(
+                SimulationEventType.DwellStarted,
+                train,
+                null,
+                $"{train.ServiceRunId} 返回反方向終點月台 {departureStation.StationId} 停站。",
+                train.Position,
+                0);
+            return;
+        }
+
         train.Phase = OperationalPhase.Turning;
-        CompleteTurnaround(train);
+        if (CompleteTurnaround(train))
+        {
+            train.AwaitingTopologyTurnbackDeparture = false;
+        }
     }
 
     private void TryReleaseCompletedTopologyTurnbackResources(MutableTrain train)
@@ -4677,7 +4731,8 @@ public sealed class SimulationWorld
                 train.CurrentTrackEdgeId,
                 train.OffsetMeters,
                 train.ServiceRouteTraversalIndex,
-                train.ProjectedChainageMeters);
+                train.ProjectedChainageMeters,
+                TrackSpeedLimitMetersPerSecond: GetTrackCurrentLimit(train, GetVehiclePerformance(train)));
             _traceStore.Record(sample);
         }
     }
@@ -4753,7 +4808,10 @@ public sealed class SimulationWorld
             train?.CurrentTrackEdgeId,
             train?.OffsetMeters,
             train?.ServiceRouteTraversalIndex,
-            train?.ProjectedChainageMeters);
+            train?.ProjectedChainageMeters,
+            StationId: train is not null && eventType is (SimulationEventType.Arrival
+                or SimulationEventType.Departure or SimulationEventType.DwellStarted or SimulationEventType.StationPassed)
+                    ? GetCurrentStationId(train) : null);
         _events.Add(item);
         _newEvents.Add(item);
         if (train is not null)
@@ -5275,6 +5333,12 @@ public sealed class SimulationWorld
         public string? DispatchServiceRunBaseId { get; set; }
 
         public bool TurnaroundPrepared { get; set; }
+
+        /// <summary>
+        /// 實體 topology 尾軌返回反方向終點月台後，先完成正常停站，
+        /// 再依接續車次時間進入 CompleteTurnaround。
+        /// </summary>
+        public bool AwaitingTopologyTurnbackDeparture { get; set; }
 
         public string? ContinuationServiceRunId { get; set; }
 

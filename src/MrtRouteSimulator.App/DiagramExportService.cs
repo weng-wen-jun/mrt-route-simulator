@@ -147,7 +147,20 @@ internal static class DiagramExportService
         var pixelWidth = Math.Max(1, (int)Math.Ceiling(width * scale));
         var pixelHeight = Math.Max(1, (int)Math.Ceiling(height * scale));
         var bitmap = new RenderTargetBitmap(pixelWidth, pixelHeight, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
-        bitmap.Render(element);
+        var bounds = new Rect(0, 0, width, height);
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            // Canvas 的透明背景在 JPEG/PDF 會變成黑底；父容器的配置偏移也不屬於輸出。
+            context.DrawRectangle(Brushes.White, null, bounds);
+            context.DrawRectangle(new VisualBrush(element)
+            {
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = new Rect((Point)VisualTreeHelper.GetOffset(element), bounds.Size),
+                Stretch = Stretch.Fill
+            }, null, bounds);
+        }
+        bitmap.Render(visual);
         return bitmap;
     }
 

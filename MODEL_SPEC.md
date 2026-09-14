@@ -98,7 +98,10 @@ StationId + PlatformId + TrackPosition + traversal index + chainage
 - `HeadwayDirectionPlan` 與 `ManualTimetableRow` 均支援端點折返續行設定。續行時，端點處理完成後沿用 `VehicleId`、`VehicleTypeId`、`ServiceTypeId`、`StopPatternId`，並建立方向相反的新 `ServiceRunId`。
 - 手動發車計畫另可指定「折返後接續車次 ID」。例如下行第一車可接續上行第六車；接續沿用相同 `VehicleId`，不另生成目標車次。實際抵達早於目標計畫時間時進入等待，晚於目標時間時記錄延誤。
 - 未續行的計畫車次抵達端點後，完成該站停站／清車秒數即轉為退出營運；退出列車不再出現在路線圖，也不參與安全配對與安全計算。
-- 下行速度曲線使用 V3 車次識別，建立 `SimulationWorld` 後即可產生並顯示，不依賴播放後才補建識別。
+- 速度曲線以 `VehicleId` 串接同一實體列車的全部 `ServiceRunId`，依模擬時間繪製上下行、停站及折返，不依方向分圖。尚未播放的列車使用 `SimulationSession.PlannedTrajectory`；實際與計畫資料不拼接成同一曲線。
+- topology 到站、出站、停站與跨站事件提供結構化 `StationId`，結果服務優先依站號、其次月台識別比對；不以訊息文字推測站號，也不以車頭越過月台中心代替到站事件。
+- 尾軌返回反向出發月台後，先產生到站並執行反向停站時間，再等待接續班表及出發條件；零停站時間不代表可提前發車。
+- `TrajectorySample.TrackSpeedLimitMetersPerSecond` 記錄 Engine 當下依車型、方向與 topology cursor 求得的速限，供顯示使用；移動閉塞的方向篩選仍獨立於速度圖。
 
 ## 1. 核心原則
 

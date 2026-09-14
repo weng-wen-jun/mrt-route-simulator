@@ -12,6 +12,10 @@ release/
 TestResults/
 artifacts/
 
+# Local Codex attachments and temporary helper work
+.codex-remote-attachments/
+tmp/
+
 # NuGet packages
 *.nupkg
 packages/

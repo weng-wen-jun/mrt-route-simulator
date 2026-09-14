@@ -43,6 +43,56 @@ public static class V1V2Comparison
         IEnumerable<StopPatternDefinition> stopPatterns,
         TrainParameters fallbackParameters,
         IEnumerable<SimulationEvent>? actualEvents)
+        => AnalyzeCore(
+            route,
+            dispatchPlan,
+            vehicleTypes,
+            stopPatterns,
+            fallbackParameters,
+            actualEvents,
+            stationEventMatcher: null);
+
+    /// <summary>
+    /// Schema 8 topology adapter for the V1/V2 presentation comparison. The synthetic
+    /// route exists only inside this analytical result; the V2 world remains topology-native.
+    /// Station events are matched by resolved platform/station identity so TrainCenter
+    /// head positions are not compared with center-based display positions.
+    /// </summary>
+    public static V1V2ComparisonResult Analyze(
+        TopologyResultContext topology,
+        ResolvedDispatchPlan dispatchPlan,
+        IEnumerable<VehicleTypeDefinition> vehicleTypes,
+        IEnumerable<StopPatternDefinition> stopPatterns,
+        TrainParameters fallbackParameters,
+        IEnumerable<SimulationEvent>? actualEvents)
+    {
+        ArgumentNullException.ThrowIfNull(topology);
+        var displayStations = topology.GetDisplayStations(TrainDirection.Outbound);
+        var origin = displayStations[0].PositionMeters;
+        var route = new Route(
+            "TOPOLOGY-RESULT",
+            "拓撲結果分析",
+            displayStations.Select(station => station with { PositionMeters = station.PositionMeters - origin }));
+        return AnalyzeCore(
+            route,
+            dispatchPlan,
+            vehicleTypes,
+            stopPatterns,
+            fallbackParameters,
+            actualEvents,
+            topology.MatchesStationEvent,
+            topology.GetDisplayStations);
+    }
+
+    private static V1V2ComparisonResult AnalyzeCore(
+        Route route,
+        ResolvedDispatchPlan dispatchPlan,
+        IEnumerable<VehicleTypeDefinition> vehicleTypes,
+        IEnumerable<StopPatternDefinition> stopPatterns,
+        TrainParameters fallbackParameters,
+        IEnumerable<SimulationEvent>? actualEvents,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
+        Func<TrainDirection, IReadOnlyList<Station>>? stationResolver = null)
     {
         ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(dispatchPlan);
@@ -70,9 +120,9 @@ public static class V1V2Comparison
                 fallbackParameters.DefaultDwellTimeSeconds,
                 fallbackParameters.OriginTurnaroundTimeSeconds,
                 fallbackParameters.TerminalTurnaroundTimeSeconds);
-            var orderedStations = run.Direction == TrainDirection.Outbound
-                ? route.Stations.ToArray()
-                : route.Stations.Reverse().ToArray();
+            var orderedStations = stationResolver is not null
+                ? stationResolver(run.Direction).ToArray()
+                : run.Direction == TrainDirection.Outbound ? route.Stations.ToArray() : route.Stations.Reverse().ToArray();
             var instructions = pattern.Instructions.ToDictionary(item => item.StationId, StringComparer.OrdinalIgnoreCase);
             var runActual = actual.Where(item => item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
                 && item.Direction == run.Direction
@@ -89,8 +139,8 @@ public static class V1V2Comparison
                 theoreticalTime,
                 theoreticalTime,
                 0,
-                Find(runActual, previousStoppedStation, SimulationEventType.Arrival),
-                Find(runActual, previousStoppedStation, SimulationEventType.Departure),
+                Find(runActual, run.Direction, previousStoppedStation, stationEventMatcher, SimulationEventType.Arrival),
+                Find(runActual, run.Direction, previousStoppedStation, stationEventMatcher, SimulationEventType.Departure),
                 "可比較"));
 
             for (var index = 1; index < orderedStations.Length; index++)
@@ -101,13 +151,13 @@ public static class V1V2Comparison
                 if (action == StopPatternAction.Pass)
                 {
                     rows.Add(CreateRow(run, station, null, null, null,
-                        Find(runActual, station, SimulationEventType.StationPassed), null, "跨站不比較"));
+                        Find(runActual, run.Direction, station, stationEventMatcher, SimulationEventType.StationPassed), null, "跨站不比較"));
                     continue;
                 }
                 if (action == StopPatternAction.Turnback)
                 {
                     rows.Add(CreateRow(run, station, null, null, null,
-                        Find(runActual, station, SimulationEventType.Arrival), null, "折返節點不適用 V1"));
+                        Find(runActual, run.Direction, station, stationEventMatcher, SimulationEventType.Arrival), null, "折返節點不適用 V1"));
                     break;
                 }
 
@@ -120,8 +170,8 @@ public static class V1V2Comparison
                 var isTerminal = index == orderedStations.Length - 1;
                 var theoreticalDwell = isTerminal ? 0 : instruction?.DwellTimeSeconds ?? station.DwellTimeSeconds;
                 var theoreticalDeparture = theoreticalArrival + theoreticalDwell;
-                var actualArrival = Find(runActual, station, SimulationEventType.Arrival);
-                var actualDeparture = FindAfter(runActual, station, actualArrival, SimulationEventType.Departure);
+                var actualArrival = Find(runActual, run.Direction, station, stationEventMatcher, SimulationEventType.Arrival);
+                var actualDeparture = FindAfter(runActual, run.Direction, station, stationEventMatcher, actualArrival, SimulationEventType.Departure);
                 rows.Add(CreateRow(run, station, theoreticalArrival, theoreticalDeparture, theoreticalDwell,
                     actualArrival, actualDeparture, actualArrival is null ? "V2 尚未抵達" : "可比較"));
                 theoreticalTime = theoreticalDeparture;
@@ -183,19 +233,30 @@ public static class V1V2Comparison
             arrivalDifference, departureDifference, departurePercent, status);
     }
 
-    private static double? Find(IEnumerable<SimulationEvent> events, Station station, params SimulationEventType[] types) =>
+    private static double? Find(
+        IEnumerable<SimulationEvent> events,
+        TrainDirection direction,
+        Station station,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
+        params SimulationEventType[] types) =>
         events.Where(item => types.Contains(item.EventType)
-                && Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters)
+                && (stationEventMatcher is not null
+                    ? stationEventMatcher(direction, station.StationId, item)
+                    : Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters))
             .Select(item => (double?)item.SimulationTimeSeconds)
             .FirstOrDefault();
 
     private static double? FindAfter(
         IEnumerable<SimulationEvent> events,
+        TrainDirection direction,
         Station station,
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
         double? after,
         params SimulationEventType[] types) =>
         events.Where(item => types.Contains(item.EventType)
-                && Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters
+                && (stationEventMatcher is not null
+                    ? stationEventMatcher(direction, station.StationId, item)
+                    : Math.Abs(item.PositionMeters - station.PositionMeters) <= PositionToleranceMeters)
                 && (after is null || item.SimulationTimeSeconds + 1e-7 >= after.Value))
             .Select(item => (double?)item.SimulationTimeSeconds)
             .FirstOrDefault();

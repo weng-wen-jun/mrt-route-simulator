@@ -27,6 +27,11 @@ public static class TrajectoryAnalysis
             var required = new SortedSet<int> { 0, ordered.Length - 1 };
             for (var index = 1; index < ordered.Length - 1; index++)
             {
+                if (ordered[index].TrackSpeedLimitMetersPerSecond != ordered[index - 1].TrackSpeedLimitMetersPerSecond)
+                {
+                    required.Add(index - 1);
+                    required.Add(index);
+                }
                 if (ordered[index].Phase != ordered[index - 1].Phase
                     || ordered[index].Direction != ordered[index - 1].Direction
                     || IsLocalExtremum(ordered[index - 1].PositionMeters, ordered[index].PositionMeters, ordered[index + 1].PositionMeters)
