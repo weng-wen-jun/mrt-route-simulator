@@ -1,6 +1,6 @@
 # MRT 路線進出站時間模擬器 — 開發交接指南
 
-> 適用版本：V4.0.1  
+> 適用版本：V4.0.1
 > 目的：讓新的開發者或自動化程式代理在不重新考古整個 repository 的前提下，快速理解目前架構、權威資料來源、未完成工作與驗證方式。
 
 ## 1. 先讀什麼
@@ -131,14 +131,15 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 
 發車、到站、停站、跨站、折返、反向接續、退出營運、資源鎖定／釋放、多列車安全與 facility traversal 先從這裡查。
 
-## 5. 目前交付狀態（2026-09-14）
+## 5. 目前交付狀態（2026-09-19）
 
 最新 `QA_REPORT.md` 的 V4.0.1 驗證基準：
 
 - Release build：**0 warnings / 0 errors**。
-- Engine runner：**139 / 139** 通過。
-- 完整 WPF runner：通過；包含全部範例、速度圖、移動閉塞方向篩選、完整 topology、TrainCenter 情境與 CSV／PNG／PDF 輸出。
-- 最新輸出已確認白底與圖表偏移修正。
+- Engine runner：**145 / 145** 通過。
+- 完整 WPF runner：通過；包含目前 13 個範例、速度圖、移動閉塞方向篩選、完整 topology、TrainCenter 情境與 CSV／PNG／PDF 輸出。
+- PDF 分頁已改為各頁重繪標題、圖例、座標軸與頁內列車標籤；A4 兩頁輸出已以 Poppler 渲染檢查，未見跨頁切斷。
+- `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已完成大型 sample 的分階段 Structural／Operational gate，Scenario Manifest 規範同步寫入 `samples/README.md`。
 - 離屏 WPF／程式驗證不等於不同 DPI 與完整桌面連續播放人工驗收。
 
 不要把歷史版本的測試數當成現在基準；每次回報以最新 `QA_REPORT.md` 為準。
@@ -147,10 +148,11 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 
 依 `TODO.md`「現行待辦」，交接時仍需注意：
 
-1. **PDF 分頁輸出**：目前仍以點陣切片造成長標題或跨頁標籤被切開；目標是各頁重新繪製標題與座標軸。
-2. **Legacy port migration**：舊檔兩端皆未填實體接軌側別時仍可相容讀取；尚缺引導式確認側別與是否全面強制的遷移流程。不可從示意位置直接猜測實體方向。
+1. **Legacy port migration**：已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不可從示意位置直接猜測實體方向。仍須完成原生桌面流程驗收，並確認產品是否要把遷移後側別設為所有舊檔的全面強制政策。
+2. **臺中機場捷運大型案例**：尚缺 O01～O26（含 O08a、O15a）的正式來源資料與完整營運班表；未經來源或明確 synthetic 核准，不可把目前 O01～O06 baseline 擴寫成真實案例。
 3. **桌面／DPI 完整驗收**：已完成部分實機抽查，但不同 DPI、折返／交會關鍵畫面與連續播放仍未完成完整驗收。
 
+PDF 分頁輸出與通用 `TopologyScenarioBuilder` 已於 2026-09-19 完成；不要把這兩項重新列為待辦。
 處理待辦時，完成條件必須同時反映到 source、tests、`QA_REPORT.md`，並在確認真正完成後更新 `TODO.md`。
 
 ## 7. 修改前的最短流程
@@ -161,6 +163,8 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 4. 先找既有 regression；修 bug 時新增能重現原問題的測試。
 5. 保持改動範圍局部，不要因單一 UI 需求修改不相關 Domain Model 或 schema。
 6. 完成後依改動類型跑 Release build 與相對應完整驗證。
+
+建立大型真實案例時，先以 minimal topology baseline 建立可執行基準，再逐類加入完整 station chain、service pattern、turnback、passing 與 timetable。驗證分為 Structural、Operational、Regression 三層；開發中先完成 Structural 與局部 Operational smoke test，階段完成後才跑 Regression（Release／Engine／WPF）驗證。
 
 ## 8. 本機驗證基準
 
