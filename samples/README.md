@@ -18,6 +18,21 @@
 
 自動化測試會逐一反序列化所有 12 個現行範例（含下列七個 PDF 站型）、建立 topology-native `SimulationWorld` 並推進 3,600 秒；驗證沒有未使用 edge、legacy facility edge 欄位、未具名的續行班次、碰撞或停站違規，且所有列車均能完成退出。情境測試另確認快速車實際越行、實體折返與指定反向接續。數值均為合成測試資料，不代表真實路線或安全設計。
 
+## 大型 sample Scenario Manifest
+
+大型真實路線 sample（建議 10 站以上，或含兩種以上特殊設施）必須在本節或同目錄 Markdown 維護一份可辨識的 Scenario Manifest。`.mrtsim.json` 是輸出／載入產物，不是大型 topology 的主要原始碼；建模應使用既有 scenario builder、factory 或局部 helper，並保留 Schema 8 topology-native runtime。
+
+每份 Manifest 至少記錄：
+
+- 案例名稱與層級：`minimal`、`operational` 或 `full`。
+- 資料來源、車站與里程來源，以及哪些欄位是正式來源資料。
+- 哪些欄位是「示範假設／synthetic test value／非正式設計值」。
+- 已建模功能、尚未建模／刻意省略功能，以及使用中的 turnback、passing、crossover、pocket、tail 等特殊設施。
+- 預期驗證情境、建議模擬時間或關鍵觀察時間點。
+- 最後一次 Structural、Operational、Regression 驗證結果與已知限制。
+
+目前本目錄的既有範例仍是合成測試資料，不能因通過自動化測試而宣稱重現臺中或其他正式路線；新增真實案例前，必須先把正式來源與 synthetic values 分開記錄。
+
 ## PDF 站型範例
 
 ### 完整 topology 範例的新增待轉軌列車

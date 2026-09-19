@@ -1,12 +1,14 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
-## 完整列車曲線、折返停站與結果輸出（2026-09-14）
+## 大型 sample builder、PDF 分頁與完整輸出（2026-09-19）
 
 - 速度圖按 VehicleId 串接上下行及折返，保留計畫預覽／實際截至目前的區別；重設及換檔不保留舊列車。移動閉塞仍可獨立按方向、配對及時間篩選，列車退出後可查歷史。
 - 尾軌返回反向終點月台後產生到站、停站及出站事件；0 秒停站仍等待接續班表，正常停站案例須滿足反向停站時間。
 - 時刻表、區間及比較使用結構化站號／月台識別；TrainCenter 車頭經過中心但尚未到站時，不提早完成區間。上行顯示里程、預覽結果初始化及全程時間摘要一併修正。
-- Release build：0 warnings／0 errors。Engine：139/139，0 失敗。完整 WPF runner 通過，包括全部範例、720／1200px 速度圖、閉塞方向篩選、完整拓撲及 TrainCenter 範例推進 3600 秒，以及 CSV／PNG／PDF 輸出。
-- 輸出證據位於 `artifacts/output-qa/`。目視確認 PNG／PDF 白底與圖表配置偏移修正；PDF 分頁仍會切開長標題及跨頁標籤，列入待辦。
+- Release build：0 warnings／0 errors。Engine：145/145，0 失敗。完整 WPF runner 通過，包括全部範例、720／1200px 速度圖、閉塞方向篩選、完整拓撲及 TrainCenter 範例推進 3600 秒，以及 CSV／PNG／PDF 輸出。
+- `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已加入可重用的 minimal baseline → station chain → service pattern → turnback → passing → timetable 分階段流程；Structural／Operational smoke gate 與 3 組 regression tests 通過。`samples/README.md` 已補 Scenario Manifest 與正式／synthetic 資料界線。
+- Legacy port migration 已加入明確 edge assignment API、缺資料盤點與 WPF 遷移引導；選擇相容讀取時會明確保留「方向尚未確認」狀態，不從示意位置猜測側別。Engine migration regression 已加入，完整桌面互動仍待驗收；完整 Engine runner 為 145/145。
+- 輸出證據位於 `artifacts/output-qa/`。PDF 分頁改為各頁重繪標題、圖例、座標軸與頁內標籤；`complete-diagram.pdf` 以 `pdfinfo` 確認為 A4 兩頁，並以 Poppler 渲染檢查白底、頁面標題、座標軸及跨頁列車標籤未被切斷。頁內同點標籤重疊仍屬來源圖表的既有呈現限制。
 - 原生桌面驗證因 Computer Use 應用程式核准逾時未完成；以上為 WPF 離屏與程式驗證，不代表不同 DPI 或連續桌面播放已完成驗收。
 
 ## 建立與讀檔接軌防堵（2026-09-13）
@@ -227,7 +229,7 @@
 
 ## 驗收界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，唯一尚未完成的 V4 交付項目是 `V4-UI-TRACK-DIAGRAM-MANUAL-01`，一般及窄視窗已有本輪桌面抽查，尚待不同 DPI 與關鍵畫面的連續驗收。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，目前尚未完成的 V4 交付項目為 `V4-LEGACY-PORT-MIGRATION`、`V4-SAMPLE-TAICHUNG-AIRPORT-01` 與 `V4-UI-TRACK-DIAGRAM-MANUAL-01`。PDF 分頁與通用大型 sample scenario builder 已完成；桌面項目仍只完成部分抽查，尚待不同 DPI、折返／交會關鍵畫面與連續播放驗收。
 
 以下屬遠期修正或非產品目標：
 
