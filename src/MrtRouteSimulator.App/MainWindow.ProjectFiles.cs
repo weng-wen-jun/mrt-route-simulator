@@ -116,10 +116,31 @@ public partial class MainWindow
             if (IsSchema8TopologyProject(json))
             {
                 var topologyDocument = TopologyProjectFormat.Deserialize(json);
+                var legacyPortItems = LegacyPortMigration.FindUnspecifiedEdges(topologyDocument);
+                var migratedLegacyPorts = false;
+                var keptLegacyCompatibility = false;
+                if (legacyPortItems.Count > 0)
+                {
+                    var migration = new LegacyPortMigrationDialog(topologyDocument) { Owner = this };
+                    if (migration.ShowDialog() != true || migration.Result is null)
+                    {
+                        StatusTextBlock.Text = "已取消接軌側別遷移；目前設定未變更。";
+                        return;
+                    }
+
+                    topologyDocument = migration.Result;
+                    migratedLegacyPorts = !migration.KeptCompatibility;
+                    keptLegacyCompatibility = migration.KeptCompatibility;
+                }
                 ConfigureTopologyProjectForPlayback(topologyDocument);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
-                StatusTextBlock.Text = $"拓撲專案已讀取：{dialog.FileName}；可直接播放、查看路線圖並原樣存檔。快速起稿欄已收合。";
+                var migrationStatus = migratedLegacyPorts
+                    ? "；已套用使用者確認的實體接軌側別"
+                    : keptLegacyCompatibility
+                        ? "；保留未指定側別的相容讀取，尚未宣稱方向已確認"
+                        : "";
+                StatusTextBlock.Text = $"拓撲專案已讀取：{dialog.FileName}{migrationStatus}；可直接播放、查看路線圖並原樣存檔。快速起稿欄已收合。";
                 return;
             }
 

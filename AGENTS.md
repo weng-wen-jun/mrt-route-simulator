@@ -24,6 +24,62 @@
 5. 修改完成後執行 Release build 與完整自動化測試。
 6. 不要因檔名含 `V2` 或 UI 標籤含 `V3.2` 就判定它是舊引擎；這些是歷史命名。
 
+### 大型真實路線／大型 sample 建模規則
+
+大型真實路線（通常為 20～30 站以上）或同時含兩種以上特殊設施的 Schema 8 範例，必須採分階段建模與逐層驗證。這些規則只約束建模流程，不得改變 V2 runtime 的物理權威、Schema 8 欄位或既有 validator 強度。
+
+#### 分階段建立
+
+不得在第一版一次建立完整 topology、折返、越行、班表與所有特殊設施。依下列順序逐階段擴充；某階段未驗證成功時，不得堆疊下一階段：
+
+1. **Minimal topology baseline**：純雙線主線、起訖站、主要中間站、單純全停服務，以及至少一班上下行列車可完成運行。
+2. **Full station chain**：補齊全部邏輯車站、月台與站距；此階段尚不加入特殊折返或越行設施。
+3. **Service patterns**：依序加入普通車、快速／直達車與 skip-stop。
+4. **Turnback facilities**：依序加入尾軌、袋狀軌與中間站折返；每新增一座 facility 立即驗證。
+5. **Passing / overtaking facilities**：每新增一處越行站立即驗證，不得一次加入多座後才除錯。
+6. **Operational timetable**：最後才加入密集班距、交錯服務、指定接續與多車營運。
+
+大型案例（建議門檻：10 站以上，或含兩種以上特殊設施）優先使用 builder／factory／局部 helper 產生；`.mrtsim.json` 是輸出與可載入範例，不是大型 topology 的主要原始碼。優先重用 `TopologyProjectFactory`、`TopologyEditingServices`、`StationLayoutTemplateService`；新增 helper 不得建立第二套 Domain Model 或 runtime。3～5 站的小型 regression sample 才適合直接維護 JSON。
+
+#### 三層驗證與快速迴圈
+
+大型案例的驗證必須分成三層，不得把局部除錯與最終回歸混成一次全跑：
+
+- **Structural Validation**：回答「topology 本身是否合法？」。檢查 node／edge／platform／station／resource 參照、traversal 連續性、方向、from/to node、port-side 與 directed connection；執行 `InfrastructureValidator` 及 `TopologyProjectFormat.Validate`。Structural 未通過時不得進入 Operational Validation。
+- **Operational Validation**：回答「合法 topology 上，列車是否能按預期運行？」。執行 `CreateRuntime`，建立 `SimulationWorld` 或既有對應 runtime，先做短時段 smoke test，再依 scenario 推進到關鍵事件或有界完成；確認發車、停站、通過、折返、越行、接續與退出營運等預期事件。每新增一座 turnback、passing、crossover、pocket 或 tail facility，至少重跑一次 Structural 加對應 Operational smoke test。
+- **Regression Validation**：回答「該階段案例／工具調整是否破壞既有功能？」。階段完成後執行 Release build 與 Engine runner；涉及 WPF、讀檔、播放或輸出時，再執行 WPF runner 與必要人工驗收，並跑相關既有 sample／regression tests。Regression 是完成階段 gate，不要求每修改一條 edge 都執行全部測試。
+
+建模快速迴圈固定為：
+
+```text
+建立／修改 topology
+→ Structural Validation
+→ Operational Validation
+→ 該階段通過後再加入下一類設施
+→ 階段完成後 Regression Validation
+```
+
+任一層失敗時，先修正該層問題；不得降低 validator 強度、跳過 port-side、移除 directed connection，或改回 virtual track 來繞過錯誤。
+
+#### Sample 命名、資料界線與 Scenario Manifest
+
+- sample 層級建議使用 `minimal`（基本 topology、讀檔與播放）、`operational`（主要停站模式與部分營運設施）及 `full`（完整折返、越行、班表與 intended scenario）；尚未涵蓋全部特殊設施時，避免使用「完整／正式」描述。
+- 真實資料與模型假設必須分開。道岔位置、crossover／尾軌／袋狀軌長度、道岔速限、月台長度、車型性能、停站秒數、折返秒數與特殊 facility 幾何若無正式來源，必須明記為「示範假設／synthetic test value／非正式設計值」，不得偽裝成真實設計值。
+- 大型真實路線 sample 必須附可辨識的 **Scenario Manifest**。初期可放在 `samples/README.md` 的獨立章節，或 sample 同目錄的 Markdown；不得只有零散註解。Manifest 至少記錄：案例名稱與 sample 層級；資料來源；車站與里程來源；正式來源欄位；示範假設／synthetic values；已建模功能；尚未建模／刻意省略功能；使用中的 turnback／passing／crossover／pocket／tail 等特殊設施；預期驗證情境；建議模擬時間或關鍵觀察時間點（若有）；最後一次 Structural／Operational／Regression 結果；以及已知限制或與正式設計不同之處。任何人只看 sample 與 manifest，都應能辨識它目前能證明與不能證明的內容。
+
+#### Port-side 建模規則
+
+`fromPortSide`／`toPortSide` 是實體建置資料，不得從 `schematicPosition`、畫面左右或路線里程自動猜測。採用明確 port-side 後，後續 edge 與 facility 必須保持一致。遇到 connection 驗證失敗，依序檢查：
+
+```text
+traversal direction
+→ from/to node
+→ from/to port side
+→ directed connection
+```
+
+不得以關閉 `[CONNECTION-001]`、降低 validator 強度或移除連接資料作為解法。
+
 ### Topology runtime 現況
 
 - V2 `SimulationWorld` 的正式輸入是 `TopologySimulationDefinition`；world 不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
@@ -156,6 +212,8 @@ WPF Results / Export
 - `src/MrtRouteSimulator.Engine/TopologyProject.cs`
 - `src/MrtRouteSimulator.Engine/TopologyProjectFactory.cs`
 - `src/MrtRouteSimulator.Engine/TopologyEditingServices.cs`
+- `src/MrtRouteSimulator.Engine/LegacyPortMigration.cs`
+- `src/MrtRouteSimulator.Engine/TopologyScenarioBuilder.cs`
 - `src/MrtRouteSimulator.Engine/TopologyResultContext.cs`
 
 ### 權威來源
@@ -190,6 +248,7 @@ VehicleTypes
 - `src/MrtRouteSimulator.Engine/TopologyProjectFactory.cs`
 - `src/MrtRouteSimulator.Engine/SimulationProject.cs`
 - `src/MrtRouteSimulator.App/MainWindow.ProjectFiles.cs`
+- `src/MrtRouteSimulator.App/LegacyPortMigrationDialog.cs`
 - `src/MrtRouteSimulator.App/MainWindow.Topology.cs`
 
 目前契約：

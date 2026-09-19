@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -26,13 +27,14 @@ internal static class DiagramExportService
 
     public static void ExportPdf(FrameworkElement element, string path, PdfPageSize pageSize, bool splitPages)
     {
-        var bitmap = Render(element, 1.6);
+        const double renderScale = 1.6;
+        var bitmap = Render(element, renderScale);
         var pageWidth = pageSize == PdfPageSize.A3 ? 1191 : 842;
         var pageHeight = pageSize == PdfPageSize.A3 ? 842 : 595;
         const int margin = 24;
         var availableWidth = pageWidth - margin * 2;
         var availableHeight = pageHeight - margin * 2;
-        var pages = CreatePdfPages(bitmap, availableWidth, availableHeight, splitPages);
+        var pages = CreatePdfPages(bitmap, availableWidth, availableHeight, splitPages, element, renderScale);
 
         using var pdf = new MemoryStream();
         var offsets = new List<long> { 0 };
@@ -91,7 +93,9 @@ internal static class DiagramExportService
         RenderTargetBitmap bitmap,
         int availableWidth,
         int availableHeight,
-        bool splitPages)
+        bool splitPages,
+        FrameworkElement element,
+        double renderScale)
     {
         var pageAspect = (double)availableWidth / availableHeight;
         if (!splitPages || (double)bitmap.PixelWidth / bitmap.PixelHeight <= pageAspect * 1.08)
@@ -99,29 +103,35 @@ internal static class DiagramExportService
             return [bitmap];
         }
 
-        var axisWidth = Math.Clamp((int)Math.Round(92 * bitmap.DpiX / 96), 1, bitmap.PixelWidth / 3);
+        // Render the graph without TextBlocks before slicing.  Every page then gets a
+        // complete, page-local text layer below instead of a bitmap fragment that can
+        // cut a title, tick label, or train marker in half.
+        var graphBitmap = Render(element, renderScale, includeText: false);
+        var textBlocks = FindTextBlocks(element);
+        var logicalScale = bitmap.DpiX / 96d;
+        var axisWidth = Math.Clamp((int)Math.Round(92 * logicalScale), 1, bitmap.PixelWidth / 3);
+        var left = Math.Clamp((int)Math.Round(82 * logicalScale), 1, axisWidth);
+        var plotTop = Math.Clamp((int)Math.Round(48 * logicalScale), 0, bitmap.PixelHeight);
+        var plotBottom = Math.Clamp((int)Math.Round(42 * logicalScale), 0, bitmap.PixelHeight - plotTop);
+        var plotHeight = Math.Max(1, bitmap.PixelHeight - plotTop - plotBottom);
         var sliceCapacity = Math.Max(120, (int)Math.Floor(bitmap.PixelHeight * pageAspect) - axisWidth);
         var step = Math.Max(1, (int)Math.Floor(sliceCapacity * 0.92));
         var pages = new List<BitmapSource>();
-        for (var start = axisWidth; start < bitmap.PixelWidth; start += step)
+        for (var start = left; start < bitmap.PixelWidth; start += step)
         {
             var sliceWidth = Math.Min(sliceCapacity, bitmap.PixelWidth - start);
             var outputWidth = axisWidth + sliceWidth;
-            var stride = outputWidth * 4;
-            var pixels = new byte[stride * bitmap.PixelHeight];
-            bitmap.CopyPixels(new Int32Rect(0, 0, axisWidth, bitmap.PixelHeight), pixels, stride, 0);
-            bitmap.CopyPixels(new Int32Rect(start, 0, sliceWidth, bitmap.PixelHeight), pixels, stride, axisWidth * 4);
-            var page = BitmapSource.Create(
+            pages.Add(ComposePdfPage(
+                graphBitmap,
+                textBlocks,
+                start,
+                sliceWidth,
                 outputWidth,
-                bitmap.PixelHeight,
-                bitmap.DpiX,
-                bitmap.DpiY,
-                PixelFormats.Pbgra32,
-                null,
-                pixels,
-                stride);
-            page.Freeze();
-            pages.Add(page);
+                axisWidth,
+                left,
+                plotTop,
+                plotHeight,
+                logicalScale));
             if (start + sliceWidth >= bitmap.PixelWidth)
             {
                 break;
@@ -129,6 +139,175 @@ internal static class DiagramExportService
         }
 
         return pages;
+    }
+
+    private static BitmapSource ComposePdfPage(
+        RenderTargetBitmap graphBitmap,
+        IReadOnlyList<TextBlock> textBlocks,
+        int start,
+        int sliceWidth,
+        int outputWidth,
+        int axisWidth,
+        int left,
+        int plotTop,
+        int plotHeight,
+        double logicalScale)
+    {
+        var outputHeight = graphBitmap.PixelHeight;
+        var logicalWidth = outputWidth / logicalScale;
+        var logicalHeight = outputHeight / logicalScale;
+        var logicalAxisWidth = axisWidth / logicalScale;
+        var logicalLeft = left / logicalScale;
+        var logicalStart = start / logicalScale;
+        var logicalSliceWidth = sliceWidth / logicalScale;
+        var logicalPlotTop = plotTop / logicalScale;
+        var logicalPlotBottom = logicalHeight - (outputHeight - plotTop - plotHeight) / logicalScale;
+
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            // Keep the established white page background and draw only the graph
+            // area.  Axis/header text is deliberately drawn separately below.
+            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            var source = new CroppedBitmap(
+                graphBitmap,
+                new Int32Rect(start, plotTop, sliceWidth, plotHeight));
+            context.DrawImage(
+                source,
+                new Rect(logicalAxisWidth, logicalPlotTop, logicalSliceWidth, plotHeight / logicalScale));
+
+            var pen = new Pen(Brushes.SlateGray, 1.1);
+            context.DrawLine(
+                pen,
+                new Point(logicalAxisWidth, logicalPlotTop),
+                new Point(logicalAxisWidth, logicalPlotBottom));
+            context.DrawLine(
+                pen,
+                new Point(logicalAxisWidth, logicalPlotBottom),
+                new Point(logicalWidth, logicalPlotBottom));
+
+            foreach (var textBlock in textBlocks)
+            {
+                var x = Canvas.GetLeft(textBlock);
+                var y = Canvas.GetTop(textBlock);
+                if (double.IsNaN(x) || double.IsNaN(y))
+                {
+                    continue;
+                }
+
+                var width = Math.Max(1, textBlock.ActualWidth);
+                var height = Math.Max(1, textBlock.ActualHeight);
+                // The chart title and legend occupy the fixed 8/28 DIP header
+                // rows.  A train label can legitimately sit just below the plot
+                // top, so do not classify every text block above the plot as header.
+                if (x >= logicalLeft - 0.5 && y <= 30)
+                {
+                    // The chart title and legend are page-local.  Shrink them as
+                    // needed so a long route name is never clipped at page right.
+                    var fit = Math.Min(1, Math.Max(1, logicalWidth - x - 4) / width);
+                    DrawTextBlock(context, textBlock, x, y, width * fit, height * fit);
+                    continue;
+                }
+
+                if (y > logicalPlotBottom + 0.5)
+                {
+                    // Recreate x-axis tick labels from their original positions, but
+                    // only when their tick is in this page's slice.  Their destination
+                    // is clamped so the text itself cannot cross a page edge.
+                    var center = x + width / 2;
+                    if (textBlock.Text.Equals("時間", StringComparison.Ordinal))
+                    {
+                        // Leave the final time tick readable; the original canvas
+                        // places this axis caption on the same baseline as the last
+                        // tick, which is too tight after a page is narrowed.
+                        DrawTextBlock(
+                            context,
+                            textBlock,
+                            Math.Max(logicalAxisWidth, logicalWidth - 48),
+                            logicalPlotBottom + 24,
+                            width,
+                            height);
+                    }
+                    else if (center >= logicalStart - 0.5 && center <= logicalStart + logicalSliceWidth + 0.5)
+                    {
+                        var destinationX = logicalAxisWidth + center - logicalStart - width / 2;
+                        destinationX = Math.Clamp(destinationX, logicalAxisWidth, Math.Max(logicalAxisWidth, logicalWidth - width));
+                        DrawTextBlock(context, textBlock, destinationX, y, width, height);
+                    }
+
+                    continue;
+                }
+
+                if (x < logicalLeft - 0.5)
+                {
+                    // Station/vertical-axis labels belong to every page's left axis.
+                    DrawTextBlock(context, textBlock, x, y, width, height);
+                    continue;
+                }
+
+                if (y >= logicalPlotTop - 20 && y <= logicalPlotBottom + 0.5)
+                {
+                    // Train labels are redrawn only on the page containing their
+                    // anchor. This prevents a label at a page boundary being split.
+                    var center = x + width / 2;
+                    if (center >= logicalStart - 0.5 && center <= logicalStart + logicalSliceWidth + 0.5)
+                    {
+                        var destinationX = logicalAxisWidth + x - logicalStart;
+                        destinationX = Math.Clamp(destinationX, logicalAxisWidth, Math.Max(logicalAxisWidth, logicalWidth - width));
+                        DrawTextBlock(context, textBlock, destinationX, y, width, height);
+                    }
+                }
+            }
+        }
+
+        var page = new RenderTargetBitmap(
+            outputWidth,
+            outputHeight,
+            graphBitmap.DpiX,
+            graphBitmap.DpiY,
+            PixelFormats.Pbgra32);
+        page.Render(visual);
+        page.Freeze();
+        return page;
+    }
+
+    private static void DrawTextBlock(
+        DrawingContext context,
+        TextBlock source,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return;
+        }
+
+        context.DrawRectangle(
+            new VisualBrush(source) { Stretch = Stretch.Fill },
+            null,
+            new Rect(x, y, width, height));
+    }
+
+    private static IReadOnlyList<TextBlock> FindTextBlocks(DependencyObject root)
+    {
+        var result = new List<TextBlock>();
+        Visit(root);
+        return result;
+
+        void Visit(DependencyObject node)
+        {
+            if (node is TextBlock textBlock)
+            {
+                result.Add(textBlock);
+            }
+
+            for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
+            {
+                Visit(VisualTreeHelper.GetChild(node, index));
+            }
+        }
     }
 
     private static byte[] EncodeJpeg(BitmapSource bitmap)
@@ -140,7 +319,7 @@ internal static class DiagramExportService
         return imageStream.ToArray();
     }
 
-    private static RenderTargetBitmap Render(FrameworkElement element, double scale)
+    private static RenderTargetBitmap Render(FrameworkElement element, double scale, bool includeText = true)
     {
         var width = Math.Max(1, element.ActualWidth);
         var height = Math.Max(1, element.ActualHeight);
@@ -149,19 +328,41 @@ internal static class DiagramExportService
         var bitmap = new RenderTargetBitmap(pixelWidth, pixelHeight, 96 * scale, 96 * scale, PixelFormats.Pbgra32);
         var bounds = new Rect(0, 0, width, height);
         var visual = new DrawingVisual();
-        using (var context = visual.RenderOpen())
+        var hiddenTextBlocks = includeText
+            ? Array.Empty<(TextBlock TextBlock, Visibility Visibility)>()
+            : FindTextBlocks(element)
+                .Where(textBlock => textBlock.Visibility != Visibility.Hidden)
+                .Select(textBlock => (textBlock, textBlock.Visibility))
+                .ToArray();
+        try
         {
-            // Canvas 的透明背景在 JPEG/PDF 會變成黑底；父容器的配置偏移也不屬於輸出。
-            context.DrawRectangle(Brushes.White, null, bounds);
-            context.DrawRectangle(new VisualBrush(element)
+            foreach (var (textBlock, _) in hiddenTextBlocks)
             {
-                ViewboxUnits = BrushMappingMode.Absolute,
-                Viewbox = new Rect((Point)VisualTreeHelper.GetOffset(element), bounds.Size),
-                Stretch = Stretch.Fill
-            }, null, bounds);
+                textBlock.Visibility = Visibility.Hidden;
+            }
+
+            using (var context = visual.RenderOpen())
+            {
+                // Canvas 的透明背景在 JPEG/PDF 會變成黑底；父容器的配置偏移也不屬於輸出。
+                context.DrawRectangle(Brushes.White, null, bounds);
+                context.DrawRectangle(new VisualBrush(element)
+                {
+                    ViewboxUnits = BrushMappingMode.Absolute,
+                    Viewbox = new Rect((Point)VisualTreeHelper.GetOffset(element), bounds.Size),
+                    Stretch = Stretch.Fill
+                }, null, bounds);
+            }
+
+            bitmap.Render(visual);
+            return bitmap;
         }
-        bitmap.Render(visual);
-        return bitmap;
+        finally
+        {
+            foreach (var (textBlock, visibility) in hiddenTextBlocks)
+            {
+                textBlock.Visibility = visibility;
+            }
+        }
     }
 
     private static void WriteObject(Stream stream, ICollection<long> offsets, int number, string content)
