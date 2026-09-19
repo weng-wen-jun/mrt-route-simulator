@@ -1,6 +1,6 @@
 # V4.0.1 可執行範例
 
-2026-09-13：12份現行範例均補入實體接軌側別 `fromPortSide`／`toPortSide`。七種站型移除未宣告的多餘轉向；站後折返修正渡線端點與實際去回路徑。兩份V3.3及baseline的尾軌／袋狀軌新增各180m進出軌，因此運行時間可能較舊範例增加；baseline中央上行月台及西端連接一併修正。最新主圖／編輯器均無配線警告。
+2026-09-13：13份現行範例均補入實體接軌側別 `fromPortSide`／`toPortSide`。七種站型移除未宣告的多餘轉向；站後折返修正渡線端點與實際去回路徑。兩份V3.3及baseline的尾軌／袋狀軌新增各180m進出軌，因此運行時間可能較舊範例增加；baseline中央上行月台及西端連接一併修正。最新主圖／編輯器均無配線警告。
 
 逐檔合理性、修正及運行結果見 [範例檢查表](AUDIT-2026-09-11.md)。路線圖以起始站月台中心0K顯示；七PDF及完整 topology 範例使用車體中心，其餘五檔保留車頭停點基準。完整 topology 範例於2026-09-12調整中央站月台所在軌段、袋狀軌進出道岔及端點渡線長度，最新驗證以 `QA_REPORT.md` 為準。舊 V3.4「雙島四股」檔案實際為三股道，已修正畫面名稱與配置說明，保留檔名相容；真正雙島四股範例為 `PDF-DoubleIslandFourTracks.mrtsim.json`。
 
@@ -9,6 +9,7 @@
 | 檔案 | 情境 | 重點 |
 |---|---|---|
 | `V4.0.0-topology-baseline.mrtsim.json` | V4 基線 | 雙端單股雙向尾軌、中央單股雙向袋狀軌與實體越行線；無未使用分支，折返停點與每條合法轉向均已顯式化。 |
+| `臺中機場捷運-主要站簡化可執行範例.mrtsim.json` | 臺中主要站 `minimal` baseline | O01／O08／O11／O16／O20／O26 六站 synthetic topology；全程車與機場直達停站模式，未宣稱正式路線資料。 |
 | `V4.0.0-完整拓撲執行驗證範例.mrtsim.json` | 完整 topology 執行 | 有向道岔、快速越行、中央袋狀軌折返、雙端 crossover 尾軌、rear-clear 資源釋放與結果資料流。 |
 | `V3.3.0-完整功能驗證範例.mrtsim.json` | 五站完整營運 | 雙向手動班表、普通／快速停站模式、指定接續、端點退出、edge-local 速限與尾軌折返。 |
 | `V3.3.0-端點站前與中間站中央避車線折返檢核.mrtsim.json` | 站後尾軌／袋狀軌折返 | 三筆派車及一次中間站反向產生四個方向別車次，完成兩次折返；舊檔名保留。 |
@@ -16,7 +17,31 @@
 
 檔名中的 V3.x 只保留作為既有範例入口與情境沿革；檔案內容已全面翻新為 V4 Schema 8 topology runtime 格式，不能再當作舊版存檔使用。
 
-自動化測試會逐一反序列化所有 12 個現行範例（含下列七個 PDF 站型）、建立 topology-native `SimulationWorld` 並推進 3,600 秒；驗證沒有未使用 edge、legacy facility edge 欄位、未具名的續行班次、碰撞或停站違規，且所有列車均能完成退出。情境測試另確認快速車實際越行、實體折返與指定反向接續。數值均為合成測試資料，不代表真實路線或安全設計。
+自動化測試會逐一反序列化所有 13 個現行範例（含下列七個 PDF 站型）、建立 topology-native `SimulationWorld` 並推進 3,600 秒；驗證沒有未使用 edge、legacy facility edge 欄位、未具名的續行班次、碰撞或停站違規，且所有列車均能完成退出。情境測試另確認快速車實際越行、實體折返與指定反向接續。數值均為合成測試資料，不代表真實路線或安全設計。
+
+## 大型 sample Scenario Manifest
+
+大型真實路線 sample（建議 10 站以上，或含兩種以上特殊設施）必須在本節或同目錄 Markdown 維護一份可辨識的 Scenario Manifest。`.mrtsim.json` 是輸出／載入產物，不是大型 topology 的主要原始碼；建模應使用既有 scenario builder、factory 或局部 helper，並保留 Schema 8 topology-native runtime。
+
+每份 Manifest 至少記錄：
+
+- 案例名稱與層級：`minimal`、`operational` 或 `full`。
+- 資料來源、車站與里程來源，以及哪些欄位是正式來源資料。
+- 哪些欄位是「示範假設／synthetic test value／非正式設計值」。
+- 已建模功能、尚未建模／刻意省略功能，以及使用中的 turnback、passing、crossover、pocket、tail 等特殊設施。
+- 預期驗證情境、建議模擬時間或關鍵觀察時間點。
+- 最後一次 Structural、Operational、Regression 驗證結果與已知限制。
+
+目前本目錄的既有範例仍是合成測試資料，不能因通過自動化測試而宣稱重現臺中或其他正式路線；新增真實案例前，必須先把正式來源與 synthetic values 分開記錄。
+
+### 臺中機場捷運主要站簡化範例 Manifest
+
+- 案例與層級：`臺中機場捷運-主要站簡化可執行範例`，`minimal`；僅示範主要站基線，不是完整路線。
+- 資料來源：目前只使用專案提供的情境名稱與站號；沒有把外部正式路線資料寫入模型。O01、O08、O11、O16、O20、O26 的站距、月台、車型性能、停站秒數與 O26 終點處理均為 synthetic test values。
+- 已建模：六站雙向主線、Schema 8 topology、全程車停站模式、機場直達模式（中間站停靠、O26 終點停靠）與基本手動班表。
+- 尚未建模／刻意省略：O02～O07、O08a、O09～O10、O12～O15、O15a、O17～O19、O21～O25、正式里程與營運班表、越行、crossover、袋狀軌、尾軌及中間站折返。
+- 預期驗證：Structural 讀檔／參照檢查、Operational 3,600 秒有界運行、Regression Release／Engine／WPF runners；最後一次結果以本次整合 `QA_REPORT.md` 為準。
+- 限制：通過驗證只代表此 synthetic minimal baseline 可執行，不代表臺中機場捷運正式設計、站距、設施或安全能力。
 
 ## PDF 站型範例
 

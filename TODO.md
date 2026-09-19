@@ -52,10 +52,13 @@
 
 ## 現行待辦
 
-- [ ] PDF 分頁匯出改為各頁重繪標題與座標軸，避免目前點陣切片切開長標題及跨頁列車標籤；2026-09-14 已修正黑底與父容器偏移，分頁排版仍需處理。
+- [x] PDF 分頁匯出改為各頁重繪標題、座標軸與頁內列車標籤，避免點陣切片切開長標題及跨頁列車標籤；2026-09-19 已完成 A4 兩頁渲染檢查、Release build、Engine 與 WPF 輸出驗證。
 
 - [x] 【V4-ROUTE-CONSTRUCTION-GUARDS】已實作明確有向轉向產生器、實體接軌側別共用檢核、編輯器保存與讀檔交易保護；快速建線、分割及設施精靈接入，12份現行範例遷移且主圖／編輯器零配線警告。詳見 [路線圖常見問題清單](ROUTE_LAYOUT_ISSUES.md)。
-- [ ] 【V4-LEGACY-PORT-MIGRATION】舊檔兩端皆未填實體接軌側別仍維持相容讀取；補上引導式確認側別與是否全面強制的遷移流程。不可從示意位置直接推定實體方向；現有讀檔不宣稱已檢查這類缺資料軌道的轉向方向。
+- [ ] 【V4-LEGACY-PORT-MIGRATION】已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不從示意位置推定實體方向。仍須完成原生桌面流程驗收，並確認產品是否要將遷移後的明確側別設為所有舊檔的全面強制政策。
+
+- [x] 【V4-SAMPLE-SCENARIO-BUILDER-01】已新增可重用 `TopologyScenarioBuilder`／`TopologyScenarioValidation`：以既有 Schema 8 document、quick builder 與 topology-native `SimulationWorld` 分階段驗證 minimal topology baseline、station chain、service pattern、turnback、passing facility 與 timetable；Structural／Operational gate 可獨立執行，Regression 由 Release／Engine／WPF 流程負責。`samples/README.md` 已補 Scenario Manifest 欄位規範；`.mrtsim.json` 維持為輸出／載入範例，不建立第二套 Domain Model 或 runtime。新增回歸後 Engine 145/145 通過。
+- [ ] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】將臺中機場捷運示範案例由主要站 minimal baseline 分階段擴充：補齊 O01～O26（含 O08a、O15a）車站鏈與月台，再依序加入 O20 區間車折返、O04／O13 越行設施及全程車／機場直達車營運班表。正式來源資料與 synthetic test values 必須在 samples/README.md 明確區分。
 
 - [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。另修正窄視窗摘要卡文字裁切並完成新版目視複核。仍須補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
 
