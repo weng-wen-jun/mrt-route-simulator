@@ -2,53 +2,55 @@
 
 ## 長時間播放效能 Phase 1：修改前基準（2026-09-20）
 
-以 `samples/V4.0.0-完整拓撲執行驗證範例.mrtsim.json` 執行獨立 benchmark runner：
+以使用者指定的真正 full sample `D:\AI\codex\mrt-route-simulator\samples\臺中機場捷運-完整營運示範範例.mrtsim.json` 執行獨立 benchmark runner；該檔案目前位於原工作樹，不在此 Phase branch 內：
 
 ```powershell
-dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Performance.csproj -c Release --no-restore
+dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Performance.csproj -c Release --no-restore -- "D:\AI\codex\mrt-route-simulator\samples\臺中機場捷運-完整營運示範範例.mrtsim.json" 8000
 ```
 
-基準 runner 先建立與 WPF 相同的 topology `SimulationWorldOptions`（`Full` trajectory retention），再量測單一 ActualWorld、現行雙 world `SimulationSession.AdvanceTo(8000)` 與現行 `PreparePlannedTimeline`。此結果是本機一次基準執行，wall time 不是硬 timing unit test；修改後以同一 runner、同一 sample、同一順序重跑比較。
+基準 runner 先建立與 WPF 相同的 topology `SimulationWorldOptions`（`Full` trajectory retention），再量測單一 ActualWorld、現行雙 world `SimulationSession.AdvanceTo(8000)` 與現行 `PreparePlannedTimeline`。本次在暫時 e57d16b 基準 worktree 以同一絕對 sample 路徑重跑；wall time 不是硬 timing unit test，修改後以同一 sample 比較。
 
 | 項目 | 修改前基準 |
 |---|---:|
 | ActualWorld requested / current time | 8000 / 8000 s |
-| ActualWorld elapsed | 1661.55 ms |
-| ActualWorld fixed ticks / ms per tick | 80000 / 0.02077 ms |
-| ActualWorld trajectory / safety / events | 26674 / 3282 / 99 |
-| ActualWorld working-set delta / managed-memory delta | +37,482,496 / +15,990,808 bytes |
-| 現行雙 world `AdvanceTo(8000)` elapsed / ms per tick | 857.11 / 0.01071 ms |
-| 雙 world actual trajectory / planned trajectory | 26674 / 26491 |
-| 雙 world actual safety / planned safety | 3282 / 0 |
-| 雙 world actual events / planned events | 99 / 98 |
-| Planned requested duration | 2536.00 s |
-| Planned timeline elapsed / last event | 200.36 ms / 2470.5 s |
-| Planned trajectory / safety / events | 25952 / 0 / 94 |
+| ActualWorld elapsed | 220,220.04 ms |
+| ActualWorld fixed ticks / ms per tick | 80000 / 2.75275 ms |
+| ActualWorld trajectory / safety / events | 204736 / 113646 / 621 |
+| ActualWorld working-set delta / managed-memory delta | +88,854,528 / +71,515,280 bytes |
+| 現行雙 world `AdvanceTo(8000)` elapsed / ms per tick | 307,819.40 / 3.84774 ms |
+| 雙 world actual trajectory / planned trajectory | 204736 / 200977 |
+| 雙 world actual safety / actual events / planned events | 113646 / 621 / 662 |
+| Planned requested duration | 12246.50 s |
+| Planned timeline elapsed / last event | 83,442.88 ms / 7398.8 s |
+| Planned trajectory / events | 200977 / 662 |
+
+基準 runner 的 planned world 在封存 `PlannedEvents`／`PlannedTrajectory` 後立即 reset，因此不再把 reset 後的 `PlannedWorld.SafetyHistory.Count = 0` 當成 planned safety metric；本表只列有效的 planned trajectory／event 封存結果。
 
 本基準確認目前 WPF 路徑的兩項待修來源：播放 API 會同時推進 ActualWorld 與 PlannedWorld；planned timeline 會依固定預估 duration 推進，而不是以 `SimulationWorld.IsComplete` 為完成條件。`tests/MrtRouteSimulator.Performance` 會保留作為後續比較用 diagnostic，不將 wall time 寫成穩定性 unit test。
 
 ## 長時間播放效能 Phase 1：修改後結果（2026-09-20）
 
-同一 benchmark、sample 與 `AdvanceTo(8000)` 範圍重跑；另加入實際 WPF playback 所用的 `AdvanceActualTo` measurement：
+同一 benchmark、同一絕對 sample 路徑與 `AdvanceTo(8000)` 範圍重跑；另加入實際 WPF playback 所用的 `AdvanceActualTo` measurement：
 
 | 項目 | 修改後結果 |
 |---|---:|
 | ActualWorld requested / current time | 8000 / 8000 s |
-| ActualWorld elapsed / fixed ticks / ms per tick | 1746.51 ms / 80000 / 0.02183 ms |
-| ActualWorld trajectory / safety / events | 5489 / 334 / 99 |
-| ActualWorld working-set delta / managed-memory delta | +27,500,544 / +9,811,504 bytes |
-| 實際 playback `AdvanceActualTo(8000)` elapsed / ms per tick | 619.08 / 0.00774 ms |
-| 實際 playback trajectory / safety / events | 5489 / 334 / 99 |
+| ActualWorld elapsed / fixed ticks / ms per tick | 256,219.26 ms / 80000 / 3.20274 ms |
+| ActualWorld trajectory / safety / events | 42742 / 11401 / 621 |
+| ActualWorld working-set delta / managed-memory delta | +31,924,224 / +9,575,008 bytes |
+| 實際 playback `AdvanceActualTo(8000)` elapsed / ms per tick | 254,826.85 / 3.18534 ms |
+| 實際 playback trajectory / safety / events | 42742 / 11401 / 621 |
 | 實際 playback 後 PlannedWorld current time | 0 s（未被推進） |
-| 舊雙 world `AdvanceTo(8000)` elapsed / ms per tick | 911.54 / 0.01139 ms |
-| 雙 world actual trajectory / planned trajectory | 5489 / 26491 |
-| 雙 world actual safety / planned safety | 334 / 0 |
-| 雙 world actual events / planned events | 99 / 98 |
-| Planned max duration（latest dispatch + baseline × 2） | 2748.00 s |
-| Planned actual completion / last event | 2590.0 / 2590.0 s |
-| Planned trajectory / events | 26491 / 98 |
+| 舊雙 world `AdvanceTo(8000)` elapsed / ms per tick | 338,864.96 / 4.23581 ms |
+| 雙 world actual trajectory / planned trajectory | 42742 / 200977 |
+| 雙 world actual safety / actual events / planned events | 11401 / 621 / 662 |
+| Planned max duration（latest dispatch + baseline × 2） | 14462.00 s |
+| Planned actual completion / last event | 7398.8 / 7398.8 s |
+| Planned trajectory / events | 200977 / 662 |
 
-相較修改前，互動 ActualWorld trajectory 由 26674 降至 5489（約少 79.4%），歷史 safety observation 由 3282 降至 334（約少 89.8%）；實際 playback path 不再推進 PlannedWorld。wall time 與 process memory 會受 JIT／GC／OS 影響，僅作觀察值；固定 tick 仍為 0.1 秒，未改 physics、occupancy、moving block、rear-clear 或 safety decision。
+本輪修正後 runner 會輸出 `samplePath`／`sampleSource`，避免只看檔名而誤用 branch 內另一份 topology sample；planned safety history 不列入，因為 timeline 封存後 planned world 會 reset。
+
+相較修改前，同一 full sample 的互動 ActualWorld trajectory 由 204736 降至 42742（約少 79.1%），歷史 safety observation 由 113646 降至 11401（約少 90.0%）；working-set delta 由約 88.9 MB 降至約 31.9 MB，managed-memory delta 由約 71.5 MB 降至約 9.6 MB。wall time 受 JIT／GC／OS 與 retention policy 影響，這次單 world elapsed 並未宣稱改善；Phase 1 的主要效益是移除正常 playback 的 planned 推進及控制歷史資料成長。實際 playback path 不再推進 PlannedWorld；固定 tick 仍為 0.1 秒，未改 physics、occupancy、moving block、rear-clear 或 safety decision。
 
 本 Phase 已完成：
 
@@ -56,6 +58,8 @@ dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Per
 - `PreparePlannedTimelineUntilComplete(maxDurationSeconds)`，以 `SimulationWorld.IsComplete` 為完成條件，超過 fail-safe 會回報 validation error；記錄 `PlannedTimelineCompletedAtSeconds`。
 - topology interactive ActualWorld `Decimated(0.5)` trajectory 與 `Decimated(1.0)` safety history；planned chart 仍使用 Full retention。
 - 獨立 benchmark runner 與 retention／completion regression。
+
+本 Phase 的 CSV／區間統計／圖表目前仍消費 interactive ActualWorld 的 0.5 秒樣本加事件與狀態轉折；尚未提供獨立的 0.1 秒 Full trajectory offline export。這是刻意保留的輸出精度邊界，已列入 `TODO.md` 的 `V4-PLAYBACK-PERF-PHASE4`，不把互動留存誤稱為完整高解析歷史。
 
 尚未解決（刻意留給後續階段）：
 

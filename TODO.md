@@ -6,6 +6,7 @@
 
 - [ ] 【V4-PLAYBACK-PERF-PHASE2】將 `SimulationWorld` 推進移出 WPF UI thread，採 single-writer simulation worker、immutable playback snapshot 與 adaptive UI refresh；本 Phase 1 不實作。
 - [ ] 【V4-PLAYBACK-PERF-PHASE3】使用 profiler 優化 `SimulationWorld` hot path，目標大型案例單 tick <= 1.5 ms；本 Phase 1 不實作。
+- [ ] 【V4-PLAYBACK-PERF-PHASE4】分離互動播放 retention 與 0.1 秒 Full trajectory 的離線 CSV／區間統計／圖表匯出；在此分離完成前，這些結果會消費互動播放的 0.5 秒樣本加狀態轉折，不能宣稱等同完整 0.1 秒歷史。
 
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 

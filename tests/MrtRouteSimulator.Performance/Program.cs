@@ -40,6 +40,8 @@ Console.OutputEncoding = System.Text.Encoding.UTF8;
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     sample = Path.GetFileName(samplePath),
+    samplePath,
+    sampleSource = args.Length > 0 ? "command-line argument" : "repository default sample",
     advanceSeconds,
     plannedMaxDurationSeconds,
     metrics = new
@@ -154,7 +156,6 @@ static object MeasurePlannedTimeline(
         completionTimeSeconds = completionTime,
         lastEventTimeSeconds = lastEvent,
         trajectoryCount = session.PlannedTrajectory.Count,
-        safetyHistoryCount = session.PlannedWorld.SafetyHistory.Count,
         eventCount = session.PlannedEvents.Count,
         workingSetDeltaBytes = Process.GetCurrentProcess().WorkingSet64 - before.WorkingSetBytes,
         managedMemoryDeltaBytes = GC.GetTotalMemory(false) - before.ManagedBytes
