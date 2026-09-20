@@ -98,6 +98,16 @@ public sealed class SimulationSession
         return ActualWorld.GetSnapshot();
     }
 
+    /// <summary>
+    /// Advances only the interactive world. The planned world is prepared separately and its
+    /// immutable timeline must not be recomputed during normal WPF playback.
+    /// </summary>
+    public SimulationSnapshot AdvanceActualTo(double targetTimeSeconds)
+    {
+        ActualWorld.AdvanceTo(targetTimeSeconds);
+        return ActualWorld.GetSnapshot();
+    }
+
     public void PreparePlannedTimeline(double durationSeconds)
     {
         if (!double.IsFinite(durationSeconds) || durationSeconds < 0)

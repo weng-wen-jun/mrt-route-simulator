@@ -94,7 +94,7 @@ public partial class MainWindow
         }
 
         var session = _v2Session;
-        var snapshot = session.AdvanceTo(_playbackTimeSeconds);
+        var snapshot = session.AdvanceActualTo(_playbackTimeSeconds);
         CurrentTrainRows.Clear();
         foreach (var state in snapshot.Trains.Where(state => state.Phase != OperationalPhase.OutOfService))
         {

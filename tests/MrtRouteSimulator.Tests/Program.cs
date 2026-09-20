@@ -73,6 +73,7 @@ var tests = new (string Name, Action Run)[]
     ("軌跡降採樣保留端點與相位轉折", TestTrajectoryDecimation),
     ("軌跡留存策略不改變事件且可限制取樣", TestTraceRetentionPolicies),
     ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
+    ("播放只推進實際世界並保留計畫時間軸", TestSimulationSessionAdvancesActualOnly),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
     ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
@@ -716,6 +717,36 @@ static void TestSimulationSession()
     NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
     True(session.PlannedEvents.Count > 0, "重設播放不應遺失已建立的計畫事件時間線。" );
     True(session.PlannedTrajectory.SequenceEqual(previewSamples), "推進和重設不可覆寫完整計畫軌跡。");
+}
+
+static void TestSimulationSessionAdvancesActualOnly()
+{
+    var actualOptions = new SimulationWorldOptions(
+        CreateThreeStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent);
+    var plannedOptions = actualOptions with
+    {
+        ProfileMode = OperationProfileMode.BasicPhysics,
+        MovingBlockMode = MovingBlockMode.Independent
+    };
+    var session = new SimulationSession(actualOptions, plannedOptions);
+    session.PreparePlannedTimeline(180);
+    var plannedEvents = session.PlannedEvents.ToArray();
+    var plannedTrajectory = session.PlannedTrajectory.ToArray();
+
+    var snapshot = session.AdvanceActualTo(10);
+
+    NearlyEqual(10, snapshot.SimulationTimeSeconds, 1e-9);
+    NearlyEqual(10, session.ActualWorld.CurrentTimeSeconds, 1e-9);
+    NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+    True(session.PlannedEvents.SequenceEqual(plannedEvents),
+        "ActualWorld-only 播放不可修改已準備的計畫事件時間軸。");
+    True(session.PlannedTrajectory.SequenceEqual(plannedTrajectory),
+        "ActualWorld-only 播放不可修改已準備的計畫軌跡。");
 }
 
 static void TestInitialV2Departure()
