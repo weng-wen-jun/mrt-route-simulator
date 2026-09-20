@@ -21,7 +21,8 @@ public sealed record SimulationWorldOptions(
     BrakingEstimationMode InitialBrakingEstimationMode = BrakingEstimationMode.Service,
     SimulationTraceRetentionPolicy? TraceRetentionPolicy = null,
     IReadOnlyList<ServiceTypeDefinition>? ServiceTypes = null,
-    TopologySimulationDefinition? Topology = null)
+    TopologySimulationDefinition? Topology = null,
+    SafetyObservationRetentionPolicy? SafetyObservationRetentionPolicy = null)
 {
     public SimulationWorld CreateWorld()
     {
@@ -43,7 +44,8 @@ public sealed record SimulationWorldOptions(
                 VehicleTypes,
                 Infrastructure,
                 TraceRetentionPolicy,
-                ServiceTypes)
+                ServiceTypes,
+                SafetyObservationRetentionPolicy)
             : new SimulationWorld(
                 Topology,
                 TrainParameters,
@@ -59,7 +61,8 @@ public sealed record SimulationWorldOptions(
                 VehicleTypes,
                 Infrastructure,
                 TraceRetentionPolicy,
-                ServiceTypes);
+                ServiceTypes,
+                SafetyObservationRetentionPolicy);
         if (InitialBrakingEstimationMode != BrakingEstimationMode.Service)
         {
             world.SetBrakingEstimationMode(InitialBrakingEstimationMode);

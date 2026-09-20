@@ -72,6 +72,7 @@ var tests = new (string Name, Action Run)[]
     ("CSV 支援跨日時間及必要欄位", TestTrajectoryCsv),
     ("軌跡降採樣保留端點與相位轉折", TestTrajectoryDecimation),
     ("軌跡留存策略不改變事件且可限制取樣", TestTraceRetentionPolicies),
+    ("安全歷程降採樣不改變目前安全與狀態轉折", TestSafetyObservationRetentionPolicies),
     ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
     ("播放只推進實際世界並保留計畫時間軸", TestSimulationSessionAdvancesActualOnly),
     ("計畫時間軸以營運完成停止並保留完成時間", TestPlannedTimelineStopsAtCompletion),
@@ -686,6 +687,53 @@ static void TestTraceRetentionPolicies()
     Equal(0, eventsOnly.Trajectory.Count);
     True(decimated.Trajectory.Any(sample => sample.Phase == OperationalPhase.Accelerating),
         "降採樣留存至少應保留車次的初始相位。" );
+}
+
+static void TestSafetyObservationRetentionPolicies()
+{
+    var options = new SimulationWorldOptions(
+        CreateFiveStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        2,
+        InitialDepartureIntervalSeconds: 15,
+        MovingBlockMode: MovingBlockMode.Control,
+        TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full);
+    var full = (options with
+    {
+        SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Full
+    }).CreateWorld();
+    var decimated = (options with
+    {
+        SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Decimated(1)
+    }).CreateWorld();
+
+    full.AdvanceTo(60);
+    decimated.AdvanceTo(60);
+
+    True(full.SafetyHistory.Count > 0, "安全歷程回歸至少需要一組相鄰列車觀測。");
+    True(decimated.SafetyHistory.Count < full.SafetyHistory.Count,
+        "安全歷程降採樣應顯著少於每 0.1 秒完整留存。");
+    True(full.GetSnapshot().SafetyObservations.SequenceEqual(decimated.GetSnapshot().SafetyObservations),
+        "Full 與 Decimated 不得改變目前 tick 的安全觀測。");
+    Equal(full.Events.Count, decimated.Events.Count);
+    foreach (var transition in full.SafetyHistory
+                 .GroupBy(item => (item.FollowerVehicleId, item.LeaderVehicleId, item.TrackId))
+                 .SelectMany(group => group.OrderBy(item => item.SimulationTimeSeconds)
+                     .Zip(group.OrderBy(item => item.SimulationTimeSeconds).Skip(1), (previous, current) =>
+                         (Previous: previous, Current: current))
+                     .Where(pair => pair.Previous.Status != pair.Current.Status)
+                     .Select(pair => pair.Current)
+                     .Append(group.OrderBy(item => item.SimulationTimeSeconds).First())))
+    {
+        True(decimated.SafetyHistory.Any(item =>
+                item.FollowerVehicleId == transition.FollowerVehicleId
+                && item.LeaderVehicleId == transition.LeaderVehicleId
+                && item.TrackId == transition.TrackId
+                && item.Status == transition.Status
+                && Math.Abs(item.SimulationTimeSeconds - transition.SimulationTimeSeconds) < 1e-9),
+            "安全狀態轉折與每組第一筆觀測不可被降採樣遺失。");
+    }
 }
 
 static void TestSimulationSession()

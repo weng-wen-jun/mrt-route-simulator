@@ -17,31 +17,36 @@ if (!File.Exists(samplePath))
 
 var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
 var runtime = TopologyProjectFormat.CreateRuntime(document);
-var actualOptions = CreateOptions(document, runtime, SimulationTraceRetentionPolicy.Full);
+var actualOptions = CreateOptions(document, runtime, SimulationTraceRetentionPolicy.Decimated(0.5)) with
+{
+    SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Decimated(1.0)
+};
 var plannedOptions = actualOptions with
 {
     ProfileMode = OperationProfileMode.BasicPhysics,
     MovingBlockMode = MovingBlockMode.Independent,
-    InitialBrakingEstimationMode = BrakingEstimationMode.Service
+    InitialBrakingEstimationMode = BrakingEstimationMode.Service,
+    TraceRetentionPolicy = SimulationTraceRetentionPolicy.Full,
+    SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Full
 };
 var latestDispatchOffsetSeconds = runtime.DispatchPlan.Runs.Max(run =>
 {
     var offset = (run.PlannedDepartureTime - runtime.DispatchPlan.ScheduleAnchorTime).TotalSeconds;
     return offset < 0 ? offset + TimeSpan.FromDays(1).TotalSeconds : offset;
 });
-var plannedRequestedSeconds = latestDispatchOffsetSeconds + actualOptions.CreateWorld().BaselineCycleTimeSeconds * 1.5;
+var plannedMaxDurationSeconds = latestDispatchOffsetSeconds + actualOptions.CreateWorld().BaselineCycleTimeSeconds * 2;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     sample = Path.GetFileName(samplePath),
     advanceSeconds,
-    plannedRequestedSeconds,
+    plannedMaxDurationSeconds,
     metrics = new
     {
         singleActual = MeasureWorld(actualOptions, advanceSeconds),
         dualSession = MeasureSession(actualOptions, plannedOptions, advanceSeconds),
-        plannedTimeline = MeasurePlannedTimeline(actualOptions, plannedOptions, plannedRequestedSeconds)
+        plannedTimeline = MeasurePlannedTimeline(actualOptions, plannedOptions, plannedMaxDurationSeconds)
     }
 }, new JsonSerializerOptions { WriteIndented = true }));
 
@@ -104,23 +109,24 @@ static object MeasureSession(
 static object MeasurePlannedTimeline(
     SimulationWorldOptions actualOptions,
     SimulationWorldOptions plannedOptions,
-    double requestedDurationSeconds)
+    double maxDurationSeconds)
 {
     var session = new SimulationSession(actualOptions, plannedOptions);
     var before = CaptureMemory();
     var stopwatch = Stopwatch.StartNew();
-    session.PreparePlannedTimeline(requestedDurationSeconds);
+    session.PreparePlannedTimelineUntilComplete(maxDurationSeconds);
     stopwatch.Stop();
     var lastEvent = session.PlannedEvents.Count == 0
         ? (double?)null
         : session.PlannedEvents.Max(item => item.SimulationTimeSeconds);
+    var completionTime = session.PlannedTimelineCompletedAtSeconds ?? maxDurationSeconds;
     return new
     {
-        requestedDurationSeconds,
+        maxDurationSeconds,
         elapsedMs = stopwatch.Elapsed.TotalMilliseconds,
-        fixedTicks = FixedTickCount(requestedDurationSeconds),
-        millisecondsPerTick = stopwatch.Elapsed.TotalMilliseconds / Math.Max(1, FixedTickCount(requestedDurationSeconds)),
-        actualCompletionTimeSeconds = session.PlannedWorld.CurrentTimeSeconds,
+        fixedTicks = FixedTickCount(completionTime),
+        millisecondsPerTick = stopwatch.Elapsed.TotalMilliseconds / Math.Max(1, FixedTickCount(completionTime)),
+        completionTimeSeconds = completionTime,
         lastEventTimeSeconds = lastEvent,
         trajectoryCount = session.PlannedTrajectory.Count,
         safetyHistoryCount = session.PlannedWorld.SafetyHistory.Count,
