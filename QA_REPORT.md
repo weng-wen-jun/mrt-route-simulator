@@ -1,5 +1,31 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 長時間播放效能 Phase 1：修改前基準（2026-09-20）
+
+以 `samples/V4.0.0-完整拓撲執行驗證範例.mrtsim.json` 執行獨立 benchmark runner：
+
+```powershell
+dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Performance.csproj -c Release --no-restore
+```
+
+基準 runner 先建立與 WPF 相同的 topology `SimulationWorldOptions`（`Full` trajectory retention），再量測單一 ActualWorld、現行雙 world `SimulationSession.AdvanceTo(8000)` 與現行 `PreparePlannedTimeline`。此結果是本機一次基準執行，wall time 不是硬 timing unit test；修改後以同一 runner、同一 sample、同一順序重跑比較。
+
+| 項目 | 修改前基準 |
+|---|---:|
+| ActualWorld requested / current time | 8000 / 8000 s |
+| ActualWorld elapsed | 1661.55 ms |
+| ActualWorld fixed ticks / ms per tick | 80000 / 0.02077 ms |
+| ActualWorld trajectory / safety / events | 26674 / 3282 / 99 |
+| ActualWorld working-set delta / managed-memory delta | +37,482,496 / +15,990,808 bytes |
+| 現行雙 world `AdvanceTo(8000)` elapsed / ms per tick | 857.11 / 0.01071 ms |
+| 雙 world actual trajectory / planned trajectory | 26674 / 26491 |
+| 雙 world actual safety / planned safety / events | 3282 / 0 / 99 / 98 |
+| Planned requested duration | 2536.00 s |
+| Planned timeline elapsed / last event | 200.36 ms / 2470.5 s |
+| Planned trajectory / safety / events | 25952 / 0 / 94 |
+
+本基準確認目前 WPF 路徑的兩項待修來源：播放 API 會同時推進 ActualWorld 與 PlannedWorld；planned timeline 會依固定預估 duration 推進，而不是以 `SimulationWorld.IsComplete` 為完成條件。`tests/MrtRouteSimulator.Performance` 會保留作為後續比較用 diagnostic，不將 wall time 寫成穩定性 unit test。
+
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
 - 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、臺中主要站簡化 sample 與 `.github/pull_request_template.md`。

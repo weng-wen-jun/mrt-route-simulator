@@ -2,6 +2,11 @@
 
 > 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
 
+## 長時間播放效能後續階段
+
+- [ ] 【V4-PLAYBACK-PERF-PHASE2】將 `SimulationWorld` 推進移出 WPF UI thread，採 single-writer simulation worker、immutable playback snapshot 與 adaptive UI refresh；本 Phase 1 不實作。
+- [ ] 【V4-PLAYBACK-PERF-PHASE3】使用 profiler 優化 `SimulationWorld` hot path，目標大型案例單 tick <= 1.5 ms；本 Phase 1 不實作。
+
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 
 - [x] 2026-09-09：依 PDF 加入七種可執行站場、方向及月台配置、進路綁定、模擬參數設定與袋狀軌對向互斥；118/118 自動化通過，完成 WPF 離屏繪圖及站型按鈕／草稿隔離驗證。桌面手動驗收仍依現行待辦執行。
