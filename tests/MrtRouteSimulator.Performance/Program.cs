@@ -46,6 +46,7 @@ Console.WriteLine(JsonSerializer.Serialize(new
     {
         singleActual = MeasureWorld(actualOptions, advanceSeconds),
         dualSession = MeasureSession(actualOptions, plannedOptions, advanceSeconds),
+        actualOnlyPlayback = MeasureActualOnlySession(actualOptions, plannedOptions, advanceSeconds),
         plannedTimeline = MeasurePlannedTimeline(actualOptions, plannedOptions, plannedMaxDurationSeconds)
     }
 }, new JsonSerializerOptions { WriteIndented = true }));
@@ -101,6 +102,30 @@ static object MeasureSession(
         plannedSafetyHistoryCount = session.PlannedWorld.SafetyHistory.Count,
         actualEventCount = session.ActualWorld.Events.Count,
         plannedEventCount = session.PlannedWorld.Events.Count,
+        workingSetDeltaBytes = Process.GetCurrentProcess().WorkingSet64 - before.WorkingSetBytes,
+        managedMemoryDeltaBytes = GC.GetTotalMemory(false) - before.ManagedBytes
+    };
+}
+
+static object MeasureActualOnlySession(
+    SimulationWorldOptions actualOptions,
+    SimulationWorldOptions plannedOptions,
+    double durationSeconds)
+{
+    var session = new SimulationSession(actualOptions, plannedOptions);
+    var before = CaptureMemory();
+    var stopwatch = Stopwatch.StartNew();
+    session.AdvanceActualTo(durationSeconds);
+    stopwatch.Stop();
+    return new
+    {
+        elapsedMs = stopwatch.Elapsed.TotalMilliseconds,
+        fixedTicks = FixedTickCount(durationSeconds),
+        millisecondsPerTick = stopwatch.Elapsed.TotalMilliseconds / Math.Max(1, FixedTickCount(durationSeconds)),
+        actualTrajectoryCount = session.ActualWorld.Trajectory.Count,
+        actualSafetyHistoryCount = session.ActualWorld.SafetyHistory.Count,
+        actualEventCount = session.ActualWorld.Events.Count,
+        plannedCurrentTimeSeconds = session.PlannedWorld.CurrentTimeSeconds,
         workingSetDeltaBytes = Process.GetCurrentProcess().WorkingSet64 - before.WorkingSetBytes,
         managedMemoryDeltaBytes = GC.GetTotalMemory(false) - before.ManagedBytes
     };
