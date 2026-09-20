@@ -32,7 +32,7 @@ public partial class MainWindow
             ProfileMode: document.Simulation.ProfileMode,
             MovingBlockMode: document.Simulation.MovingBlockMode,
             InitialBrakingEstimationMode: document.Simulation.BrakingEstimationMode,
-            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full,
+            TraceRetentionPolicy: SimulationTraceRetentionPolicy.Decimated(0.5),
             ServicePatterns: runtime.ServicePatterns,
             DispatchPlan: runtime.DispatchPlan,
             VehicleTypes: runtime.VehicleTypes,
@@ -42,7 +42,8 @@ public partial class MainWindow
         {
             ProfileMode = OperationProfileMode.BasicPhysics,
             MovingBlockMode = MovingBlockMode.Independent,
-            InitialBrakingEstimationMode = BrakingEstimationMode.Service
+            InitialBrakingEstimationMode = BrakingEstimationMode.Service,
+            TraceRetentionPolicy = SimulationTraceRetentionPolicy.Full
         };
         // 候選專案的執行與預覽全部準備成功後，才取代目前播放狀態。
         // 驗證成功不代表計畫時間軸能執行；這些工作不可先寫入視窗欄位。
