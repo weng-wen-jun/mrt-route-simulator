@@ -76,6 +76,8 @@ var tests = new (string Name, Action Run)[]
     ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
     ("播放只推進實際世界並保留計畫時間軸", TestSimulationSessionAdvancesActualOnly),
     ("計畫時間軸以營運完成停止並保留完成時間", TestPlannedTimelineStopsAtCompletion),
+    ("計畫時間軸涵蓋延遲發車與接續車次後才完成", TestPlannedTimelineHandlesDelayedContinuation),
+    ("計畫時間軸等待資源解除後才完成", TestPlannedTimelineWaitsForResource),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
     ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
@@ -829,6 +831,89 @@ static void TestPlannedTimelineStopsAtCompletion()
     True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded),
         "完成型計畫時間軸必須保留最後車次退出事件。");
     NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+}
+
+static void TestPlannedTimelineHandlesDelayedContinuation()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [
+                new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    vehicleId: "EMU-TIMELINE-01", serviceRunId: "RUN-TIMELINE-DOWN",
+                    continueAfterTerminal: true, continuationServiceRunId: "RUN-TIMELINE-UP"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(300), TrainDirection.Inbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    serviceRunId: "RUN-TIMELINE-UP")
+            ],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var options = new SimulationWorldOptions(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 2, 2),
+        OperationalParameters.CreateDefault(),
+        1,
+        MovingBlockMode: MovingBlockMode.Independent,
+        DispatchPlan: dispatch,
+        VehicleTypes: vehicles);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(1000);
+
+    var continuationDeparture = session.PlannedEvents
+        .Where(item => item.EventType == SimulationEventType.Departure && item.ServiceRunId == "RUN-TIMELINE-UP")
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .Last();
+    True(continuationDeparture.SimulationTimeSeconds >= 300 - 0.1,
+        "接續車次不得在排定延遲發車時間前被計畫時間軸省略。 ");
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.DirectionChanged
+        && item.ServiceRunId == "RUN-TIMELINE-UP"),
+        "計畫時間軸必須先完成端點折返，才能進入接續車次。 ");
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded
+        && item.ServiceRunId == "RUN-TIMELINE-UP"),
+        "計畫完成條件必須等待接續車次退出營運。 ");
+    True(!session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded
+        && item.ServiceRunId == "RUN-TIMELINE-DOWN"),
+        "仍有接續車次時，前一段車次不得被當成整體營運完成。 ");
+    True(session.PlannedTimelineCompletedAtSeconds is not null
+        && session.PlannedTimelineCompletedAtSeconds.Value > continuationDeparture.SimulationTimeSeconds,
+        "計畫完成時間必須晚於延遲發車的接續車次。 ");
+}
+
+static void TestPlannedTimelineWaitsForResource()
+{
+    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+    var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+    var runtime = TopologyProjectFormat.CreateRuntime(document);
+    var options = new SimulationWorldOptions(
+        Route: null,
+        TrainParameters: runtime.TrainParameters,
+        OperationalParameters: runtime.OperationalParameters,
+        TrainCount: runtime.DispatchPlan.Runs.Count,
+        ProfileMode: document.Simulation.ProfileMode,
+        MovingBlockMode: document.Simulation.MovingBlockMode,
+        ServicePatterns: runtime.ServicePatterns,
+        DispatchPlan: runtime.DispatchPlan,
+        VehicleTypes: runtime.VehicleTypes,
+        ServiceTypes: runtime.ServiceTypes,
+        Topology: runtime.Topology);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(4000);
+
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.DepartureDelayed)
+        && session.PlannedEvents.Any(item => item.EventType == SimulationEventType.RouteReserved)
+        && session.PlannedEvents.Any(item => item.EventType == SimulationEventType.RouteReleased),
+        "計畫時間軸必須保留資源鎖定／釋放造成的延遲發車，不可因班表時間已到就提前完成。 ");
+    True(session.PlannedEvents.Count(item => item.EventType == SimulationEventType.ServiceEnded)
+        == runtime.DispatchPlan.Runs.Count(item => !item.ContinueAfterTerminal),
+        "計畫完成條件必須等待所有未接續車次退出營運。 ");
+    True(session.PlannedTimelineCompletedAtSeconds is not null
+        && session.PlannedTimelineCompletedAtSeconds.Value < 4000,
+        "計畫時間軸不得跑滿 fail-safe 上限才回報完成。 ");
 }
 
 static void TestInitialV2Departure()

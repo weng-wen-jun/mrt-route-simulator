@@ -66,7 +66,7 @@ dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Per
 最終驗證閘門：
 
 - `dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore`：0 warnings／0 errors。
-- `dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore`：148/148 通過，0 失敗；包含 fixed 0.1 s、moving block、collision、turnback、passing、rear-clear、ActualWorld-only、completion 與 safety retention regression。
+- `dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore`：150/150 通過，0 失敗；包含 fixed 0.1 s、moving block、collision、turnback、passing、rear-clear、ActualWorld-only、completion、delayed/resource operation 與 safety retention regression。
 - `dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore`：PASS WPF visual rules；完整 sample matrix、計畫時間軸、雙向預覽、速度圖、CSV／PNG／PDF 輸出通過。
 - `tests/MrtRouteSimulator.Performance` Release build／benchmark：通過；`git diff --check`：通過。
 - 本輪未執行 60× 原生桌面連續播放人工 smoke；這仍屬 Phase 2／桌面驗收範圍，不以離屏 WPF runner 代替。
