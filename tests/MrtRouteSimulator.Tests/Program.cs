@@ -74,6 +74,7 @@ var tests = new (string Name, Action Run)[]
     ("軌跡留存策略不改變事件且可限制取樣", TestTraceRetentionPolicies),
     ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
     ("播放只推進實際世界並保留計畫時間軸", TestSimulationSessionAdvancesActualOnly),
+    ("計畫時間軸以營運完成停止並保留完成時間", TestPlannedTimelineStopsAtCompletion),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
     ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
@@ -747,6 +748,39 @@ static void TestSimulationSessionAdvancesActualOnly()
         "ActualWorld-only 播放不可修改已準備的計畫事件時間軸。");
     True(session.PlannedTrajectory.SequenceEqual(plannedTrajectory),
         "ActualWorld-only 播放不可修改已準備的計畫軌跡。");
+}
+
+static void TestPlannedTimelineStopsAtCompletion()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                vehicleId: "EMU-PLANNED-01", serviceRunId: "RUN-PLANNED-01")],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var options = new SimulationWorldOptions(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 2, 2),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent,
+        DispatchPlan: dispatch,
+        VehicleTypes: vehicles);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(1000);
+
+    True(session.PlannedTimelineCompletedAtSeconds is > 0 and < 1000,
+        "計畫時間軸應在最後車次完成時停止，而不是跑滿 fail-safe 上限。");
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded),
+        "完成型計畫時間軸必須保留最後車次退出事件。");
+    NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
 }
 
 static void TestInitialV2Departure()

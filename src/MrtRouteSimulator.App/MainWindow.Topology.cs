@@ -54,9 +54,11 @@ public partial class MainWindow
         });
         // 手動班表的後段車次不一定有全域 headway；播放範圍必須以實際展開後的最後
         // 發車時間為準，否則較晚的接續車次會落在預先建立的計畫時間軸之外。
-        var candidateDurationSeconds = latestDispatchOffsetSeconds
-            + candidateSession.ActualWorld.BaselineCycleTimeSeconds * 1.5;
-        candidateSession.PreparePlannedTimeline(candidateDurationSeconds);
+        var maxCandidateDurationSeconds = latestDispatchOffsetSeconds
+            + candidateSession.ActualWorld.BaselineCycleTimeSeconds * 2;
+        candidateSession.PreparePlannedTimelineUntilComplete(maxCandidateDurationSeconds);
+        var candidateDurationSeconds = candidateSession.PlannedTimelineCompletedAtSeconds!.Value
+            + SimulationWorld.FixedTimeStepSeconds;
         var candidateStationRows = new List<StationInputRow>();
         var outboundStops = candidateSession.ActualWorld.GetTopologyResultContext().GetStops(TrainDirection.Outbound);
         for (var index = 0; index < outboundStops.Count; index++)

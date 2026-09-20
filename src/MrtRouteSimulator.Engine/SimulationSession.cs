@@ -91,6 +91,9 @@ public sealed class SimulationSession
 
     public IReadOnlyList<TrajectorySample> PlannedTrajectory { get; private set; } = [];
 
+    /// <summary>Actual completion time of the most recently prepared planned timeline.</summary>
+    public double? PlannedTimelineCompletedAtSeconds { get; private set; }
+
     public SimulationSnapshot AdvanceTo(double targetTimeSeconds)
     {
         ActualWorld.AdvanceTo(targetTimeSeconds);
@@ -115,10 +118,57 @@ public sealed class SimulationSession
             throw new ArgumentOutOfRangeException(nameof(durationSeconds), "計畫時間軸長度必須是非負有限數值。");
         }
 
+        PlannedWorld.Reset();
+        PlannedTimelineCompletedAtSeconds = null;
         PlannedWorld.AdvanceTo(durationSeconds);
+        CapturePlannedTimeline();
+        if (PlannedWorld.IsComplete)
+        {
+            PlannedTimelineCompletedAtSeconds = PlannedWorld.CurrentTimeSeconds;
+        }
+
+        PlannedWorld.Reset();
+    }
+
+    /// <summary>
+    /// Builds a planned timeline until the scenario's operational state reports completion.
+    /// The maximum duration is only a fail-safe and is never used as the planned end time.
+    /// </summary>
+    public void PreparePlannedTimelineUntilComplete(double maxDurationSeconds)
+    {
+        if (!double.IsFinite(maxDurationSeconds) || maxDurationSeconds < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDurationSeconds), "計畫時間軸最大長度必須是非負有限數值。");
+        }
+
+        PlannedWorld.Reset();
+        PlannedTimelineCompletedAtSeconds = null;
+        while (!PlannedWorld.IsComplete
+            && PlannedWorld.CurrentTimeSeconds + SimulationWorld.FixedTimeStepSeconds
+                <= maxDurationSeconds + 1e-7)
+        {
+            PlannedWorld.Tick();
+        }
+
+        if (!PlannedWorld.IsComplete)
+        {
+            var pendingCount = PlannedWorld.GetSnapshot().Trains.Count(train =>
+                train.Phase != OperationalPhase.OutOfService);
+            PlannedWorld.Reset();
+            throw new SimulationValidationException([
+                $"計畫時間軸在 {maxDurationSeconds:0.0} 秒 fail-safe 上限內未完成；仍有 {pendingCount} 個車次尚未結束。"
+            ]);
+        }
+
+        PlannedTimelineCompletedAtSeconds = PlannedWorld.CurrentTimeSeconds;
+        CapturePlannedTimeline();
+        PlannedWorld.Reset();
+    }
+
+    private void CapturePlannedTimeline()
+    {
         PlannedEvents = PlannedWorld.Events.ToArray();
         PlannedTrajectory = PlannedWorld.Trajectory.ToArray();
-        PlannedWorld.Reset();
     }
 
     public void Reset()
