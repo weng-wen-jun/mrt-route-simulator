@@ -1,5 +1,14 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 臺中機場捷運 full sample（2026-09-20）
+
+- 新增 `samples/臺中機場捷運-完整營運示範範例.mrtsim.json`，並保留既有 minimal sample。主要原始碼是測試專案內的 staged builder，JSON 為可載入輸出；minimal → 28 站完整鏈 → services → O20 pocket → O04 passing → O13 passing → timetable 共 7 個階段均先做 Structural／Operational gate。
+- 補充來源 `外部檔案參考/Taichung_Airport_MRT_simulation_reference.md` 明確覆蓋舊草案：AIRPORT-DIRECT 為 O01↔O20，停 O01／O08／O11／O16／O20，不前往 O26；FULL-LINE 為 O01↔O26 全停，SECTION 為 O01↔O20。29.9 km 與 O01～O20 23.8 km 是 source-backed aggregate target；逐站距離分配、platform／train 尺寸、性能、dwell、facility 幾何／速限、port side 與 dispatch offset 仍是 synthetic test values。
+- O20 以 topology-native 站後袋式儲車軌完成 SECTION 與 AIRPORT-DIRECT 同 `VehicleId`、不同 `ServiceRunId` 的實體換端；O04／O13 各有上下行 PassingFacility，共 4 條通過 edge。O04 同時驗證 SECTION 越行，AIRPORT-DIRECT 依序於 O04／O13 兩次越行；普通車均等 express 車尾淨空及 resource 釋放後才離站。
+- 代表班表把尖峰 FULL-LINE＋SECTION 與離峰 FULL-LINE＋AIRPORT-DIRECT 合併到同一 regression runtime，只為覆蓋多服務、越行與折返，不是正式同時營運班表。deterministic 事件：DIRECT 於 624.5／676.3 秒、1,252.0／1,303.8 秒提出／完成 O04、O13 越行，1,858.1 秒抵達 O20 pocket，2,600.0 秒換為上行；SECTION 於 3,124.5／3,176.3 秒提出／完成 O04 越行，4,704.5 秒抵達 O20 pocket，5,600.0 秒換為上行，7,446.5 秒退出。
+- 最終驗證：Release build 0 warnings／0 errors；Engine runner **160/160**、0 失敗（含新增 focused 15/15 與 14-sample 有界 gate）；WPF runner `PASS WPF visual rules`，含全 14 份 sample 載入／計畫時間軸／雙向預覽，以及新 sample 主圖／編輯器 720／1200px。新增的 schematic lane 只改善四股道視覺喉區與標籤間距，不取代 physical port metadata。
+- 尚未完成的人工驗收：原生 WPF 不同 DPI、8,000 秒連續播放、O04／O13 越行與 O20 pocket 換端的關鍵畫面目視。本節的自動 WPF runner 不代表上述桌面人工驗收已完成；sample 也不能用於工程設計、號誌設計、安全認證或正式時刻表。
+
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
 - 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、臺中主要站簡化 sample 與 `.github/pull_request_template.md`。

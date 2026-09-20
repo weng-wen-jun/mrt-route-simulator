@@ -58,7 +58,7 @@
 - [ ] 【V4-LEGACY-PORT-MIGRATION】已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不從示意位置推定實體方向。仍須完成原生桌面流程驗收，並確認產品是否要將遷移後的明確側別設為所有舊檔的全面強制政策。
 
 - [x] 【V4-SAMPLE-SCENARIO-BUILDER-01】已新增可重用 `TopologyScenarioBuilder`／`TopologyScenarioValidation`：以既有 Schema 8 document、quick builder 與 topology-native `SimulationWorld` 分階段驗證 minimal topology baseline、station chain、service pattern、turnback、passing facility 與 timetable；Structural／Operational gate 可獨立執行，Regression 由 Release／Engine／WPF 流程負責。`samples/README.md` 已補 Scenario Manifest 欄位規範；`.mrtsim.json` 維持為輸出／載入範例，不建立第二套 Domain Model 或 runtime。新增回歸後 Engine 145/145 通過。
-- [ ] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】將臺中機場捷運示範案例由主要站 minimal baseline 分階段擴充：補齊 O01～O26（含 O08a、O15a）車站鏈與月台，再依序加入 O20 區間車折返、O04／O13 越行設施及全程車／機場直達車營運班表。正式來源資料與 synthetic test values 必須在 samples/README.md 明確區分。
+- [x] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】已保留主要站 minimal baseline，並以可重建 builder 分 7 階段建立 full sample：O01～O26（含 O08a、O15a）28 站鏈、29.9 km／O01～O20 23.8 km aggregate target、O20 站後 pocket、O04／O13 雙向四股越行，以及 FULL-LINE／SECTION／AIRPORT-DIRECT。補充參考資料將 AIRPORT-DIRECT 修正為 O01↔O20；正式／規劃來源與 synthetic test values 已在 `samples/README.md` Manifest 分開。2026-09-20 Release build 0 warnings／0 errors、Engine 160/160、WPF runner 與 `git diff --check` 通過；原生桌面不同 DPI 與關鍵事件連續播放仍列入 UI 人工驗收邊界。
 
 - [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。另修正窄視窗摘要卡文字裁切並完成新版目視複核。仍須補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
 
