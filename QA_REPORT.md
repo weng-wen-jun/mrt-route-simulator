@@ -19,12 +19,57 @@ dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Per
 | ActualWorld working-set delta / managed-memory delta | +37,482,496 / +15,990,808 bytes |
 | 現行雙 world `AdvanceTo(8000)` elapsed / ms per tick | 857.11 / 0.01071 ms |
 | 雙 world actual trajectory / planned trajectory | 26674 / 26491 |
-| 雙 world actual safety / planned safety / events | 3282 / 0 / 99 / 98 |
+| 雙 world actual safety / planned safety | 3282 / 0 |
+| 雙 world actual events / planned events | 99 / 98 |
 | Planned requested duration | 2536.00 s |
 | Planned timeline elapsed / last event | 200.36 ms / 2470.5 s |
 | Planned trajectory / safety / events | 25952 / 0 / 94 |
 
 本基準確認目前 WPF 路徑的兩項待修來源：播放 API 會同時推進 ActualWorld 與 PlannedWorld；planned timeline 會依固定預估 duration 推進，而不是以 `SimulationWorld.IsComplete` 為完成條件。`tests/MrtRouteSimulator.Performance` 會保留作為後續比較用 diagnostic，不將 wall time 寫成穩定性 unit test。
+
+## 長時間播放效能 Phase 1：修改後結果（2026-09-20）
+
+同一 benchmark、sample 與 `AdvanceTo(8000)` 範圍重跑；另加入實際 WPF playback 所用的 `AdvanceActualTo` measurement：
+
+| 項目 | 修改後結果 |
+|---|---:|
+| ActualWorld requested / current time | 8000 / 8000 s |
+| ActualWorld elapsed / fixed ticks / ms per tick | 1746.51 ms / 80000 / 0.02183 ms |
+| ActualWorld trajectory / safety / events | 5489 / 334 / 99 |
+| ActualWorld working-set delta / managed-memory delta | +27,500,544 / +9,811,504 bytes |
+| 實際 playback `AdvanceActualTo(8000)` elapsed / ms per tick | 619.08 / 0.00774 ms |
+| 實際 playback trajectory / safety / events | 5489 / 334 / 99 |
+| 實際 playback 後 PlannedWorld current time | 0 s（未被推進） |
+| 舊雙 world `AdvanceTo(8000)` elapsed / ms per tick | 911.54 / 0.01139 ms |
+| 雙 world actual trajectory / planned trajectory | 5489 / 26491 |
+| 雙 world actual safety / planned safety | 334 / 0 |
+| 雙 world actual events / planned events | 99 / 98 |
+| Planned max duration（latest dispatch + baseline × 2） | 2748.00 s |
+| Planned actual completion / last event | 2590.0 / 2590.0 s |
+| Planned trajectory / events | 26491 / 98 |
+
+相較修改前，互動 ActualWorld trajectory 由 26674 降至 5489（約少 79.4%），歷史 safety observation 由 3282 降至 334（約少 89.8%）；實際 playback path 不再推進 PlannedWorld。wall time 與 process memory 會受 JIT／GC／OS 影響，僅作觀察值；固定 tick 仍為 0.1 秒，未改 physics、occupancy、moving block、rear-clear 或 safety decision。
+
+本 Phase 已完成：
+
+- `SimulationSession.AdvanceActualTo()` 與 WPF ActualWorld-only playback。
+- `PreparePlannedTimelineUntilComplete(maxDurationSeconds)`，以 `SimulationWorld.IsComplete` 為完成條件，超過 fail-safe 會回報 validation error；記錄 `PlannedTimelineCompletedAtSeconds`。
+- topology interactive ActualWorld `Decimated(0.5)` trajectory 與 `Decimated(1.0)` safety history；planned chart 仍使用 Full retention。
+- 獨立 benchmark runner 與 retention／completion regression。
+
+尚未解決（刻意留給後續階段）：
+
+- Engine 單 tick < 1.67 ms 的 hot-path 優化。
+- simulation worker／single-writer background task／immutable playback snapshot。
+- adaptive UI render FPS、hidden-tab lazy rendering、incremental result accumulator。
+
+最終驗證閘門：
+
+- `dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore`：0 warnings／0 errors。
+- `dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore`：148/148 通過，0 失敗；包含 fixed 0.1 s、moving block、collision、turnback、passing、rear-clear、ActualWorld-only、completion 與 safety retention regression。
+- `dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore`：PASS WPF visual rules；完整 sample matrix、計畫時間軸、雙向預覽、速度圖、CSV／PNG／PDF 輸出通過。
+- `tests/MrtRouteSimulator.Performance` Release build／benchmark：通過；`git diff --check`：通過。
+- 本輪未執行 60× 原生桌面連續播放人工 smoke；這仍屬 Phase 2／桌面驗收範圍，不以離屏 WPF runner 代替。
 
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
