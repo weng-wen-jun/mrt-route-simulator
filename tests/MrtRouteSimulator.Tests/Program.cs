@@ -678,9 +678,9 @@ static void TestTraceRetentionPolicies()
     var decimated = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.Decimated(2) }).CreateWorld();
     var eventsOnly = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.EventsOnly }).CreateWorld();
 
-    full.AdvanceTo(60);
-    decimated.AdvanceTo(60);
-    eventsOnly.AdvanceTo(60);
+    full.AdvanceTo(240);
+    decimated.AdvanceTo(240);
+    eventsOnly.AdvanceTo(240);
 
     True(decimated.Trajectory.Count < full.Trajectory.Count,
         "降採樣留存應少於完整 0.1 秒軌跡，但不得改變引擎推進。" );
@@ -689,6 +689,26 @@ static void TestTraceRetentionPolicies()
     Equal(0, eventsOnly.Trajectory.Count);
     True(decimated.Trajectory.Any(sample => sample.Phase == OperationalPhase.Accelerating),
         "降採樣留存至少應保留車次的初始相位。" );
+
+    var stateChanges = full.Trajectory
+        .OrderBy(sample => sample.SimulationTimeSeconds)
+        .Zip(full.Trajectory.OrderBy(sample => sample.SimulationTimeSeconds).Skip(1),
+            (previous, current) => (Previous: previous, Current: current))
+        .Where(pair => !string.Equals(pair.Previous.TrackEdgeId, pair.Current.TrackEdgeId, StringComparison.Ordinal)
+            || pair.Previous.ServiceRouteTraversalIndex != pair.Current.ServiceRouteTraversalIndex)
+        .ToArray();
+    True(stateChanges.Any(pair => !string.Equals(pair.Previous.TrackEdgeId, pair.Current.TrackEdgeId, StringComparison.Ordinal)),
+        "完整 topology 軌跡應涵蓋至少一個 TrackEdgeId 轉換。" );
+    True(stateChanges.Any(pair => pair.Previous.ServiceRouteTraversalIndex != pair.Current.ServiceRouteTraversalIndex),
+        "完整 topology 軌跡應涵蓋至少一個 ServiceRouteTraversalIndex 轉換。" );
+    foreach (var change in stateChanges)
+    {
+        True(decimated.Trajectory.Any(sample =>
+                Math.Abs(sample.SimulationTimeSeconds - change.Current.SimulationTimeSeconds) < 1e-9
+                && string.Equals(sample.TrackEdgeId, change.Current.TrackEdgeId, StringComparison.Ordinal)
+                && sample.ServiceRouteTraversalIndex == change.Current.ServiceRouteTraversalIndex),
+            "降採樣不可省略 topology edge 或 traversal index 狀態轉折。" );
+    }
 }
 
 static void TestSafetyObservationRetentionPolicies()
