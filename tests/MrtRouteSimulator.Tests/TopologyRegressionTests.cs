@@ -491,7 +491,7 @@ internal static class TopologyRegressionTests
         var samplePaths = Directory.EnumerateFiles(sampleDirectory, "*.mrtsim.json", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        Equal(13, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
+        Equal(14, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
 
         foreach (var samplePath in samplePaths)
         {
@@ -537,7 +537,12 @@ internal static class TopologyRegressionTests
                 VehicleTypes: runtime.VehicleTypes,
                 ServiceTypes: runtime.ServiceTypes,
                 Topology: runtime.Topology).CreateWorld();
-            world.AdvanceTo(3600);
+            var boundedEndSeconds = Path.GetFileName(samplePath).Equals(
+                "臺中機場捷運-完整營運示範範例.mrtsim.json",
+                StringComparison.OrdinalIgnoreCase)
+                ? 8000
+                : 3600;
+            world.AdvanceTo(boundedEndSeconds);
             True(world.Events.Any(item => item.EventType == SimulationEventType.Departure),
                 $"範例建立後未能正常推進：{Path.GetFileName(samplePath)}");
             var collisions = world.Events.Where(item => item.EventType == SimulationEventType.Collision).ToArray();
@@ -551,7 +556,7 @@ internal static class TopologyRegressionTests
                 + string.Join("；", stopViolations.Select(item =>
                     $"t={item.SimulationTimeSeconds:0.0} {item.ServiceRunId}/{item.VehicleId} @ {item.TrackEdgeId}:{item.OffsetMeters:0.0} {item.Message}")));
             True(world.GetSnapshot().Trains.All(train => !train.IsActive),
-                $"範例推進 3600 秒後不得殘留無界接續或卡住的列車：{Path.GetFileName(samplePath)}");
+                $"範例推進 {boundedEndSeconds:0} 秒後不得殘留無界接續或卡住的列車：{Path.GetFileName(samplePath)}");
 
             if (Path.GetFileName(samplePath).Equals("V3.4.0-雙島四股快速車越行驗證.mrtsim.json", StringComparison.OrdinalIgnoreCase))
             {

@@ -1,8 +1,40 @@
 using System.Text.Json.Nodes;
 using MrtRouteSimulator.Engine;
 
+if (args.Length == 1 && args[0].Equals("--report-taichung-full-sample", StringComparison.OrdinalIgnoreCase))
+{
+    TaichungAirportFullScenarioTests.PrintKeyEventReport();
+    return;
+}
+
+if (args.Length == 2 && args[0].Equals("--write-taichung-full-sample", StringComparison.OrdinalIgnoreCase))
+{
+    var outputPath = Path.GetFullPath(args[1]);
+    var outputDirectory = Path.GetDirectoryName(outputPath)
+        ?? throw new InvalidOperationException("輸出路徑缺少目錄。 ");
+    Directory.CreateDirectory(outputDirectory);
+    File.WriteAllText(outputPath, TopologyProjectFormat.Serialize(TaichungAirportFullScenarioBuilder.BuildFull()));
+    Console.WriteLine($"已輸出臺中機場捷運 full Schema 8 sample：{outputPath}");
+    return;
+}
+
 var tests = new (string Name, Action Run)[]
 {
+    ("臺中機場捷運 full station chain 完整驗證", TaichungAirportFullScenarioTests.FullStationChainValidates),
+    ("臺中機場捷運 29.9km／23.8km 路線長度", TaichungAirportFullScenarioTests.RouteLengthsMatchReviewedSource),
+    ("臺中機場捷運全程車 28 站全停完成", TaichungAirportFullScenarioTests.FullLineAllStopCompletes),
+    ("臺中機場捷運機場直達車 skip-stop", TaichungAirportFullScenarioTests.AirportDirectSkipStopWorks),
+    ("臺中機場捷運 SECTION O20 topology-native 袋狀軌折返", TaichungAirportFullScenarioTests.O20TurnbackCompletes),
+    ("臺中機場捷運 DIRECT O20 折返且不進入 O21-O26", TaichungAirportFullScenarioTests.AirportDirectTurnsAtO20AndReturns),
+    ("臺中機場捷運 SECTION O04 越行後 O20 折返", TaichungAirportFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
+    ("臺中機場捷運 O04 越行與 rear-clear", TaichungAirportFullScenarioTests.O04OvertakingCompletesSafely),
+    ("臺中機場捷運 O13 越行與 rear-clear", TaichungAirportFullScenarioTests.O13OvertakingCompletesSafely),
+    ("臺中機場捷運直達車完成兩次實體越行", TaichungAirportFullScenarioTests.AirportDirectCompletesTwoOvertakes),
+    ("臺中機場捷運 O04／O13 雙向四股實體 topology", TaichungAirportFullScenarioTests.O04AndO13AreBidirectionalFourTrackStations),
+    ("臺中機場捷運完整情境無碰撞與停站違規", TaichungAirportFullScenarioTests.NoCollisionOrStationStopViolation),
+    ("臺中機場捷運代表性班表所有列車完成", TaichungAirportFullScenarioTests.AllExpectedTrainsComplete),
+    ("臺中機場捷運 full sample Schema 8 round-trip", TaichungAirportFullScenarioTests.Schema8RoundTripPreservesFullScenario),
+    ("臺中機場捷運 full sample 建立 topology-native world", TaichungAirportFullScenarioTests.CreatesTopologyNativeSimulationWorld),
     ("V4 尾軌折返後反向終點月台停站與首站", TopologyTurnbackRegressionTests.PhysicalTailTurnbackStopsAtFirstReverseStation),
     ("V4 尾軌折返 0 秒停站仍等待接續班表", TopologyTurnbackRegressionTests.PhysicalTailTurnbackWaitsForScheduledDepartureWithZeroDwell),
     ("V4 topology 上行結果輸出與方向篩選", TopologyResultsOutputTests.InboundTopologyResultsUseGlobalDisplayPositions),
@@ -152,12 +184,15 @@ var tests = new (string Name, Action Run)[]
 
 var passed = 0;
 var failures = new List<string>();
+var selectedTests = args.Length >= 2 && args[0].Equals("--filter", StringComparison.OrdinalIgnoreCase)
+    ? tests.Where(test => test.Name.Contains(args[1], StringComparison.OrdinalIgnoreCase)).ToArray()
+    : tests;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 Console.WriteLine($"MRT 路線進出站時間模擬器 {ProductVersion.Current} - 自動化測試");
 Console.WriteLine(new string('=', 58));
 
-foreach (var test in tests)
+foreach (var test in selectedTests)
 {
     try
     {
@@ -174,7 +209,7 @@ foreach (var test in tests)
 }
 
 Console.WriteLine(new string('-', 58));
-Console.WriteLine($"結果：{passed}/{tests.Length} 通過，{failures.Count} 失敗");
+Console.WriteLine($"結果：{passed}/{selectedTests.Length} 通過，{failures.Count} 失敗");
 
 if (failures.Count > 0)
 {
