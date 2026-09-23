@@ -67,9 +67,11 @@ internal static class OutputTests
 
     private static void VerifyLoadedPlan(MainWindow window, string label)
     {
+        SelectTab(window, "ResultsTabItem");
         Require(window.TimetableRows.Count > 0, $"{label}載入後計畫時刻表不可空白。");
         Require(window.TimetableRows.Any(row => row.PlannedDepartureTime != "—"),
             $"{label}載入後計畫發車時刻不可全為空白。");
+        SelectTab(window, "ComparisonTabItem");
         Require(window.V1V2ComparisonRows.Count > 0,
             $"{label}載入後 V1/V2 比較頁不可因 legacy Route null guard 而空白。");
     }
@@ -82,9 +84,15 @@ internal static class OutputTests
         var window = scenario.Window;
         var document = scenario.Document;
         WpfTestWait.Wait(scenario.Worker.AdvanceToSimulationTimeAsync(3600));
-        Invoke(window, "UpdateV2PlaybackView");
+        Invoke(window, "UpdateV2PlaybackView", true);
         var frame = WpfTestWait.LatestFrame(window);
         var planned = (PlannedTimelineArtifact)Field(window, "_plannedTimelineArtifact")!;
+
+        SelectTab(window, "ResultsTabItem");
+        SelectTab(window, "SegmentTabItem");
+        SelectTab(window, "IntervalStatisticsTabItem");
+        SelectTab(window, "ResourceTabItem");
+        SelectTab(window, "ComparisonTabItem");
 
         Require(frame.CurrentTimeSeconds >= 3599.99,
             $"{label}實際世界未推進到 3600 秒。");
@@ -104,6 +112,11 @@ internal static class OutputTests
         var context = frame.GetTopologyResultContext();
         var timetable = OperationsTimetable.Build(context, runtime.DispatchPlan, planned.Events, frame.Events);
         var intervals = IntervalStatistics.Analyze(context, frame.Trajectory, frame.Events);
+        var incrementalAccumulator = (SimulationResultAccumulator)(Field(window, "_resultAccumulator")
+            ?? throw new InvalidOperationException("結果累積器未建立。"));
+        var incrementalIntervals = incrementalAccumulator.BuildIntervalStatistics()
+            ?? throw new InvalidOperationException("增量區間累積器未建立。 ");
+        VerifyIncrementalIntervalParity(intervals, incrementalIntervals, label);
         var resource = ResourceOccupancyAnalysis.Analyze(frame.Events, frame.CurrentTimeSeconds);
         var v1v2 = V1V2Comparison.Analyze(
             context,
@@ -119,6 +132,13 @@ internal static class OutputTests
                     instruction.PassingSpeedLimitMetersPerSecond)))),
             runtime.TrainParameters,
             frame.Events);
+        var accumulator = (SimulationResultAccumulator)Field(window, "_resultAccumulator")!;
+        Require(accumulator.TimetableEntries is { } cachedTimetable
+                && cachedTimetable.SequenceEqual(timetable),
+            $"{label} 增量時刻表與完整分析不一致。");
+        Require(accumulator.ComparisonEntries is { } cachedComparison
+                && cachedComparison.SequenceEqual(v1v2.Stations),
+            $"{label} 增量 V1/V2 比較與完整分析不一致。");
 
         Require(timetable.Any(item => item.ActualArrivalTimeSeconds is not null), $"{label} Engine 時刻表無實際到站。");
         Require(intervals.AllIntervals.Count > 0 && intervals.JourneyStatistics.Count > 0,
@@ -175,6 +195,118 @@ internal static class OutputTests
         Require(window.IntervalStatisticRows.Count > 0
             && window.IntervalStatisticRows.All(row => row.Direction == label),
             $"{scenario} 區間統計方向篩選混入其他方向。");
+    }
+
+    internal static void VerifyIncrementalIntervalParity(
+        IntervalStatisticsResult expected,
+        IntervalStatisticsResult actual,
+        string label)
+    {
+        var expectedIntervals = expected.AllIntervals
+            .OrderBy(item => item.VehicleId, StringComparer.Ordinal)
+            .ThenBy(item => item.ServiceRunId, StringComparer.Ordinal)
+            .ThenBy(item => item.Direction)
+            .ThenBy(item => item.FromStationId, StringComparer.Ordinal)
+            .ToArray();
+        var actualIntervals = actual.AllIntervals
+            .OrderBy(item => item.VehicleId, StringComparer.Ordinal)
+            .ThenBy(item => item.ServiceRunId, StringComparer.Ordinal)
+            .ThenBy(item => item.Direction)
+            .ThenBy(item => item.FromStationId, StringComparer.Ordinal)
+            .ToArray();
+        Require(expectedIntervals.Length == actualIntervals.Length,
+            $"{label} 增量區間數量與完整分析不同：{actualIntervals.Length}/{expectedIntervals.Length}。 ");
+        for (var index = 0; index < expectedIntervals.Length; index++)
+        {
+            var expectedItem = expectedIntervals[index];
+            var actualItem = actualIntervals[index];
+            Require(expectedItem.VehicleId == actualItem.VehicleId
+                    && expectedItem.ServiceRunId == actualItem.ServiceRunId
+                    && expectedItem.Direction == actualItem.Direction
+                    && expectedItem.FromStationId == actualItem.FromStationId
+                    && expectedItem.ToStationId == actualItem.ToStationId
+                    && expectedItem.IsComplete == actualItem.IsComplete
+                    && NearlyEqual(expectedItem.DepartureTimeSeconds, actualItem.DepartureTimeSeconds)
+                    && NearlyEqual(expectedItem.ArrivalTimeSeconds, actualItem.ArrivalTimeSeconds)
+                    && NearlyEqual(expectedItem.TravelTimeSeconds, actualItem.TravelTimeSeconds)
+                    && NearlyEqual(expectedItem.DistanceMeters, actualItem.DistanceMeters)
+                    && NearlyEqual(expectedItem.AverageSpeedMetersPerSecond, actualItem.AverageSpeedMetersPerSecond)
+                    && NearlyEqual(expectedItem.PeakSpeedMetersPerSecond, actualItem.PeakSpeedMetersPerSecond)
+                    && NearlyEqual(expectedItem.EntrySpeedMetersPerSecond, actualItem.EntrySpeedMetersPerSecond)
+                    && NearlyEqual(expectedItem.ExitSpeedMetersPerSecond, actualItem.ExitSpeedMetersPerSecond)
+                    && NearlyEqual(expectedItem.MinimumEffectiveSpeedLimitMetersPerSecond,
+                        actualItem.MinimumEffectiveSpeedLimitMetersPerSecond)
+                    && expectedItem.IsScheduledStop == actualItem.IsScheduledStop
+                    && PhaseSecondsEqual(expectedItem, actualItem)
+                    && ControlEventsEqual(expectedItem, actualItem)
+                    && NearlyEqual(expectedItem.ControlLimitedSeconds, actualItem.ControlLimitedSeconds),
+                $"{label} 增量區間與完整分析不一致：{actualItem.ServiceRunId} {actualItem.FromStationId}->{actualItem.ToStationId}; "
+                + $"expected dep/arr/travel/dist/avg/peak/control="
+                + $"{expectedItem.DepartureTimeSeconds}/{expectedItem.ArrivalTimeSeconds}/{expectedItem.TravelTimeSeconds}/{expectedItem.DistanceMeters}/{expectedItem.AverageSpeedMetersPerSecond}/{expectedItem.PeakSpeedMetersPerSecond}/{expectedItem.ControlLimitedSeconds}; "
+                + $"actual={actualItem.DepartureTimeSeconds}/{actualItem.ArrivalTimeSeconds}/{actualItem.TravelTimeSeconds}/{actualItem.DistanceMeters}/{actualItem.AverageSpeedMetersPerSecond}/{actualItem.PeakSpeedMetersPerSecond}/{actualItem.ControlLimitedSeconds}; "
+                + $"stop={expectedItem.IsScheduledStop}/{actualItem.IsScheduledStop}; "
+                + $"entry={expectedItem.EntrySpeedMetersPerSecond}/{actualItem.EntrySpeedMetersPerSecond}; "
+                + $"exit={expectedItem.ExitSpeedMetersPerSecond}/{actualItem.ExitSpeedMetersPerSecond}; "
+                + $"limit={expectedItem.MinimumEffectiveSpeedLimitMetersPerSecond}/{actualItem.MinimumEffectiveSpeedLimitMetersPerSecond}; "
+                + $"phases={string.Join('|', Enum.GetValues<OperationalPhase>().Select(phase => $"{phase}:{expectedItem.PhaseSeconds.GetValueOrDefault(phase):0.###}/{actualItem.PhaseSeconds.GetValueOrDefault(phase):0.###}"))}; "
+                + $"controls={expectedItem.ControlEvents.TotalCount}/{actualItem.ControlEvents.TotalCount}。 ");
+        }
+
+        var expectedJourneys = expected.JourneyStatistics
+            .OrderBy(item => item.VehicleId, StringComparer.Ordinal)
+            .ThenBy(item => item.ServiceRunId, StringComparer.Ordinal)
+            .ThenBy(item => item.Direction)
+            .ToArray();
+        var actualJourneys = actual.JourneyStatistics
+            .OrderBy(item => item.VehicleId, StringComparer.Ordinal)
+            .ThenBy(item => item.ServiceRunId, StringComparer.Ordinal)
+            .ThenBy(item => item.Direction)
+            .ToArray();
+        Require(expectedJourneys.Length == actualJourneys.Length,
+            $"{label} 增量全程數量與完整分析不同：{actualJourneys.Length}/{expectedJourneys.Length}。 ");
+        for (var index = 0; index < expectedJourneys.Length; index++)
+        {
+            var expectedItem = expectedJourneys[index];
+            var actualItem = actualJourneys[index];
+            Require(expectedItem.VehicleId == actualItem.VehicleId
+                    && expectedItem.ServiceRunId == actualItem.ServiceRunId
+                    && expectedItem.Direction == actualItem.Direction
+                    && expectedItem.OriginStationId == actualItem.OriginStationId
+                    && expectedItem.TerminalStationId == actualItem.TerminalStationId
+                    && expectedItem.IsComplete == actualItem.IsComplete
+                    && NearlyEqual(expectedItem.DepartureTimeSeconds, actualItem.DepartureTimeSeconds)
+                    && NearlyEqual(expectedItem.ArrivalTimeSeconds, actualItem.ArrivalTimeSeconds)
+                    && NearlyEqual(expectedItem.TravelTimeSeconds, actualItem.TravelTimeSeconds)
+                    && NearlyEqual(expectedItem.DistanceMeters, actualItem.DistanceMeters)
+                    && NearlyEqual(expectedItem.AverageSpeedMetersPerSecond, actualItem.AverageSpeedMetersPerSecond),
+                $"{label} 增量全程與完整分析不一致：{actualItem.ServiceRunId}。 ");
+        }
+    }
+
+    private static bool NearlyEqual(double? left, double? right) =>
+        left is null || right is null
+            ? left is null && right is null
+            : Math.Abs(left.Value - right.Value) <= 1e-6;
+
+    private static bool NearlyEqual(double left, double right) => Math.Abs(left - right) <= 1e-6;
+
+    private static bool PhaseSecondsEqual(IntervalStatistic expected, IntervalStatistic actual) =>
+        Enum.GetValues<OperationalPhase>().All(phase => NearlyEqual(
+            expected.PhaseSeconds.GetValueOrDefault(phase),
+            actual.PhaseSeconds.GetValueOrDefault(phase)));
+
+    private static bool ControlEventsEqual(IntervalStatistic expected, IntervalStatistic actual) =>
+        expected.ControlEvents.TotalCount == actual.ControlEvents.TotalCount
+        && expected.ControlEvents.EventTypes.SequenceEqual(actual.ControlEvents.EventTypes)
+        && expected.ControlEvents.CountsByType.Count == actual.ControlEvents.CountsByType.Count
+        && expected.ControlEvents.CountsByType.All(pair =>
+            actual.ControlEvents.CountsByType.TryGetValue(pair.Key, out var count)
+            && count == pair.Value);
+
+    private static void SelectTab(MainWindow window, string tabName)
+    {
+        ((TabControl)window.FindName("WorkspaceTabControl")).SelectedItem = window.FindName(tabName);
+        Invoke(window, "UpdateV2PlaybackView", true);
     }
 
     private static void VerifyTrainCenterStationEvents(

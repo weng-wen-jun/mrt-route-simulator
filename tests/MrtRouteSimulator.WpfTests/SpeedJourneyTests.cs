@@ -66,11 +66,12 @@ internal static class SpeedJourneyTests
                 Require(canvas.Children.OfType<Polyline>().Count() == 2, $"列車 {id} 的速度與速限線缺失。");
             }
             var directions = (ComboBox)window.FindName("SafetyDirectionComboBox");
+            ((TabControl)window.FindName("WorkspaceTabControl")).SelectedItem = window.FindName("SafetyTabItem");
             var statuses = (ComboBox)window.FindName("SafetyStatusComboBox");
             statuses.SelectedIndex = 0;
             var observation = frame.SafetyHistory.First();
             directions.SelectedIndex = 0;
-            Invoke(window, "UpdateV2PlaybackView");
+            Invoke(window, "UpdateV2PlaybackView", true);
             Require(((TextBlock)window.FindName("OneWaySummaryText")).Text.Contains("V2 實際平均"),
                 "已完成實際車次不可顯示尚無完成行程。");
             Require(((TextBlock)window.FindName("CycleSummaryText")).Text.Contains("已完成列車平均"),
@@ -93,13 +94,13 @@ internal static class SpeedJourneyTests
                 Require((bool)Invoke(window, "MatchesSafetyFilters", observation with { Direction = direction })!, "閉塞同方向必須通過篩選。");
                 Require(!(bool)Invoke(window, "MatchesSafetyFilters", observation with
                 { Direction = direction == TrainDirection.Outbound ? TrainDirection.Inbound : TrainDirection.Outbound })!, "閉塞另一方向必須排除。");
-                Invoke(window, "UpdateV2PlaybackView");
+                Invoke(window, "UpdateV2PlaybackView", true);
                 Require(pairs.Items.Cast<string>().All(key => key.Contains(direction == TrainDirection.Outbound ? "下行" : "上行")),
                     "歷史配對選單不可混入反向資料。");
             }
             selector.SelectedItem = "TAIL-01";
             WpfTestWait.Wait(worker.ResetAsync());
-            Invoke(window, "UpdateV2PlaybackView");
+            Invoke(window, "UpdateV2PlaybackView", true);
             Invoke(window, "DrawV2SpeedProfile");
             Require(source.Text.StartsWith("計畫預覽") && plan.Trajectory.Length == planCount,
                 "重設必須保留計畫預覽且不混入上一輪實際軌跡。");

@@ -118,7 +118,12 @@ public partial class MainWindow
 
             if (ReferenceEquals(selectedTab, SimulationTabItem))
             {
-                DrawV2Route(frame.GetSnapshot());
+                if (RefreshDue(ref _lastRouteRenderTimestamp, 100, force))
+                {
+                    var routeRender = Stopwatch.StartNew();
+                    DrawV2Route(frame.GetSnapshot());
+                    _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;
+                }
                 if (RefreshDue(ref _lastChartRenderTimestamp, 250, force))
                 {
                     DrawV2SpeedProfile();
@@ -224,6 +229,7 @@ public partial class MainWindow
             $"模擬推進 {frame.Performance.SimulationAdvanceMilliseconds:0.0} ms；frame 建立 {frame.Performance.FrameBuildMilliseconds:0.0} ms；"
             + $"frame 發布 {frame.Performance.FramePublishMilliseconds:0.0} ms；結果累積 {_lastAccumulatorMilliseconds:0.0} ms；"
             + $"UI 刷新 {_lastUiRenderMilliseconds:0.0} ms；略過 {frame.Performance.FrameDropCount} 幀；"
+            + $"路線圖 {_lastRouteRenderMilliseconds:0.0} ms／固定配線重建 {_routeStaticRebuildCount} 次；"
             + $"軌跡 {frame.Performance.TrajectoryCount:N0} 筆；安全觀測 {frame.Performance.SafetyHistoryCount:N0} 筆。";
     }
 

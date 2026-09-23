@@ -21,6 +21,19 @@ public partial class MainWindow
     private long _lastRenderedPlaybackFrameSequence;
     private readonly SimulationResultAccumulator _resultAccumulator = new();
     private long _lastTrainRenderTimestamp;
+    private long _lastRouteRenderTimestamp;
+    private double _lastRouteRenderMilliseconds;
+    private int _routeStaticRebuildCount;
+    private TopologyRouteVisualCache? _topologyRouteVisualCache;
+
+    private sealed record TopologyRouteVisualCache(
+        InfrastructureGraphV4 Infrastructure,
+        TopologyProjectDocument? Project,
+        double Width,
+        double Height,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> EdgeGeometries,
+        StationChainageProjection? StationChainage,
+        int StaticChildCount);
     private long _lastSafetyRenderTimestamp;
     private long _lastChartRenderTimestamp;
     private long _lastSegmentRefreshTimestamp;
@@ -135,6 +148,7 @@ public partial class MainWindow
         ResourceOccupancyRows.Clear();
         _lastIntervalRefreshSecond = -1;
         _lastTrainRenderTimestamp = 0;
+        _lastRouteRenderTimestamp = 0;
         _lastSafetyRenderTimestamp = 0;
         _lastChartRenderTimestamp = 0;
         _lastSegmentRefreshTimestamp = 0;
@@ -198,6 +212,9 @@ public partial class MainWindow
         _latestPlaybackFrame = null;
         _lastRenderedPlaybackFrameSequence = 0;
         _resultAccumulator.Reset();
+        _resultAccumulator.ClearTimetable();
+        _resultAccumulator.ClearIntervalStatistics();
+        _resultAccumulator.ClearComparison();
         _lastRenderedEventCount = 0;
         _timetableDirty = true;
         _segmentDetailsDirty = true;
@@ -242,6 +259,9 @@ public partial class MainWindow
         _latestPlaybackFrame = null;
         _lastRenderedPlaybackFrameSequence = 0;
         _resultAccumulator.Reset();
+        _resultAccumulator.ClearTimetable();
+        _resultAccumulator.ClearIntervalStatistics();
+        _resultAccumulator.ClearComparison();
         _lastRenderedEventCount = 0;
         _plannedTimetableEvents = [];
         _isV2PlaybackPlaying = false;
@@ -304,6 +324,8 @@ public partial class MainWindow
         {
             _plannedTimelineArtifact = plannedTask.GetAwaiter().GetResult();
             _plannedTimetableEvents = _plannedTimelineArtifact.Events;
+            _resultAccumulator.SetPlannedTimetableEvents(
+                _plannedTimetableEvents, _latestPlaybackFrame?.Events ?? []);
             PlaybackStatusText.Text = "計畫時間軸已就緒；實際營運可獨立播放。";
             _timetableDirty = true;
             _comparisonDirty = true;
@@ -562,11 +584,12 @@ public partial class MainWindow
 
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
-        RouteCanvas.Children.Clear();
         var width = RouteCanvas.ActualWidth;
         var height = RouteCanvas.ActualHeight;
         if (width < 100 || height < 100)
         {
+            RouteCanvas.Children.Clear();
+            _topologyRouteVisualCache = null;
             return;
         }
 
@@ -582,6 +605,8 @@ public partial class MainWindow
             return;
         }
 
+        RouteCanvas.Children.Clear();
+        _topologyRouteVisualCache = null;
         if (_route is null)
         {
             return;
@@ -727,6 +752,26 @@ public partial class MainWindow
         double height,
         IReadOnlyDictionary<string, TrackPosition> trainCenterPositions)
     {
+        var cached = _topologyRouteVisualCache;
+        if (cached is not null
+            && ReferenceEquals(cached.Infrastructure, infrastructure)
+            && ReferenceEquals(cached.Project, topologyProject)
+            && cached.Width == width
+            && cached.Height == height
+            && RouteCanvas.Children.Count >= cached.StaticChildCount)
+        {
+            while (RouteCanvas.Children.Count > cached.StaticChildCount)
+            {
+                RouteCanvas.Children.RemoveAt(RouteCanvas.Children.Count - 1);
+            }
+
+            DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
+                cached.EdgeGeometries, cached.StationChainage, width, height);
+            return;
+        }
+
+        RouteCanvas.Children.Clear();
+        _routeStaticRebuildCount++;
         var stationChainage = topologyProject is null ? null : StationChainageProjection.TryCreate(topologyProject);
         var nodes = infrastructure.Nodes.Values
             .OrderBy(node => node.NodeId, StringComparer.OrdinalIgnoreCase)
@@ -1094,6 +1139,30 @@ public partial class MainWindow
             s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
         StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
 
+        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, height - 38);
+        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, height - 21, 9, Color.FromRgb(108, 119, 132));
+        _topologyRouteVisualCache = new TopologyRouteVisualCache(
+            infrastructure, topologyProject, width, height, edgeGeometries, stationChainage,
+            RouteCanvas.Children.Count);
+        DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
+            edgeGeometries, stationChainage, width, height);
+
+        static (string StartNodeId, string EndNodeId) GetTraversalEndpoints(
+            TrackEdgeDefinition edge,
+            TraversalDirection direction) => direction == TraversalDirection.Forward
+                ? (edge.FromNodeId, edge.ToNodeId)
+                : (edge.ToNodeId, edge.FromNodeId);
+    }
+
+    private void DrawTopologyTrainMarkers(
+        InfrastructureGraphV4 infrastructure,
+        SimulationSnapshot snapshot,
+        IReadOnlyDictionary<string, TrackPosition> trainCenterPositions,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> edgeGeometries,
+        StationChainageProjection? stationChainage,
+        double width,
+        double height)
+    {
         foreach (var state in snapshot.Trains.Where(train => train.IsActive))
         {
             TrackPosition? centerPosition = trainCenterPositions.TryGetValue(state.VehicleId, out var centerPositionValue)
@@ -1133,16 +1202,6 @@ public partial class MainWindow
             Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
             RouteCanvas.Children.Add(marker);
         }
-
-        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, height - 38);
-        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, height - 21, 9, Color.FromRgb(108, 119, 132));
-
-        static (string StartNodeId, string EndNodeId) GetTraversalEndpoints(
-            TrackEdgeDefinition edge,
-            TraversalDirection direction) => direction == TraversalDirection.Forward
-                ? (edge.FromNodeId, edge.ToNodeId)
-                : (edge.ToNodeId, edge.FromNodeId);
-
     }
 
     private void DrawV2SpeedProfile()

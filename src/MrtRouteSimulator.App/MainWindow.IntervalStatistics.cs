@@ -112,18 +112,19 @@ public partial class MainWindow
         {
             throw new InvalidOperationException("篩選開始秒不可大於結束秒。");
         }
-        return _activeTopologyProjectDocument is null
-            ? IntervalStatistics.Analyze(
-                _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
-                _latestPlaybackFrame.Trajectory,
-                _latestPlaybackFrame.Events,
-                _latestPlaybackFrame.SpeedLimits.Limits,
-                filter)
-            : IntervalStatistics.Analyze(
-                _latestPlaybackFrame.GetTopologyResultContext(),
-                _latestPlaybackFrame.Trajectory,
-                _latestPlaybackFrame.Events,
-                filter);
+        return _resultAccumulator.BuildIntervalStatistics(filter)
+            ?? (_activeTopologyProjectDocument is null
+                ? IntervalStatistics.Analyze(
+                    _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    _latestPlaybackFrame.SpeedLimits.Limits,
+                    filter)
+                : IntervalStatistics.Analyze(
+                    _latestPlaybackFrame.GetTopologyResultContext(),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    filter));
     }
 
     private void RefreshIntervalFilterOptions()

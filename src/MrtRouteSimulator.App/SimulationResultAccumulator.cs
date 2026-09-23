@@ -26,6 +26,9 @@ public sealed record SimulationResultDelta(
 public sealed class SimulationResultAccumulator
 {
     private readonly ResourceOccupancyAccumulator _resourceOccupancy = new();
+    private IncrementalOperationsTimetable? _timetable;
+    private IncrementalV1V2Comparison? _comparison;
+    private IncrementalIntervalStatistics? _intervalStatistics;
     private Guid? _generationId;
     private int _eventCursor;
     private int _trajectoryCursor;
@@ -37,6 +40,49 @@ public sealed class SimulationResultAccumulator
     public int LastProcessedTrajectoryIndex => _trajectoryCursor;
 
     public int LastProcessedSafetyIndex => _safetyCursor;
+
+    public IReadOnlyList<OperationsTimetableEntry>? TimetableEntries => _timetable?.Entries;
+
+    public IReadOnlyList<V1V2StationComparison>? ComparisonEntries => _comparison?.Entries;
+
+    public void ConfigureIntervalStatistics(
+        Route? route,
+        TopologyResultContext? topology,
+        IReadOnlyList<SpeedLimitSegment>? speedLimits = null) =>
+        _intervalStatistics = new IncrementalIntervalStatistics(route, topology, speedLimits);
+
+    public IntervalStatisticsResult? BuildIntervalStatistics(IntervalStatisticsFilter? filter = null) =>
+        _intervalStatistics?.Build(filter);
+
+    public void ClearIntervalStatistics() => _intervalStatistics = null;
+
+    public void ConfigureTimetable(
+        Route? route,
+        TopologyResultContext? topology,
+        ResolvedDispatchPlan dispatchPlan,
+        IReadOnlyList<SimulationEvent> plannedEvents,
+        IReadOnlyList<SimulationEvent> actualEvents) =>
+        _timetable = new IncrementalOperationsTimetable(route, topology, dispatchPlan,
+            plannedEvents, actualEvents);
+
+    public void SetPlannedTimetableEvents(IReadOnlyList<SimulationEvent> plannedEvents,
+        IReadOnlyList<SimulationEvent> actualEvents) =>
+        _timetable?.SetPlannedEvents(plannedEvents, actualEvents);
+
+    public void ClearTimetable() => _timetable = null;
+
+    public void ConfigureComparison(
+        Route? route,
+        TopologyResultContext? topology,
+        ResolvedDispatchPlan dispatchPlan,
+        IEnumerable<VehicleTypeDefinition> vehicleTypes,
+        IEnumerable<StopPatternDefinition> stopPatterns,
+        TrainParameters fallbackParameters,
+        IReadOnlyList<SimulationEvent> actualEvents) =>
+        _comparison = new IncrementalV1V2Comparison(route, topology, dispatchPlan,
+            vehicleTypes, stopPatterns, fallbackParameters, actualEvents);
+
+    public void ClearComparison() => _comparison = null;
 
     public SimulationResultDelta Advance(PlaybackFrame frame)
     {
@@ -56,6 +102,9 @@ public sealed class SimulationResultAccumulator
         var newTrajectory = Slice(frame.Trajectory, _trajectoryCursor);
         var newSafety = Slice(frame.SafetyHistory, _safetyCursor);
         _resourceOccupancy.Append(newEvents);
+        _timetable?.Append(newEvents);
+        _comparison?.Append(newEvents);
+        _intervalStatistics?.Append(newTrajectory, newEvents);
         _eventCursor = frame.Events.Count;
         _trajectoryCursor = frame.Trajectory.Count;
         _safetyCursor = frame.SafetyHistory.Count;
@@ -77,6 +126,9 @@ public sealed class SimulationResultAccumulator
         _safetyCursor = 0;
         _lastSimulationTimeSeconds = 0;
         _resourceOccupancy.Reset();
+        _timetable?.ResetActual();
+        _comparison?.ResetActual();
+        _intervalStatistics?.Reset();
     }
 
     private static ImmutableArray<T> Slice<T>(IReadOnlyList<T> source, int start)

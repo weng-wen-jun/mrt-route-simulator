@@ -12,7 +12,7 @@ public partial class MainWindow
             return;
         }
 
-        var entries = _activeTopologyProjectDocument is null
+        var entries = _resultAccumulator.TimetableEntries ?? (_activeTopologyProjectDocument is null
             ? OperationsTimetable.Build(
                 _route ?? throw new InvalidOperationException("相容 V2 時刻表需要路線資料。"),
                 _v2DispatchPlan,
@@ -22,7 +22,7 @@ public partial class MainWindow
                 _latestPlaybackFrame.GetTopologyResultContext(),
                 _v2DispatchPlan,
                 _plannedTimetableEvents,
-                _latestPlaybackFrame.Events);
+                _latestPlaybackFrame.Events));
         var rows = entries.Select(entry =>
         {
             var serviceName = ServiceTypeRows.FirstOrDefault(row =>
@@ -70,18 +70,20 @@ public partial class MainWindow
             return;
         }
 
-        var result = _activeTopologyProjectDocument is null
-            ? IntervalStatistics.Analyze(
-                _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
-                _latestPlaybackFrame.Trajectory,
-                _latestPlaybackFrame.Events,
-                _latestPlaybackFrame.SpeedLimits.Limits,
-                new IntervalStatisticsFilter(IncludeInProgress: true))
-            : IntervalStatistics.Analyze(
-                _latestPlaybackFrame.GetTopologyResultContext(),
-                _latestPlaybackFrame.Trajectory,
-                _latestPlaybackFrame.Events,
-                new IntervalStatisticsFilter(IncludeInProgress: true));
+        var filter = new IntervalStatisticsFilter(IncludeInProgress: true);
+        var result = _resultAccumulator.BuildIntervalStatistics(filter)
+            ?? (_activeTopologyProjectDocument is null
+                ? IntervalStatistics.Analyze(
+                    _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    _latestPlaybackFrame.SpeedLimits.Limits,
+                    filter)
+                : IntervalStatistics.Analyze(
+                    _latestPlaybackFrame.GetTopologyResultContext(),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    filter));
         var rows = result.AllIntervals
                      .OrderBy(value => value.DepartureTimeSeconds ?? value.FirstObservedTimeSeconds)
                      .ThenBy(value => value.VehicleId, StringComparer.OrdinalIgnoreCase)
@@ -129,7 +131,8 @@ public partial class MainWindow
             return;
         }
 
-        var result = _activeTopologyProjectDocument is null
+        var cached = _resultAccumulator.ComparisonEntries;
+        var result = cached is not null ? null : _activeTopologyProjectDocument is null
             ? V1V2Comparison.Analyze(
                 _route ?? throw new InvalidOperationException("相容 V1/V2 比較需要路線資料。"),
                 _v2DispatchPlan,
@@ -162,7 +165,7 @@ public partial class MainWindow
                         instruction.PassingSpeedLimitMetersPerSecond)))),
                 _parameters,
                 _latestPlaybackFrame.Events);
-        var rows = result.Stations.Select(item => new V1V2ComparisonRow(
+        var rows = (cached ?? result!.Stations).Select(item => new V1V2ComparisonRow(
                 item.VehicleId,
                 item.ServiceRunId,
                 DirectionToChinese(item.Direction),

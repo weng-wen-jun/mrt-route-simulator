@@ -103,6 +103,23 @@ public partial class MainWindow
         _playbackWorker = candidateWorker;
         _latestPlaybackFrame = initialFrame;
         _lastRenderedPlaybackFrameSequence = 0;
+        _resultAccumulator.ConfigureTimetable(null, initialFrame.GetTopologyResultContext(),
+            runtime.DispatchPlan, [], []);
+        _resultAccumulator.ConfigureIntervalStatistics(null, initialFrame.GetTopologyResultContext());
+        _resultAccumulator.ConfigureComparison(null, initialFrame.GetTopologyResultContext(),
+            runtime.DispatchPlan,
+            document.VehicleTypes.Select(item => new VehicleTypeDefinition(
+                item.Id, item.DisplayName, item.LengthMeters, item.MaxSpeedMetersPerSecond,
+                item.AccelerationMetersPerSecondSquared, item.ServiceBrakeDecelerationMetersPerSecondSquared,
+                item.EmergencyBrakeDecelerationMetersPerSecondSquared, item.JerkMetersPerSecondCubed,
+                item.TractionDecayPerSecond, item.CoastingDecelerationMetersPerSecondSquared,
+                item.DefaultStopPatternId)),
+            document.StopPatterns.Select(pattern => new StopPatternDefinition(
+                pattern.Id, pattern.DisplayName,
+                pattern.Instructions.Select(instruction => new StopPatternInstruction(
+                    instruction.StationId, instruction.Action, instruction.DwellTimeSeconds,
+                    instruction.PassingSpeedLimitMetersPerSecond)))),
+            runtime.TrainParameters, []);
         _playbackDurationSeconds = candidateDurationSeconds;
         _plannedTimetableEvents = [];
         _v2PlannedMinimumIntervalSeconds = document.Simulation.HeadwaySeconds;
