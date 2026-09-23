@@ -1,24 +1,31 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
-## 臺中機場捷運 full sample（2026-09-20）
+## V4.0.2 大型機場線停車中心修正（2026-09-22）
 
-- 新增 `samples/臺中機場捷運-完整營運示範範例.mrtsim.json`，並保留既有 minimal sample。主要原始碼是測試專案內的 staged builder，JSON 為可載入輸出；minimal → 28 站完整鏈 → services → O20 pocket → O04 passing → O13 passing → timetable 共 7 個階段均先做 Structural／Operational gate。
-- 補充來源 `外部檔案參考/Taichung_Airport_MRT_simulation_reference.md` 明確覆蓋舊草案：AIRPORT-DIRECT 為 O01↔O20，停 O01／O08／O11／O16／O20，不前往 O26；FULL-LINE 為 O01↔O26 全停，SECTION 為 O01↔O20。29.9 km 與 O01～O20 23.8 km 是 source-backed aggregate target；逐站距離分配、platform／train 尺寸、性能、dwell、facility 幾何／速限、port side 與 dispatch offset 仍是 synthetic test values。
+- 大型機場線 full sample 的 56 個月台明確使用 `StopPositionReference.TrainCenter`，停點與月臺幾何中心一致；O01／O26 終端目的月臺保留完整 100m 車體所需的邊界前置空間。
+- `SimulationWorld` 以有序 ServiceRoute navigator 解析中心停點；列車頭可跨越站界到相鄰 edge，車體中心仍落在原月臺中心，不寫入超出 edge 的 offset。
+- Release build：0 warnings／0 errors；完整 Engine runner **170/170** 通過，包含上下行全程車實際停車中心回歸；Schema 8 sample round-trip 通過。
+- WPF runner 已執行，但在 full sample editor-720 的既有 `EDGE:PASS-002` 46.3° 示意突折停止；原生桌面／不同 DPI／8,000 秒連續播放仍未完成人工驗收。
+
+## V4.0.2 大型機場線 full sample（2026-09-20）
+
+- 新增 `samples/大型機場線-完整營運示範範例.mrtsim.json`，並保留既有 minimal sample。主要原始碼是測試專案內的 staged builder，JSON 為可載入輸出；minimal → 28 站完整鏈 → services → O20 pocket → O04 passing → O13 passing → timetable 共 7 個階段均先做 Structural／Operational gate。
+- 去識別化參考 `外部檔案參考/大型機場線_模擬參考.md` 固定本 synthetic scenario 的服務邊界：AIRPORT-DIRECT 為 O01↔O20，停 O01／O08／O11／O16／O20，不前往 O26；FULL-LINE 為 O01↔O26 全停，SECTION 為 O01↔O20。29.9 km 與 O01～O20 23.8 km 僅是 synthetic aggregate targets；逐站距離分配、platform／train 尺寸、性能、dwell、facility 幾何／速限、port side 與 dispatch offset 均不是任何正式路線資料。
 - O20 以 topology-native 站後袋式儲車軌完成 SECTION 與 AIRPORT-DIRECT 同 `VehicleId`、不同 `ServiceRunId` 的實體換端；O04／O13 各有上下行 PassingFacility，共 4 條通過 edge。O04 同時驗證 SECTION 越行，AIRPORT-DIRECT 依序於 O04／O13 兩次越行；普通車均等 express 車尾淨空及 resource 釋放後才離站。
 - 代表班表把尖峰 FULL-LINE＋SECTION 與離峰 FULL-LINE＋AIRPORT-DIRECT 合併到同一 regression runtime，只為覆蓋多服務、越行與折返，不是正式同時營運班表。deterministic 事件：DIRECT 於 624.5／676.3 秒、1,252.0／1,303.8 秒提出／完成 O04、O13 越行，1,858.1 秒抵達 O20 pocket，2,600.0 秒換為上行；SECTION 於 3,124.5／3,176.3 秒提出／完成 O04 越行，4,704.5 秒抵達 O20 pocket，5,600.0 秒換為上行，7,446.5 秒退出。
-- 最終驗證：Release build 0 warnings／0 errors；Engine runner **160/160**、0 失敗（含新增 focused 15/15 與 14-sample 有界 gate）；WPF runner `PASS WPF visual rules`，含全 14 份 sample 載入／計畫時間軸／雙向預覽，以及新 sample 主圖／編輯器 720／1200px。新增的 schematic lane 只改善四股道視覺喉區與標籤間距，不取代 physical port metadata。
+- 最終驗證：Release build 0 warnings／0 errors；Engine runner **161/161**、0 失敗（含新增 focused 15/15 與 14-sample 有界 gate）。WPF runner 的既有範例檢核通過，但 full sample editor-720 在 `EDGE:PASS-002` 回報 55.3° 示意突折，因此不能宣稱 14 份 sample 的 WPF runner 全數通過；此顯示層問題不改變 physical port metadata 或 Engine topology 驗證。
 - 尚未完成的人工驗收：原生 WPF 不同 DPI、8,000 秒連續播放、O04／O13 越行與 O20 pocket 換端的關鍵畫面目視。本節的自動 WPF runner 不代表上述桌面人工驗收已完成；sample 也不能用於工程設計、號誌設計、安全認證或正式時刻表。
 
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
-- 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、臺中主要站簡化 sample 與 `.github/pull_request_template.md`。
+- 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、大型機場線主要站簡化 sample 與 `.github/pull_request_template.md`。
 - 本次重新執行 `dotnet build MrtRouteSimulator.slnx -c Release`、Engine runner、WPF runner 及 `git diff --check`；以下數字是本次整合分支實際結果，不沿用 `a61d4bc` 的舊執行紀錄。
 
 - 速度圖按 VehicleId 串接上下行及折返，保留計畫預覽／實際截至目前的區別；重設及換檔不保留舊列車。移動閉塞仍可獨立按方向、配對及時間篩選，列車退出後可查歷史。
 - 尾軌返回反向終點月台後產生到站、停站及出站事件；0 秒停站仍等待接續班表，正常停站案例須滿足反向停站時間。
 - 時刻表、區間及比較使用結構化站號／月台識別；TrainCenter 車頭經過中心但尚未到站時，不提早完成區間。上行顯示里程、預覽結果初始化及全程時間摘要一併修正。
 - Release build：0 warnings／0 errors；Engine：145/145，0 失敗；WPF runner：PASS；`git diff --check`：PASS。完整 WPF runner 包含 13 個範例、720／1200px 速度圖、閉塞方向篩選、完整拓撲及 TrainCenter 範例推進 3600 秒，以及 CSV／PNG／PDF 輸出。
-- 臺中主要站簡化 sample 經本次整合修正為可驗證的 minimal baseline：直達模式的 O26 為合法終點停靠，topology 內明列 10 段主線 `directedConnections`；仍只使用 synthetic test values，不宣稱正式路線資料。
+- 大型機場線主要站簡化 sample 經本次整合修正為可驗證的 minimal baseline：直達模式的 O26 為合法終點停靠，topology 內明列 10 段主線 `directedConnections`；仍只使用 synthetic test values，不宣稱正式路線資料。
 - `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已加入可重用的 minimal baseline → station chain → service pattern → turnback → passing → timetable 分階段流程；Structural／Operational smoke gate 與 3 組 regression tests 通過。`samples/README.md` 已補 Scenario Manifest 與正式／synthetic 資料界線。
 - Legacy port migration 已加入明確 edge assignment API、缺資料盤點與 WPF 遷移引導；選擇相容讀取時會明確保留「方向尚未確認」狀態，不從示意位置猜測側別。Engine migration regression 已加入，完整桌面互動仍待驗收；完整 Engine runner 為 145/145。
 - 輸出證據位於 `artifacts/output-qa/`。PDF 分頁改為各頁重繪標題、圖例、座標軸與頁內標籤；`complete-diagram.pdf` 以 `pdfinfo` 確認為 A4 兩頁，並以 Poppler 渲染檢查白底、頁面標題、座標軸及跨頁列車標籤未被切斷。頁內同點標籤重疊仍屬來源圖表的既有呈現限制。
@@ -242,7 +249,7 @@
 
 ## 驗收界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，目前尚未完成的 V4 交付項目為 `V4-LEGACY-PORT-MIGRATION`、`V4-SAMPLE-TAICHUNG-AIRPORT-01` 與 `V4-UI-TRACK-DIAGRAM-MANUAL-01`。PDF 分頁與通用大型 sample scenario builder 已完成；桌面項目仍只完成部分抽查，尚待不同 DPI、折返／交會關鍵畫面與連續播放驗收。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，目前尚未完成的 V4 交付項目為 `V4-LEGACY-PORT-MIGRATION` 與 `V4-UI-TRACK-DIAGRAM-MANUAL-01`。去識別化大型 sample scenario builder 已完成 Engine gate，但 full sample WPF editor-720 尚有 `EDGE:PASS-002` 示意突折；桌面項目仍只完成部分抽查，尚待不同 DPI、折返／交會關鍵畫面與連續播放驗收。
 
 以下屬遠期修正或非產品目標：
 

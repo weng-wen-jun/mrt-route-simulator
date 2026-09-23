@@ -1,6 +1,6 @@
 using MrtRouteSimulator.Engine;
 
-internal sealed record TaichungAirportScenarioStages(
+internal sealed record LargeAirportLineScenarioStages(
     TopologyProjectDocument MinimalBaseline,
     TopologyProjectDocument FullStationChain,
     TopologyProjectDocument ServicePatterns,
@@ -11,14 +11,13 @@ internal sealed record TaichungAirportScenarioStages(
     IReadOnlyList<TopologyScenarioStageValidation> StageValidations);
 
 /// <summary>
-/// Rebuildable source for the Taichung Airport MRT full demonstration sample.
-/// Source-backed values: station order, O01-O26 total length (29.9 km), O01-O20 length (23.8 km),
-/// service extents/stops, and the O04/O13/O20 facility roles. Individual station spacing, facility
-/// geometry, dwell times, rolling-stock performance and timetable offsets remain synthetic test values.
+/// Rebuildable source for the de-identified Large Airport Line full demonstration sample.
+/// Station-center chainages are source-backed planning reference data. Facility geometry, dwell
+/// times, rolling-stock performance and timetable offsets remain synthetic test values.
 /// </summary>
-internal static class TaichungAirportFullScenarioBuilder
+internal static class LargeAirportLineFullScenarioBuilder
 {
-    internal const string ProjectId = "TAICHUNG-AIRPORT-MRT-FULL-DEMO";
+    internal const string ProjectId = "LARGE-AIRPORT-LINE-FULL-DEMO";
     internal const string DownRouteId = ProjectId + ":DOWN";
     internal const string UpRouteId = ProjectId + ":UP";
     internal const string VehicleTypeId = "EMU-100";
@@ -34,8 +33,8 @@ internal static class TaichungAirportFullScenarioBuilder
     internal const string AirportDirectUpRunId = "AIRPORT-DIRECT-UP-01";
     internal const string SectionDownRunId = "SECTION-DOWN-01";
     internal const string SectionUpRunId = "SECTION-UP-01";
-    internal const double FullRouteLengthMeters = 29_900;
-    internal const double AirportSectionLengthMeters = 23_800;
+    internal const double FullRouteLengthMeters = 29_943;
+    internal const double AirportSectionLengthMeters = 23_833;
 
     internal static readonly string[] StationIds =
     [
@@ -44,11 +43,25 @@ internal static class TaichungAirportFullScenarioBuilder
         "O23", "O24", "O25", "O26"
     ];
 
+    // Source-backed station-center chainage (m).  Interstation distances must be
+    // derived from this single table; do not introduce a second interval table.
+    internal static readonly IReadOnlyDictionary<string, double> StationChainages =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["O01"] = 190, ["O02"] = 1_567, ["O03"] = 2_197, ["O04"] = 4_467,
+            ["O05"] = 5_067, ["O06"] = 6_727, ["O07"] = 7_677, ["O08"] = 10_137,
+            ["O08a"] = 10_843, ["O09"] = 11_773, ["O10"] = 12_873, ["O11"] = 14_278,
+            ["O12"] = 15_348, ["O13"] = 16_208, ["O14"] = 17_053, ["O15"] = 17_737,
+            ["O15a"] = 18_878, ["O16"] = 19_450, ["O17"] = 20_728, ["O18"] = 21_943,
+            ["O19"] = 23_103, ["O20"] = 24_023, ["O21"] = 24_453, ["O22"] = 25_738,
+            ["O23"] = 26_388, ["O24"] = 28_118, ["O25"] = 28_873, ["O26"] = 30_133
+        };
+
     internal static readonly HashSet<string> AirportDirectStops = new(
         ["O01", "O08", "O11", "O16", "O20"],
         StringComparer.OrdinalIgnoreCase);
 
-    public static TaichungAirportScenarioStages BuildStages()
+    public static LargeAirportLineScenarioStages BuildStages()
     {
         var minimal = BuildMinimalBaseline();
         var builder = TopologyScenarioBuilder.FromMinimalBaseline(minimal);
@@ -89,7 +102,7 @@ internal static class TaichungAirportFullScenarioBuilder
             smokeDurationSeconds: 30);
         var result = builder.Build();
 
-        return new TaichungAirportScenarioStages(
+        return new LargeAirportLineScenarioStages(
             minimal,
             stationChain,
             servicePatterns,
@@ -107,7 +120,7 @@ internal static class TaichungAirportFullScenarioBuilder
         var template = StationLayoutTemplateService.Build(StationLayoutTemplateKind.IslandTwoTracks) with
         {
             ProjectId = ProjectId,
-            ProjectName = "臺中機場捷運（橘線）minimal baseline",
+            ProjectName = "大型機場線minimal baseline",
             Train = new ProjectTrainSettings(80d / 3.6d, 1.2, 1.5, 30, 30, 30),
             Operations = new ProjectOperationalSettings(1, 0.1, 180, 40d / 3.6d, 0, 100, 1.5, 2, 0.2, 0.2, 1, 5, 5),
             Simulation = new ProjectRunSettings(2, null, 0, 1, OperationProfileMode.RealisticOperations,
@@ -133,11 +146,51 @@ internal static class TaichungAirportFullScenarioBuilder
             StationName(stationId),
             index == 0 ? 0 : DistanceFromPrevious(stationIds, index),
             30));
-        return ProjectDocumentMapper.BuildQuickLinearProject(template, inputs) with
+        var document = ProjectDocumentMapper.BuildQuickLinearProject(template, inputs);
+        if (stationIds.Count == StationIds.Length)
+        {
+            // The full-line sample documents station-centre stopping.  The quick
+            // linear mapper intentionally keeps the legacy TrainFront default, so
+            // make this sample's semantic choice explicit at its source.
+            document = document with
+            {
+                Topology = document.Topology with
+                {
+                    Platforms = document.Topology.Platforms
+                        .Select(platform => platform with { StopPositionReference = StopPositionReference.TrainCenter })
+                        .ToArray()
+                }
+            };
+            // The two terminal destination platforms cannot place a center-referenced
+            // train with its head beyond the route boundary.  Keep their centers 50 m
+            // before the buffer node so the complete vehicle remains on the physical edge.
+            document = MoveTerminalPlatform(document, DownPlatform("O26"));
+            document = MoveTerminalPlatform(document, UpPlatform("O01"));
+        }
+        // SchematicPosition is an existing presentation-only field.  Here it records
+        // the source-backed station-center projection; it is never used to infer port
+        // sides or physical connectivity.
+        document = document with
+        {
+            Topology = document.Topology with
+            {
+                Nodes = document.Topology.Nodes.Select(node =>
+                {
+                    const string prefix = "NODE:";
+                    var stationId = node.NodeId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                        ? node.NodeId[prefix.Length..]
+                        : null;
+                    return stationId is not null && StationChainages.TryGetValue(stationId, out var chainage)
+                        ? node with { SchematicPosition = chainage }
+                        : node;
+                }).ToArray()
+            }
+        };
+        return document with
         {
             ProjectId = ProjectId,
             ProjectName = stationIds.Count == StationIds.Length
-                ? "臺中機場捷運（橘線）完整營運示範範例"
+                ? "大型機場線完整營運示範範例"
                 : template.ProjectName
         };
     }
@@ -146,13 +199,14 @@ internal static class TaichungAirportFullScenarioBuilder
     {
         var full = Pattern(FullLinePatternId, "全程車全站停靠", StationIds, _ => StopPatternAction.Stop);
         var airportSectionStations = StationIds.Take(StationIndex("O20") + 1).ToArray();
+        // Pass means non-stop on the normal mainline in this synthetic scenario.  Keep the
+        // optional passing-speed override unset so a higher-priority train is not capped at
+        // an unrelated demonstration value before reaching a real passing facility.
         var section = Pattern(SectionPatternId, "區間車 O01－O20（O04 通過越行、O08 後站站停）", airportSectionStations, stationId =>
             StationIndex(stationId) is > 0 and < 7 ? StopPatternAction.Pass : StopPatternAction.Stop,
-            passingSpeedMetersPerSecond: 60d / 3.6d,
             dwellSeconds: 10);
         var direct = Pattern(AirportDirectPatternId, "機場直達車 O01/O08/O11/O16/O20 停靠並於 O20 折返", airportSectionStations,
             stationId => AirportDirectStops.Contains(stationId) ? StopPatternAction.Stop : StopPatternAction.Pass,
-            passingSpeedMetersPerSecond: 60d / 3.6d,
             dwellSeconds: 20);
 
         var rows = new[]
@@ -283,23 +337,24 @@ internal static class TaichungAirportFullScenarioBuilder
         var expressPlatformId = $"PLATFORM:{stationId}:{directionCode}:THROUGH";
         var routeId = direction == TrainDirection.Outbound ? DownRouteId : UpRouteId;
 
-        // Synthetic geometry: split 200 m before the station node, then mirror the mainline station edge
-        // with a parallel through track. The published source only establishes the four-track station form.
+        // Synthetic geometry: split 200 m before the station node, then add a parallel siding.
+        // Local trains follow the service route into that siding and stop there; higher-priority trains
+        // use the original mainline edge as the physical passing traversal.
         document = TopologyEditingService.SplitEdge(document, originalArrivalEdge, 200);
         var arrivalEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":A", StringComparison.OrdinalIgnoreCase));
-        var localEdge = document.Topology.Edges.Single(edge =>
+        var mainlineStationEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":B", StringComparison.OrdinalIgnoreCase));
-        var stopOffset = Math.Min(320, localEdge.LengthMeters - 20);
-        document = MovePlatform(document, localPlatformId, localEdge.TrackEdgeId, stopOffset);
+        var stopOffset = Math.Min(320, mainlineStationEdge.LengthMeters - 20);
+        document = MovePlatform(document, localPlatformId, mainlineStationEdge.TrackEdgeId, stopOffset);
         var localPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == localPlatformId);
         var expressPlatform = localPlatform with
         {
             PlatformId = expressPlatformId,
-            Name = $"{stationId} {directionText}內側通過股（synthetic operational marker）",
+            Name = $"{stationId} {directionText}正線通過股（synthetic operational marker）",
             // Keep the 720 px overview readable; this is an operational marker, not a passenger platform number.
             PlatformNumber = direction == TrainDirection.Outbound ? "D" : "U",
-            TrackEdgeId = localEdge.TrackEdgeId,
+            TrackEdgeId = mainlineStationEdge.TrackEdgeId,
             AllowsPassengerService = false,
             AllowedServiceTypeIds = new HashSet<string>(
                 stationId == "O04" ? [SectionServiceId, AirportDirectServiceId] : [AirportDirectServiceId],
@@ -319,7 +374,7 @@ internal static class TaichungAirportFullScenarioBuilder
         var priorEdgeIds = document.Topology.Edges.Select(edge => edge.TrackEdgeId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         document = FacilityCreationService.CreatePassingTrack(document, new PassingFacilityRequest(
-            $"{stationId} synthetic {directionText}內側通過股",
+            $"{stationId} synthetic {directionText}側線待避",
             stationId,
             arrivalEdge.ToNodeId,
             Node(stationId),
@@ -327,33 +382,46 @@ internal static class TaichungAirportFullScenarioBuilder
             departureEdge,
             localPlatformId,
             expressPlatformId,
-            localEdge.LengthMeters,
+            mainlineStationEdge.LengthMeters,
             80d / 3.6d,
             routeId,
             AirportDirectServiceId));
         var passingEdge = document.Topology.Edges.Single(edge => !priorEdgeIds.Contains(edge.TrackEdgeId));
         // Keep the physical port metadata independent from the drawing, but give the WPF schematic
         // enough lane information to draw a tangential throat instead of a vertical same-X jump.
-        // Local tracks stay on the normal directional lanes; through tracks use the inner lanes.
+        // Local sidings stay on the normal outer lanes; the original mainline through tracks use the inner lanes.
         var throughLane = direction == TrainDirection.Outbound ? 0.5d : -0.5d;
-        var outboundMainlineIds = document.ServiceRoutes.Single(route => route.ServiceRouteId == DownRouteId)
-            .Traversals.Select(traversal => traversal.TrackEdgeId).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var inboundMainlineIds = document.ServiceRoutes.Single(route => route.ServiceRouteId == UpRouteId)
-            .Traversals.Select(traversal => traversal.TrackEdgeId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var localLane = direction == TrainDirection.Outbound ? 2d : -2d;
+        var createdFacilityId = document.Topology.PassingFacilities.Last().FacilityId;
         document = document with
         {
+            ServiceRoutes = document.ServiceRoutes.Select(route => route.ServiceRouteId == routeId
+                ? route with
+                {
+                    Traversals = route.Traversals.Select(traversal =>
+                        traversal.TrackEdgeId == mainlineStationEdge.TrackEdgeId
+                            ? new DirectedTrackTraversal(passingEdge.TrackEdgeId, traversal.Direction)
+                            : traversal).ToArray()
+                }
+                : route).ToArray(),
             Topology = document.Topology with
             {
-                Edges = document.Topology.Edges.Select(edge => edge.TrackEdgeId == passingEdge.TrackEdgeId
+                Edges = document.Topology.Edges.Select(edge => edge.TrackEdgeId == mainlineStationEdge.TrackEdgeId
                     ? edge with { SchematicLane = throughLane }
-                    : outboundMainlineIds.Contains(edge.TrackEdgeId)
-                        ? edge with { SchematicLane = 2 }
-                        : inboundMainlineIds.Contains(edge.TrackEdgeId)
-                            ? edge with { SchematicLane = -2 }
-                        : edge).ToArray()
+                    : edge.TrackEdgeId == passingEdge.TrackEdgeId
+                        ? edge with { Kind = TrackEdgeKind.Siding, SchematicLane = localLane }
+                        : edge).ToArray(),
+                PassingFacilities = document.Topology.PassingFacilities.Select(facility =>
+                    facility.FacilityId == createdFacilityId
+                        ? facility with
+                        {
+                            Name = $"{stationId} synthetic {directionText}正線通過／側線待避",
+                            Traversals = [new DirectedTrackTraversal(mainlineStationEdge.TrackEdgeId, TraversalDirection.Forward)]
+                        }
+                        : facility).ToArray()
             }
         };
-        document = MovePlatform(document, expressPlatformId, passingEdge.TrackEdgeId, stopOffset);
+        document = MovePlatform(document, localPlatformId, passingEdge.TrackEdgeId, stopOffset);
         var platformSide = direction == TrainDirection.Outbound ? PlatformSide.Below : PlatformSide.Above;
         document = document with
         {
@@ -470,9 +538,9 @@ internal static class TaichungAirportFullScenarioBuilder
     {
         var edgeLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == edgeId).LengthMeters;
         const double platformLength = 140;
-        const double syntheticTrainLength = 100;
-        var platformStart = Math.Clamp(stopOffset - syntheticTrainLength, 0, Math.Max(0, edgeLength - platformLength));
+        var platformStart = Math.Clamp(stopOffset - platformLength / 2, 0, Math.Max(0, edgeLength - platformLength));
         var platformEnd = Math.Min(edgeLength, platformStart + platformLength);
+        stopOffset = platformStart + (platformEnd - platformStart) / 2;
         return document with
         {
             Topology = document.Topology with
@@ -491,8 +559,34 @@ internal static class TaichungAirportFullScenarioBuilder
         };
     }
 
+    private static TopologyProjectDocument MoveTerminalPlatform(
+        TopologyProjectDocument document,
+        string platformId)
+    {
+        var platform = document.Topology.Platforms.Single(item => item.PlatformId == platformId);
+        var edgeLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == platform.TrackEdgeId).LengthMeters;
+        const double platformLength = 100;
+        var start = Math.Max(0, edgeLength - platformLength);
+        var end = edgeLength;
+        return document with
+        {
+            Topology = document.Topology with
+            {
+                Platforms = document.Topology.Platforms.Select(item => item.PlatformId == platformId
+                    ? item with
+                    {
+                        PlatformStartOffsetMeters = start,
+                        PlatformEndOffsetMeters = end,
+                        StopPositionOffsetMeters = start + platformLength / 2,
+                        EffectiveLengthMeters = end - start
+                    }
+                    : item).ToArray()
+            }
+        };
+    }
+
     private static ProjectVehicleType VehicleType() => new(
-        VehicleTypeId, "橘線示範電聯車", 100, 80d / 3.6d, 1.2, 1.5, 2, 1, 0, 0, FullLinePatternId);
+        VehicleTypeId, "示範電聯車", 100, 80d / 3.6d, 1.2, 1.5, 2, 1, 0, 0, FullLinePatternId);
 
     private static ProjectStopPattern Pattern(
         string id,
@@ -534,22 +628,12 @@ internal static class TaichungAirportFullScenarioBuilder
             continuationServiceRunId);
 
     private static double DistanceFromPrevious(IReadOnlyList<string> stationIds, int index) =>
-        SourceBackedChainage(stationIds[index]) - SourceBackedChainage(stationIds[index - 1]);
+        SourceChainage(stationIds[index]) - SourceChainage(stationIds[index - 1]);
 
-    private static double SourceBackedChainage(string stationId)
-    {
-        var index = StationIndex(stationId);
-        var o20Index = StationIndex("O20");
-        if (index <= o20Index)
-        {
-            // Source-backed aggregate 23.8 km; individual intervals are synthetic equal spacing.
-            return AirportSectionLengthMeters * index / o20Index;
-        }
-
-        // Source-backed aggregate O01-O26 29.9 km; O20-O26 intervals are also synthetic equal spacing.
-        return AirportSectionLengthMeters
-            + (FullRouteLengthMeters - AirportSectionLengthMeters) * (index - o20Index) / (StationIds.Length - 1 - o20Index);
-    }
+    internal static double SourceChainage(string stationId) =>
+        StationChainages.TryGetValue(stationId, out var chainage)
+            ? chainage
+            : throw new InvalidOperationException($"未知車站 {stationId}。");
 
     private static int StationIndex(string stationId)
     {
@@ -560,8 +644,8 @@ internal static class TaichungAirportFullScenarioBuilder
     private static string[] MinimalStationIds() => ["O01", "O08", "O11", "O16", "O20", "O26"];
     private static string StationName(string id) => id switch
     {
-        "O01" => "O01 臺中機場",
-        "O16" => "O16 臺中車站",
+        "O01" => "O01 機場端",
+        "O16" => "O16 中央轉乘站",
         _ => $"{id} 站"
     };
     private static string Node(string stationId) => $"NODE:{stationId}";

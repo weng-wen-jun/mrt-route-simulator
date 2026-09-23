@@ -1,10 +1,10 @@
-# MRT Route Simulation Engine - Model Specification V4.0.1
+# MRT Route Simulation Engine - Model Specification V4.0.2
 
 > 現行規格（2026-08-31）。V3.0～V3.4 章節僅保留歷史模型說明；V2 寫實運行已改為 topology-native runtime。
 
-產品版本為 V4.0.1。V1 解析模型可保留 `Route` 作為輸入 adapter；V2 `SimulationWorld` 一律使用 Schema 8 的 `InfrastructureGraphV4 + ServiceRoute`，不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
+產品版本為 V4.0.2。V1 解析模型可保留 `Route` 作為輸入 adapter；V2 `SimulationWorld` 一律使用 Schema 8 的 `InfrastructureGraphV4 + ServiceRoute`，不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
 
-## V4.0.1 Track-first topology 執行契約
+## V4.0.2 Track-first topology 執行契約
 
 V2 的權威位置與資料流：
 
@@ -320,7 +320,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ## 8. 自動化測試
 
-測試執行器目前包含 107 項案例。Topology regression 驗證 domain、projection、正常主線、topology-first entry、有向道岔轉向、完整 physical facilities、passing rear-clear、edge-local physical turnback、Schema 8 編輯交易、dependency guard 與 legacy Schema 7 匯入轉換。
+測試執行器目前包含 161 項案例。Topology regression 驗證 domain、projection、正常主線、topology-first entry、有向道岔轉向、完整 physical facilities、passing rear-clear、edge-local physical turnback、Schema 8 編輯交易、dependency guard、legacy Schema 7 匯入轉換與大型 sample 分階段 gate。
 
 - 無限制性能、零距離及非法性能。
 - 5000 m 長距離梯形速度曲線。
@@ -501,7 +501,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 16. 輸入驗證與邊界
 
-| 輸入／情境 | V4.0.1 現行保留行為 |
+| 輸入／情境 | V4.0.2 現行保留行為 |
 |---|---|
 | 速限起點大於等於終點 | validation error |
 | 速限超過全線或不是 10 m 精度 | validation error |

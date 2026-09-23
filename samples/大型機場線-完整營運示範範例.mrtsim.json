@@ -1,7 +1,7 @@
 {
   "schemaVersion": 8,
-  "projectId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO",
-  "projectName": "\u81FA\u4E2D\u6A5F\u5834\u6377\u904B\uFF08\u6A58\u7DDA\uFF09\u5B8C\u6574\u71DF\u904B\u793A\u7BC4\u7BC4\u4F8B",
+  "projectId": "LARGE-AIRPORT-LINE-FULL-DEMO",
+  "projectName": "\u5927\u578B\u6A5F\u5834\u7DDA\u5B8C\u6574\u71DF\u904B\u793A\u7BC4\u7BC4\u4F8B",
   "train": {
     "maxSpeedMetersPerSecond": 22.22222222222222,
     "accelerationMetersPerSecondSquared": 1.2,
@@ -38,7 +38,7 @@
   "vehicleTypes": [
     {
       "id": "EMU-100",
-      "displayName": "\u6A58\u7DDA\u793A\u7BC4\u96FB\u806F\u8ECA",
+      "displayName": "\u793A\u7BC4\u96FB\u806F\u8ECA",
       "lengthMeters": 100,
       "maxSpeedMetersPerSecond": 22.22222222222222,
       "accelerationMetersPerSecondSquared": 1.2,
@@ -100,37 +100,37 @@
           "stationId": "O02",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O03",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O04",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O05",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O06",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O07",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O08",
@@ -238,37 +238,37 @@
           "stationId": "O02",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O03",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O04",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O05",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O06",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O07",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O08",
@@ -280,19 +280,19 @@
           "stationId": "O08a",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O09",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O10",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O11",
@@ -304,31 +304,31 @@
           "stationId": "O12",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O13",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O14",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O15",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O15a",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O16",
@@ -340,19 +340,19 @@
           "stationId": "O17",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O18",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O19",
           "action": "Pass",
           "dwellTimeSeconds": null,
-          "passingSpeedLimitMetersPerSecond": 16.666666666666668
+          "passingSpeedLimitMetersPerSecond": null
         },
         {
           "stationId": "O20",
@@ -992,198 +992,198 @@
     "nodes": [
       {
         "nodeId": "NODE:O01",
-        "name": "O01 \u81FA\u4E2D\u6A5F\u5834",
+        "name": "O01 \u6A5F\u5834\u7AEF",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 190,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O02",
         "name": "O02 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 1567,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O03",
         "name": "O03 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 2197,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O04",
         "name": "O04 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 4467,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O05",
         "name": "O05 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 5067,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O06",
         "name": "O06 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 6727,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O07",
         "name": "O07 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 7677,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O08",
         "name": "O08 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 10137,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O08a",
         "name": "O08a \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 10843,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O09",
         "name": "O09 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 11773,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O10",
         "name": "O10 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 12873,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O11",
         "name": "O11 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 14278,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O12",
         "name": "O12 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 15348,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O13",
         "name": "O13 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 16208,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O14",
         "name": "O14 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 17053,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O15",
         "name": "O15 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 17737,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O15a",
         "name": "O15a \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 18878,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O16",
-        "name": "O16 \u81FA\u4E2D\u8ECA\u7AD9",
+        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 19450,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O17",
         "name": "O17 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 20728,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O18",
         "name": "O18 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 21943,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O19",
         "name": "O19 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 23103,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O20",
         "name": "O20 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 24023,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O21",
         "name": "O21 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 24453,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O22",
         "name": "O22 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 25738,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O23",
         "name": "O23 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 26388,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O24",
         "name": "O24 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 28118,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O25",
         "name": "O25 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 28873,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:O26",
         "name": "O26 \u7AD9",
         "kind": "Ordinary",
-        "schematicPosition": null,
+        "schematicPosition": 30133,
         "schematicLane": null
       },
       {
@@ -1233,11 +1233,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O01:O02",
         "fromNodeId": "NODE:O01",
         "toNodeId": "NODE:O02",
-        "lengthMeters": 1133.3333333333333,
+        "lengthMeters": 1377,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1246,11 +1246,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O02:O01",
         "fromNodeId": "NODE:O02",
         "toNodeId": "NODE:O01",
-        "lengthMeters": 1133.3333333333333,
+        "lengthMeters": 1377,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1259,11 +1259,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O02:O03",
         "fromNodeId": "NODE:O02",
         "toNodeId": "NODE:O03",
-        "lengthMeters": 1133.3333333333333,
+        "lengthMeters": 630,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1272,11 +1272,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O03:O02",
         "fromNodeId": "NODE:O03",
         "toNodeId": "NODE:O02",
-        "lengthMeters": 1133.3333333333333,
+        "lengthMeters": 630,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1285,11 +1285,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O04:O03",
         "fromNodeId": "NODE:O04",
         "toNodeId": "NODE:O03",
-        "lengthMeters": 1133.3333333333335,
+        "lengthMeters": 2270,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1298,11 +1298,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O04:O05",
         "fromNodeId": "NODE:O04",
         "toNodeId": "NODE:O05",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 600,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1311,11 +1311,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O05:O06",
         "fromNodeId": "NODE:O05",
         "toNodeId": "NODE:O06",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1660,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1324,11 +1324,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O06:O05",
         "fromNodeId": "NODE:O06",
         "toNodeId": "NODE:O05",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1660,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1337,11 +1337,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O06:O07",
         "fromNodeId": "NODE:O06",
         "toNodeId": "NODE:O07",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 950,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1350,11 +1350,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O07:O06",
         "fromNodeId": "NODE:O07",
         "toNodeId": "NODE:O06",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 950,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1363,11 +1363,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O07:O08",
         "fromNodeId": "NODE:O07",
         "toNodeId": "NODE:O08",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 2460,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1376,11 +1376,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O08:O07",
         "fromNodeId": "NODE:O08",
         "toNodeId": "NODE:O07",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 2460,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1389,11 +1389,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O08:O08a",
         "fromNodeId": "NODE:O08",
         "toNodeId": "NODE:O08a",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 706,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1402,11 +1402,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O08a:O08",
         "fromNodeId": "NODE:O08a",
         "toNodeId": "NODE:O08",
-        "lengthMeters": 1133.333333333333,
+        "lengthMeters": 706,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1415,11 +1415,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O08a:O09",
         "fromNodeId": "NODE:O08a",
         "toNodeId": "NODE:O09",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 930,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1428,11 +1428,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O09:O08a",
         "fromNodeId": "NODE:O09",
         "toNodeId": "NODE:O08a",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 930,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1441,11 +1441,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O09:O10",
         "fromNodeId": "NODE:O09",
         "toNodeId": "NODE:O10",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1100,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1454,11 +1454,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O10:O09",
         "fromNodeId": "NODE:O10",
         "toNodeId": "NODE:O09",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1100,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1467,11 +1467,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O10:O11",
         "fromNodeId": "NODE:O10",
         "toNodeId": "NODE:O11",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1405,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1480,11 +1480,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O11:O10",
         "fromNodeId": "NODE:O11",
         "toNodeId": "NODE:O10",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1405,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1493,11 +1493,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O11:O12",
         "fromNodeId": "NODE:O11",
         "toNodeId": "NODE:O12",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1070,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1506,11 +1506,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O12:O11",
         "fromNodeId": "NODE:O12",
         "toNodeId": "NODE:O11",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 1070,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1519,11 +1519,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O13:O12",
         "fromNodeId": "NODE:O13",
         "toNodeId": "NODE:O12",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 860,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1532,11 +1532,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O13:O14",
         "fromNodeId": "NODE:O13",
         "toNodeId": "NODE:O14",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 845,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1545,11 +1545,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O14:O15",
         "fromNodeId": "NODE:O14",
         "toNodeId": "NODE:O15",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 684,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1558,11 +1558,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O15:O14",
         "fromNodeId": "NODE:O15",
         "toNodeId": "NODE:O14",
-        "lengthMeters": 1133.333333333334,
+        "lengthMeters": 684,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1571,11 +1571,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O15:O15a",
         "fromNodeId": "NODE:O15",
         "toNodeId": "NODE:O15a",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1141,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1584,11 +1584,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O15a:O15",
         "fromNodeId": "NODE:O15a",
         "toNodeId": "NODE:O15",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1141,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1597,11 +1597,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O15a:O16",
         "fromNodeId": "NODE:O15a",
         "toNodeId": "NODE:O16",
-        "lengthMeters": 1133.3333333333358,
+        "lengthMeters": 572,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1610,11 +1610,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O16:O15a",
         "fromNodeId": "NODE:O16",
         "toNodeId": "NODE:O15a",
-        "lengthMeters": 1133.3333333333358,
+        "lengthMeters": 572,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1623,11 +1623,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O16:O17",
         "fromNodeId": "NODE:O16",
         "toNodeId": "NODE:O17",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1278,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1636,11 +1636,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O17:O16",
         "fromNodeId": "NODE:O17",
         "toNodeId": "NODE:O16",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1278,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1649,11 +1649,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O17:O18",
         "fromNodeId": "NODE:O17",
         "toNodeId": "NODE:O18",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1215,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1662,11 +1662,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O18:O17",
         "fromNodeId": "NODE:O18",
         "toNodeId": "NODE:O17",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 1215,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1675,11 +1675,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O18:O19",
         "fromNodeId": "NODE:O18",
         "toNodeId": "NODE:O19",
-        "lengthMeters": 1133.3333333333358,
+        "lengthMeters": 1160,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1688,11 +1688,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O19:O18",
         "fromNodeId": "NODE:O19",
         "toNodeId": "NODE:O18",
-        "lengthMeters": 1133.3333333333358,
+        "lengthMeters": 1160,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1701,11 +1701,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O19:O20",
         "fromNodeId": "NODE:O19",
         "toNodeId": "NODE:O20",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 920,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1714,11 +1714,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O20:O19",
         "fromNodeId": "NODE:O20",
         "toNodeId": "NODE:O19",
-        "lengthMeters": 1133.3333333333321,
+        "lengthMeters": 920,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1727,11 +1727,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O20:O21",
         "fromNodeId": "NODE:O20",
         "toNodeId": "NODE:O21",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 430,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1740,11 +1740,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O21:O20",
         "fromNodeId": "NODE:O21",
         "toNodeId": "NODE:O20",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 430,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1753,11 +1753,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O21:O22",
         "fromNodeId": "NODE:O21",
         "toNodeId": "NODE:O22",
-        "lengthMeters": 1016.6666666666642,
+        "lengthMeters": 1285,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1766,11 +1766,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O22:O21",
         "fromNodeId": "NODE:O22",
         "toNodeId": "NODE:O21",
-        "lengthMeters": 1016.6666666666642,
+        "lengthMeters": 1285,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1779,11 +1779,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O22:O23",
         "fromNodeId": "NODE:O22",
         "toNodeId": "NODE:O23",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 650,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1792,11 +1792,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O23:O22",
         "fromNodeId": "NODE:O23",
         "toNodeId": "NODE:O22",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 650,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1805,11 +1805,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O23:O24",
         "fromNodeId": "NODE:O23",
         "toNodeId": "NODE:O24",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 1730,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1818,11 +1818,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O24:O23",
         "fromNodeId": "NODE:O24",
         "toNodeId": "NODE:O23",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 1730,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1831,11 +1831,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O24:O25",
         "fromNodeId": "NODE:O24",
         "toNodeId": "NODE:O25",
-        "lengthMeters": 1016.6666666666642,
+        "lengthMeters": 755,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1844,11 +1844,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O25:O24",
         "fromNodeId": "NODE:O25",
         "toNodeId": "NODE:O24",
-        "lengthMeters": 1016.6666666666642,
+        "lengthMeters": 755,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1857,11 +1857,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O25:O26",
         "fromNodeId": "NODE:O25",
         "toNodeId": "NODE:O26",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 1260,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1870,11 +1870,11 @@
       {
         "fromPortSide": "A",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O26:O25",
         "fromNodeId": "NODE:O26",
         "toNodeId": "NODE:O25",
-        "lengthMeters": 1016.6666666666679,
+        "lengthMeters": 1260,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1928,7 +1928,7 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O03:O04:A-001",
         "fromNodeId": "NODE:O03",
         "toNodeId": "NODE:SPLIT-001",
@@ -1941,11 +1941,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": 0.5,
         "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
         "fromNodeId": "NODE:SPLIT-001",
         "toNodeId": "NODE:O04",
-        "lengthMeters": 933.3333333333335,
+        "lengthMeters": 2070,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1954,13 +1954,13 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 0.5,
+        "schematicLane": 2,
         "trackEdgeId": "EDGE:PASS-001",
         "fromNodeId": "NODE:SPLIT-001",
         "toNodeId": "NODE:O04",
-        "lengthMeters": 933.3333333333335,
+        "lengthMeters": 2070,
         "directionality": "ForwardOnly",
-        "kind": "PassingTrack",
+        "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
         "conflictResourceIds": [
           "AUTO:RESOURCE:PASS-001"
@@ -1969,7 +1969,7 @@
       {
         "fromPortSide": "A",
         "toPortSide": "A",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O05:O04:A-001",
         "fromNodeId": "NODE:O05",
         "toNodeId": "NODE:SPLIT-002",
@@ -1982,11 +1982,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": -0.5,
         "trackEdgeId": "EDGE:UP:O05:O04:B-001",
         "fromNodeId": "NODE:SPLIT-002",
         "toNodeId": "NODE:O04",
-        "lengthMeters": 933.333333333333,
+        "lengthMeters": 400,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1995,13 +1995,13 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
-        "schematicLane": -0.5,
+        "schematicLane": -2,
         "trackEdgeId": "EDGE:PASS-002",
         "fromNodeId": "NODE:SPLIT-002",
         "toNodeId": "NODE:O04",
-        "lengthMeters": 933.333333333333,
+        "lengthMeters": 400,
         "directionality": "ForwardOnly",
-        "kind": "PassingTrack",
+        "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
         "conflictResourceIds": [
           "AUTO:RESOURCE:PASS-002"
@@ -2010,7 +2010,7 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O12:O13:A-001",
         "fromNodeId": "NODE:O12",
         "toNodeId": "NODE:SPLIT-003",
@@ -2023,11 +2023,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 2,
+        "schematicLane": 0.5,
         "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
         "fromNodeId": "NODE:SPLIT-003",
         "toNodeId": "NODE:O13",
-        "lengthMeters": 933.3333333333339,
+        "lengthMeters": 660,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2036,13 +2036,13 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": 0.5,
+        "schematicLane": 2,
         "trackEdgeId": "EDGE:PASS-003",
         "fromNodeId": "NODE:SPLIT-003",
         "toNodeId": "NODE:O13",
-        "lengthMeters": 933.3333333333339,
+        "lengthMeters": 660,
         "directionality": "ForwardOnly",
-        "kind": "PassingTrack",
+        "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
         "conflictResourceIds": [
           "AUTO:RESOURCE:PASS-003"
@@ -2051,7 +2051,7 @@
       {
         "fromPortSide": "A",
         "toPortSide": "A",
-        "schematicLane": -2,
+        "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O14:O13:A-001",
         "fromNodeId": "NODE:O14",
         "toNodeId": "NODE:SPLIT-004",
@@ -2064,11 +2064,11 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
-        "schematicLane": -2,
+        "schematicLane": -0.5,
         "trackEdgeId": "EDGE:UP:O14:O13:B-001",
         "fromNodeId": "NODE:SPLIT-004",
         "toNodeId": "NODE:O13",
-        "lengthMeters": 933.3333333333321,
+        "lengthMeters": 645,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2077,13 +2077,13 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
-        "schematicLane": -0.5,
+        "schematicLane": -2,
         "trackEdgeId": "EDGE:PASS-004",
         "fromNodeId": "NODE:SPLIT-004",
         "toNodeId": "NODE:O13",
-        "lengthMeters": 933.3333333333321,
+        "lengthMeters": 645,
         "directionality": "ForwardOnly",
-        "kind": "PassingTrack",
+        "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
         "conflictResourceIds": [
           "AUTO:RESOURCE:PASS-004"
@@ -2093,7 +2093,7 @@
     "stations": [
       {
         "stationId": "O01",
-        "name": "O01 \u81FA\u4E2D\u6A5F\u5834",
+        "name": "O01 \u6A5F\u5834\u7AEF",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "PLATFORM:O01:DOWN",
@@ -2250,7 +2250,7 @@
       },
       {
         "stationId": "O16",
-        "name": "O16 \u81FA\u4E2D\u8ECA\u7AD9",
+        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "PLATFORM:O16:DOWN",
@@ -2350,13 +2350,13 @@
     ],
     "platforms": [
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
         "platformId": "PLATFORM:O01:DOWN",
         "stationId": "O01",
-        "name": "O01 \u81FA\u4E2D\u6A5F\u5834 \u4E0B\u884C\u6708\u53F0",
+        "name": "O01 \u6A5F\u5834\u7AEF \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O01:O02",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 0,
@@ -2368,25 +2368,25 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
         "platformId": "PLATFORM:O01:UP",
         "stationId": "O01",
-        "name": "O01 \u81FA\u4E2D\u6A5F\u5834 \u4E0A\u884C\u6708\u53F0",
+        "name": "O01 \u6A5F\u5834\u7AEF \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O02:O01",
-        "platformStartOffsetMeters": 1133.3333333333333,
-        "platformEndOffsetMeters": 1133.3333333333333,
-        "stopPositionOffsetMeters": 1133.3333333333333,
+        "platformStartOffsetMeters": 1277,
+        "platformEndOffsetMeters": 1377,
+        "stopPositionOffsetMeters": 1327,
         "allowedDirection": "Inbound",
-        "effectiveLengthMeters": 220,
+        "effectiveLengthMeters": 100,
         "allowsPassengerService": true,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2404,7 +2404,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2412,9 +2412,9 @@
         "stationId": "O02",
         "name": "O02 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O03:O02",
-        "platformStartOffsetMeters": 1133.3333333333333,
-        "platformEndOffsetMeters": 1133.3333333333333,
-        "stopPositionOffsetMeters": 1133.3333333333333,
+        "platformStartOffsetMeters": 630,
+        "platformEndOffsetMeters": 630,
+        "stopPositionOffsetMeters": 630,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2422,7 +2422,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2440,7 +2440,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2448,9 +2448,9 @@
         "stationId": "O03",
         "name": "O03 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O04:O03",
-        "platformStartOffsetMeters": 1133.3333333333335,
-        "platformEndOffsetMeters": 1133.3333333333335,
-        "stopPositionOffsetMeters": 1133.3333333333335,
+        "platformStartOffsetMeters": 2270,
+        "platformEndOffsetMeters": 2270,
+        "stopPositionOffsetMeters": 2270,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2458,16 +2458,16 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Below",
         "platformId": "PLATFORM:O04:DOWN",
         "stationId": "O04",
         "name": "O04 \u7AD9 \u4E0B\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "trackEdgeId": "EDGE:PASS-001",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
@@ -2476,16 +2476,16 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Above",
         "platformId": "PLATFORM:O04:UP",
         "stationId": "O04",
         "name": "O04 \u7AD9 \u4E0A\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:UP:O05:O04:B-001",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "trackEdgeId": "EDGE:PASS-002",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
@@ -2494,7 +2494,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2512,7 +2512,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2520,9 +2520,9 @@
         "stationId": "O05",
         "name": "O05 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O06:O05",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 1660,
+        "platformEndOffsetMeters": 1660,
+        "stopPositionOffsetMeters": 1660,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2530,7 +2530,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2548,7 +2548,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2556,9 +2556,9 @@
         "stationId": "O06",
         "name": "O06 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O07:O06",
-        "platformStartOffsetMeters": 1133.333333333333,
-        "platformEndOffsetMeters": 1133.333333333333,
-        "stopPositionOffsetMeters": 1133.333333333333,
+        "platformStartOffsetMeters": 950,
+        "platformEndOffsetMeters": 950,
+        "stopPositionOffsetMeters": 950,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2566,7 +2566,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2584,7 +2584,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2592,9 +2592,9 @@
         "stationId": "O07",
         "name": "O07 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O08:O07",
-        "platformStartOffsetMeters": 1133.333333333333,
-        "platformEndOffsetMeters": 1133.333333333333,
-        "stopPositionOffsetMeters": 1133.333333333333,
+        "platformStartOffsetMeters": 2460,
+        "platformEndOffsetMeters": 2460,
+        "stopPositionOffsetMeters": 2460,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2602,7 +2602,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2620,7 +2620,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2628,9 +2628,9 @@
         "stationId": "O08",
         "name": "O08 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O08a:O08",
-        "platformStartOffsetMeters": 1133.333333333333,
-        "platformEndOffsetMeters": 1133.333333333333,
-        "stopPositionOffsetMeters": 1133.333333333333,
+        "platformStartOffsetMeters": 706,
+        "platformEndOffsetMeters": 706,
+        "stopPositionOffsetMeters": 706,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2638,7 +2638,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2656,7 +2656,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2664,9 +2664,9 @@
         "stationId": "O08a",
         "name": "O08a \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O09:O08a",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 930,
+        "platformEndOffsetMeters": 930,
+        "stopPositionOffsetMeters": 930,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2674,7 +2674,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2692,7 +2692,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2700,9 +2700,9 @@
         "stationId": "O09",
         "name": "O09 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O10:O09",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 1100,
+        "platformEndOffsetMeters": 1100,
+        "stopPositionOffsetMeters": 1100,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2710,7 +2710,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2728,7 +2728,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2736,9 +2736,9 @@
         "stationId": "O10",
         "name": "O10 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O11:O10",
-        "platformStartOffsetMeters": 1133.3333333333321,
-        "platformEndOffsetMeters": 1133.3333333333321,
-        "stopPositionOffsetMeters": 1133.3333333333321,
+        "platformStartOffsetMeters": 1405,
+        "platformEndOffsetMeters": 1405,
+        "stopPositionOffsetMeters": 1405,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2746,7 +2746,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2764,7 +2764,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2772,9 +2772,9 @@
         "stationId": "O11",
         "name": "O11 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O12:O11",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 1070,
+        "platformEndOffsetMeters": 1070,
+        "stopPositionOffsetMeters": 1070,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2782,7 +2782,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2800,7 +2800,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2808,9 +2808,9 @@
         "stationId": "O12",
         "name": "O12 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O13:O12",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 860,
+        "platformEndOffsetMeters": 860,
+        "stopPositionOffsetMeters": 860,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2818,16 +2818,16 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Below",
         "platformId": "PLATFORM:O13:DOWN",
         "stationId": "O13",
         "name": "O13 \u7AD9 \u4E0B\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "trackEdgeId": "EDGE:PASS-003",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
@@ -2836,16 +2836,16 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Above",
         "platformId": "PLATFORM:O13:UP",
         "stationId": "O13",
         "name": "O13 \u7AD9 \u4E0A\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:UP:O14:O13:B-001",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "trackEdgeId": "EDGE:PASS-004",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
@@ -2854,7 +2854,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2872,7 +2872,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2880,9 +2880,9 @@
         "stationId": "O14",
         "name": "O14 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O15:O14",
-        "platformStartOffsetMeters": 1133.333333333334,
-        "platformEndOffsetMeters": 1133.333333333334,
-        "stopPositionOffsetMeters": 1133.333333333334,
+        "platformStartOffsetMeters": 684,
+        "platformEndOffsetMeters": 684,
+        "stopPositionOffsetMeters": 684,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2890,7 +2890,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2908,7 +2908,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2916,9 +2916,9 @@
         "stationId": "O15",
         "name": "O15 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O15a:O15",
-        "platformStartOffsetMeters": 1133.3333333333321,
-        "platformEndOffsetMeters": 1133.3333333333321,
-        "stopPositionOffsetMeters": 1133.3333333333321,
+        "platformStartOffsetMeters": 1141,
+        "platformEndOffsetMeters": 1141,
+        "stopPositionOffsetMeters": 1141,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2926,7 +2926,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2944,7 +2944,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -2952,9 +2952,9 @@
         "stationId": "O15a",
         "name": "O15a \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O16:O15a",
-        "platformStartOffsetMeters": 1133.3333333333358,
-        "platformEndOffsetMeters": 1133.3333333333358,
-        "stopPositionOffsetMeters": 1133.3333333333358,
+        "platformStartOffsetMeters": 572,
+        "platformEndOffsetMeters": 572,
+        "stopPositionOffsetMeters": 572,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2962,13 +2962,13 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
         "platformId": "PLATFORM:O16:DOWN",
         "stationId": "O16",
-        "name": "O16 \u81FA\u4E2D\u8ECA\u7AD9 \u4E0B\u884C\u6708\u53F0",
+        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O16:O17",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 0,
@@ -2980,17 +2980,17 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
         "platformId": "PLATFORM:O16:UP",
         "stationId": "O16",
-        "name": "O16 \u81FA\u4E2D\u8ECA\u7AD9 \u4E0A\u884C\u6708\u53F0",
+        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O17:O16",
-        "platformStartOffsetMeters": 1133.3333333333321,
-        "platformEndOffsetMeters": 1133.3333333333321,
-        "stopPositionOffsetMeters": 1133.3333333333321,
+        "platformStartOffsetMeters": 1278,
+        "platformEndOffsetMeters": 1278,
+        "stopPositionOffsetMeters": 1278,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2998,7 +2998,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3016,7 +3016,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3024,9 +3024,9 @@
         "stationId": "O17",
         "name": "O17 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O18:O17",
-        "platformStartOffsetMeters": 1133.3333333333321,
-        "platformEndOffsetMeters": 1133.3333333333321,
-        "stopPositionOffsetMeters": 1133.3333333333321,
+        "platformStartOffsetMeters": 1215,
+        "platformEndOffsetMeters": 1215,
+        "stopPositionOffsetMeters": 1215,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3034,7 +3034,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3052,7 +3052,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3060,9 +3060,9 @@
         "stationId": "O18",
         "name": "O18 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O19:O18",
-        "platformStartOffsetMeters": 1133.3333333333358,
-        "platformEndOffsetMeters": 1133.3333333333358,
-        "stopPositionOffsetMeters": 1133.3333333333358,
+        "platformStartOffsetMeters": 1160,
+        "platformEndOffsetMeters": 1160,
+        "stopPositionOffsetMeters": 1160,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3070,7 +3070,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3088,7 +3088,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3096,9 +3096,9 @@
         "stationId": "O19",
         "name": "O19 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O20:O19",
-        "platformStartOffsetMeters": 1133.3333333333321,
-        "platformEndOffsetMeters": 1133.3333333333321,
-        "stopPositionOffsetMeters": 1133.3333333333321,
+        "platformStartOffsetMeters": 920,
+        "platformEndOffsetMeters": 920,
+        "stopPositionOffsetMeters": 920,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3106,7 +3106,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3114,9 +3114,9 @@
         "stationId": "O20",
         "name": "O20 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O19:O20",
-        "platformStartOffsetMeters": 933.3333333333321,
-        "platformEndOffsetMeters": 1073.3333333333321,
-        "stopPositionOffsetMeters": 1033.3333333333321,
+        "platformStartOffsetMeters": 750,
+        "platformEndOffsetMeters": 890,
+        "stopPositionOffsetMeters": 820,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -3124,7 +3124,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3132,8 +3132,8 @@
         "stationId": "O20",
         "name": "O20 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O20:O19",
-        "platformStartOffsetMeters": 0,
-        "platformEndOffsetMeters": 140,
+        "platformStartOffsetMeters": 30,
+        "platformEndOffsetMeters": 170,
         "stopPositionOffsetMeters": 100,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
@@ -3142,7 +3142,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3160,7 +3160,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3168,9 +3168,9 @@
         "stationId": "O21",
         "name": "O21 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O22:O21",
-        "platformStartOffsetMeters": 1016.6666666666642,
-        "platformEndOffsetMeters": 1016.6666666666642,
-        "stopPositionOffsetMeters": 1016.6666666666642,
+        "platformStartOffsetMeters": 1285,
+        "platformEndOffsetMeters": 1285,
+        "stopPositionOffsetMeters": 1285,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3178,7 +3178,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3196,7 +3196,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3204,9 +3204,9 @@
         "stationId": "O22",
         "name": "O22 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O23:O22",
-        "platformStartOffsetMeters": 1016.6666666666679,
-        "platformEndOffsetMeters": 1016.6666666666679,
-        "stopPositionOffsetMeters": 1016.6666666666679,
+        "platformStartOffsetMeters": 650,
+        "platformEndOffsetMeters": 650,
+        "stopPositionOffsetMeters": 650,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3214,7 +3214,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3232,7 +3232,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3240,9 +3240,9 @@
         "stationId": "O23",
         "name": "O23 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O24:O23",
-        "platformStartOffsetMeters": 1016.6666666666679,
-        "platformEndOffsetMeters": 1016.6666666666679,
-        "stopPositionOffsetMeters": 1016.6666666666679,
+        "platformStartOffsetMeters": 1730,
+        "platformEndOffsetMeters": 1730,
+        "stopPositionOffsetMeters": 1730,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3250,7 +3250,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3268,7 +3268,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3276,9 +3276,9 @@
         "stationId": "O24",
         "name": "O24 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O25:O24",
-        "platformStartOffsetMeters": 1016.6666666666642,
-        "platformEndOffsetMeters": 1016.6666666666642,
-        "stopPositionOffsetMeters": 1016.6666666666642,
+        "platformStartOffsetMeters": 755,
+        "platformEndOffsetMeters": 755,
+        "stopPositionOffsetMeters": 755,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3286,7 +3286,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3304,7 +3304,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3312,9 +3312,9 @@
         "stationId": "O25",
         "name": "O25 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O26:O25",
-        "platformStartOffsetMeters": 1016.6666666666679,
-        "platformEndOffsetMeters": 1016.6666666666679,
-        "stopPositionOffsetMeters": 1016.6666666666679,
+        "platformStartOffsetMeters": 1260,
+        "platformEndOffsetMeters": 1260,
+        "stopPositionOffsetMeters": 1260,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3322,7 +3322,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3330,17 +3330,17 @@
         "stationId": "O26",
         "name": "O26 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O25:O26",
-        "platformStartOffsetMeters": 1016.6666666666679,
-        "platformEndOffsetMeters": 1016.6666666666679,
-        "stopPositionOffsetMeters": 1016.6666666666679,
+        "platformStartOffsetMeters": 1160,
+        "platformEndOffsetMeters": 1260,
+        "stopPositionOffsetMeters": 1210,
         "allowedDirection": "Outbound",
-        "effectiveLengthMeters": 220,
+        "effectiveLengthMeters": 100,
         "allowsPassengerService": true,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "",
         "platformBodyId": "",
         "displaySide": "Auto",
@@ -3358,16 +3358,16 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "D",
         "platformBodyId": "",
         "displaySide": "Below",
         "platformId": "PLATFORM:O04:DOWN:THROUGH",
         "stationId": "O04",
-        "name": "O04 \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
-        "trackEdgeId": "EDGE:PASS-001",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "name": "O04 \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
+        "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
@@ -3379,16 +3379,16 @@
         ]
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "U",
         "platformBodyId": "",
         "displaySide": "Above",
         "platformId": "PLATFORM:O04:UP:THROUGH",
         "stationId": "O04",
-        "name": "O04 \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
-        "trackEdgeId": "EDGE:PASS-002",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "name": "O04 \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
+        "trackEdgeId": "EDGE:UP:O05:O04:B-001",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
@@ -3400,16 +3400,16 @@
         ]
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "D",
         "platformBodyId": "",
         "displaySide": "Below",
         "platformId": "PLATFORM:O13:DOWN:THROUGH",
         "stationId": "O13",
-        "name": "O13 \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
-        "trackEdgeId": "EDGE:PASS-003",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "name": "O13 \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
+        "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
@@ -3420,16 +3420,16 @@
         ]
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "U",
         "platformBodyId": "",
         "displaySide": "Above",
         "platformId": "PLATFORM:O13:UP:THROUGH",
         "stationId": "O13",
-        "name": "O13 \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
-        "trackEdgeId": "EDGE:PASS-004",
-        "platformStartOffsetMeters": 220,
-        "platformEndOffsetMeters": 360,
+        "name": "O13 \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
+        "trackEdgeId": "EDGE:UP:O14:O13:B-001",
+        "platformStartOffsetMeters": 250,
+        "platformEndOffsetMeters": 390,
         "stopPositionOffsetMeters": 320,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
@@ -3448,22 +3448,22 @@
       },
       {
         "resourceId": "AUTO:RESOURCE:PASS-001",
-        "name": "O04 synthetic \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1 \u5360\u7528",
+        "name": "O04 synthetic \u4E0B\u884C\u5074\u7DDA\u5F85\u907F \u5360\u7528",
         "kind": "Block"
       },
       {
         "resourceId": "AUTO:RESOURCE:PASS-002",
-        "name": "O04 synthetic \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1 \u5360\u7528",
+        "name": "O04 synthetic \u4E0A\u884C\u5074\u7DDA\u5F85\u907F \u5360\u7528",
         "kind": "Block"
       },
       {
         "resourceId": "AUTO:RESOURCE:PASS-003",
-        "name": "O13 synthetic \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1 \u5360\u7528",
+        "name": "O13 synthetic \u4E0B\u884C\u5074\u7DDA\u5F85\u907F \u5360\u7528",
         "kind": "Block"
       },
       {
         "resourceId": "AUTO:RESOURCE:PASS-004",
-        "name": "O13 synthetic \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1 \u5360\u7528",
+        "name": "O13 synthetic \u4E0A\u884C\u5074\u7DDA\u5F85\u907F \u5360\u7528",
         "kind": "Block"
       }
     ],
@@ -3892,7 +3892,7 @@
         "name": "O20 synthetic \u7AD9\u5F8C\u888B\u5F0F\u5132\u8ECA\u8ECC",
         "kind": "PocketTrack",
         "arrivalTrackEdgeId": "EDGE:DOWN:O19:O20",
-        "arrivalStopOffsetMeters": 1033.3333333333321,
+        "arrivalStopOffsetMeters": 820,
         "departureTrackEdgeId": "EDGE:UP:O20:O19",
         "departureStartOffsetMeters": 100,
         "traversals": [
@@ -3928,15 +3928,15 @@
       {
         "operationId": "TURNBACK-001",
         "facilityId": "FACILITY:POCKET-001",
-        "arrivalServiceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN",
-        "departureServiceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP",
+        "arrivalServiceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
+        "departureServiceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
         "minimumDwellTimeSeconds": 30
       }
     ],
     "passingFacilities": [
       {
         "facilityId": "FACILITY:PASS-001",
-        "name": "O04 synthetic \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1",
+        "name": "O04 synthetic \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O04",
         "arrivalTrackEdgeId": "EDGE:DOWN:O03:O04:A-001",
         "arrivalOffsetMeters": 200,
@@ -3944,7 +3944,7 @@
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
-            "trackEdgeId": "EDGE:PASS-001",
+            "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
             "direction": "Forward"
           }
         ],
@@ -3956,7 +3956,7 @@
       },
       {
         "facilityId": "FACILITY:PASS-002",
-        "name": "O04 synthetic \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1",
+        "name": "O04 synthetic \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O04",
         "arrivalTrackEdgeId": "EDGE:UP:O05:O04:A-001",
         "arrivalOffsetMeters": 200,
@@ -3964,7 +3964,7 @@
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
-            "trackEdgeId": "EDGE:PASS-002",
+            "trackEdgeId": "EDGE:UP:O05:O04:B-001",
             "direction": "Forward"
           }
         ],
@@ -3976,7 +3976,7 @@
       },
       {
         "facilityId": "FACILITY:PASS-003",
-        "name": "O13 synthetic \u4E0B\u884C\u5167\u5074\u901A\u904E\u80A1",
+        "name": "O13 synthetic \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O13",
         "arrivalTrackEdgeId": "EDGE:DOWN:O12:O13:A-001",
         "arrivalOffsetMeters": 200,
@@ -3984,7 +3984,7 @@
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
-            "trackEdgeId": "EDGE:PASS-003",
+            "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
             "direction": "Forward"
           }
         ],
@@ -3996,7 +3996,7 @@
       },
       {
         "facilityId": "FACILITY:PASS-004",
-        "name": "O13 synthetic \u4E0A\u884C\u5167\u5074\u901A\u904E\u80A1",
+        "name": "O13 synthetic \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O13",
         "arrivalTrackEdgeId": "EDGE:UP:O14:O13:A-001",
         "arrivalOffsetMeters": 200,
@@ -4004,7 +4004,7 @@
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
-            "trackEdgeId": "EDGE:PASS-004",
+            "trackEdgeId": "EDGE:UP:O14:O13:B-001",
             "direction": "Forward"
           }
         ],
@@ -4019,37 +4019,37 @@
       {
         "operationId": "PASSING-001",
         "facilityId": "FACILITY:PASS-001",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
         "expressServiceTypeId": "AIRPORT-DIRECT"
       },
       {
         "operationId": "PASSING:O04:DOWN:SECTION",
         "facilityId": "FACILITY:PASS-001",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
         "expressServiceTypeId": "SECTION"
       },
       {
         "operationId": "PASSING-002",
         "facilityId": "FACILITY:PASS-002",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
         "expressServiceTypeId": "AIRPORT-DIRECT"
       },
       {
         "operationId": "PASSING:O04:UP:SECTION",
         "facilityId": "FACILITY:PASS-002",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
         "expressServiceTypeId": "SECTION"
       },
       {
         "operationId": "PASSING-003",
         "facilityId": "FACILITY:PASS-003",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
         "expressServiceTypeId": "AIRPORT-DIRECT"
       },
       {
         "operationId": "PASSING-004",
         "facilityId": "FACILITY:PASS-004",
-        "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP",
+        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
         "expressServiceTypeId": "AIRPORT-DIRECT"
       }
     ],
@@ -4143,8 +4143,8 @@
   },
   "serviceRoutes": [
     {
-      "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN",
-      "name": "\u81FA\u4E2D\u6A5F\u5834\u6377\u904B\uFF08\u6A58\u7DDA\uFF09minimal baseline \u4E0B\u884C",
+      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
+      "name": "\u5927\u578B\u6A5F\u5834\u7DDAminimal baseline \u4E0B\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:DOWN:O01:O02",
@@ -4159,7 +4159,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
+          "trackEdgeId": "EDGE:PASS-001",
           "direction": "Forward"
         },
         {
@@ -4203,7 +4203,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
+          "trackEdgeId": "EDGE:PASS-003",
           "direction": "Forward"
         },
         {
@@ -4435,8 +4435,8 @@
       ]
     },
     {
-      "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP",
-      "name": "\u81FA\u4E2D\u6A5F\u5834\u6377\u904B\uFF08\u6A58\u7DDA\uFF09minimal baseline \u4E0A\u884C",
+      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
+      "name": "\u5927\u578B\u6A5F\u5834\u7DDAminimal baseline \u4E0A\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:UP:O26:O25",
@@ -4495,7 +4495,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:UP:O14:O13:B-001",
+          "trackEdgeId": "EDGE:PASS-004",
           "direction": "Forward"
         },
         {
@@ -4539,7 +4539,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:UP:O05:O04:B-001",
+          "trackEdgeId": "EDGE:PASS-002",
           "direction": "Forward"
         },
         {
@@ -4730,11 +4730,11 @@
   "directionRouteBindings": [
     {
       "direction": "Outbound",
-      "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:DOWN"
+      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN"
     },
     {
       "direction": "Inbound",
-      "serviceRouteId": "TAICHUNG-AIRPORT-MRT-FULL-DEMO:UP"
+      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP"
     }
   ]
 }

@@ -538,7 +538,7 @@ internal static class TopologyRegressionTests
                 ServiceTypes: runtime.ServiceTypes,
                 Topology: runtime.Topology).CreateWorld();
             var boundedEndSeconds = Path.GetFileName(samplePath).Equals(
-                "臺中機場捷運-完整營運示範範例.mrtsim.json",
+                "大型機場線-完整營運示範範例.mrtsim.json",
                 StringComparison.OrdinalIgnoreCase)
                 ? 8000
                 : 3600;

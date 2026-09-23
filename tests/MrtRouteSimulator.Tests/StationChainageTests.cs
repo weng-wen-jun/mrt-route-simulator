@@ -42,9 +42,48 @@ internal static class StationChainageTests
         }
     }
 
+    public static void LargeAirportLinePassingPlatformCentersStayAligned()
+    {
+        var directory = FindRoot();
+        var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(directory.FullName,
+            "samples", "大型機場線-完整營運示範範例.mrtsim.json")));
+        var projection = new StationChainageProjection(document);
+
+        foreach (var stationId in new[] { "O04", "O13" })
+        {
+            var expected = projection.StationCenters[stationId];
+            var projected = document.Topology.Platforms
+                .Where(platform => platform.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))
+                .Select(platform =>
+                {
+                    var center = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
+                    return (platform.PlatformId, Value: projection.ToChainage(new TrackPosition(platform.TrackEdgeId, center)));
+                })
+                .ToArray();
+            if (projected.Length == 0 || projected.Any(item => item.Value is null))
+                throw new InvalidOperationException($"{stationId} 的所有平台中心都必須可投影到顯示里程。");
+
+            foreach (var item in projected)
+                Equal(expected, item.Value!.Value);
+
+            var minimum = projected.Min(item => item.Value!.Value);
+            var maximum = projected.Max(item => item.Value!.Value);
+            if (maximum - minimum > .001)
+                throw new InvalidOperationException($"{stationId} 同站平台中心不可錯列：{minimum:0.###}～{maximum:0.###} m。");
+        }
+    }
+
     private static void Equal(double expected, double actual)
     {
         if (Math.Abs(expected - actual) > .001)
             throw new InvalidOperationException($"中心里程預期 {expected}，實際 {actual}。");
+    }
+
+    private static DirectoryInfo FindRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "MrtRouteSimulator.slnx")))
+            directory = directory.Parent;
+        return directory ?? throw new InvalidOperationException("找不到完整範例。");
     }
 }

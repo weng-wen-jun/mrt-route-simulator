@@ -2,7 +2,28 @@
 
 本檔依軟體版本由新到舊記錄。Git 標籤使用小寫 `v`，軟體畫面使用大寫 `V`。
 
+## V4.0.2 - 2026-09-20
+
+### 去識別化大型路線範例
+
+- 新增可重建的大型機場線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
+- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`AIRPORT-DIRECT` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
+- 新增去識別化 Scenario Manifest，明確記錄 29.9 km／23.8 km synthetic aggregate target、O20 折返、O04／O13 passing、驗證時間點及尚未工程化的欄位。
+
+### 穩定性、輸出與介面
+
+- 納入大型 sample 的 Structural／Operational／Regression 分階段驗證、legacy track-port migration workflow，以及分頁 PDF 逐頁重繪，讓 Schema 8 topology、匯出與相容讀檔邊界有一致說明。
+- 主畫面播放路線顯示區高度由 260 調整為 320，讓較大型路線與列車標記有較完整的可視空間。
+- 不變更現行 Schema 8 topology、Schema 7 legacy 匯入／固定時刻表相容格式及 topology-native `SimulationWorld` 權威資料流。
+
+### 驗證與限制
+
+- Release build：0 warnings／0 errors；Engine runner **161/161**；大型機場線範例 focused tests **15/15**。WPF runner 已通過既有範例，但 full sample editor-720 gate 目前在 `EDGE:PASS-002` 回報 55.3° 示意突折，尚不能宣稱 14 份範例的 WPF gate 全數通過。
+- 原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 pocket 換端關鍵畫面的連續目視驗收仍未完成；既有 WPF 離屏失敗與人工驗收都不應被版本摘要隱藏。
+
 ## V4.0.1 - 2026-08-31
+
+> 本節保留 v4.0.1 tag 後的工作區歷史紀錄；其中已驗收並納入對外版本的內容，以上方 V4.0.2 摘要為準。
 
 ### 工作區修正（2026-09-14，尚未發布）
 
