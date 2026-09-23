@@ -15,6 +15,20 @@ public partial class MainWindow
     private const long MaximumFixedTimetableArchiveBytes = FixedTimetableArchiveFormat.MaximumJsonCharacters * 4L;
     private string? _currentProjectFilePath;
 
+    private void UpdateFixedTimetableArchiveExportState()
+    {
+        if (ExportFixedTimetableArchiveMenuItem is null)
+        {
+            return;
+        }
+
+        var topologyLoaded = _activeTopologyProjectDocument is not null;
+        ExportFixedTimetableArchiveMenuItem.IsEnabled = !topologyLoaded;
+        ExportFixedTimetableArchiveMenuItem.ToolTip = topologyLoaded
+            ? "Schema 8 拓撲專案目前以拓撲結果與 Schema 8 存檔為準；固定時刻表封存僅支援 legacy Schema 7 動態模擬。"
+            : "匯出已完成的 legacy Schema 7 動態模擬結果。";
+    }
+
     private void SetCurrentProjectFile(string? filePath)
     {
         _currentProjectFilePath = string.IsNullOrWhiteSpace(filePath)
@@ -87,7 +101,7 @@ public partial class MainWindow
         }
     }
 
-    private void LoadProject_Click(object sender, RoutedEventArgs e)
+    private async void LoadProject_Click(object sender, RoutedEventArgs e)
     {
         HideValidation();
         var dialog = new OpenFileDialog
@@ -104,23 +118,41 @@ public partial class MainWindow
             return;
         }
 
+        ProjectLoadProgressWindow? progressWindow = null;
         try
         {
             var fileInfo = new FileInfo(dialog.FileName);
-            if (fileInfo.Length > MaximumFixedTimetableArchiveBytes)
+            var isFixedTimetableArchive = fileInfo.Name.EndsWith(
+                ".mrttimetable.json",
+                StringComparison.OrdinalIgnoreCase);
+            var maximumBytes = isFixedTimetableArchive
+                ? MaximumFixedTimetableArchiveBytes
+                : MaximumProjectFileBytes;
+            if (fileInfo.Length > maximumBytes)
             {
-                throw new SimulationValidationException([$"存檔超過 {MaximumFixedTimetableArchiveBytes / 1_000_000} MB 讀取上限。"]);
+                var formatLabel = isFixedTimetableArchive ? "固定時刻表封存" : "模擬專案";
+                throw new SimulationValidationException([
+                    $"{formatLabel}存檔超過 {maximumBytes / 1_000_000} MB 讀取上限。"]);
             }
 
-            var json = File.ReadAllText(dialog.FileName, Encoding.UTF8);
-            if (IsSchema8TopologyProject(json))
+            progressWindow = new ProjectLoadProgressWindow { Owner = this };
+            progressWindow.Show();
+            IsEnabled = false;
+            IProgress<(double Percentage, string Message)> progress = new Progress<(double Percentage, string Message)>(update =>
+                progressWindow.UpdateProgress(update.Percentage, update.Message));
+            var json = await ReadProjectFileAsync(dialog.FileName, fileInfo.Length, progress);
+            progress.Report((35, "正在辨識存檔格式…"));
+            if (await Task.Run(() => IsSchema8TopologyProject(json)))
             {
-                var topologyDocument = TopologyProjectFormat.Deserialize(json);
-                var legacyPortItems = LegacyPortMigration.FindUnspecifiedEdges(topologyDocument);
+                progress.Report((45, "正在驗證拓撲專案…"));
+                var topologyDocument = await Task.Run(() => TopologyProjectFormat.Deserialize(json));
+                var legacyPortItems = await Task.Run(() => LegacyPortMigration.FindUnspecifiedEdges(topologyDocument));
                 var migratedLegacyPorts = false;
                 var keptLegacyCompatibility = false;
                 if (legacyPortItems.Count > 0)
                 {
+                    progressWindow.Hide();
+                    IsEnabled = true;
                     var migration = new LegacyPortMigrationDialog(topologyDocument) { Owner = this };
                     if (migration.ShowDialog() != true || migration.Result is null)
                     {
@@ -131,8 +163,13 @@ public partial class MainWindow
                     topologyDocument = migration.Result;
                     migratedLegacyPorts = !migration.KeptCompatibility;
                     keptLegacyCompatibility = migration.KeptCompatibility;
+                    IsEnabled = false;
+                    progressWindow.Show();
                 }
-                ConfigureTopologyProjectForPlayback(topologyDocument);
+                progress.Report((60, "正在建立模擬與計畫時間軸…"));
+                var prepared = await Task.Run(() => PrepareTopologyProjectForPlayback(topologyDocument, progress));
+                progress.Report((92, "正在套用讀取結果…"));
+                ApplyPreparedTopologyProjectForPlayback(prepared, lockLegacyInputs: true);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 var migrationStatus = migratedLegacyPorts
@@ -144,36 +181,43 @@ public partial class MainWindow
                 return;
             }
 
-            var archive = FixedTimetableArchiveFormat.IsFixedTimetableArchive(json)
+            progress.Report((45, "正在驗證存檔內容…"));
+            var archive = await Task.Run(() => FixedTimetableArchiveFormat.IsFixedTimetableArchive(json)
                 ? FixedTimetableArchiveFormat.Deserialize(json)
-                : null;
-            var document = archive?.Project ?? SimulationProjectFormat.Deserialize(json);
+                : null);
+            var document = archive?.Project ?? await Task.Run(() => SimulationProjectFormat.Deserialize(json));
             if (archive is null)
             {
-                var topologyDocument = TopologyProjectFactory.CreateLinearDraft(document);
-                ConfigureTopologyProjectForPlayback(topologyDocument);
+                progress.Report((60, "正在將舊格式轉為拓撲並建立模擬…"));
+                var prepared = await Task.Run(() => PrepareTopologyProjectForPlayback(
+                    TopologyProjectFactory.CreateLinearDraft(document),
+                    progress));
+                progress.Report((92, "正在套用讀取結果…"));
+                ApplyPreparedTopologyProjectForPlayback(prepared, lockLegacyInputs: true);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 StatusTextBlock.Text = $"已將舊格式版本 {document.SchemaVersion} 專案轉為拓撲專案；請由專案工作區繼續編輯並另存。";
                 return;
             }
+            progress.Report((75, "正在建立固定時刻表結果…"));
+            var archiveRows = await PrepareFixedTimetableArchiveRowsAsync(archive, progress);
             PausePlayback();
             ClearResults();
             ApplyProjectDocument(document);
-            if (archive is not null)
-            {
-                DisplayFixedTimetableArchive(archive);
-            }
+            ApplyFixedTimetableArchive(archive, archiveRows);
             HideValidation();
             SetCurrentProjectFile(dialog.FileName);
-            StatusTextBlock.Text = archive is null
-                ? $"專案已讀取：{dialog.FileName}；請按「計算並建立模擬」。"
-                : $"固定時刻表已讀取：{dialog.FileName}；可直接查看完成模擬的凍結結果。";
+            StatusTextBlock.Text = $"固定時刻表已讀取：{dialog.FileName}；已切換至進出站時刻表結果頁。";
         }
         catch (SimulationValidationException exception)
         {
             ShowValidation(exception.Errors);
             StatusTextBlock.Text = "存檔驗證未通過；目前設定未變更。";
+        }
+        catch (JsonException exception)
+        {
+            ShowValidation([$"專案 JSON 格式無效：{exception.Message}"]);
+            StatusTextBlock.Text = "讀取專案失敗；目前設定未變更。";
         }
         catch (InvalidOperationException exception)
         {
@@ -190,6 +234,41 @@ public partial class MainWindow
             ShowValidation([$"沒有權限讀取專案：{exception.Message}"]);
             StatusTextBlock.Text = "讀取專案失敗；目前設定未變更。";
         }
+        finally
+        {
+            IsEnabled = true;
+            progressWindow?.Close();
+        }
+    }
+
+    private static async Task<string> ReadProjectFileAsync(
+        string filePath,
+        long fileLength,
+        IProgress<(double Percentage, string Message)> progress)
+    {
+        const int bufferSize = 80 * 1024;
+        await using var file = new FileStream(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        await using var bytes = new MemoryStream(fileLength > int.MaxValue ? 0 : (int)fileLength);
+        var buffer = new byte[bufferSize];
+        long totalRead = 0;
+        int bytesRead;
+        while ((bytesRead = await file.ReadAsync(buffer)) > 0)
+        {
+            await bytes.WriteAsync(buffer.AsMemory(0, bytesRead));
+            totalRead += bytesRead;
+            var percentage = fileLength == 0 ? 30 : totalRead * 30d / fileLength;
+            progress.Report((percentage, $"正在讀取檔案… {percentage:0}%"));
+        }
+
+        bytes.Position = 0;
+        using var reader = new StreamReader(bytes, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return await reader.ReadToEndAsync();
     }
 
     private static bool IsSchema8TopologyProject(string json)
@@ -207,6 +286,12 @@ public partial class MainWindow
         HideValidation();
         try
         {
+            if (_activeTopologyProjectDocument is not null)
+            {
+                throw new InvalidOperationException(
+                    "目前是 Schema 8 拓撲專案；固定時刻表封存僅支援 legacy Schema 7 動態模擬，請使用 Schema 8 存檔或結果頁匯出。");
+            }
+
             if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null
                 || _activeSimulationProjectDocument is null)
             {
@@ -410,7 +495,16 @@ public partial class MainWindow
         SelectComboBoxTag(
             OperationModeComboBox,
             document.Simulation.ProfileMode == OperationProfileMode.BasicPhysics ? "Basic" : "Realistic");
-        SelectComboBoxTag(EngineModeComboBox, document.Simulation.EngineKind.ToString());
+        _suppressEngineModeSelectionChanged = true;
+        try
+        {
+            SelectComboBoxTag(EngineModeComboBox, document.Simulation.EngineKind.ToString());
+        }
+        finally
+        {
+            _suppressEngineModeSelectionChanged = false;
+        }
+        ApplyEngineModeUiState();
         SelectComboBoxTag(MovingBlockModeComboBox, document.Simulation.MovingBlockMode.ToString());
         SelectComboBoxTag(BrakingModeComboBox, document.Simulation.BrakingEstimationMode.ToString());
         if (!SelectComboBoxTag(PlaybackSpeedComboBox, FormatProjectNumber(document.Simulation.PlaybackSpeed)))

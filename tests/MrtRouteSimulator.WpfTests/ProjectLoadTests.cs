@@ -8,7 +8,28 @@ internal static class ProjectLoadTests
 {
     public static void Run(string root)
     {
+        var calculateMaximumDuration = typeof(MainWindow).GetMethod(
+            "CalculateMaximumCandidateDurationSeconds",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var maximumDuration = (double)calculateMaximumDuration.Invoke(null, [5600d, 4434.87d])!;
+        if (Math.Abs(maximumDuration - 11034.87d) > 1e-9)
+            throw new InvalidOperationException($"計畫時間軸安全上限公式錯誤：{maximumDuration:0.00} 秒。 ");
+        var percentageMarginDuration = (double)calculateMaximumDuration.Invoke(null, [0d, 6000d])!;
+        if (Math.Abs(percentageMarginDuration - 7200d) > 1e-9)
+            throw new InvalidOperationException($"計畫時間軸百分比安全緩衝錯誤：{percentageMarginDuration:0.00} 秒。 ");
+        Console.WriteLine("[通過] 計畫時間軸安全上限使用基準週期 20% 與 1000 秒取大值");
+
         var window = new MainWindow();
+        var progressType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectLoadProgressWindow")!;
+        var progressWindow = (System.Windows.Window)Activator.CreateInstance(progressType)!;
+        try
+        {
+            progressType.GetMethod("UpdateProgress")!.Invoke(progressWindow, [60d, "正在建立模擬與計畫時間軸…"]);
+            if (progressWindow.Title != "正在讀取存檔")
+                throw new InvalidOperationException("讀檔進度視窗必須清楚標示目前正在讀取存檔。");
+            Console.WriteLine("[通過] 讀檔進度視窗可建立並更新階段文字");
+        }
+        finally { progressWindow.Close(); }
         var configure = typeof(MainWindow).GetMethod("ConfigureTopologyProjectForPlayback", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var setCurrentProjectFile = typeof(MainWindow).GetMethod("SetCurrentProjectFile", BindingFlags.NonPublic | BindingFlags.Instance)!;
         try
@@ -34,6 +55,32 @@ internal static class ProjectLoadTests
                 configure.Invoke(window, [document, true]);
                 if (!ReferenceEquals(Field(window, "_activeTopologyProjectDocument"), document))
                     throw new InvalidOperationException("載入後專案不符。");
+                var engineMode = (ComboBox)window.FindName("EngineModeComboBox")!;
+                var engineTag = (engineMode.SelectedItem as ComboBoxItem)?.Tag?.ToString();
+                if (!string.Equals(engineTag, SimulationEngineKind.V2RealisticOperations.ToString(), StringComparison.Ordinal))
+                    throw new InvalidOperationException("載入 Schema 8 拓撲後，模擬引擎選擇必須同步為 V2 實際營運。");
+
+                var vehicleRows = ((IEnumerable<VehicleTypeInputRow>)typeof(MainWindow)
+                    .GetProperty("VehicleTypeRows")!.GetValue(window)!).ToArray();
+                var serviceRows = ((IEnumerable<ServiceTypeInputRow>)typeof(MainWindow)
+                    .GetProperty("ServiceTypeRows")!.GetValue(window)!).ToArray();
+                if (vehicleRows.Length != document.VehicleTypes.Length
+                    || serviceRows.Length != document.ServiceTypes.Length
+                    || !document.VehicleTypes.All(item => vehicleRows.Any(row => row.Id == item.Id && row.Name == item.DisplayName))
+                    || !document.ServiceTypes.All(item => serviceRows.Any(row => row.Id == item.Id && row.Name == item.DisplayName)))
+                    throw new InvalidOperationException("載入 Schema 8 拓撲後，車型／服務目錄不得留在示範資料或只顯示內部 ID。");
+
+                var serviceFilter = (ComboBox)window.FindName("IntervalServiceTypeComboBox")!;
+                var patternFilter = (ComboBox)window.FindName("IntervalStopPatternComboBox")!;
+                var serviceFilterIds = serviceFilter.Items.OfType<CatalogOption>().Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var patternFilterIds = patternFilter.Items.OfType<CatalogOption>().Select(item => item.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (!document.ServiceTypes.All(item => serviceFilterIds.Contains(item.Id))
+                    || !document.StopPatterns.All(item => patternFilterIds.Contains(item.Id)))
+                    throw new InvalidOperationException("載入 Schema 8 拓撲後，區間統計服務／停站模式篩選不得為空或沿用舊專案。");
+
+                var archiveMenu = (MenuItem)window.FindName("ExportFixedTimetableArchiveMenuItem")!;
+                if (archiveMenu.IsEnabled)
+                    throw new InvalidOperationException("Schema 8 拓撲專案不應啟用只支援 legacy Schema 7 的固定時刻表封存匯出。");
                 Console.WriteLine($"[通過] WPF 完整載入／計畫時間軸／雙向預覽：{Path.GetFileName(path)}");
             }
             var before = Field(window, "_activeTopologyProjectDocument");

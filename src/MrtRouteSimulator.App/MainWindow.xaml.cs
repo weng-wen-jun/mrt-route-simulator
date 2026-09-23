@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -33,9 +34,12 @@ public partial class MainWindow : Window
     private double _playbackTimeSeconds;
     private double _playbackDurationSeconds;
     private double _startClockSeconds;
+    private bool _suppressEngineModeSelectionChanged;
+
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => FitInitialWindowToWorkArea();
         Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
         VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";
         DataContext = this;
@@ -51,6 +55,37 @@ public partial class MainWindow : Window
             DrawRoute();
             DrawSpeedProfile();
         };
+    }
+
+    /// <summary>
+    /// 預設 1440 x 900 是舒適工作尺寸，不得讓它在較小的可用工作區開啟時超出螢幕。
+    /// 視窗建立後才可取得 WPF 以 DIP 表示的工作區；同時下調本次視窗的最小值，
+    /// 讓 Windows 不會再以 XAML 的固定最小尺寸把視窗推出可視範圍。
+    /// </summary>
+    private void FitInitialWindowToWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        var (width, minimumWidth) = FitWindowDimension(Width, MinWidth, workArea.Width);
+        var (height, minimumHeight) = FitWindowDimension(Height, MinHeight, workArea.Height);
+
+        MinWidth = minimumWidth;
+        MinHeight = minimumHeight;
+        Width = width;
+        Height = height;
+    }
+
+    private static (double Size, double Minimum) FitWindowDimension(
+        double preferredSize,
+        double declaredMinimum,
+        double availableSize)
+    {
+        if (double.IsNaN(availableSize) || double.IsInfinity(availableSize) || availableSize <= 0)
+        {
+            return (preferredSize, declaredMinimum);
+        }
+
+        var minimum = Math.Min(declaredMinimum, availableSize);
+        return (Math.Clamp(preferredSize, minimum, availableSize), minimum);
     }
 
     public ObservableCollection<StationInputRow> StationRows { get; } = [];
@@ -78,7 +113,7 @@ public partial class MainWindow : Window
 
     private void EngineMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || _suppressEngineModeSelectionChanged) return;
         PausePlayback();
         ClearResults();
         ApplyEngineModeUiState();
@@ -141,6 +176,7 @@ public partial class MainWindow : Window
         LoadSampleV2Data();
 
         ClearResults();
+        UpdateFixedTimetableArchiveExportState();
         HideValidation();
         StatusTextBlock.Text = "已載入六站示範路線；可直接建立模擬或修改參數。";
     }
@@ -436,6 +472,21 @@ public partial class MainWindow : Window
 
     private void PlaybackTimer_Tick(object? sender, EventArgs e)
     {
+        try
+        {
+            PlaybackTimer_TickCore();
+        }
+        catch (Exception exception)
+        {
+            PausePlayback();
+            Trace.WriteLine($"Playback stopped after an unexpected UI update failure: {exception}");
+            PlaybackStatusText.Text = $"播放已停止：{exception.Message}";
+            StatusTextBlock.Text = "播放更新失敗；模擬已暫停，專案資料仍保留。";
+        }
+    }
+
+    private void PlaybackTimer_TickCore()
+    {
         if (_simulationEngine is null && _v2World is null)
         {
             PausePlayback();
@@ -526,7 +577,7 @@ public partial class MainWindow : Window
         }
 
         RouteCanvas.Children.Clear();
-        var width = RouteCanvas.ActualWidth;
+        var width = PrepareRouteCanvasWidth();
         var height = RouteCanvas.ActualHeight;
         if (width < 100 || height < 100)
         {
@@ -720,7 +771,45 @@ public partial class MainWindow : Window
         SpeedCanvas.Children.Add(polyline);
     }
 
+    private const double RouteCanvasMinimumStationPitch = 92;
+    private const double RouteCanvasHorizontalPadding = 120;
+
+    // 總覽圖以可讀的每站最小間距作為內容寬度，而不是把大型專案壓進目前視窗。
+    // ScrollViewer 會在內容超出可視範圍時提供水平捲軸；此函式只影響 WPF 畫面，
+    // 不會改寫 topology 的 schematicPosition 或任何 runtime 位置。
+    private double PrepareRouteCanvasWidth()
+    {
+        var viewportWidth = RouteScrollViewer.ViewportWidth;
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteScrollViewer.ActualWidth;
+        }
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteCanvas.ActualWidth;
+        }
+
+        var stationCount = _v2World?.TopologyInfrastructure.Stations.Count ?? _route?.Stations.Count ?? 0;
+        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount);
+        if (!double.IsFinite(RouteCanvas.Width) || Math.Abs(RouteCanvas.Width - width) > .5)
+        {
+            RouteCanvas.Width = width;
+        }
+        return width;
+    }
+
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)
+    {
+        var usableViewport = double.IsFinite(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
+        var desiredWidth = stationCount <= 0
+            ? usableViewport
+            : RouteCanvasHorizontalPadding + stationCount * RouteCanvasMinimumStationPitch;
+        return Math.Max(100, Math.Max(usableViewport, desiredWidth));
+    }
+
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
+
+    private void RouteScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
 
     private void SpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 
@@ -733,6 +822,7 @@ public partial class MainWindow : Window
         _multipleTrainResult = null;
         _simulationEngine = null;
         ClearV2Results();
+        UpdateFixedTimetableArchiveExportState();
         _playbackTimeSeconds = 0;
         _playbackDurationSeconds = 0;
         TimetableRows.Clear();
