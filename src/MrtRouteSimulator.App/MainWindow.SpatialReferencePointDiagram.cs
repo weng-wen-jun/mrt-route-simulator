@@ -228,15 +228,15 @@ public partial class MainWindow
 
     private IReadOnlyList<AfterStationTailTrackVisualLayout> GetAfterStationTailTrackVisualLayouts()
     {
-        if (_route is null || _v2World is null)
+        if (_route is null || _latestPlaybackFrame?.Infrastructure is not { } infrastructure)
         {
             return [];
         }
 
         var result = new List<AfterStationTailTrackVisualLayout>();
-        foreach (var plan in _v2World.Infrastructure.TurnbackPlans.Where(item => item.Kind == TurnbackKind.AfterStation))
+        foreach (var plan in infrastructure.TurnbackPlans.Where(item => item.Kind == TurnbackKind.AfterStation))
         {
-            var layout = _v2World.Infrastructure.FindAfterStationTailTrackLayout(plan);
+            var layout = infrastructure.FindAfterStationTailTrackLayout(plan);
             var stationIndex = _route.Stations.ToList().FindIndex(station =>
                 station.StationId.Equals(plan.StationId, StringComparison.OrdinalIgnoreCase));
             if (layout is not null && stationIndex >= 0)

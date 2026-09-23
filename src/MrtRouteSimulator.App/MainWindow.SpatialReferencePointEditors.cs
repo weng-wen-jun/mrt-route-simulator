@@ -207,9 +207,10 @@ public partial class MainWindow
             new(initialRows.Where(row => row.Kind == kind).Select(Clone));
     }
 
-    private void CommitInfrastructurePreview(string status, Window window)
+    private async void CommitInfrastructurePreview(string status, Window window)
     {
         PausePlayback();
+        await StopCurrentPlaybackResourcesAsync();
         ClearResults();
         try
         {

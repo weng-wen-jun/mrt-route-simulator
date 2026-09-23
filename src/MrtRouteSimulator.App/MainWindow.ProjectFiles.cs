@@ -87,7 +87,7 @@ public partial class MainWindow
         }
     }
 
-    private void LoadProject_Click(object sender, RoutedEventArgs e)
+    private async void LoadProject_Click(object sender, RoutedEventArgs e)
     {
         HideValidation();
         var dialog = new OpenFileDialog
@@ -132,7 +132,7 @@ public partial class MainWindow
                     migratedLegacyPorts = !migration.KeptCompatibility;
                     keptLegacyCompatibility = migration.KeptCompatibility;
                 }
-                ConfigureTopologyProjectForPlayback(topologyDocument);
+                await ConfigureTopologyProjectForPlaybackAsync(topologyDocument);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 var migrationStatus = migratedLegacyPorts
@@ -151,13 +151,14 @@ public partial class MainWindow
             if (archive is null)
             {
                 var topologyDocument = TopologyProjectFactory.CreateLinearDraft(document);
-                ConfigureTopologyProjectForPlayback(topologyDocument);
+                await ConfigureTopologyProjectForPlaybackAsync(topologyDocument);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 StatusTextBlock.Text = $"已將舊格式版本 {document.SchemaVersion} 專案轉為拓撲專案；請由專案工作區繼續編輯並另存。";
                 return;
             }
             PausePlayback();
+            await StopCurrentPlaybackResourcesAsync();
             ClearResults();
             ApplyProjectDocument(document);
             if (archive is not null)
@@ -207,13 +208,13 @@ public partial class MainWindow
         HideValidation();
         try
         {
-            if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null
+            if (!_v2Enabled || _route is null || _latestPlaybackFrame is null || _v2DispatchPlan is null
                 || _activeSimulationProjectDocument is null)
             {
                 throw new InvalidOperationException("請先建立 V2 寫實營運模擬。固定時刻表只會封存模擬世界的實際結果。");
             }
 
-            if (!_v2World.IsComplete)
+            if (!_latestPlaybackFrame.IsComplete)
             {
                 throw new InvalidOperationException("請先讓所有列車完成營運循環，再匯出固定時刻表。未完成的動態結果不可封存為固定時刻表。");
             }
@@ -222,7 +223,7 @@ public partial class MainWindow
                 _route,
                 _v2DispatchPlan,
                 _plannedTimetableEvents,
-                _v2World.Events);
+                _latestPlaybackFrame.Events);
             var archive = FixedTimetableArchiveFormat.Create(_activeSimulationProjectDocument, entries);
             var json = FixedTimetableArchiveFormat.Serialize(archive);
             var dialog = new SaveFileDialog

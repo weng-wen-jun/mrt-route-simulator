@@ -7,7 +7,7 @@ public partial class MainWindow
 {
     private void PopulateV3Timetable()
     {
-        if (!_v2Enabled || _v2World is null || _v2DispatchPlan is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null || _v2DispatchPlan is null)
         {
             return;
         }
@@ -17,14 +17,13 @@ public partial class MainWindow
                 _route ?? throw new InvalidOperationException("相容 V2 時刻表需要路線資料。"),
                 _v2DispatchPlan,
                 _plannedTimetableEvents,
-                _v2World.Events)
+                _latestPlaybackFrame.Events)
             : OperationsTimetable.Build(
-                _v2World.GetTopologyResultContext(),
+                _latestPlaybackFrame.GetTopologyResultContext(),
                 _v2DispatchPlan,
                 _plannedTimetableEvents,
-                _v2World.Events);
-        TimetableRows.Clear();
-        foreach (var entry in entries)
+                _latestPlaybackFrame.Events);
+        var rows = entries.Select(entry =>
         {
             var serviceName = ServiceTypeRows.FirstOrDefault(row =>
                 row.Id.Equals(entry.ServiceTypeId, StringComparison.OrdinalIgnoreCase))?.Name ?? entry.ServiceTypeId;
@@ -33,7 +32,7 @@ public partial class MainWindow
                 : ServicePatternRows.FirstOrDefault(row =>
                     row.PatternId.Equals(entry.StopPatternId, StringComparison.OrdinalIgnoreCase))?.PatternName
                     ?? entry.StopPatternId;
-            TimetableRows.Add(new TimetableRow(
+            return new TimetableRow(
                 entry.VehicleId,
                 DirectionToChinese(entry.Direction),
                 entry.StationId,
@@ -48,8 +47,9 @@ public partial class MainWindow
                 DisplayClock(entry.PlannedArrivalTimeSeconds),
                 DisplayClock(entry.PlannedDepartureTimeSeconds),
                 entry.DelaySeconds is { } delay ? $"{delay:0.0} s" : "—",
-                entry.Status));
-        }
+                entry.Status);
+        }).ToArray();
+        ApplyRowsByKey(TimetableRows, rows, row => $"{row.ServiceRunId}|{row.StationId}");
 
         if (TimetableSourceText is not null)
         {
@@ -65,7 +65,7 @@ public partial class MainWindow
 
     private void PopulateV3SegmentDetails()
     {
-        if (!_v2Enabled || _v2World is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null)
         {
             return;
         }
@@ -73,25 +73,25 @@ public partial class MainWindow
         var result = _activeTopologyProjectDocument is null
             ? IntervalStatistics.Analyze(
                 _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
-                _v2World.Trajectory,
-                _v2World.Events,
-                _v2World.SpeedLimits.Limits,
+                _latestPlaybackFrame.Trajectory,
+                _latestPlaybackFrame.Events,
+                _latestPlaybackFrame.SpeedLimits.Limits,
                 new IntervalStatisticsFilter(IncludeInProgress: true))
             : IntervalStatistics.Analyze(
-                _v2World.GetTopologyResultContext(),
-                _v2World.Trajectory,
-                _v2World.Events,
+                _latestPlaybackFrame.GetTopologyResultContext(),
+                _latestPlaybackFrame.Trajectory,
+                _latestPlaybackFrame.Events,
                 new IntervalStatisticsFilter(IncludeInProgress: true));
-        SegmentRows.Clear();
-        foreach (var item in result.AllIntervals
+        var rows = result.AllIntervals
                      .OrderBy(value => value.DepartureTimeSeconds ?? value.FirstObservedTimeSeconds)
-                     .ThenBy(value => value.VehicleId, StringComparer.OrdinalIgnoreCase))
+                     .ThenBy(value => value.VehicleId, StringComparer.OrdinalIgnoreCase)
+                     .Select(item =>
         {
             var accelerating = Phase(item, OperationalPhase.Accelerating);
             var cruising = Phase(item, OperationalPhase.Cruising);
             var coasting = Phase(item, OperationalPhase.Coasting);
             var braking = Phase(item, OperationalPhase.Braking) + Phase(item, OperationalPhase.ApproachBraking);
-            SegmentRows.Add(new SegmentRow(
+            return new SegmentRow(
                 $"{item.FromStationId} → {item.ToStationId}",
                 (item.DistanceMeters / 1000).ToString("0.###", CultureInfo.InvariantCulture),
                 "V2 實際（加加速度／速限／控制）",
@@ -107,8 +107,9 @@ public partial class MainWindow
                 $"{coasting:0.0} s",
                 item.ControlEvents.EventTypes.Count == 0
                     ? "無"
-                    : string.Join("、", item.ControlEvents.EventTypes.Select(EventTypeToChinese))));
-        }
+                    : string.Join("、", item.ControlEvents.EventTypes.Select(EventTypeToChinese)));
+        }).ToArray();
+        ApplyRowsByKey(SegmentRows, rows, row => $"{row.VehicleId}|{row.ServiceRunId}|{row.Segment}");
 
         if (SegmentSourceText is not null)
         {
@@ -123,7 +124,7 @@ public partial class MainWindow
 
     private void PopulateV1V2Comparison()
     {
-        if (!_v2Enabled || _v2World is null || _v2DispatchPlan is null || _parameters is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null || _v2DispatchPlan is null || _parameters is null)
         {
             return;
         }
@@ -135,9 +136,9 @@ public partial class MainWindow
                 BuildVehicleTypeDefinitions(),
                 BuildStopPatternDefinitions(),
                 _parameters,
-                _v2World.Events)
+                _latestPlaybackFrame.Events)
             : V1V2Comparison.Analyze(
-                _v2World.GetTopologyResultContext(),
+                _latestPlaybackFrame.GetTopologyResultContext(),
                 _v2DispatchPlan,
                 _activeTopologyProjectDocument.VehicleTypes.Select(item => new VehicleTypeDefinition(
                     item.Id,
@@ -160,11 +161,8 @@ public partial class MainWindow
                         instruction.DwellTimeSeconds,
                         instruction.PassingSpeedLimitMetersPerSecond)))),
                 _parameters,
-                _v2World.Events);
-        V1V2ComparisonRows.Clear();
-        foreach (var item in result.Stations)
-        {
-            V1V2ComparisonRows.Add(new V1V2ComparisonRow(
+                _latestPlaybackFrame.Events);
+        var rows = result.Stations.Select(item => new V1V2ComparisonRow(
                 item.VehicleId,
                 item.ServiceRunId,
                 DirectionToChinese(item.Direction),
@@ -180,8 +178,8 @@ public partial class MainWindow
                 Seconds(item.ArrivalDifferenceSeconds, signed: true),
                 Seconds(item.DepartureDifferenceSeconds, signed: true),
                 item.DepartureDifferencePercent is { } percent ? $"{percent:+0.0;-0.0;0.0}%" : "—",
-                item.Status));
-        }
+                item.Status)).ToArray();
+        ApplyRowsByKey(V1V2ComparisonRows, rows, row => $"{row.VehicleId}|{row.ServiceRunId}|{row.Station}");
 
         string Clock(double? seconds) => seconds is { } value ? FormatClock(_startClockSeconds + value) : "—";
         static string Seconds(double? seconds, bool signed = false) => seconds is not { } value
@@ -191,23 +189,20 @@ public partial class MainWindow
 
     private void PopulateResourceOccupancy()
     {
-        if (!_v2Enabled || _v2World is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null)
         {
             return;
         }
 
-        var result = ResourceOccupancyAnalysis.Analyze(_v2World.Events, _v2World.CurrentTimeSeconds);
-        ResourceOccupancyRows.Clear();
-        foreach (var item in result.Resources)
-        {
-            ResourceOccupancyRows.Add(new ResourceOccupancyRow(
+        var result = _resultAccumulator.BuildResourceOccupancy(_latestPlaybackFrame.CurrentTimeSeconds);
+        var rows = result.Resources.Select(item => new ResourceOccupancyRow(
                 item.ResourceId,
                 $"{item.OccupiedSeconds:0.0} s",
                 $"{item.UtilizationPercent:0.0}%",
                 item.ReservationCount.ToString(),
                 $"{item.ObservedReservationsPerHour:0.0}",
-                item.MinimumReleaseHeadwaySeconds is { } headway ? $"{headway:0.0} s" : "—"));
-        }
+                item.MinimumReleaseHeadwaySeconds is { } headway ? $"{headway:0.0} s" : "—")).ToArray();
+        ApplyRowsByKey(ResourceOccupancyRows, rows, row => row.ResourceId);
         if (ResourceOccupancySummaryText is not null)
         {
             ResourceOccupancySummaryText.Text = result.Resources.Count == 0

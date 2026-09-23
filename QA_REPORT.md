@@ -1,5 +1,15 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## Playback worker 與分級刷新第一階段（2026-09-23）
+
+- B1 已將實際 `SimulationWorld` 交由單一播放 worker 擁有；命令佇列依序且可靠，UI frame 使用容量 1、丟棄舊 frame 的 bounded channel。WPF 消費 immutable frame，不再直接讀取 worker 正在修改的 world；0.1 秒 Engine tick 及拓撲安全流程未改。
+- 計畫時間軸改由獨立背景 worker 建立 artifact；實際播放可在計畫運算期間啟動。工作者支援播放／暫停／重設、倍率與安全模式命令、障礙物事件、關閉與換檔清理，並以 generation ID 隔離舊 frame。
+- B2 目前部分完成：事件、軌跡與安全歷史以獨立 cursor 只擷取新增資料，資源 Reserve／Release 占用由 accumulator 增量維護。時刻表、區間／全程統計及 V1/V2 比較仍在資料變更且分頁需要時呼叫既有完整分析，尚未達到所有結果 `O(new data)`。
+- B3 加入差分列更新、事件 append 上限 300、隱藏分頁延遲刷新與分級刷新週期；播放狀態 tooltip 提供 worker、結果累加及 UI render 計時資訊。拓撲互動軌跡採 0.2 秒留存間隔，Physics 仍逐一執行 0.1 秒 tick；本輪未驗證高解析離線匯出。
+- Release build：0 warnings／0 errors；Engine：145/145 通過；WPF playback worker targeted runner：PASS，涵蓋 latest-frame、可靠命令、固定步進、增量資源、暫停／重設及 worker 清理。
+- 完整拓撲 WPF 長行程 runner 需背景計算 2,536 秒計畫時間軸。本輪執行超過 700 秒 CPU 仍未完成，之後中止；WPF 完整 runner 與 CSV／PNG／PDF 長情境輸出 runner 均未完成，不宣稱通過。視窗／DPI 桌面人工驗收、1×／10×／30×／60×播放及 8,000 秒前後效能基準亦未執行。
+- B2 全結果增量化與代表性效能基準列為後續工作。C 階段 Engine tick 平行提案／leader 查找尚未實作；需待 B 階段完整驗收並 profile 確認 Engine 熱點後再評估，以維持 topology 資源仲裁與 deterministic single-writer 行為。
+
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
 - 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、臺中主要站簡化 sample 與 `.github/pull_request_template.md`。

@@ -9,7 +9,6 @@ internal static class ProjectLoadTests
     public static void Run(string root)
     {
         var window = new MainWindow();
-        var configure = typeof(MainWindow).GetMethod("ConfigureTopologyProjectForPlayback", BindingFlags.NonPublic | BindingFlags.Instance)!;
         var setCurrentProjectFile = typeof(MainWindow).GetMethod("SetCurrentProjectFile", BindingFlags.NonPublic | BindingFlags.Instance)!;
         try
         {
@@ -31,27 +30,27 @@ internal static class ProjectLoadTests
             foreach (var path in paths)
             {
                 var document = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
-                configure.Invoke(window, [document, true]);
+                WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
                 if (!ReferenceEquals(Field(window, "_activeTopologyProjectDocument"), document))
                     throw new InvalidOperationException("載入後專案不符。");
                 Console.WriteLine($"[通過] WPF 完整載入／計畫時間軸／雙向預覽：{Path.GetFileName(path)}");
             }
             var before = Field(window, "_activeTopologyProjectDocument");
-            var session = Field(window, "_v2Session");
+            var worker = Field(window, "_playbackWorker");
             setCurrentProjectFile.Invoke(window, [displayedPath]);
             var beforeTitle = window.Title;
             var beforeFileText = currentProjectFileText.Text;
             var invalid = ((TopologyProjectDocument)before!) with { ProjectId = "" };
             try
             {
-                configure.Invoke(window, [invalid, true]);
+                WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", invalid, true));
                 throw new InvalidOperationException("無效專案未拒絕。");
             }
-            catch (TargetInvocationException ex) when (ex.InnerException is SimulationValidationException) { }
+            catch (SimulationValidationException) { }
             if (!ReferenceEquals(before, Field(window, "_activeTopologyProjectDocument"))
-                || !ReferenceEquals(session, Field(window, "_v2Session")))
-                throw new InvalidOperationException("失敗載入污染原專案或模擬會話。");
-            Console.WriteLine("[通過] WPF 無效專案載入保留原專案及模擬會話");
+                || !ReferenceEquals(worker, Field(window, "_playbackWorker")))
+                throw new InvalidOperationException("失敗載入污染原專案或播放工作者。");
+            Console.WriteLine("[通過] WPF 無效專案載入保留原專案及播放工作者");
             var pocket = StationLayoutTemplateService.Build(StationLayoutTemplateKind.CentralPocket);
             var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.TrackEdgeEditorViewModel")!;
             foreach (var edge in pocket.Topology.Edges)
@@ -70,18 +69,18 @@ internal static class ProjectLoadTests
             } };
             try
             {
-                configure.Invoke(window, [invalidTurn, true]);
+                WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", invalidTurn, true));
                 throw new InvalidOperationException("不合理道岔回頭轉向未在載入替換前拒絕。");
             }
-            catch (TargetInvocationException ex) when (ex.InnerException is SimulationValidationException) { }
+            catch (SimulationValidationException) { }
             if (!ReferenceEquals(before, Field(window, "_activeTopologyProjectDocument"))
-                || !ReferenceEquals(session, Field(window, "_v2Session"))
+                || !ReferenceEquals(worker, Field(window, "_playbackWorker"))
                 || window.Title != beforeTitle || currentProjectFileText.Text != beforeFileText
                 || !Equals(currentProjectFileText.ToolTip, displayedPath))
                 throw new InvalidOperationException("不合理道岔轉向載入污染原專案或模擬會話。");
-            Console.WriteLine("[通過] WPF 不合理道岔轉向拒絕載入且保留既有會話");
+            Console.WriteLine("[通過] WPF 不合理道岔轉向拒絕載入且保留既有播放工作者");
         }
-        finally { window.Close(); }
+        finally { WpfTestWait.Close(window); }
     }
 
     private static object? Field(MainWindow window, string name) =>

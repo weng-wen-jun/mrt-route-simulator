@@ -75,8 +75,13 @@ internal static class VisualRulesTests
                     }
                     var routeCanvas = (Canvas)main.FindName("RouteCanvas");
                     routeCanvas.Children.Clear(); routeCanvas.Width = width; routeCanvas.Height = 400;
+                    var snapshot = world.GetSnapshot();
+                    var trainCenterPositions = snapshot.Trains
+                        .Select(state => (state.VehicleId, Center: world.GetTrainCenterPosition(state.VehicleId)))
+                        .Where(item => item.Center is not null)
+                        .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
                     typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
-                        .Invoke(main, [runtime.Topology.Infrastructure, sample, world.GetSnapshot(), (double)width, 400d, world]);
+                        .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, (double)width, 400d, trainCenterPositions]);
                     var capture = new Canvas { Width = width, Height = routeCanvas.Height, Background = Brushes.White };
                     foreach (var child in routeCanvas.Children.Cast<UIElement>().ToArray()) { routeCanvas.Children.Remove(child); capture.Children.Add(child); }
                     CheckAndSave(capture, sample, System.IO.Path.Combine(output, System.IO.Path.GetFileName(path) + $"-main-{width}-t{stopTime}.png"),

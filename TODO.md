@@ -2,6 +2,13 @@
 
 > 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
 
+## Playback worker／分級刷新（2026-09-23）
+
+- [x] 【PLAYBACK-B1/B3】實際 world 單一 worker、可靠命令、latest-frame-wins immutable frame、背景計畫時間軸、分級 UI 刷新、隱藏分頁延遲刷新及 ObservableCollection 差分更新。Release build 0 warnings／0 errors；Engine 145/145；playback worker targeted runner 通過。
+- [ ] 【PLAYBACK-B2】將時刻表、區間／全程統計與 V1/V2 comparison 改為消費新增事件／軌跡的增量結果；目前只有 cursor 擷取及資源占用完成增量維護。
+- [ ] 【PLAYBACK-QA-01】完成完整 WPF 長行程及 CSV／PNG／PDF runner、原生桌面 1×／10×／30×／60×互動驗收與 8,000 秒前後 benchmark。2026-09-23 長行程計畫時間軸超過 700 秒 CPU 未完成，測試已中止；詳見 `QA_REPORT.md`。
+- [ ] 【PLAYBACK-PROFILE-01】完成 B 階段驗收後 profile Engine hot path；只有證據顯示 tick 計算仍是瓶頸時，才評估 C 階段平行提案或 leader lookup 最佳化。
+
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 
 - [x] 2026-09-09：依 PDF 加入七種可執行站場、方向及月台配置、進路綁定、模擬參數設定與袋狀軌對向互斥；118/118 自動化通過，完成 WPF 離屏繪圖及站型按鈕／草稿隔離驗證。桌面手動驗收仍依現行待辦執行。
