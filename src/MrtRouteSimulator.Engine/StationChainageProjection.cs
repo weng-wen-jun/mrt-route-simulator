@@ -6,6 +6,9 @@ namespace MrtRouteSimulator.Engine;
 /// </summary>
 public sealed class StationChainageProjection
 {
+    private sealed record RouteDisplayMap(
+        IReadOnlyDictionary<string, Func<double, double>> EdgeMaps);
+
     private readonly Dictionary<string, (double From, double To, double Length)> edges = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> stations = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, Func<double, double>> edgeMaps = new(StringComparer.OrdinalIgnoreCase);
@@ -30,10 +33,28 @@ public sealed class StationChainageProjection
         var primaryProjection = new RouteProjection(graph, primary);
         var primaryStops = Centers(primary, primaryProjection);
         if (primaryStops.Length == 0) throw new SimulationValidationException(["中心里程需要至少一個起始站。"]);
-        var origin = primaryStops[0].Raw;
-        foreach (var stop in primaryStops) stations[stop.Id] = stop.Raw - origin;
+        var explicitStationCenters = primaryStops.Select(stop =>
+        {
+            var node = graph.Nodes.GetValueOrDefault($"NODE:{stop.Id}");
+            return (stop.Id, Chainage: node?.SchematicPosition);
+        }).ToArray();
+        if (explicitStationCenters.All(item => item.Chainage is not null))
+        {
+            // An author may supply an explicit station-center display projection
+            // (for example, source-backed chainage).  This remains presentation
+            // data only: physical cursor, edge length and port validation continue
+            // to use the topology graph.
+            foreach (var station in explicitStationCenters)
+                stations[station.Id] = station.Chainage!.Value;
+        }
+        else
+        {
+            var origin = primaryStops[0].Raw;
+            foreach (var stop in primaryStops) stations[stop.Id] = stop.Raw - origin;
+        }
 
         var nodes = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        var routeMaps = new Dictionary<string, RouteDisplayMap>(StringComparer.OrdinalIgnoreCase);
         foreach (var route in new[] { primary }.Concat(document.ServiceRoutes.Where(r => r.ServiceRouteId != primaryId)))
         {
             var projection = new RouteProjection(graph, route);
@@ -51,15 +72,85 @@ public sealed class StationChainageProjection
                             * (raw - anchors[i - 1].Raw) / (anchors[i].Raw - anchors[i - 1].Raw);
                 return anchors[^1].Value;
             }
+
+            var routeEdgeMaps = new Dictionary<string, Func<double, double>>(StringComparer.OrdinalIgnoreCase);
             foreach (var segment in projection.Segments)
             {
                 var edge = graph.Edges[segment.Traversal.TrackEdgeId];
                 var from = Map(segment.StartChainageMeters); var to = Map(segment.EndChainageMeters);
                 if (segment.Traversal.Direction == TraversalDirection.Reverse) (from, to) = (to, from);
+                var edgeMap = (double offset) => Map(segment.StartChainageMeters
+                    + (segment.Traversal.Direction == TraversalDirection.Forward ? offset : edge.LengthMeters - offset));
+                routeEdgeMaps.TryAdd(edge.TrackEdgeId, edgeMap);
                 edges.TryAdd(edge.TrackEdgeId, (from, to, edge.LengthMeters));
-                edgeMaps.TryAdd(edge.TrackEdgeId, offset => Map(segment.StartChainageMeters
-                    + (segment.Traversal.Direction == TraversalDirection.Forward ? offset : edge.LengthMeters - offset)));
+                edgeMaps.TryAdd(edge.TrackEdgeId, edgeMap);
                 nodes.TryAdd(edge.FromNodeId, from); nodes.TryAdd(edge.ToNodeId, to);
+            }
+
+            routeMaps[route.ServiceRouteId] = new(routeEdgeMaps);
+        }
+
+        // Passing tracks are physical facility traversals rather than ServiceRoute
+        // traversals.  Project them through the corresponding route's arrival and
+        // departure edges, then anchor the express platform center to the station
+        // center.  Falling back to shared-node interpolation here can mix the first
+        // direction's node value with the opposite direction's edge map.
+        foreach (var facility in document.Topology.PassingFacilities)
+        {
+            var expressPlatform = graph.Platforms.GetValueOrDefault(facility.ExpressPlatformId);
+            if (expressPlatform is null
+                || edges.ContainsKey(expressPlatform.TrackEdgeId)
+                || edgeMaps.ContainsKey(expressPlatform.TrackEdgeId)
+                || !facility.Traversals.Any(item => item.TrackEdgeId.Equals(expressPlatform.TrackEdgeId, StringComparison.OrdinalIgnoreCase))
+                || !stations.TryGetValue(facility.StationId, out var stationCenter))
+            {
+                continue;
+            }
+
+            var operationRouteIds = document.Topology.PassingOperations
+                .Where(operation => operation.FacilityId.Equals(facility.FacilityId, StringComparison.OrdinalIgnoreCase))
+                .Select(operation => operation.ServiceRouteId)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            foreach (var routeId in operationRouteIds)
+            {
+                if (!routeMaps.TryGetValue(routeId, out var routeMap)
+                    || !routeMap.EdgeMaps.TryGetValue(facility.ArrivalTrackEdgeId, out var arrivalMap)
+                    || !routeMap.EdgeMaps.TryGetValue(facility.DepartureTrackEdgeId, out var departureMap))
+                {
+                    continue;
+                }
+
+                var arrivalEdge = graph.Edges[facility.ArrivalTrackEdgeId];
+                var departureEdge = graph.Edges[facility.DepartureTrackEdgeId];
+                var arrivalOffset = Math.Clamp(facility.ArrivalOffsetMeters, 0, arrivalEdge.LengthMeters);
+                var departureOffset = Math.Clamp(facility.DepartureStartOffsetMeters, 0, departureEdge.LengthMeters);
+                var routeStart = arrivalMap(arrivalOffset);
+                var routeEnd = departureMap(departureOffset);
+                var traversal = facility.Traversals.First(item =>
+                    item.TrackEdgeId.Equals(expressPlatform.TrackEdgeId, StringComparison.OrdinalIgnoreCase));
+                var expressEdge = graph.Edges[expressPlatform.TrackEdgeId];
+                var centerOffset = Math.Clamp(
+                    (expressPlatform.PlatformStartOffsetMeters + expressPlatform.PlatformEndOffsetMeters) / 2,
+                    0,
+                    expressEdge.LengthMeters);
+                var map = CreateAnchoredFacilityMap(
+                    expressEdge.LengthMeters,
+                    traversal.Direction,
+                    centerOffset,
+                    routeStart,
+                    stationCenter,
+                    routeEnd);
+                var from = map(0);
+                var to = map(expressEdge.LengthMeters);
+                if (!double.IsFinite(from) || !double.IsFinite(to))
+                {
+                    continue;
+                }
+
+                edges[expressEdge.TrackEdgeId] = (from, to, expressEdge.LengthMeters);
+                edgeMaps[expressEdge.TrackEdgeId] = map;
+                break;
             }
         }
 
@@ -87,7 +178,9 @@ public sealed class StationChainageProjection
                 nodes.TryAdd(end, b);
             }
         }
-        // 已有兩端里程的passing／crossover，用端點內插，不能把繞行長度加進主線里程。
+        // Remaining passing／crossover edges without a facility-specific map use
+        // their already projected node endpoints.  Facility edges with a station
+        // center anchor were handled above and must not be replaced here.
         foreach (var edge in graph.Edges.Values)
             if (!edges.ContainsKey(edge.TrackEdgeId) && nodes.TryGetValue(edge.FromNodeId, out var from)
                 && nodes.TryGetValue(edge.ToNodeId, out var to))
@@ -99,6 +192,45 @@ public sealed class StationChainageProjection
                 var center = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
                 return (s.StationId, projection.ToChainage(s.TraversalIndex, new(platform.TrackEdgeId, center)));
             }).ToArray();
+    }
+
+    private static Func<double, double> CreateAnchoredFacilityMap(
+        double edgeLength,
+        TraversalDirection traversalDirection,
+        double centerOffset,
+        double routeStart,
+        double stationCenter,
+        double routeEnd)
+    {
+        var routeCenterOffset = traversalDirection == TraversalDirection.Forward
+            ? centerOffset
+            : edgeLength - centerOffset;
+
+        double AlongTraversal(double distance)
+        {
+            if (routeCenterOffset <= TrackPosition.DefaultToleranceMeters
+                || routeCenterOffset >= edgeLength - TrackPosition.DefaultToleranceMeters)
+            {
+                return Linear(routeStart, routeEnd, edgeLength <= TrackPosition.DefaultToleranceMeters
+                    ? 0
+                    : distance / edgeLength);
+            }
+
+            return distance <= routeCenterOffset
+                ? Linear(routeStart, stationCenter, distance / routeCenterOffset)
+                : Linear(stationCenter, routeEnd, (distance - routeCenterOffset) / (edgeLength - routeCenterOffset));
+        }
+
+        return offset =>
+        {
+            var physicalOffset = Math.Clamp(offset, 0, edgeLength);
+            var distance = traversalDirection == TraversalDirection.Forward
+                ? physicalOffset
+                : edgeLength - physicalOffset;
+            return AlongTraversal(distance);
+        };
+
+        static double Linear(double start, double end, double ratio) => start + (end - start) * Math.Clamp(ratio, 0, 1);
     }
 
     public double? ToChainage(TrackPosition position) => edgeMaps.TryGetValue(position.TrackEdgeId, out var map)
