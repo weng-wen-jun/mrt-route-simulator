@@ -5,9 +5,9 @@
 ## Playback worker／分級刷新（2026-09-23）
 
 - [x] 【PLAYBACK-B1/B3】實際 world 單一 worker、可靠命令、latest-frame-wins immutable frame、背景計畫時間軸、分級 UI 刷新、隱藏分頁延遲刷新及 ObservableCollection 差分更新。Release build 0 warnings／0 errors；Engine 145/145；playback worker targeted runner 通過。
-- [ ] 【PLAYBACK-B2】將時刻表、區間／全程統計與 V1/V2 comparison 改為消費新增事件／軌跡的增量結果；目前只有 cursor 擷取及資源占用完成增量維護。
-- [ ] 【PLAYBACK-QA-01】完成完整 WPF 長行程及 CSV／PNG／PDF runner、原生桌面 1×／10×／30×／60×互動驗收與 8,000 秒前後 benchmark。2026-09-23 長行程計畫時間軸超過 700 秒 CPU 未完成，測試已中止；詳見 `QA_REPORT.md`。
-- [ ] 【PLAYBACK-PROFILE-01】完成 B 階段驗收後 profile Engine hot path；只有證據顯示 tick 計算仍是瓶頸時，才評估 C 階段平行提案或 leader lookup 最佳化。
+- [x] 【PLAYBACK-B2】時刻表、區間／全程統計、資源占用與 V1/V2 comparison 已消費新增事件／軌跡並與 2 秒、10 秒、重設及 3,600 秒完整分析核對。詳見 `QA_REPORT.md`。
+- [ ] 【PLAYBACK-QA-01】完整 WPF 長行程與 CSV／PNG／PDF runner 已通過；8,000 秒 Engine benchmark 已跑三次且事件序列一致。仍待原生桌面 1×／10×／30×／60×、不同 DPI、長時間 UI FPS／最長卡頓，以及 28 站大型 sample 的實測。詳見 `QA_REPORT.md`。
+- [ ] 【PLAYBACK-PROFILE-01】目前 7 車次完整拓撲範例的 8,000 秒 Engine benchmark 遠低於 60× tick 門檻，暫不啟動 C 階段。待整合 28 站大型 sample 後，重做 profile 並視瓶頸決定是否需平行提案或 leader lookup 最佳化。
 
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 
