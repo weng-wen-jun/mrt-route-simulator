@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Windows;
@@ -21,6 +22,10 @@ public partial class MainWindow
     private bool _v2Enabled;
     private bool _updatingSpeedProfileSelection;
     private double? _v2PlannedMinimumIntervalSeconds;
+    private long _lastExpensivePlaybackRefreshTimestamp;
+
+    private static readonly long ExpensivePlaybackRefreshIntervalTicks =
+        (long)(Stopwatch.Frequency * 0.25);
 
     public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
 
@@ -94,7 +99,7 @@ public partial class MainWindow
         }
 
         var session = _v2Session;
-        var snapshot = session.AdvanceTo(_playbackTimeSeconds);
+        var snapshot = session.AdvanceActualTo(_playbackTimeSeconds);
         CurrentTrainRows.Clear();
         foreach (var state in snapshot.Trains.Where(state => state.Phase != OperationalPhase.OutOfService))
         {
@@ -110,46 +115,67 @@ public partial class MainWindow
                 state.NextStationId ?? "—"));
         }
 
-        SafetyRows.Clear();
-        foreach (var observation in snapshot.SafetyObservations.Where(MatchesSafetyFilters))
+        var refreshExpensiveViews = !_playbackTimer.IsEnabled || ShouldRefreshExpensivePlaybackViews();
+        if (refreshExpensiveViews)
         {
-            SafetyRows.Add(new SafetyRow(
-                $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}",
-                observation.TrackId,
-                $"{observation.FollowerFrontPositionMeters / 1000:0.00}",
-                $"{observation.LeaderRearPositionMeters / 1000:0.00}",
-                $"{observation.ActualGapMeters:0.0}",
-                $"{observation.DynamicSafetyDistanceMeters:0.0}",
-                $"{observation.ObstacleBrakingDemandMeters:0.0}",
-                $"{observation.SafetyMarginMeters:0.0}",
-                SafetyStatusToChinese(observation.Status)));
+            SafetyRows.Clear();
+            foreach (var observation in snapshot.SafetyObservations.Where(MatchesSafetyFilters))
+            {
+                SafetyRows.Add(new SafetyRow(
+                    $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}",
+                    observation.TrackId,
+                    $"{observation.FollowerFrontPositionMeters / 1000:0.00}",
+                    $"{observation.LeaderRearPositionMeters / 1000:0.00}",
+                    $"{observation.ActualGapMeters:0.0}",
+                    $"{observation.DynamicSafetyDistanceMeters:0.0}",
+                    $"{observation.ObstacleBrakingDemandMeters:0.0}",
+                    $"{observation.SafetyMarginMeters:0.0}",
+                    SafetyStatusToChinese(observation.Status)));
+            }
+
+            EventRows.Clear();
+            foreach (var simulationEvent in session.ActualWorld.Events.TakeLast(300).Reverse())
+            {
+                EventRows.Add(new EventRow(
+                    TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds),
+                    EventTypeToChinese(simulationEvent.EventType),
+                    string.IsNullOrWhiteSpace(simulationEvent.VehicleId) ? "—" : ShortVehicle(simulationEvent.VehicleId),
+                    $"{simulationEvent.PositionMeters / 1000:0.00}",
+                    simulationEvent.Message));
+            }
+
+            RefreshPairFilter(session.ActualWorld.SafetyHistory.Where(MatchesSafetyFilters));
+            UpdateSafetySummary();
         }
 
-        EventRows.Clear();
-        foreach (var simulationEvent in session.ActualWorld.Events.TakeLast(300).Reverse())
-        {
-            EventRows.Add(new EventRow(
-                TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds),
-                EventTypeToChinese(simulationEvent.EventType),
-                string.IsNullOrWhiteSpace(simulationEvent.VehicleId) ? "—" : ShortVehicle(simulationEvent.VehicleId),
-                $"{simulationEvent.PositionMeters / 1000:0.00}",
-                simulationEvent.Message));
-        }
-
-        RefreshPairFilter(session.ActualWorld.SafetyHistory.Where(MatchesSafetyFilters));
-        UpdateSafetySummary();
         SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
         DrawV2Route(snapshot);
-        DrawV2SpeedProfile();
-        DrawSafetyDistanceChart();
-        DrawTimeDistanceDiagram();
-        PopulateIntervalStatistics(throttled: true);
-        PopulateV3Timetable();
-        PopulateV3SegmentDetails();
-        PopulateV1V2Comparison();
-        PopulateResourceOccupancy();
-        UpdateV2ActualSummary();
+        if (refreshExpensiveViews)
+        {
+            DrawV2SpeedProfile();
+            DrawSafetyDistanceChart();
+            DrawTimeDistanceDiagram();
+            PopulateIntervalStatistics(throttled: true);
+            PopulateV3Timetable();
+            PopulateV3SegmentDetails();
+            PopulateV1V2Comparison();
+            PopulateResourceOccupancy();
+            UpdateV2ActualSummary();
+        }
         session.ActualWorld.AcknowledgeSnapshotEvents();
+    }
+
+    private bool ShouldRefreshExpensivePlaybackViews()
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (_lastExpensivePlaybackRefreshTimestamp != 0
+            && now - _lastExpensivePlaybackRefreshTimestamp < ExpensivePlaybackRefreshIntervalTicks)
+        {
+            return false;
+        }
+
+        _lastExpensivePlaybackRefreshTimestamp = now;
+        return true;
     }
 
     private void ResetV2Playback()
@@ -162,6 +188,7 @@ public partial class MainWindow
         V1V2ComparisonRows.Clear();
         ResourceOccupancyRows.Clear();
         _lastIntervalRefreshSecond = -1;
+        _lastExpensivePlaybackRefreshTimestamp = 0;
         SafetyPairComboBox.Items.Clear();
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         DrawSafetyDistanceChart();
@@ -184,6 +211,7 @@ public partial class MainWindow
         IntervalStatisticRows.Clear();
         JourneyStatisticRows.Clear();
         _lastIntervalRefreshSecond = -1;
+        _lastExpensivePlaybackRefreshTimestamp = 0;
         SafetyPairComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
@@ -416,7 +444,7 @@ public partial class MainWindow
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
         RouteCanvas.Children.Clear();
-        var width = RouteCanvas.ActualWidth;
+        var width = PrepareRouteCanvasWidth();
         var height = RouteCanvas.ActualHeight;
         if (width < 100 || height < 100)
         {
@@ -801,7 +829,10 @@ public partial class MainWindow
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2));
+            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), infrastructure.Platforms.Values,
+            infrastructure.DirectedConnections,
+            StationSchematicPresentation.UsesCompactLaneTransitions(topologyProject, width),
+            topologyProject?.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
         var railColor = Color.FromRgb(25, 96, 125);
         StationSchematicPresentation.DrawLegend(RouteCanvas);
@@ -833,7 +864,7 @@ public partial class MainWindow
         }
 
         var stationCenters = StationSchematicPresentation.DrawPlatforms(RouteCanvas, infrastructure.Platforms.Values,
-            infrastructure.Edges.Values, edgeGeometries, mainlineY);
+            infrastructure.Edges.Values, edgeGeometries, mainlineY, topologyProject?.Topology.PassingFacilities);
         var stationVisuals = infrastructure.Stations.Values
             .Select(station =>
             {
@@ -875,18 +906,40 @@ public partial class MainWindow
                 ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
             var outgoing = connection.ToDirection == TraversalDirection.Forward
                 ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+            var fromEdge = infrastructure.Edges.GetValueOrDefault(connection.FromTrackEdgeId);
+            var toEdge = infrastructure.Edges.GetValueOrDefault(connection.ToTrackEdgeId);
+            var allowLaneTurn = fromEdge is not null && toEdge is not null
+                && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
+                    || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
             StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
-                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})");
+                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
+                allowLaneTurn);
         }
 
         foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
         {
             var geometry = edgeGeometries[edge.TrackEdgeId];
+            var emphasizeSideTrack = edgeGeometries.Count >= 32
+                && edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.Siding;
+            if (emphasizeSideTrack)
+            {
+                // The large-route overview intentionally keeps short passing-track
+                // transitions shallow.  Reserve a light outline so the parallel
+                // side track remains visible instead of blending into the mainline.
+                RouteCanvas.Children.Add(new Polyline
+                {
+                    Points = new PointCollection(geometry.Points),
+                    Stroke = Brushes.White,
+                    StrokeThickness = 7,
+                    StrokeLineJoin = PenLineJoin.Round,
+                    IsHitTestVisible = false
+                });
+            }
             RouteCanvas.Children.Add(new Polyline
             {
                 Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(railColor),
-                StrokeThickness = 5,
+                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
+                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)} · {edge.LengthMeters:0.#} m · 預設 {edge.DefaultSpeedLimitMetersPerSecond * 3.6:0.#} km/h"
             });

@@ -16,6 +16,7 @@ public sealed class SimulationWorld
     private readonly List<MutableTrain> _trains = [];
     private readonly SimulationTraceStore _traceStore;
     private readonly List<SafetyObservation> _safetyHistory = [];
+    private readonly Dictionary<SafetyObservationKey, double> _lastSafetyHistorySamples = [];
     private readonly List<SimulationEvent> _events = [];
     private readonly List<SimulationEvent> _newEvents = [];
     private readonly List<ScheduledObstacle> _scheduledObstacles = [];
@@ -49,8 +50,10 @@ public sealed class SimulationWorld
     private readonly TrackSpeedLimitService _trackSpeedLimits;
     private readonly bool _enforceRouteResources;
     private readonly bool _topologyNativeRuntime;
+    private readonly SafetyObservationRetentionPolicy _safetyObservationRetentionPolicy;
     private IReadOnlyList<SafetyObservation> _currentSafety = [];
     private int _nextEventIndex;
+    private readonly HashSet<SafetyObservationKey> _safetyKeysWithStatusChange = [];
 
     private VehiclePerformance GetVehiclePerformance(MutableTrain train)
     {
@@ -134,7 +137,8 @@ public sealed class SimulationWorld
         IEnumerable<VehicleTypeDefinition>? vehicleTypes = null,
         InfrastructureGraph? infrastructure = null,
         SimulationTraceRetentionPolicy? traceRetentionPolicy = null,
-        IEnumerable<ServiceTypeDefinition>? serviceTypes = null)
+        IEnumerable<ServiceTypeDefinition>? serviceTypes = null,
+        SafetyObservationRetentionPolicy? safetyObservationRetentionPolicy = null)
         : this(
             CreateTopologyFromRouteInput(route, trainParameters, speedLimits, infrastructure),
             trainParameters,
@@ -150,7 +154,8 @@ public sealed class SimulationWorld
             vehicleTypes,
             infrastructure: null,
             traceRetentionPolicy,
-            serviceTypes)
+            serviceTypes,
+            safetyObservationRetentionPolicy)
     {
     }
 
@@ -187,7 +192,8 @@ public sealed class SimulationWorld
         SimulationTraceRetentionPolicy? traceRetentionPolicy = null,
         IEnumerable<ServiceTypeDefinition>? serviceTypes = null,
         LinearInfrastructureBuildResult? topologyBuild = null,
-        bool topologyNativeRuntime = false)
+        bool topologyNativeRuntime = false,
+        SafetyObservationRetentionPolicy? safetyObservationRetentionPolicy = null)
     {
         if (trainCount <= 0)
         {
@@ -239,6 +245,8 @@ public sealed class SimulationWorld
         BrakingEstimationMode = BrakingEstimationMode.Service;
         TraceRetentionPolicy = traceRetentionPolicy ?? SimulationTraceRetentionPolicy.Full;
         _traceStore = new SimulationTraceStore(TraceRetentionPolicy);
+        _safetyObservationRetentionPolicy = safetyObservationRetentionPolicy
+            ?? SafetyObservationRetentionPolicy.Full;
         _enforceRouteResources = false;
         _dispatchPlan = dispatchPlan;
         foreach (var run in dispatchPlan?.Runs ?? [])
@@ -294,7 +302,8 @@ public sealed class SimulationWorld
         IEnumerable<VehicleTypeDefinition>? vehicleTypes = null,
         InfrastructureGraph? infrastructure = null,
         SimulationTraceRetentionPolicy? traceRetentionPolicy = null,
-        IEnumerable<ServiceTypeDefinition>? serviceTypes = null)
+        IEnumerable<ServiceTypeDefinition>? serviceTypes = null,
+        SafetyObservationRetentionPolicy? safetyObservationRetentionPolicy = null)
         : this(
             null,
             trainParameters,
@@ -312,7 +321,8 @@ public sealed class SimulationWorld
             traceRetentionPolicy,
             serviceTypes,
             topology.ToBuildResult(),
-            topologyNativeRuntime: true)
+            topologyNativeRuntime: true,
+            safetyObservationRetentionPolicy: safetyObservationRetentionPolicy)
     {
     }
 
@@ -376,6 +386,9 @@ public sealed class SimulationWorld
     public double TimeStepSeconds => FixedTimeStepSeconds;
 
     public SimulationTraceRetentionPolicy TraceRetentionPolicy { get; }
+
+    public SafetyObservationRetentionPolicy SafetyObservationRetentionPolicy =>
+        _safetyObservationRetentionPolicy;
 
     /// <summary>所有已排入世界的車輛均已完成最後一個車次並退出營運。</summary>
     public bool IsComplete => _trains.Count > 0 && _trains.All(train => train.Completed);
@@ -549,7 +562,7 @@ public sealed class SimulationWorld
         _currentSafety = MovingBlockMode == MovingBlockMode.Independent
             ? []
             : ComputeSafetyObservations(recordStatusEvents: true);
-        _safetyHistory.AddRange(_currentSafety);
+        RecordSafetyHistory(_currentSafety);
         RecordTrajectory();
 
         return new SimulationSnapshot(
@@ -571,10 +584,12 @@ public sealed class SimulationWorld
         CurrentTimeSeconds = 0;
         _traceStore.Reset();
         _safetyHistory.Clear();
+        _lastSafetyHistorySamples.Clear();
         _events.Clear();
         _newEvents.Clear();
         _currentSafety = [];
         _lastSafetyStatuses.Clear();
+        _safetyKeysWithStatusChange.Clear();
         _controlBrakingActive.Clear();
         _lastDestinationPlatforms.Clear();
         _destinationPlatformAllocationCounts.Clear();
@@ -4526,6 +4541,10 @@ public sealed class SimulationWorld
         }
 
         _lastSafetyStatuses[key] = observation.Status;
+        _safetyKeysWithStatusChange.Add(new SafetyObservationKey(
+            follower.VehicleId,
+            leader.VehicleId,
+            observation.TrackId));
         AddEvent(
             SimulationEventType.SafetyStatusChanged,
             follower,
@@ -4545,6 +4564,39 @@ public sealed class SimulationWorld
                 follower.Speed);
         }
     }
+
+    private void RecordSafetyHistory(IReadOnlyList<SafetyObservation> observations)
+    {
+        var observedKeys = new HashSet<SafetyObservationKey>();
+        foreach (var observation in observations)
+        {
+            var key = new SafetyObservationKey(
+                observation.FollowerVehicleId,
+                observation.LeaderVehicleId,
+                observation.TrackId);
+            observedKeys.Add(key);
+            var statusChanged = _safetyKeysWithStatusChange.Remove(key);
+            var shouldRecord = _safetyObservationRetentionPolicy.Mode == SafetyObservationRetentionMode.Full
+                || !_lastSafetyHistorySamples.TryGetValue(key, out var previousTime)
+                || observation.SimulationTimeSeconds - previousTime
+                    >= _safetyObservationRetentionPolicy.MinimumSampleIntervalSeconds - NumericalTolerance
+                || statusChanged;
+            if (!shouldRecord)
+            {
+                continue;
+            }
+
+            _safetyHistory.Add(observation);
+            _lastSafetyHistorySamples[key] = observation.SimulationTimeSeconds;
+        }
+
+        _safetyKeysWithStatusChange.RemoveWhere(key => !observedKeys.Contains(key));
+    }
+
+    private readonly record struct SafetyObservationKey(
+        string FollowerVehicleId,
+        string LeaderVehicleId,
+        string TrackId);
 
     private void ApplyCollisionProtection()
     {
@@ -4850,9 +4902,33 @@ public sealed class SimulationWorld
     {
         var platform = TopologyInfrastructure.Platforms[stop.PlatformId];
         var direction = GetServiceRouteDefinition(train.Direction).Traversals[stop.TraversalIndex].Direction;
-        var position = PlatformStopPositionResolver.ResolveHeadPosition(platform, direction, GetVehiclePerformance(train).LengthMeters);
-        return stop with { Position = position, ChainageMeters = stop.ChainageMeters
-            + (platform.StopPositionReference == StopPositionReference.TrainCenter ? GetVehiclePerformance(train).LengthMeters / 2 : 0) };
+        var trainLength = GetVehiclePerformance(train).LengthMeters;
+        if (platform.StopPositionReference != StopPositionReference.TrainCenter)
+        {
+            return stop with
+            {
+                Position = PlatformStopPositionResolver.ResolveHeadPosition(platform, direction, trainLength)
+            };
+        }
+
+        // A center-referenced stop may sit exactly at a node.  Resolve the
+        // vehicle head by advancing along the ordered ServiceRoute instead of
+        // writing an out-of-range offset on the platform's arrival edge.  This
+        // keeps the physical center at the platform center while allowing the
+        // footprint to span the adjacent edge at station boundaries.
+        var routeNavigator = GetTopologyNavigator(train.Direction);
+        var centerCursor = new TopologyTraversalCursor(
+            routeNavigator.ServiceRouteId,
+            stop.TraversalIndex,
+            stop.Position);
+        var headCursor = routeNavigator.Advance(centerCursor, trainLength / 2);
+        var resolvedCenterOffset = routeNavigator.TryGetForwardDistance(centerCursor, headCursor) ?? 0;
+        return stop with
+        {
+            TraversalIndex = headCursor.TraversalIndex,
+            Position = headCursor.Position,
+            ChainageMeters = stop.ChainageMeters + resolvedCenterOffset
+        };
     }
 
     private TrackPosition ResolveFacilityPlatformHead(MutableTrain train, string edgeId, double anchor, TraversalDirection direction)
