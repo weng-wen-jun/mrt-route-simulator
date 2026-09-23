@@ -81,6 +81,7 @@ var tests = new (string Name, Action Run)[]
     ("同一追撞只記錄一次碰撞事件", TestCollisionEventRecordedOnce),
     ("動態煞車包絡線使到站前速度接近零", TestDynamicStationBrakingContinuity),
     ("StationStopController 以曲線與預測停點控制精停", TestStationStopControllerTracksCurveAndPrediction),
+    ("BasicPhysics 煞車包絡閉式計算與固定步進積分一致", TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps),
     ("進站低速限制解除後仍受精停目標速度約束", TestStationStopControllerPreventsPostNearStopBounce),
     ("SimulationWorld 進站近停後不會重新牽引回彈", TestSimulationWorldStationBrakingDoesNotReaccelerate),
     ("移動閉塞控制不再把高速列車瞬間歸零", TestMovingBlockControlDoesNotHardStop),
@@ -844,6 +845,43 @@ static void TestDynamicStationBrakingContinuity()
         0.1,
         jerkLimited: true);
     True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps()
+{
+    var random = new Random(20260923);
+    var speeds = new List<double> { 0, 1e-10, 0.15, 22.22, 33.3333333333 };
+    for (var index = 0; index < 300; index++)
+    {
+        speeds.Add(random.NextDouble() * 45);
+    }
+
+    foreach (var speed in speeds)
+    foreach (var braking in new[] { 0.3, 0.9, 1.6 })
+    foreach (var timeStep in new[] { 0.05, 0.1, 0.2 })
+    {
+        var actual = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            speed, 0.5, braking, 0, timeStep, jerkLimited: false);
+        var expectedSpeed = speed;
+        var expectedDistance = 0d;
+        var expectedDuration = 0d;
+        var expectedAcceleration = 0.5;
+        for (var step = 0; expectedSpeed > 1e-9 && step < 100_000; step++)
+        {
+            expectedAcceleration = -braking;
+            var nextSpeed = Math.Max(0, expectedSpeed - braking * timeStep);
+            expectedDistance += (expectedSpeed + nextSpeed) * 0.5 * timeStep;
+            expectedDuration += timeStep;
+            expectedSpeed = nextSpeed;
+        }
+
+        True(Math.Abs(actual.DistanceMeters - expectedDistance) <= 1e-7 * Math.Max(1, expectedDistance),
+            $"BasicPhysics 煞停距離與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(Math.Abs(actual.DurationSeconds - expectedDuration) <= 1e-8,
+            $"BasicPhysics 煞停時間與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(actual.FinalAccelerationMetersPerSecondSquared == expectedAcceleration,
+            "BasicPhysics 最終加速度須與固定步進相同。");
+    }
 }
 
 static void TestStationStopControllerTracksCurveAndPrediction()

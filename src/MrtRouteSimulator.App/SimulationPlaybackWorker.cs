@@ -233,17 +233,17 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
 
     private async Task StopCoreAsync()
     {
-        if (!_runTask.IsCompleted)
-        {
-            var completion = NewCompletion();
-            if (_commands.Writer.TryWrite(PlaybackCommand.Stop(completion)))
-            {
-                await completion.Task.ConfigureAwait(false);
-            }
-        }
-
         try
         {
+            if (!_runTask.IsCompleted)
+            {
+                var completion = NewCompletion();
+                if (_commands.Writer.TryWrite(PlaybackCommand.Stop(completion)))
+                {
+                    await completion.Task.ConfigureAwait(false);
+                }
+            }
+
             await _runTask.ConfigureAwait(false);
         }
         finally
@@ -257,6 +257,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
 
     private async Task RunAsync()
     {
+        Exception? failure = null;
         try
         {
             PublishFrame(force: true);
@@ -303,18 +304,25 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         }
         catch (Exception exception)
         {
+            failure = exception;
             _ready.TrySetException(exception);
-            while (_commands.Reader.TryRead(out var pending))
-            {
-                pending.Completion?.TrySetException(exception);
-            }
-
             throw;
         }
         finally
         {
             _isPlaying = false;
-            _commands.Writer.TryComplete();
+            lock (_disposeLock)
+            {
+                Interlocked.Exchange(ref _stopRequested, 1);
+                _commands.Writer.TryComplete(failure);
+            }
+
+            while (_commands.Reader.TryRead(out var pending))
+            {
+                pending.Completion?.TrySetException(
+                    failure ?? new ObjectDisposedException(nameof(SimulationPlaybackWorker)));
+            }
+
             _frames.Writer.TryComplete();
         }
     }
@@ -644,10 +652,19 @@ public static class PlannedTimelineWorker
         }
 
         var world = options.CreateWorld();
-        while (!world.IsComplete && world.CurrentTimeSeconds < durationSeconds)
+        // AdvanceTo only executes complete 0.1 s ticks. Floating-point drift can
+        // leave CurrentTimeSeconds microscopically below durationSeconds after
+        // the final tick; a strict comparison would request the same target forever.
+        while (!world.IsComplete
+               && world.CurrentTimeSeconds + SimulationWorld.FixedTimeStepSeconds <= durationSeconds + 1e-7)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var before = world.CurrentTimeSeconds;
             world.AdvanceTo(Math.Min(durationSeconds, world.CurrentTimeSeconds + AdvanceSliceSeconds));
+            if (world.CurrentTimeSeconds <= before)
+            {
+                throw new InvalidOperationException("計畫時間軸未能推進到下一個固定時間步進。");
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();

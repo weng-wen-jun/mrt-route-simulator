@@ -512,11 +512,21 @@ public sealed class SimulationWorld
 
         while (CurrentTimeSeconds + FixedTimeStepSeconds <= targetTimeSeconds + NumericalTolerance)
         {
-            Tick();
+            TickCore();
         }
     }
 
     public SimulationSnapshot Tick()
+    {
+        TickCore();
+        return new SimulationSnapshot(
+            CurrentTimeSeconds,
+            _trains.Select(ToState).ToArray(),
+            _currentSafety,
+            _newEvents.ToArray());
+    }
+
+    private void TickCore()
     {
         _newEvents.Clear();
         CurrentTimeSeconds = Math.Round(CurrentTimeSeconds + FixedTimeStepSeconds, 10);
@@ -551,12 +561,6 @@ public sealed class SimulationWorld
             : ComputeSafetyObservations(recordStatusEvents: true);
         _safetyHistory.AddRange(_currentSafety);
         RecordTrajectory();
-
-        return new SimulationSnapshot(
-            CurrentTimeSeconds,
-            _trains.Select(ToState).ToArray(),
-            _currentSafety,
-            _newEvents.ToArray());
     }
 
     public void Reset()
