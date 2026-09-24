@@ -144,56 +144,10 @@ internal static class StationSchematicPresentation
                 ? Math.Max(endpointX[(edge.TrackEdgeId, false)], centerX + throat)
                 : Math.Min(endpointX[(edge.TrackEdgeId, false)], centerX - throat);
         }
-        var widePassingEdges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        // A passing siding and its through edge share both physical junctions.
-        // In a wide scrollable overview, spread those junctions around the
-        // station so the siding reads as a parallel platform track rather than
-        // a tiny bump. Bind only the facility's arrival/departure tracks: the
-        // two directions may reuse a logical station node but need separate
-        // left/right schematic junctions.
-        foreach (var facility in document.Topology.PassingFacilities)
-        {
-            if (width < 2000 || document.Topology.Edges.Count < 32) continue;
-            var localPlatform = document.Topology.Platforms.FirstOrDefault(p =>
-                p.PlatformId.Equals(facility.LocalPlatformId, StringComparison.OrdinalIgnoreCase));
-            var throughPlatform = document.Topology.Platforms.FirstOrDefault(p =>
-                p.PlatformId.Equals(facility.ExpressPlatformId, StringComparison.OrdinalIgnoreCase));
-            if (localPlatform is null || throughPlatform is null
-                || !chainageEdges.TryGetValue(localPlatform.TrackEdgeId, out var siding)
-                || !chainageEdges.TryGetValue(throughPlatform.TrackEdgeId, out var through)
-                || siding.Kind is not (TrackEdgeKind.Siding or TrackEdgeKind.PassingTrack)
-                || through.Kind != TrackEdgeKind.Mainline
-                || !siding.FromNodeId.Equals(through.FromNodeId, StringComparison.OrdinalIgnoreCase)
-                || !siding.ToNodeId.Equals(through.ToNodeId, StringComparison.OrdinalIgnoreCase)
-                || !projection.StationCenters.TryGetValue(facility.StationId, out var stationChainage)) continue;
-            var centerX = X(stationChainage);
-            var nearestStationGap = projection.StationCenters
-                .Where(pair => !pair.Key.Equals(facility.StationId, StringComparison.OrdinalIgnoreCase))
-                .Select(pair => Math.Abs(X(pair.Value) - centerX))
-                .DefaultIfEmpty(0).Min();
-            var halfWidth = Math.Min(32, nearestStationGap * .44);
-            if (halfWidth < 18) continue;
-            var direction = Math.Sign(ProjectedX(through, .75) - ProjectedX(through, .25));
-            if (direction == 0) continue;
-            compactLaneEdges[through.TrackEdgeId] = through;
-            widePassingEdges.Add(siding.TrackEdgeId);
-            widePassingEdges.Add(through.TrackEdgeId);
-            foreach (var (nodeId, x, adjacentEdgeId) in new[]
-            {
-                (siding.FromNodeId, centerX - direction * halfWidth, facility.ArrivalTrackEdgeId),
-                (siding.ToNodeId, centerX + direction * halfWidth, facility.DepartureTrackEdgeId)
-            })
-            {
-                anchoredNodes.Add(nodeId);
-                foreach (var edge in new[] { siding, through, chainageEdges[adjacentEdgeId] })
-                {
-                    if (edge.FromNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase))
-                        endpointX[(edge.TrackEdgeId, true)] = x;
-                    if (edge.ToNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase))
-                        endpointX[(edge.TrackEdgeId, false)] = x;
-                }
-            }
-        }
+        // Keep passing-facility junctions at their projected edge-local positions. Moving a
+        // junction next to the station would make a short approach edge cover
+        // most of the preceding interstation distance on screen, while the long
+        // siding barely moves the train marker.
         var compactAdjacentEdges = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var connection in document.Topology.DirectedConnections)
         {
@@ -296,9 +250,7 @@ internal static class StationSchematicPresentation
                             var desiredCenter = Math.Clamp(projectedPlatformCenter, lower, upper);
                             var availableHalf = Math.Min(Math.Abs(desiredCenter - fromX), Math.Abs(toX - desiredCenter)) * .45;
                             var nominalHalf = Math.Abs(toX - fromX) * (platformEnd - platformStart) / 2;
-                            var half = widePassingEdges.Contains(edge.TrackEdgeId)
-                                ? Math.Min(availableHalf, Math.Max(nominalHalf, 8))
-                                : Math.Min(nominalHalf, availableHalf);
+                            var half = Math.Min(nominalHalf, availableHalf);
                             var platformStartX = desiredCenter - direction * half;
                             var platformEndX = desiredCenter + direction * half;
                             x = MonotoneX(ratio, platformStart, platformCenter, platformEnd,

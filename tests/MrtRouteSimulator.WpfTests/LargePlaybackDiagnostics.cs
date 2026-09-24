@@ -68,13 +68,30 @@ internal static class LargePlaybackDiagnostics
                 var geometry = lookup.GetValue(geometries, [edgeId])!;
                 return (System.Windows.Point)geometry.GetType().GetMethod("PointAt")!.Invoke(geometry, [ratio])!;
             }
+            var labels = canvas.Children.OfType<FrameworkElement>()
+                .Where(element => element.Tag?.GetType().Name == "StationLabelAnchor")
+                .ToArray();
+            var labelCenters = labels.ToDictionary(
+                label => label.Tag!.GetType().GetProperty("StationId")!.GetValue(label.Tag)!.ToString()!,
+                label => (double)label.Tag!.GetType().GetProperty("PlatformCenterX")!.GetValue(label.Tag)!,
+                StringComparer.OrdinalIgnoreCase);
+            var bodyCenters = canvas.Children.OfType<System.Windows.Shapes.Rectangle>()
+                .Where(element => element.Tag?.GetType().Name == "PlatformBodyAnchor")
+                .GroupBy(element => element.Tag!.GetType().GetProperty("StationId")!.GetValue(element.Tag)!.ToString()!,
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key,
+                    group => group.Select(element => Canvas.GetLeft(element) + element.Width / 2).Average(),
+                    StringComparer.OrdinalIgnoreCase);
+            CheckExplicitStationDisplayProjection(document, labelCenters, bodyCenters, "大型樣本");
+
+            var outboundRouteId = document.DirectionRouteBindings
+                .Single(binding => binding.Direction == TrainDirection.Outbound).ServiceRouteId;
+            var outboundRoute = document.ServiceRoutes.Single(route => route.ServiceRouteId == outboundRouteId);
+            CheckProjectedRouteEdges(document, projection, outboundRoute, geometries, bodyCenters);
             if ((Position("EDGE:PASS-001", 1) - Position("EDGE:DOWN:O04:O05", 0)).Length > .5)
                 throw new InvalidOperationException("O04 側線列車位置在出站邊界不連續。");
             if (canvas.Height + .5 < routeViewport.ViewportHeight)
                 throw new InvalidOperationException("路線圖畫布沒有填滿可視高度。");
-            var labels = canvas.Children.OfType<FrameworkElement>()
-                .Where(element => element.Tag?.GetType().Name == "StationLabelAnchor")
-                .ToArray();
             foreach (var stationId in new[] { "O04", "O13" })
             {
                 var count = labels.Count(label => stationId.Equals(
@@ -205,6 +222,145 @@ internal static class LargePlaybackDiagnostics
         finally
         {
             WpfTestWait.Close(window);
+        }
+    }
+
+    private static void CheckExplicitStationDisplayProjection(
+        TopologyProjectDocument document,
+        IReadOnlyDictionary<string, double> labelCenters,
+        IReadOnlyDictionary<string, double> bodyCenters,
+        string scope)
+    {
+        var sourceStations = document.Topology.Stations
+            .Select(station =>
+            {
+                var node = document.Topology.Nodes.SingleOrDefault(item =>
+                    item.NodeId.Equals($"NODE:{station.StationId}", StringComparison.OrdinalIgnoreCase));
+                return (station.StationId, Position: node?.SchematicPosition);
+            })
+            .Where(item => item.Position is not null && labelCenters.ContainsKey(item.StationId)
+                && bodyCenters.ContainsKey(item.StationId))
+            .Select(item => (item.StationId, Position: item.Position!.Value,
+                LabelX: labelCenters[item.StationId], BodyX: bodyCenters[item.StationId]))
+            .OrderBy(item => item.Position)
+            .ToArray();
+        if (sourceStations.Length < 3 || sourceStations[^1].Position - sourceStations[0].Position <= .001)
+            return;
+
+        var sourceStart = sourceStations[0];
+        var sourceEnd = sourceStations[^1];
+        var sourceSpan = sourceEnd.Position - sourceStart.Position;
+        var screenSpan = sourceEnd.BodyX - sourceStart.BodyX;
+        if (screenSpan <= 1)
+            throw new InvalidOperationException($"{scope} 車站畫面中心沒有依來源里程向右排列。");
+
+        foreach (var station in sourceStations)
+        {
+            var expected = sourceStart.BodyX + screenSpan * (station.Position - sourceStart.Position) / sourceSpan;
+            if (Math.Abs(station.BodyX - expected) > 8)
+                throw new InvalidOperationException(
+                    $"{scope} 車站 {station.StationId} 畫面位置未符合來源里程：實際 {station.BodyX:0.0}px、預期 {expected:0.0}px。");
+            if (Math.Abs(station.LabelX - station.BodyX) > .51)
+                throw new InvalidOperationException(
+                    $"{scope} 車站 {station.StationId} 站名與月臺中心錯位 {station.LabelX - station.BodyX:0.0}px。");
+        }
+    }
+
+    private static void CheckProjectedRouteEdges(
+        TopologyProjectDocument document,
+        StationChainageProjection projection,
+        ServiceRouteDefinition outboundRoute,
+        object geometries,
+        IReadOnlyDictionary<string, double> bodyCenters)
+    {
+        var sourceStations = document.Topology.Stations
+            .Select(station =>
+            {
+                var node = document.Topology.Nodes.SingleOrDefault(item =>
+                    item.NodeId.Equals($"NODE:{station.StationId}", StringComparison.OrdinalIgnoreCase));
+                return (station.StationId, Position: node?.SchematicPosition);
+            })
+            .Where(item => item.Position is not null && bodyCenters.ContainsKey(item.StationId))
+            .Select(item => (item.StationId, Position: item.Position!.Value, X: bodyCenters[item.StationId]))
+            .OrderBy(item => item.Position)
+            .ToArray();
+        if (sourceStations.Length < 2) return;
+
+        var sourceStart = sourceStations[0];
+        var sourceEnd = sourceStations[^1];
+        var sourceSpan = sourceEnd.Position - sourceStart.Position;
+        var screenSpan = sourceEnd.X - sourceStart.X;
+        if (sourceSpan <= .001 || screenSpan <= 1) return;
+        var projectedStart = projection.StationCenters[sourceStart.StationId];
+        double ExpectedX(double chainage) => sourceStart.X + screenSpan *
+            (chainage - projectedStart) / sourceSpan;
+
+        var geometryItem = geometries.GetType().GetProperty("Item")!;
+        var edgeDefinitions = document.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId,
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var platform in document.Topology.Platforms)
+        {
+            if (!bodyCenters.TryGetValue(platform.StationId, out var stationX)) continue;
+            var edge = edgeDefinitions[platform.TrackEdgeId];
+            var geometry = geometryItem.GetValue(geometries, [edge.TrackEdgeId])!;
+            var centerOffset = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
+            var center = (Point)geometry.GetType().GetMethod("PointAt")!
+                .Invoke(geometry, [centerOffset / edge.LengthMeters])!;
+            if (Math.Abs(center.X - stationX) > 8)
+                throw new InvalidOperationException(
+                    $"路線圖車站投影錯誤：{platform.StationId} 月臺 {platform.PlatformId} 中心偏離站心 {center.X - stationX:0.0}px。");
+        }
+        var routeEdges = outboundRoute.Traversals
+            .Select(traversal => edgeDefinitions[traversal.TrackEdgeId])
+            .ToArray();
+        foreach (var traversal in outboundRoute.Traversals)
+        {
+            var edge = edgeDefinitions[traversal.TrackEdgeId];
+            var geometry = geometryItem.GetValue(geometries, [edge.TrackEdgeId])!;
+            var startOffset = traversal.Direction == TraversalDirection.Forward ? 0 : edge.LengthMeters;
+            var endOffset = traversal.Direction == TraversalDirection.Forward ? edge.LengthMeters : 0;
+            var startChainage = projection.ToChainage(new TrackPosition(edge.TrackEdgeId, startOffset));
+            var endChainage = projection.ToChainage(new TrackPosition(edge.TrackEdgeId, endOffset));
+            if (startChainage is null || endChainage is null) continue;
+
+            var pointAt = geometry.GetType().GetMethod("PointAt")!;
+            var startPoint = (Point)pointAt.Invoke(geometry, [traversal.Direction == TraversalDirection.Forward ? 0d : 1d])!;
+            var endPoint = (Point)pointAt.Invoke(geometry, [traversal.Direction == TraversalDirection.Forward ? 1d : 0d])!;
+            CheckEndpoint(edge.TrackEdgeId, startOffset, startPoint.X, startChainage.Value, ExpectedX, "起點");
+            CheckEndpoint(edge.TrackEdgeId, endOffset, endPoint.X, endChainage.Value, ExpectedX, "終點");
+        }
+
+        for (var index = 1; index < routeEdges.Length; index++)
+        {
+            var previousTraversal = outboundRoute.Traversals[index - 1];
+            var nextTraversal = outboundRoute.Traversals[index];
+            var previousEdge = edgeDefinitions[previousTraversal.TrackEdgeId];
+            var nextEdge = edgeDefinitions[nextTraversal.TrackEdgeId];
+            var previousGeometry = geometryItem.GetValue(geometries, [previousEdge.TrackEdgeId])!;
+            var nextGeometry = geometryItem.GetValue(geometries, [nextEdge.TrackEdgeId])!;
+            var pointAtPrevious = previousGeometry.GetType().GetMethod("PointAt")!;
+            var pointAtNext = nextGeometry.GetType().GetMethod("PointAt")!;
+            var previousEnd = (Point)pointAtPrevious.Invoke(previousGeometry,
+                [previousTraversal.Direction == TraversalDirection.Forward ? 1d : 0d])!;
+            var nextStart = (Point)pointAtNext.Invoke(nextGeometry,
+                [nextTraversal.Direction == TraversalDirection.Forward ? 0d : 1d])!;
+            if ((previousEnd - nextStart).Length > .51)
+            {
+                var scope = previousEdge.TrackEdgeId.Contains("O03:O04", StringComparison.OrdinalIgnoreCase)
+                    || nextEdge.TrackEdgeId.Contains("O03:O04", StringComparison.OrdinalIgnoreCase)
+                    ? "O03→O04" : "下行路徑";
+                throw new InvalidOperationException(
+                    $"{scope} 軌道切換端點不連續：{previousEdge.TrackEdgeId} → {nextEdge.TrackEdgeId}，相差 {(previousEnd - nextStart).Length:0.0}px。");
+            }
+        }
+
+        void CheckEndpoint(string edgeId, double offset, double actualX, double chainage,
+            Func<double, double> expectedX, string endpoint)
+        {
+            var difference = actualX - expectedX(chainage);
+            if (Math.Abs(difference) > 12)
+                throw new InvalidOperationException(
+                    $"路線圖車站投影錯誤：{edgeId} {endpoint} ({offset:0.#}m) 畫面 X 偏離來源里程 {difference:0.0}px。");
         }
     }
 }
