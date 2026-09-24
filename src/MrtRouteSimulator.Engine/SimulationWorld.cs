@@ -4854,9 +4854,30 @@ public sealed class SimulationWorld
     {
         var platform = TopologyInfrastructure.Platforms[stop.PlatformId];
         var direction = GetServiceRouteDefinition(train.Direction).Traversals[stop.TraversalIndex].Direction;
-        var position = PlatformStopPositionResolver.ResolveHeadPosition(platform, direction, GetVehiclePerformance(train).LengthMeters);
-        return stop with { Position = position, ChainageMeters = stop.ChainageMeters
-            + (platform.StopPositionReference == StopPositionReference.TrainCenter ? GetVehiclePerformance(train).LengthMeters / 2 : 0) };
+        var trainLength = GetVehiclePerformance(train).LengthMeters;
+        if (platform.StopPositionReference != StopPositionReference.TrainCenter)
+        {
+            return stop with
+            {
+                Position = PlatformStopPositionResolver.ResolveHeadPosition(platform, direction, trainLength)
+            };
+        }
+
+        // A center-referenced stop can lie at a node. Advance the head along
+        // the ordered route so its cursor can cross into the next edge.
+        var routeNavigator = GetTopologyNavigator(train.Direction);
+        var centerCursor = new TopologyTraversalCursor(
+            routeNavigator.ServiceRouteId,
+            stop.TraversalIndex,
+            stop.Position);
+        var headCursor = routeNavigator.Advance(centerCursor, trainLength / 2);
+        var resolvedCenterOffset = routeNavigator.TryGetForwardDistance(centerCursor, headCursor) ?? 0;
+        return stop with
+        {
+            TraversalIndex = headCursor.TraversalIndex,
+            Position = headCursor.Position,
+            ChainageMeters = stop.ChainageMeters + resolvedCenterOffset
+        };
     }
 
     private TrackPosition ResolveFacilityPlatformHead(MutableTrain train, string edgeId, double anchor, TraversalDirection direction)

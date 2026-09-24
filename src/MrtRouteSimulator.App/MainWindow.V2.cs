@@ -122,11 +122,29 @@ public partial class MainWindow
         UpdateV2PlaybackView(force: true);
     }
 
-    private async Task ResetV2PlaybackAsync()
+    private async Task<bool> ResetV2PlaybackAsync()
     {
-        if (_playbackWorker is not null)
+        var worker = _playbackWorker;
+        if (worker is null)
         {
-            await _playbackWorker.ResetAsync();
+            return false;
+        }
+
+        try
+        {
+            await worker.ResetAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Reload/close or a worker fault may finish while the UI is
+            // waiting for Reset. Do not let an async-void button handler
+            // surface that expected lifecycle race as an unhandled exception.
+            return false;
+        }
+
+        if (!ReferenceEquals(worker, _playbackWorker))
+        {
+            return false;
         }
 
         _latestPlaybackFrame = null;
@@ -160,6 +178,7 @@ public partial class MainWindow
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
+        return true;
     }
 
     private void ObservePlannedTimelineCompletion(Task<PlannedTimelineArtifact> plannedTask)

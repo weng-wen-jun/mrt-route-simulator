@@ -9,6 +9,14 @@ internal static class Program
         app.InitializeComponent();
         try
         {
+            if (args.Contains("--large-playback-only"))
+            {
+                var sample = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal))
+                    ?? throw new ArgumentException("請提供 Schema 8 大型樣本路徑。");
+                LargePlaybackDiagnostics.Run(System.IO.Path.GetFullPath(sample));
+                Console.WriteLine("PASS WPF large playback diagnostics");
+                return 0;
+            }
             if (args.Contains("--output-only"))
             {
                 var root = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal)) ?? ".";

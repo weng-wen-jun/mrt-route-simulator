@@ -124,6 +124,17 @@ internal static class PlaybackWorkerTests
             RequireTimetableParity(window, accumulator, latest!);
             RequireComparisonParity(window, accumulator, latest!);
             Console.WriteLine("  Reset 命令完成");
+
+            // A fault/reload can dispose the worker while Reset is queued. The
+            // async-void button handler must report it instead of terminating WPF.
+            WpfTestWait.Wait(worker.DisposeAsync().AsTask());
+            WpfTestWait.Invoke(window, "ResetPlayback_Click", new Button(),
+                new RoutedEventArgs(Button.ClickEvent));
+            WpfTestWait.Wait(Task.Delay(30));
+            var playbackStatus = (TextBlock)window.FindName("PlaybackStatusText");
+            Require(playbackStatus.Text.Contains("已停止", StringComparison.Ordinal),
+                "重設已停止的 worker 應顯示狀態，不可讓 async-void 例外結束應用程式。");
+            Console.WriteLine("  已釋放 worker 重設保護完成");
         }
         finally
         {

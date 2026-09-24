@@ -474,11 +474,24 @@ public partial class MainWindow : Window
     private async void ResetPlayback_Click(object sender, RoutedEventArgs e)
     {
         PausePlayback();
-        _playbackTimeSeconds = 0;
         if (_simulationEngine is not null || _playbackWorker is not null)
         {
-            _simulationEngine?.Reset();
-            await ResetV2PlaybackAsync();
+            if (_v2Enabled)
+            {
+                if (!await ResetV2PlaybackAsync())
+                {
+                    PlaybackStatusText.Text = _playbackWorker?.Completion.Exception?.GetBaseException() is { } failure
+                        ? $"模擬工作者已停止：{failure.Message}"
+                        : "模擬工作者已停止或專案正在切換；請重新建立模擬。";
+                    return;
+                }
+            }
+            else
+            {
+                _simulationEngine?.Reset();
+            }
+
+            _playbackTimeSeconds = 0;
             UpdatePlaybackView();
             PlaybackStatusText.Text = "已回到首班列車發車時刻。";
             StatusTextBlock.Text = "播放進度已重設。";
