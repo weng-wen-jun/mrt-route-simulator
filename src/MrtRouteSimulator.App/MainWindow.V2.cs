@@ -603,7 +603,7 @@ public partial class MainWindow
 
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
-        var width = RouteCanvas.ActualWidth;
+        var width = PrepareRouteCanvasWidth();
         var height = RouteCanvas.ActualHeight;
         if (width < 100 || height < 100)
         {
@@ -776,7 +776,8 @@ public partial class MainWindow
             && ReferenceEquals(cached.Infrastructure, infrastructure)
             && ReferenceEquals(cached.Project, topologyProject)
             && cached.Width == width
-            && cached.Height == height
+            && cached.Height == RouteCanvas.Height
+            && height <= cached.Height + .5
             && RouteCanvas.Children.Count >= cached.StaticChildCount)
         {
             while (RouteCanvas.Children.Count > cached.StaticChildCount)
@@ -1012,7 +1013,10 @@ public partial class MainWindow
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2));
+            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), infrastructure.Platforms.Values,
+            infrastructure.DirectedConnections,
+            StationSchematicPresentation.UsesCompactLaneTransitions(topologyProject, width),
+            topologyProject?.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
         var railColor = Color.FromRgb(25, 96, 125);
         StationSchematicPresentation.DrawLegend(RouteCanvas);
@@ -1044,7 +1048,7 @@ public partial class MainWindow
         }
 
         var stationCenters = StationSchematicPresentation.DrawPlatforms(RouteCanvas, infrastructure.Platforms.Values,
-            infrastructure.Edges.Values, edgeGeometries, mainlineY);
+            infrastructure.Edges.Values, edgeGeometries, mainlineY, topologyProject?.Topology.PassingFacilities);
         var stationVisuals = infrastructure.Stations.Values
             .Select(station =>
             {
@@ -1086,8 +1090,14 @@ public partial class MainWindow
                 ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
             var outgoing = connection.ToDirection == TraversalDirection.Forward
                 ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+            var fromEdge = infrastructure.Edges.GetValueOrDefault(connection.FromTrackEdgeId);
+            var toEdge = infrastructure.Edges.GetValueOrDefault(connection.ToTrackEdgeId);
+            var allowLaneTurn = fromEdge is not null && toEdge is not null
+                && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
+                    || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
             StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
-                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})");
+                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
+                allowLaneTurn);
         }
 
         foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
@@ -1158,10 +1168,10 @@ public partial class MainWindow
             s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
         StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
 
-        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, height - 38);
-        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, height - 21, 9, Color.FromRgb(108, 119, 132));
+        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, 36);
+        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, 54, 9, Color.FromRgb(108, 119, 132));
         _topologyRouteVisualCache = new TopologyRouteVisualCache(
-            infrastructure, topologyProject, width, height, edgeGeometries, stationChainage,
+            infrastructure, topologyProject, width, RouteCanvas.Height, edgeGeometries, stationChainage,
             RouteCanvas.Children.Count);
         DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
             edgeGeometries, stationChainage, width, height);

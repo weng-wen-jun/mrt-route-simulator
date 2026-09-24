@@ -610,7 +610,7 @@ public partial class MainWindow : Window
         }
 
         RouteCanvas.Children.Clear();
-        var width = RouteCanvas.ActualWidth;
+        var width = PrepareRouteCanvasWidth();
         var height = RouteCanvas.ActualHeight;
         if (width < 100 || height < 100)
         {
@@ -804,7 +804,43 @@ public partial class MainWindow : Window
         SpeedCanvas.Children.Add(polyline);
     }
 
+    private const double RouteCanvasMinimumStationPitch = 92;
+    private const double RouteCanvasHorizontalPadding = 120;
+
+    private double PrepareRouteCanvasWidth()
+    {
+        var viewportWidth = RouteScrollViewer.ViewportWidth;
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteScrollViewer.ActualWidth;
+        }
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteCanvas.ActualWidth;
+        }
+
+        var stationCount = _latestPlaybackFrame?.TopologyInfrastructure?.Stations.Count
+            ?? _route?.Stations.Count ?? 0;
+        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount);
+        if (!double.IsFinite(RouteCanvas.Width) || Math.Abs(RouteCanvas.Width - width) > .5)
+        {
+            RouteCanvas.Width = width;
+        }
+        return width;
+    }
+
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)
+    {
+        var usableViewport = double.IsFinite(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
+        var desiredWidth = stationCount <= 0
+            ? usableViewport
+            : RouteCanvasHorizontalPadding + stationCount * RouteCanvasMinimumStationPitch;
+        return Math.Max(100, Math.Max(usableViewport, desiredWidth));
+    }
+
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
+
+    private void RouteScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
 
     private void SpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 

@@ -22,6 +22,26 @@ internal static class GraphDistanceConstraintTests
             throw new InvalidOperationException("D0 到 U0 必須繞經 C 返回，不能跨過禁止轉向的 B 節點走零距離捷徑。");
         var gap = TopologyGraphDistance.TryGetForwardDistance(graph, down, down.CreateEndCursor(), sameDirection, sameDirection.CreateStartCursor());
         if (gap != 0) throw new InvalidOperationException("合法 D0→D1 邊界距離應為零。");
+        if (TopologyGraphDistance.TryGetForwardDistance(graph, down, down.CreateEndCursor(),
+                sameDirection, sameDirection.CreateStartCursor()) != gap)
+            throw new InvalidOperationException("重複查詢必須維持相同的有向接軌距離。");
+        var longerBridge = new InfrastructureGraphV4(new() {
+            Nodes = [new("A", "A", TrackNodeKind.Ordinary), new("B", "B", TrackNodeKind.Ordinary),
+                new("C", "C", TrackNodeKind.Ordinary)],
+            Edges = [Edge("D0", "A", "B"), Edge("D1", "B", "C") with { LengthMeters = 200 },
+                Edge("U1", "C", "B") with { LengthMeters = 200 }, Edge("U0", "B", "A")],
+            DirectedConnections = [new("D0", TraversalDirection.Forward, "D1", TraversalDirection.Forward),
+                new("U1", TraversalDirection.Forward, "U0", TraversalDirection.Forward)]
+        });
+        TopologyMovementNavigator LongerBridgeNavigator(string id, string edge) => new(longerBridge, new() {
+            MovementPlanId = id,
+            Legs = [new() { LegId = id, Traversals = [new(longerBridge.GetRequiredEdge(edge), TraversalDirection.Forward)] }]
+        });
+        var longerDown = LongerBridgeNavigator("down", "D0");
+        var longerUp = LongerBridgeNavigator("up", "U0");
+        if (TopologyGraphDistance.TryGetForwardDistance(longerBridge, longerDown,
+                longerDown.CreateEndCursor(), longerUp, longerUp.CreateStartCursor()) != 400)
+            throw new InvalidOperationException("另一份拓撲不得沿用不同軌道長度的路徑快取。");
         var first = new TopologyRouteNavigator(graph, new() { ServiceRouteId = "D", Name = "D", Traversals = [new("D0", TraversalDirection.Forward)] });
         var second = new TopologyRouteNavigator(graph, new() { ServiceRouteId = "U", Name = "U", Traversals = [new("U0", TraversalDirection.Forward)] });
         if (TopologyGraphDistance.TryGetForwardDistance(graph, first, new("D", 0, new("D0", 100)), second, new("U", 0, new("U0", 0))) != 200)

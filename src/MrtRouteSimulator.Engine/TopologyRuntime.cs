@@ -1,3 +1,6 @@
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+
 namespace MrtRouteSimulator.Engine;
 
 /// <summary>列車車頭在已解析 ServiceRoute 上的權威 runtime cursor。</summary>
@@ -783,6 +786,42 @@ public static class TopologyPlatformOccupancy
 /// <summary>以 edge direction 與 graph path 計算列車間／障礙物間的前方距離。</summary>
 public static class TopologyGraphDistance
 {
+    private readonly record struct BridgeKey(string FromNodeId, string ToNodeId,
+        DirectedTrackTraversal Incoming, DirectedTrackTraversal Outgoing);
+    private readonly record struct BridgeDistance(bool Found, double LengthMeters);
+    // InfrastructureGraphV4 is immutable after construction. Keep each graph's
+    // directed bridge distances weakly keyed so loading another project neither
+    // reuses its paths nor retains the old infrastructure indefinitely.
+    private static readonly ConditionalWeakTable<InfrastructureGraphV4,
+        ConcurrentDictionary<BridgeKey, BridgeDistance>> BridgeDistances = new();
+
+    private static double? GetBridgeDistance(InfrastructureGraphV4 infrastructure,
+        string fromNodeId, string toNodeId,
+        DirectedTrackTraversal incoming, DirectedTrackTraversal outgoing)
+    {
+        var distances = BridgeDistances.GetValue(infrastructure,
+            static _ => new ConcurrentDictionary<BridgeKey, BridgeDistance>());
+        var result = distances.GetOrAdd(new BridgeKey(fromNodeId, toNodeId, incoming, outgoing), key =>
+        {
+            try
+            {
+                var path = TopologyPathFinder.FindShortestPath(infrastructure,
+                    key.FromNodeId, key.ToNodeId,
+                    new TopologyPathConstraints
+                    {
+                        IncomingTraversal = key.Incoming,
+                        OutgoingTraversal = key.Outgoing
+                    });
+                return new BridgeDistance(true, path.TotalLengthMeters);
+            }
+            catch (SimulationValidationException)
+            {
+                return new BridgeDistance(false, 0);
+            }
+        });
+        return result.Found ? result.LengthMeters : null;
+    }
+
     public static double? TryGetForwardDistance(
         InfrastructureGraphV4 infrastructure,
         TopologyMovementNavigator fromNavigator,
@@ -810,17 +849,11 @@ public static class TopologyGraphDistance
 
         var fromEndNode = InfrastructureValidator.GetEndNode(fromTraversal.Edge, from.Direction);
         var targetStartNode = InfrastructureValidator.GetStartNode(targetTraversal.Edge, target.Direction);
-        try
-        {
-            var bridge = TopologyPathFinder.FindShortestPath(infrastructure, fromEndNode, targetStartNode,
-                new TopologyPathConstraints { IncomingTraversal = new(fromTraversal.Edge.TrackEdgeId, from.Direction),
-                    OutgoingTraversal = new(targetTraversal.Edge.TrackEdgeId, target.Direction) });
-            return (fromTraversal.LengthMeters - fromDistance) + bridge.TotalLengthMeters + targetDistance;
-        }
-        catch (SimulationValidationException)
-        {
-            return null;
-        }
+        var bridge = GetBridgeDistance(infrastructure, fromEndNode, targetStartNode,
+            new(fromTraversal.Edge.TrackEdgeId, from.Direction),
+            new(targetTraversal.Edge.TrackEdgeId, target.Direction));
+        return bridge is null ? null
+            : (fromTraversal.LengthMeters - fromDistance) + bridge.Value + targetDistance;
     }
 
     public static double? TryGetFootprintGap(
@@ -866,16 +899,10 @@ public static class TopologyGraphDistance
 
         var fromEndNode = InfrastructureValidator.GetEndNode(fromEdge, fromTraversal.Direction);
         var targetStartNode = InfrastructureValidator.GetStartNode(targetEdge, targetTraversal.Direction);
-        try
-        {
-            var bridge = TopologyPathFinder.FindShortestPath(infrastructure, fromEndNode, targetStartNode,
-                new TopologyPathConstraints { IncomingTraversal = fromTraversal, OutgoingTraversal = targetTraversal });
-            return (fromEdge.LengthMeters - fromDistance) + bridge.TotalLengthMeters + targetDistance;
-        }
-        catch (SimulationValidationException)
-        {
-            return null;
-        }
+        var bridge = GetBridgeDistance(infrastructure, fromEndNode, targetStartNode,
+            fromTraversal, targetTraversal);
+        return bridge is null ? null
+            : (fromEdge.LengthMeters - fromDistance) + bridge.Value + targetDistance;
     }
 
     public static double? TryGetFootprintGap(

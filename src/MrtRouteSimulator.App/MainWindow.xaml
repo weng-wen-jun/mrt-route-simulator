@@ -288,49 +288,60 @@
                                 <TextBlock TextWrapping="Wrap" x:Name="PlaybackStatusText" Text="請先建立模擬" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,0,8" />
                                 </DockPanel>
                             </StackPanel>
-                            <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
-                                <Canvas x:Name="RouteCanvas" SizeChanged="RouteCanvas_SizeChanged" AutomationProperties.Name="列車路線動畫" />
-                            </Border>
-                            <Grid Grid.Row="2" Margin="0,12,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.05*" />
-                                    <ColumnDefinition Width="12" />
-                                    <ColumnDefinition Width="0.95*" />
-                                </Grid.ColumnDefinitions>
-                                <StackPanel>
-                                    <TextBlock Text="即時列車狀態" Style="{StaticResource SectionTitle}" />
-                                    <DataGrid x:Name="CurrentTrainDataGrid" ItemsSource="{Binding CurrentTrainRows}" IsReadOnly="True" RowHeaderWidth="0">
+                            <TabControl x:Name="SimulationViewTabControl" Grid.Row="1" Margin="0,4,0,0"
+                                        AutomationProperties.Name="模擬即時檢視">
+                                <TabItem Header="軌道配線與列車位置">
+                                    <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
+                                        <ScrollViewer x:Name="RouteScrollViewer"
+                                                      HorizontalScrollBarVisibility="Auto"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      PanningMode="Both"
+                                                      SizeChanged="RouteScrollViewer_SizeChanged"
+                                                      AutomationProperties.Name="列車路線圖水平捲動區">
+                                            <Canvas x:Name="RouteCanvas" Height="520" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
+                                                    AutomationProperties.Name="列車路線動畫" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </TabItem>
+                                <TabItem Header="即時列車狀態">
+                                    <DataGrid x:Name="CurrentTrainDataGrid" Margin="0,6,0,0"
+                                              ItemsSource="{Binding CurrentTrainRows}" IsReadOnly="True" RowHeaderWidth="0">
                                         <DataGrid.Columns>
-                                            <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="75" />
-                                            <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
-                                            <DataGridTextColumn Header="狀態" Binding="{Binding State}" Width="72" />
-                                            <DataGridTextColumn Header="車體中心 km" Binding="{Binding PositionKm}" Width="90" />
-                                            <DataGridTextColumn Header="速度 km/h" Binding="{Binding SpeedKmh}" Width="80" />
+                                            <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="100" />
+                                            <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="80" />
+                                            <DataGridTextColumn Header="狀態" Binding="{Binding State}" Width="110" />
+                                            <DataGridTextColumn Header="車體中心 km" Binding="{Binding PositionKm}" Width="120" />
+                                            <DataGridTextColumn Header="速度 km/h" Binding="{Binding SpeedKmh}" Width="110" />
                                             <DataGridTextColumn Header="下一站" Binding="{Binding NextStation}" Width="*" />
                                         </DataGrid.Columns>
                                     </DataGrid>
-                                </StackPanel>
-                                <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <DockPanel LastChildFill="True" Margin="0,0,0,6">
-                                        <TextBlock Text="列車完整行程速度曲線" DockPanel.Dock="Top" Style="{StaticResource SectionTitle}" Margin="0,0,0,4" VerticalAlignment="Center" />
-                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                            <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                            <ComboBox x:Name="SpeedProfileRunComboBox" Width="155" SelectionChanged="SpeedProfileRun_SelectionChanged" AutomationProperties.Name="完整行程列車" />
-                                        </StackPanel>
-                                    </DockPanel>
-                                    <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
-                                        <Canvas x:Name="SpeedCanvas" Height="260" SizeChanged="SpeedCanvas_SizeChanged" AutomationProperties.Name="列車完整行程速度時間曲線" />
-                                    </Border>
-                                </Grid>
-                                </ScrollViewer>
-                            </Grid>
+                                </TabItem>
+                                <TabItem Header="完整行程速度曲線">
+                                    <Grid Margin="0,6,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <DockPanel LastChildFill="True" Margin="0,0,0,6">
+                                            <TextBlock Text="列車完整行程速度曲線" DockPanel.Dock="Left" Style="{StaticResource SectionTitle}"
+                                                       Margin="0,0,12,0" VerticalAlignment="Center" />
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽"
+                                                           Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                                <ComboBox x:Name="SpeedProfileRunComboBox" Width="190"
+                                                          SelectionChanged="SpeedProfileRun_SelectionChanged"
+                                                          AutomationProperties.Name="完整行程列車" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                        <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}"
+                                                BorderThickness="1" CornerRadius="8" Padding="6">
+                                            <Canvas x:Name="SpeedCanvas" ClipToBounds="True" MinHeight="220"
+                                                    SizeChanged="SpeedCanvas_SizeChanged"
+                                                    AutomationProperties.Name="列車完整行程速度時間曲線" />
+                                        </Border>
+                                    </Grid>
+                                </TabItem>
+                            </TabControl>
                         </Grid>
                     </TabItem>
 

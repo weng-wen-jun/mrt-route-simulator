@@ -4293,23 +4293,27 @@ public sealed class SimulationWorld
             followerFootprint.Front,
             leaderNavigator,
             leaderFootprint.Front);
-        var actualGap = TopologyGraphDistance.TryGetFootprintGap(
-            TopologyInfrastructure,
-            followerNavigator,
-            followerFootprint,
-            leaderNavigator,
-            leaderFootprint);
-        if (headDistance is null || actualGap is null)
+        if (headDistance is null)
+        {
+            return false;
+        }
+
+        // The footprint-gap helper repeats the same graph search. The leader
+        // length is already available from the footprint on its own route.
+        var leaderLength = leaderNavigator.TryGetForwardDistance(
+            leaderFootprint.Rear, leaderFootprint.Front);
+        if (leaderLength is null)
         {
             return false;
         }
 
         metrics = new TopologySafetyMetrics(
             headDistance.Value,
-            actualGap.Value,
+            headDistance.Value - leaderLength.Value,
             leaderFootprint);
         return true;
     }
+
 
     private MutableTrain? FindNearestTopologyLeader(MutableTrain follower) =>
         _trains
