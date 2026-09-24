@@ -4,8 +4,10 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using MrtRouteSimulator.Engine;
 
@@ -604,7 +606,7 @@ public partial class MainWindow
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
         var width = PrepareRouteCanvasWidth();
-        var height = RouteCanvas.ActualHeight;
+        var height = PrepareRouteCanvasHeight();
         if (width < 100 || height < 100)
         {
             RouteCanvas.Children.Clear();
@@ -736,8 +738,9 @@ public partial class MainWindow
                 ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}｜{state.ServiceClassId}｜{state.ServicePatternId}\n"
                     + $"{DirectionToChinese(state.Direction)} {state.TrackId}\n"
                     + $"車頭 {state.FrontPositionMeters / 1000:0.00} km｜車尾 {state.RearPositionMeters / 1000:0.00} km\n"
-                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
+                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
             };
+            AttachTrainMarkerNavigation(train, state.VehicleId);
             Canvas.SetLeft(train, Math.Clamp(x - 21.5, 0, width - 43));
             Canvas.SetTop(train, y - 11.5);
             RouteCanvas.Children.Add(train);
@@ -851,7 +854,7 @@ public partial class MainWindow
         var top = 30d;
         var bottom = 28d;
         var usableWidth = Math.Max(1, width - left - right);
-        var mainlineY = height * 0.52;
+        var mainlineY = height * 0.52 + (height < 380 ? 24 : 0);
         var trackSpacing = inboundServiceRoute is null ? 0 : Math.Clamp(height * 0.18, 30, 46);
         var outboundTrackY = mainlineY + trackSpacing / 2;
         var inboundTrackY = mainlineY - trackSpacing / 2;
@@ -1225,12 +1228,31 @@ public partial class MainWindow
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 },
-                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
+                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
             };
+            AttachTrainMarkerNavigation(marker, state.VehicleId);
             Canvas.SetLeft(marker, Math.Clamp(point.X - 12, 0, width - 24));
             Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
             RouteCanvas.Children.Add(marker);
         }
+    }
+
+    private void AttachTrainMarkerNavigation(Border marker, string vehicleId)
+    {
+        marker.Tag = vehicleId;
+        marker.Cursor = Cursors.Hand;
+        marker.MouseLeftButtonUp += (_, args) =>
+        {
+            SimulationViewTabControl.SelectedItem = SpeedProfileTabItem;
+            if (!SpeedProfileRunComboBox.Items.Contains(vehicleId))
+            {
+                SpeedProfileRunComboBox.Items.Add(vehicleId);
+            }
+
+            SpeedProfileRunComboBox.SelectedItem = vehicleId;
+            Dispatcher.BeginInvoke(DrawV2SpeedProfile, DispatcherPriority.Loaded);
+            args.Handled = true;
+        };
     }
 
     private void DrawV2SpeedProfile()

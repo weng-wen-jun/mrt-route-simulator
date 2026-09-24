@@ -115,19 +115,19 @@ public partial class MainWindow
                 .ToArray();
             ApplyRowsByKey(CurrentTrainRows, trainRows, row => row.TrainId);
             SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
+        }
 
-            if (ReferenceEquals(selectedTab, SimulationTabItem))
+        if (refreshDynamicRows && ReferenceEquals(selectedTab, SimulationTabItem))
+        {
+            if (RefreshDue(ref _lastRouteRenderTimestamp, 33, force))
             {
-                if (RefreshDue(ref _lastRouteRenderTimestamp, 100, force))
-                {
-                    var routeRender = Stopwatch.StartNew();
-                    DrawV2Route(frame.GetSnapshot());
-                    _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;
-                }
-                if (RefreshDue(ref _lastChartRenderTimestamp, 250, force))
-                {
-                    DrawV2SpeedProfile();
-                }
+                var routeRender = Stopwatch.StartNew();
+                DrawV2Route(frame.GetSnapshot());
+                _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;
+            }
+            if (RefreshDue(ref _lastChartRenderTimestamp, 250, force))
+            {
+                DrawV2SpeedProfile();
             }
         }
 

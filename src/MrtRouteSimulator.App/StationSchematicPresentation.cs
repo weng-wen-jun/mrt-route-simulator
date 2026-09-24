@@ -525,7 +525,7 @@ internal static class StationSchematicPresentation
     {
         var bodies = canvas.Children.OfType<Rectangle>().Where(r => r.Tag is PlatformBodyAnchor).ToArray();
         if (bodies.Length == 0) return;
-        var upper = Math.Max(36, bodies.Min(r => Canvas.GetTop(r)) - 60);
+        var upper = Math.Max(canvas.Height < 380 ? 66 : 36, bodies.Min(r => Canvas.GetTop(r)) - 60);
         var lower = bodies.Max(r => Canvas.GetTop(r) + r.Height) + 32;
         var occupied = new List<Rect>();
         var stationIndex = 0;

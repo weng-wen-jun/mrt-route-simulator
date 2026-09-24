@@ -122,7 +122,7 @@ public sealed record PlaybackFrame(
 public sealed class SimulationPlaybackWorker : IAsyncDisposable
 {
     private const double MaximumAdvancePerSliceSeconds = 0.5;
-    private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(50);
+    private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(33);
     private static readonly TimeSpan IdlePlaybackDelay = TimeSpan.FromMilliseconds(2);
 
     private readonly SimulationWorld _world;

@@ -611,7 +611,7 @@ public partial class MainWindow : Window
 
         RouteCanvas.Children.Clear();
         var width = PrepareRouteCanvasWidth();
-        var height = RouteCanvas.ActualHeight;
+        var height = PrepareRouteCanvasHeight();
         if (width < 100 || height < 100)
         {
             return;
@@ -806,6 +806,7 @@ public partial class MainWindow : Window
 
     private const double RouteCanvasMinimumStationPitch = 92;
     private const double RouteCanvasHorizontalPadding = 120;
+    private double _routeCanvasLayoutViewportHeight = double.NaN;
 
     private double PrepareRouteCanvasWidth()
     {
@@ -827,6 +828,31 @@ public partial class MainWindow : Window
             RouteCanvas.Width = width;
         }
         return width;
+    }
+
+    private double PrepareRouteCanvasHeight()
+    {
+        var viewportHeight = RouteScrollViewer.ViewportHeight;
+        if (!double.IsFinite(viewportHeight) || viewportHeight < 1)
+        {
+            viewportHeight = RouteScrollViewer.ActualHeight;
+        }
+
+        var desiredHeight = Math.Max(300, viewportHeight);
+        if (!double.IsFinite(_routeCanvasLayoutViewportHeight)
+            || Math.Abs(_routeCanvasLayoutViewportHeight - viewportHeight) > .5)
+        {
+            _routeCanvasLayoutViewportHeight = viewportHeight;
+            RouteCanvas.Height = desiredHeight;
+        }
+        else if (!double.IsFinite(RouteCanvas.Height) || RouteCanvas.Height < desiredHeight - .5)
+        {
+            RouteCanvas.Height = desiredHeight;
+        }
+
+        // Label collision avoidance can extend the canvas once. Preserve that
+        // height until the viewport itself changes to keep the static rail cache.
+        return RouteCanvas.Height;
     }
 
     private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)

@@ -261,8 +261,7 @@
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="260" />
-                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" MinHeight="300" />
                             </Grid.RowDefinitions>
                             <StackPanel>
                                 <WrapPanel>
@@ -298,7 +297,7 @@
                                                       PanningMode="Both"
                                                       SizeChanged="RouteScrollViewer_SizeChanged"
                                                       AutomationProperties.Name="列車路線圖水平捲動區">
-                                            <Canvas x:Name="RouteCanvas" Height="520" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
+                                            <Canvas x:Name="RouteCanvas" Height="300" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
                                                     AutomationProperties.Name="列車路線動畫" />
                                         </ScrollViewer>
                                     </Border>
@@ -316,7 +315,7 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </TabItem>
-                                <TabItem Header="完整行程速度曲線">
+                                <TabItem x:Name="SpeedProfileTabItem" Header="完整行程速度曲線">
                                     <Grid Margin="0,6,0,0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />

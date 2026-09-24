@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -18,19 +19,29 @@ internal static class LargePlaybackDiagnostics
         {
             WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window,
                 "ConfigureTopologyProjectForPlaybackAsync", document, true));
+            window.Height = 720;
             window.Show();
             WpfTestWait.Wait(Task.Delay(200));
             var worker = (SimulationPlaybackWorker)WpfTestWait.Field(window, "_playbackWorker")!;
             var canvas = (Canvas)window.FindName("RouteCanvas");
-            canvas.Width = 1200;
-            canvas.Height = 520;
-            canvas.Measure(new Size(1200, 520));
-            canvas.Arrange(new Rect(0, 0, 1200, 520));
             ((TabControl)window.FindName("WorkspaceTabControl")).SelectedItem =
                 window.FindName("SimulationTabItem");
+            window.UpdateLayout();
+            var viewTabs = (TabControl)window.FindName("SimulationViewTabControl");
+            var routeViewport = (ScrollViewer)window.FindName("RouteScrollViewer");
+            var simulationGrid = (Grid)viewTabs.Parent;
+            var workspaceTabs = (TabControl)window.FindName("WorkspaceTabControl");
+            Console.WriteLine($"layout viewTabs={viewTabs.ActualHeight:0.0} routeViewport={routeViewport.ActualHeight:0.0} "
+                + $"simulationGrid={simulationGrid.ActualHeight:0.0} workspaceTabs={workspaceTabs.ActualHeight:0.0} "
+                + $"row1={simulationGrid.RowDefinitions[1].ActualHeight:0.0} window={window.ActualHeight:0.0}");
+            if (Math.Abs(viewTabs.ActualHeight - simulationGrid.RowDefinitions[1].ActualHeight) > 5
+                || routeViewport.ActualHeight < viewTabs.ActualHeight - 65)
+                throw new InvalidOperationException("路線圖分頁未撐滿模擬頁面剩餘高度。");
             typeof(MainWindow).GetMethod("DrawV2Route",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                 .Invoke(window, [null]);
+            if (canvas.Height + .5 < routeViewport.ViewportHeight)
+                throw new InvalidOperationException("路線圖畫布沒有填滿可視高度。");
             var labels = canvas.Children.OfType<FrameworkElement>()
                 .Where(element => element.Tag?.GetType().Name == "StationLabelAnchor")
                 .ToArray();
@@ -60,6 +71,30 @@ internal static class LargePlaybackDiagnostics
             encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using (var output = File.Create(outputPath)) encoder.Save(output);
             Console.WriteLine($"routeImage={outputPath}");
+            window.UpdateLayout();
+            var windowBitmap = new RenderTargetBitmap((int)Math.Ceiling(window.ActualWidth),
+                (int)Math.Ceiling(window.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+            windowBitmap.Render(window);
+            var windowPath = Path.Combine(AppContext.BaseDirectory, "large-playback-window.png");
+            var windowEncoder = new PngBitmapEncoder();
+            windowEncoder.Frames.Add(BitmapFrame.Create(windowBitmap));
+            using (var output = File.Create(windowPath)) windowEncoder.Save(output);
+            Console.WriteLine($"windowImage={windowPath}");
+            var trainMarker = canvas.Children.OfType<Border>()
+                .FirstOrDefault(item => item.Tag is string);
+            if (trainMarker is null || trainMarker.Tag is not string selectedVehicleId)
+                throw new InvalidOperationException("大型路線圖未顯示可點選的運行列車。");
+            trainMarker.RaiseEvent(new MouseButtonEventArgs(InputManager.Current.PrimaryMouseDevice,
+                Environment.TickCount, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.MouseLeftButtonUpEvent
+            });
+            var speedTab = (TabItem)window.FindName("SpeedProfileTabItem");
+            var speedSelector = (ComboBox)window.FindName("SpeedProfileRunComboBox");
+            if (!ReferenceEquals(viewTabs.SelectedItem, speedTab)
+                || !Equals(speedSelector.SelectedItem, selectedVehicleId))
+                throw new InvalidOperationException("點選路線圖列車未跳至該車完整行程速度曲線。");
+            viewTabs.SelectedIndex = 0;
             ((ComboBox)window.FindName("PlaybackSpeedComboBox")).SelectedIndex = 3;
 
             var timer = new DispatcherTimer(DispatcherPriority.Input)
