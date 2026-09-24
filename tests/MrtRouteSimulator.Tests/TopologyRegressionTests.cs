@@ -586,6 +586,35 @@ internal static class TopologyRegressionTests
         }
     }
 
+    public static void ShortApproachBrakesBeforeStopPoint()
+    {
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V3.3.0-完整功能驗證範例.mrtsim.json");
+        var saved = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+        var document = saved with { Operations = saved.Operations with { ApproachDistanceMeters = 65 } };
+        var runtime = TopologyProjectFormat.CreateRuntime(document);
+        var world = new SimulationWorldOptions(
+            Route: null,
+            TrainParameters: runtime.TrainParameters,
+            OperationalParameters: runtime.OperationalParameters,
+            TrainCount: runtime.DispatchPlan.Runs.Count,
+            InitialDepartureIntervalSeconds: document.Simulation.HeadwaySeconds,
+            ProfileMode: document.Simulation.ProfileMode,
+            MovingBlockMode: document.Simulation.MovingBlockMode,
+            ServicePatterns: runtime.ServicePatterns,
+            DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes,
+            ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+
+        world.AdvanceTo(3600);
+        True(world.Events.Any(item => item.EventType == SimulationEventType.Arrival
+                && item.ServiceRunId == "RUN-DOWN-001" && item.PositionMeters == 1200),
+            "65 m 進站設定仍須完成 V02 到站。");
+        True(!world.Events.Any(item => item.EventType == SimulationEventType.StationStopViolation),
+            "65 m 進站設定不應在 V02／V04／V05 留下高速觸點。");
+        True(world.IsComplete, "短進站距離不得使列車卡在停車點。");
+    }
+
     public static void TopologySimulationWorldDoesNotConstructCompatibilityRoute()
     {
         var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");

@@ -12,6 +12,10 @@ public static class StationStopController
     public const double PrecisionBrakingMetersPerSecondSquared = 0.5;
 
     private const double BrakeRequestToleranceMeters = 0.05;
+    private const double StopViolationSpeedThresholdMetersPerSecond = 3.0 / 3.6;
+
+    public static bool ShouldRecordStopViolation(double speedMetersPerSecond) =>
+        speedMetersPerSecond >= StopViolationSpeedThresholdMetersPerSecond;
 
     public static StationStopControlOutput Calculate(StationStopControlInput input)
     {

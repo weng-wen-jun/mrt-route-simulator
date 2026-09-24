@@ -2218,7 +2218,10 @@ public sealed class SimulationWorld
         }
 
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
-        if (isScheduledStop && stationStopControl is { RequiresServiceBraking: true })
+        if (isScheduledStop
+            && (stationStopControl is { RequiresServiceBraking: true }
+                || ShouldBeginStationBraking(train, distanceToStation, desiredAcceleration, effectiveServiceBraking,
+                    stationStopControl!.PredictedStoppingDistanceMeters)))
         {
             train.StationBrakingActive = true;
             desiredAcceleration = -effectiveServiceBraking;
@@ -2298,7 +2301,8 @@ public sealed class SimulationWorld
 
         if (isScheduledStop && traveled >= distanceToStation - NumericalTolerance)
         {
-            if (!train.StationStopViolationRecorded)
+            if (!train.StationStopViolationRecorded
+                && StationStopController.ShouldRecordStopViolation(newSpeed))
             {
                 train.StationStopViolationRecorded = true;
                 AddEvent(
@@ -2399,7 +2403,8 @@ public sealed class SimulationWorld
         MutableTrain train,
         double distanceToStation,
         double desiredAccelerationIfWaiting,
-        double effectiveBraking)
+        double effectiveBraking,
+        double? knownStoppingDistanceMeters = null)
     {
         if (distanceToStation <= StationBrakingLookAheadMeters)
         {
@@ -2408,16 +2413,22 @@ public sealed class SimulationWorld
 
         var jerkLimited = ProfileMode == OperationProfileMode.RealisticOperations;
         var performance = GetVehiclePerformance(train);
-        var stoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
-            train.Speed,
-            train.Acceleration,
-            effectiveBraking,
-            performance.JerkMetersPerSecondCubed,
-            FixedTimeStepSeconds,
-            jerkLimited).DistanceMeters;
+        var stoppingDistance = knownStoppingDistanceMeters
+            ?? BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+                train.Speed,
+                train.Acceleration,
+                effectiveBraking,
+                performance.JerkMetersPerSecondCubed,
+                FixedTimeStepSeconds,
+                jerkLimited).DistanceMeters;
         if (stoppingDistance + StationBrakingLookAheadMeters >= distanceToStation)
         {
             return true;
+        }
+
+        if (desiredAccelerationIfWaiting <= -effectiveBraking + NumericalTolerance)
+        {
+            return false;
         }
 
         var previewAcceleration = jerkLimited

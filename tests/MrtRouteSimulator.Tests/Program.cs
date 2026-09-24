@@ -59,6 +59,7 @@ var tests = new (string Name, Action Run)[]
     ("V2 固定子步進與 Jerk 受限", TestV2FixedTickAndJerk),
     ("Route 表單輸入會先轉為 topology-native V2 world", TestRouteInputConvertsToTopologyNativeWorld),
     ("實際營運軌跡平順抵站且不越站", TestOperationalTripStopsAtStation),
+    ("停站違規忽略低於 3 km/h 的觸點速度", TestStationStopViolationThreshold),
     ("實際營運長區間包含惰行階段", TestOperationalTripContainsCoasting),
     ("里程速限重疊採最低且方向分離", TestSpeedLimitOverlapAndDirection),
     ("里程速限輸入精度與範圍驗證", TestSpeedLimitValidation),
@@ -118,6 +119,7 @@ var tests = new (string Name, Action Run)[]
     ("Schema 8 拒絕 legacy 欄位與非本版格式", TopologyRegressionTests.Schema8RejectsLegacyOrWrongVersion),
     ("Schema 8 topology baseline 範例可載入並建立世界", TopologyRegressionTests.Schema8TopologyBaselineSampleLoadsAndBuildsWorld),
     ("所有範例均為有界且完整可執行的 Schema 8 topology 專案", TopologyRegressionTests.AllSamplesLoadAndBuildTopologyWorld),
+    ("65m 進站限速下完成停靠且無高速觸點", TopologyRegressionTests.ShortApproachBrakesBeforeStopPoint),
     ("V4 topology SimulationWorld 不建立 compatibility Route", TopologyRegressionTests.TopologySimulationWorldDoesNotConstructCompatibilityRoute),
     ("V4 完整 topology 範例逐一執行實體越行、袋狀軌與雙端尾軌", TopologyRegressionTests.ComprehensiveTopologySampleExercisesAllPhysicalFacilities),
     ("V4 道岔有向轉向限制約束尋徑與 runtime movement plan", TopologyRegressionTests.DirectedConnectionsRestrictSwitchPathsAndMovementPlans),
@@ -845,6 +847,13 @@ static void TestDynamicStationBrakingContinuity()
         0.1,
         jerkLimited: true);
     True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestStationStopViolationThreshold()
+{
+    True(!StationStopController.ShouldRecordStopViolation(2.99 / 3.6), "低於 3 km/h 不應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.0 / 3.6), "剛好 3 km/h 應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.01 / 3.6), "高於 3 km/h 應記錄停站違規。");
 }
 
 static void TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps()

@@ -14,6 +14,26 @@ internal static class LargePlaybackDiagnostics
     public static void Run(string samplePath)
     {
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+        var projection = new StationChainageProjection(document);
+        var origin = document.Topology.Nodes.Single(node => node.NodeId == "NODE:O01").SchematicPosition!.Value;
+        foreach (var stationId in new[] { "O01", "O04", "O05", "O13" })
+        {
+            var source = document.Topology.Nodes.Single(node => node.NodeId == $"NODE:{stationId}")
+                .SchematicPosition!.Value - origin;
+            if (Math.Abs(projection.StationCenters[stationId] - source) > .001)
+                throw new InvalidOperationException($"{stationId} 顯示里程未使用存檔車站中心。");
+        }
+        foreach (var platform in document.Topology.Platforms.Where(item => item.StationId == "O04"))
+        {
+            var center = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
+            var edgeLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == platform.TrackEdgeId)
+                .LengthMeters;
+            if (edgeLength - center > 100)
+                throw new InvalidOperationException($"O04 月臺 {platform.PlatformId} 距離實體站點過遠。");
+            if (Math.Abs(projection.ToChainage(new TrackPosition(platform.TrackEdgeId, center))!.Value
+                - projection.StationCenters["O04"]) > .001)
+                throw new InvalidOperationException($"O04 月臺 {platform.PlatformId} 未對齊顯示站心。");
+        }
         var window = new MainWindow();
         try
         {
@@ -40,6 +60,16 @@ internal static class LargePlaybackDiagnostics
             typeof(MainWindow).GetMethod("DrawV2Route",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
                 .Invoke(window, [null]);
+            var routeCache = WpfTestWait.Field(window, "_topologyRouteVisualCache")!;
+            var geometries = routeCache.GetType().GetProperty("EdgeGeometries")!.GetValue(routeCache)!;
+            var lookup = geometries.GetType().GetProperty("Item")!;
+            System.Windows.Point Position(string edgeId, double ratio)
+            {
+                var geometry = lookup.GetValue(geometries, [edgeId])!;
+                return (System.Windows.Point)geometry.GetType().GetMethod("PointAt")!.Invoke(geometry, [ratio])!;
+            }
+            if ((Position("EDGE:PASS-001", 1) - Position("EDGE:DOWN:O04:O05", 0)).Length > .5)
+                throw new InvalidOperationException("O04 側線列車位置在出站邊界不連續。");
             if (canvas.Height + .5 < routeViewport.ViewportHeight)
                 throw new InvalidOperationException("路線圖畫布沒有填滿可視高度。");
             var labels = canvas.Children.OfType<FrameworkElement>()
@@ -56,6 +86,15 @@ internal static class LargePlaybackDiagnostics
                 throw new InvalidOperationException("大型路線未保留每站最小水平間距。");
             if (canvas.Children.OfType<TextBlock>().Any(item => Equals(item.Tag, "TrackConnectionIssue")))
                 throw new InvalidOperationException("大型路線仍顯示配線待修警告。");
+            System.Windows.Shapes.Polyline Rail(string edgeId) => canvas.Children.OfType<System.Windows.Shapes.Polyline>()
+                .Single(item => item.ToolTip?.ToString()?.StartsWith(edgeId + "\n", StringComparison.Ordinal) == true);
+            foreach (var arrivalEdge in new[] { "EDGE:PASS-001", "EDGE:DOWN:O03:O04:B-001" })
+            {
+                var arrival = Rail(arrivalEdge);
+                var departure = Rail("EDGE:DOWN:O04:O05");
+                if ((arrival.Points[^1] - departure.Points[0]).Length > .5)
+                    throw new InvalidOperationException($"O04 出站圖面不連續：{arrivalEdge}。");
+            }
             var presentation = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.StationSchematicPresentation")!;
             var warnings = (IReadOnlyList<string>)presentation.GetMethod("ValidateStationLabels")!
                 .Invoke(null, [canvas])!;
