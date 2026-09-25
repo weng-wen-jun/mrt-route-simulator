@@ -38,7 +38,8 @@ public static class OperationsTimetable
             dispatchPlan,
             plannedEvents,
             actualEvents,
-            stationEventMatcher: null);
+            stationEventMatcher: null,
+            pocketOriginResolver: null);
     }
 
     /// <summary>
@@ -58,7 +59,8 @@ public static class OperationsTimetable
             plannedEvents,
             actualEvents,
             (direction, stationId, simulationEvent) =>
-                topology.MatchesStationEvent(direction, stationId, simulationEvent));
+                topology.MatchesStationEvent(direction, stationId, simulationEvent),
+            topology.GetPocketOrigin);
     }
 
     private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
@@ -66,7 +68,8 @@ public static class OperationsTimetable
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
         IEnumerable<SimulationEvent>? actualEvents,
-        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
+        Func<SimulationEvent, TopologyPocketOrigin?>? pocketOriginResolver)
     {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
@@ -80,7 +83,39 @@ public static class OperationsTimetable
             var runActualEvents = actual.Where(item => SameRun(item, run)).ToArray();
             var scheduledOriginDeparture = RelativeSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
 
-            for (var index = 0; index < stations.Length; index++)
+            var plannedPocketDeparture = pocketOriginResolver is null ? null
+                : runPlannedEvents.FirstOrDefault(item => pocketOriginResolver(item) is not null);
+            var actualPocketDeparture = pocketOriginResolver is null ? null
+                : runActualEvents.FirstOrDefault(item => pocketOriginResolver(item) is not null);
+            var pocketEvent = actualPocketDeparture ?? plannedPocketDeparture;
+            var pocketOrigin = pocketEvent is null ? null : pocketOriginResolver!(pocketEvent);
+            var firstStationIndex = 0;
+            if (pocketOrigin is not null)
+            {
+                firstStationIndex = Array.FindIndex(stations, station =>
+                    station.StationId.Equals(pocketOrigin.StationId, StringComparison.OrdinalIgnoreCase));
+                if (firstStationIndex < 0) firstStationIndex = 0;
+                var actualDeparture = actualPocketDeparture?.SimulationTimeSeconds;
+                values.Add(new OperationsTimetableEntry(
+                    run.VehicleId ?? string.Empty,
+                    run.ServiceRunId,
+                    run.Direction,
+                    run.ServiceTypeId,
+                    run.StopPatternId,
+                    run.VehicleTypeId,
+                    pocketOrigin.FacilityId,
+                    pocketOrigin.Name,
+                    pocketEvent!.PositionMeters,
+                    null,
+                    scheduledOriginDeparture,
+                    null,
+                    actualDeparture,
+                    null,
+                    actualDeparture is { } departure ? Math.Max(0, departure - scheduledOriginDeparture) : null,
+                    actualDeparture is null ? "待發" : "已發車"));
+            }
+
+            for (var index = firstStationIndex; index < stations.Length; index++)
             {
                 var station = stations[index];
                 var plannedArrival = Find(runPlannedEvents, station, run.Direction, stationEventMatcher,

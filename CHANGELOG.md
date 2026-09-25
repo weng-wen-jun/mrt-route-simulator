@@ -1,4 +1,4 @@
-# 變更紀錄（V4；保留 V3 歷史）
+﻿# 變更紀錄（V4；保留 V3 歷史）
 
 本檔依軟體版本由新到舊記錄。Git 標籤使用小寫 `v`，軟體畫面使用大寫 `V`。
 
@@ -6,14 +6,14 @@
 
 ### 三個工作樹整合與播放穩定性（2026-09-25）
 
-- 整合大型機場線／O04 路線圖修正、播放效能 Phase 1 與 parallel playback worker 三個工作樹；保留 Schema 8 topology、固定 0.1 秒 Engine tick 與 topology-native `SimulationWorld` 作為唯一物理資料流。
+- 整合合成長路線／O04 路線圖修正、播放效能 Phase 1 與 parallel playback worker 三個工作樹；保留 Schema 8 topology、固定 0.1 秒 Engine tick 與 topology-native `SimulationWorld` 作為唯一物理資料流。
 - 播放改由 single-writer worker 管理實際 world，使用 immutable latest-frame snapshot、可靠命令、背景計畫時間軸、增量結果累積與分級 UI 刷新；路線圖可獨立以 33 ms 更新，列車點選會導向對應的完整速度曲線。
 - O04／O13 越行顯示採實體 edge-local 投影，上下行採鏡射幾何；站中心、月台中心、岔出／匯入節點與相鄰 edge 接點納入 WPF 畫面規則檢核。進站控制器保留 65 m 設定，並忽略 3 km/h 以下停站觸點違規。
 
 ### 去識別化大型路線範例
 
-- 新增可重建的大型機場線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
-- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`AIRPORT-DIRECT` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
+- 新增可重建的合成長路線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
+- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`EXPRESS` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
 - 新增去識別化 Scenario Manifest，明確記錄 29.9 km／23.8 km synthetic aggregate target、O20 折返、O04／O13 passing、驗證時間點及尚未工程化的欄位。
 
 ### 穩定性、輸出與介面
@@ -49,7 +49,7 @@
 - 路線圖採起始站月台中心0K，尾軌允許負里程，終點外側延伸；即時車輛標記與位置欄位使用實際車體中心。
 - 新增明確停點基準，七PDF模板採車體中心；換端改由原車尾成為新車頭，保持完整footprint，涵蓋車尾恰落節點的邊界。舊專案預設車頭基準。
 - 逐檔修正13範例月台容量、起點停車標、越行月台位置及尾軌／袋狀軌容車長度；新增月台有效長度／整車停靠與完整反向返回進路驗證。修正精確抵達越行入口漏接旁線，以及中心停點導致速度預覽找不到終點。
-- 站名對準每個實際月台本體，錯列月台分別標示；完整127/127測試、52圖WPF檢核及13範例載入通過。詳見 `QA_REPORT.md` 與 `samples/AUDIT-2026-09-11.md`。
+- 站名對準每個實際月台本體，錯列月台分別標示；完整127/127測試、52圖WPF檢核及13範例載入通過。詳見 `QA_REPORT.md` 與 `samples/範例檢查表.md`。
 
 ### 工作區新增（2026-09-09，尚未發布）
 
@@ -74,7 +74,7 @@
 - 修整範例班次與進站參數，排除碰撞、停站違規、未具名無限續行及未實際發生的越行；V3.4 快速車現會在普通車待避期間實際完成通過線超越。
 - 主路線圖與 topology editor 共用平行 edge 幾何，並明確繪出有向轉向連接器；設施精靈會保存既有自然轉向，validator 會拒絕未接上服務路線或中段停點跳接其他 edge 的折返。
 - 六個範例均推進 3,600 秒並完整退出，無碰撞或停站違規；Release build 0 warnings／0 errors，自動化 107/107 通過。Windows WPF 已實機載入並播放完整 topology 範例；本輪未重做匯出，也未 commit、tag、push 或發布。
-- 新增 `V4.0.0-完整拓撲執行驗證範例.mrtsim.json`：以實際手動派車依序執行有向道岔、快速越行、中央袋狀軌、東西端 crossover 尾軌、指定接續與 edge-local 折返停點。
+- 新增 `11-小型-三站完整拓樸運行範例.mrtsim.json`：以實際手動派車依序執行有向道岔、快速越行、中央袋狀軌、東西端 crossover 尾軌、指定接續與 edge-local 折返停點。
 - 修正快速車剛由 passing edge 匯入正線時，普通車仍在平行 local edge 卻被 safety 誤算為負間距、進而可能碰撞的問題；普通車現在保持待避至快速車車尾 rear-clear，平行 edge 不再錯作共線。
 - 補完整情境 regression，並把既有 physical passing regression 延長到合流後，確認無碰撞、資源釋放、時刻表、區間統計及 CSV 都使用 topology 結果。
 - Release build 0 warnings／0 errors；自動化 100/100 通過。本輪未重做 Windows UI 手動操作；未 commit、tag、push 或發布。

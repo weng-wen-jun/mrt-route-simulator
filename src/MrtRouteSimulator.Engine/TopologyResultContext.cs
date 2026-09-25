@@ -13,6 +13,8 @@ public sealed record TopologyResultStop(
     double ProjectedChainageMeters,
     double DefaultDwellTimeSeconds = 0);
 
+internal sealed record TopologyPocketOrigin(string FacilityId, string Name, string StationId);
+
 /// <summary>
 /// 將 topology-native V2 的 resolved service stops 提供給結果層，避免結果、時刻表或統計
 /// 重新要求 compatibility Route。所有顯示里程皆由既有 cursor / service traversal 衍生。
@@ -22,13 +24,15 @@ public sealed class TopologyResultContext
     private readonly IReadOnlyDictionary<TrainDirection, IReadOnlyList<TopologyResultStop>> stopsByDirection;
     private readonly IReadOnlyDictionary<TrainDirection, double> routeLengthsByDirection;
     private readonly IReadOnlyDictionary<string, string> platformStationIds;
+    private readonly IReadOnlyDictionary<string, TopologyPocketOrigin> pocketOrigins;
 
     private TopologyResultContext(
         IReadOnlyList<TopologyResultStop> outboundStops,
         IReadOnlyList<TopologyResultStop> inboundStops,
         double outboundRouteLengthMeters,
         double inboundRouteLengthMeters,
-        IReadOnlyDictionary<string, string> platformStationIds)
+        IReadOnlyDictionary<string, string> platformStationIds,
+        IReadOnlyDictionary<string, TopologyPocketOrigin> pocketOrigins)
     {
         stopsByDirection = new Dictionary<TrainDirection, IReadOnlyList<TopologyResultStop>>
         {
@@ -41,7 +45,16 @@ public sealed class TopologyResultContext
             [TrainDirection.Inbound] = inboundRouteLengthMeters
         };
         this.platformStationIds = platformStationIds;
+        this.pocketOrigins = pocketOrigins;
     }
+
+    internal TopologyPocketOrigin? GetPocketOrigin(SimulationEvent simulationEvent) =>
+        simulationEvent.EventType == SimulationEventType.Departure
+        && simulationEvent.StationId is null
+        && simulationEvent.PlatformId is null
+        && simulationEvent.ResourceId is { } facilityId
+        && pocketOrigins.TryGetValue(facilityId, out var origin)
+            ? origin : null;
 
     public IReadOnlyList<TopologyResultStop> GetStops(TrainDirection direction) =>
         stopsByDirection.TryGetValue(direction, out var stops)
@@ -118,7 +131,22 @@ public sealed class TopologyResultContext
             infrastructure.Platforms.Values.ToDictionary(
                 platform => platform.PlatformId,
                 platform => platform.StationId,
-                StringComparer.OrdinalIgnoreCase));
+                StringComparer.OrdinalIgnoreCase),
+            infrastructure.TurnbackOperations.Values
+                .Where(operation => infrastructure.TurnbackFacilities[operation.FacilityId].Kind
+                    == TurnbackFacilityKind.PocketTrack)
+                .Select(operation => new
+                {
+                    Facility = infrastructure.TurnbackFacilities[operation.FacilityId],
+                    StationId = infrastructure.StationOperations.Values.FirstOrDefault(station =>
+                        station.TurnbackOperationIds.Contains(operation.OperationId, StringComparer.OrdinalIgnoreCase))?.StationId
+                })
+                .Where(item => item.StationId is not null)
+                .GroupBy(item => item.Facility.FacilityId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key,
+                    group => new TopologyPocketOrigin(group.Key, group.First().Facility.Name,
+                        group.First().StationId!),
+                    StringComparer.OrdinalIgnoreCase));
 
     private static double GetRouteLengthMeters(ResolvedRunRouteContext context) =>
         context.MainMovementPlan.Legs

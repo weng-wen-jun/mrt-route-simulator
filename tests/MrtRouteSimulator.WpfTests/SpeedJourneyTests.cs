@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -16,7 +16,7 @@ internal static class SpeedJourneyTests
         var window = new MainWindow();
         try
         {
-            var path = Path.Combine(root, "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+            var path = Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
             WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
             Console.WriteLine("  長行程測試專案載入完成");

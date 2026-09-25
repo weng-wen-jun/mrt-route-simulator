@@ -1,9 +1,9 @@
-using System.Text.Json.Nodes;
+﻿using System.Text.Json.Nodes;
 using MrtRouteSimulator.Engine;
 
 if (args.Length == 1 && args[0].Equals("--report-large-full-sample", StringComparison.OrdinalIgnoreCase))
 {
-    LargeAirportLineFullScenarioTests.PrintKeyEventReport();
+    SyntheticLongRouteFullScenarioTests.PrintKeyEventReport();
     return;
 }
 
@@ -13,31 +13,31 @@ if (args.Length == 2 && args[0].Equals("--write-large-full-sample", StringCompar
     var outputDirectory = Path.GetDirectoryName(outputPath)
         ?? throw new InvalidOperationException("輸出路徑缺少目錄。 ");
     Directory.CreateDirectory(outputDirectory);
-    File.WriteAllText(outputPath, TopologyProjectFormat.Serialize(LargeAirportLineFullScenarioBuilder.BuildFull()));
-    Console.WriteLine($"已輸出大型機場線 full Schema 8 sample：{outputPath}");
+    File.WriteAllText(outputPath, TopologyProjectFormat.Serialize(SyntheticLongRouteFullScenarioBuilder.BuildFull()));
+    Console.WriteLine($"已輸出合成長路線 full Schema 8 sample：{outputPath}");
     return;
 }
 
 var tests = new (string Name, Action Run)[]
 {
-    ("大型機場線 full station chain 完整驗證", LargeAirportLineFullScenarioTests.FullStationChainValidates),
-    ("大型機場線列車停點對齊月台中心", LargeAirportLineFullScenarioTests.FullSampleStopsUsePlatformCenters),
-    ("大型機場線實際停車中心對齊月台中心", LargeAirportLineFullScenarioTests.FullSampleDwellCentersMatchPlatformCenters),
-    ("大型機場線 source-backed chainage 與站間距", LargeAirportLineFullScenarioTests.RouteLengthsDeriveFromSourceBackedChainages),
-    ("大型機場線 full station chain 雙向全停 smoke test", LargeAirportLineFullScenarioTests.FullStationChainBidirectionalAllStopCompletes),
-    ("大型機場線全程車 28 站全停完成", LargeAirportLineFullScenarioTests.FullLineAllStopCompletes),
-    ("大型機場線機場直達車 skip-stop", LargeAirportLineFullScenarioTests.AirportDirectSkipStopWorks),
-    ("大型機場線 SECTION O20 topology-native 袋狀軌折返", LargeAirportLineFullScenarioTests.O20TurnbackCompletes),
-    ("大型機場線 DIRECT O20 折返且不進入 O21-O26", LargeAirportLineFullScenarioTests.AirportDirectTurnsAtO20AndReturns),
-    ("大型機場線 SECTION O04 越行後 O20 折返", LargeAirportLineFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
-    ("大型機場線 O04 越行與 rear-clear", LargeAirportLineFullScenarioTests.O04OvertakingCompletesSafely),
-    ("大型機場線 O13 越行與 rear-clear", LargeAirportLineFullScenarioTests.O13OvertakingCompletesSafely),
-    ("大型機場線直達車完成兩次實體越行", LargeAirportLineFullScenarioTests.AirportDirectCompletesTwoOvertakes),
-    ("大型機場線 O04／O13 雙向四股實體 topology", LargeAirportLineFullScenarioTests.O04AndO13AreBidirectionalFourTrackStations),
-    ("大型機場線完整情境無碰撞與停站違規", LargeAirportLineFullScenarioTests.NoCollisionOrStationStopViolation),
-    ("大型機場線代表性班表所有列車完成", LargeAirportLineFullScenarioTests.AllExpectedTrainsComplete),
-    ("大型機場線 full sample Schema 8 round-trip", LargeAirportLineFullScenarioTests.Schema8RoundTripPreservesFullScenario),
-    ("大型機場線 full sample 建立 topology-native world", LargeAirportLineFullScenarioTests.CreatesTopologyNativeSimulationWorld),
+    ("合成長路線 full station chain 完整驗證", SyntheticLongRouteFullScenarioTests.FullStationChainValidates),
+    ("合成長路線列車停點對齊月台中心", SyntheticLongRouteFullScenarioTests.FullSampleStopsUsePlatformCenters),
+    ("合成長路線實際停車中心對齊月台中心", SyntheticLongRouteFullScenarioTests.FullSampleDwellCentersMatchPlatformCenters),
+    ("合成長路線保留里程與站間距", SyntheticLongRouteFullScenarioTests.RouteLengthsMatchRetainedChainages),
+    ("合成長路線 full station chain 雙向全停 smoke test", SyntheticLongRouteFullScenarioTests.FullStationChainBidirectionalAllStopCompletes),
+    ("合成長路線全程車 28 站全停完成", SyntheticLongRouteFullScenarioTests.FullLineAllStopCompletes),
+    ("合成長路線快速車 skip-stop", SyntheticLongRouteFullScenarioTests.ExpressSkipStopWorks),
+    ("合成長路線 SECTION O20 topology-native 袋狀軌折返", SyntheticLongRouteFullScenarioTests.O20TurnbackCompletes),
+    ("合成長路線 DIRECT O20 折返且不進入 O21-O26", SyntheticLongRouteFullScenarioTests.ExpressTurnsAtO20AndReturns),
+    ("合成長路線 SECTION O04 越行後 O20 折返", SyntheticLongRouteFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
+    ("合成長路線 O04 越行與 rear-clear", SyntheticLongRouteFullScenarioTests.O04OvertakingCompletesSafely),
+    ("合成長路線 O13 越行與 rear-clear", SyntheticLongRouteFullScenarioTests.O13OvertakingCompletesSafely),
+    ("合成長路線直達車完成兩次實體越行", SyntheticLongRouteFullScenarioTests.ExpressCompletesTwoOvertakes),
+    ("合成長路線 O04／O13 雙向四股實體 topology", SyntheticLongRouteFullScenarioTests.O04AndO13AreBidirectionalFourTrackStations),
+    ("合成長路線完整情境無碰撞與停站違規", SyntheticLongRouteFullScenarioTests.NoCollisionOrStationStopViolation),
+    ("合成長路線代表性班表所有列車完成", SyntheticLongRouteFullScenarioTests.AllExpectedTrainsComplete),
+    ("合成長路線 full sample Schema 8 round-trip", SyntheticLongRouteFullScenarioTests.Schema8RoundTripPreservesFullScenario),
+    ("合成長路線 full sample 建立 topology-native world", SyntheticLongRouteFullScenarioTests.CreatesTopologyNativeSimulationWorld),
     ("V4 尾軌折返後反向終點月台停站與首站", TopologyTurnbackRegressionTests.PhysicalTailTurnbackStopsAtFirstReverseStation),
     ("V4 尾軌折返 0 秒停站仍等待接續班表", TopologyTurnbackRegressionTests.PhysicalTailTurnbackWaitsForScheduledDepartureWithZeroDwell),
     ("V4 topology 上行結果輸出與方向篩選", TopologyResultsOutputTests.InboundTopologyResultsUseGlobalDisplayPositions),
@@ -60,7 +60,7 @@ var tests = new (string Name, Action Run)[]
     ("單端 physical port metadata 拒絕", DirectionPortTests.OneSidedPortMetadataIsRejected),
     ("原地折返同 edge 反向 traversal 合法", DirectionPortTests.InteriorSameEdgeReverseTurnbackRemainsLegal),
     ("physical port metadata Schema 8 round-trip 保留", DirectionPortTests.PortMetadataRoundTripsThroughSchema8),
-    ("大型機場線 O04／O13 passing 平台中心顯示里程一致", StationChainageTests.LargeAirportLinePassingPlatformCentersStayAligned),
+    ("合成長路線 O04／O13 passing 平台中心顯示里程一致", StationChainageTests.SyntheticLongRoutePassingPlatformCentersStayAligned),
     ("PDF 七種站場往返及完整運行", StationLayoutTemplateTests.BuildsAndRoundTripsAllStationLayoutTemplates),
     ("PDF 站前站後折返實體軌跡及接續", StationLayoutTemplateTests.BuildsFacilityTemplatesWithPhysicalTraversals),
     ("PDF 三四股道實際使用側線", StationLayoutTemplateTests.ThreeAndFourTrackTemplatesExposeAdditionalPhysicalTracks),
@@ -987,7 +987,7 @@ static void TestPlannedTimelineHandlesDelayedContinuation()
 
 static void TestPlannedTimelineWaitsForResource()
 {
-    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
     var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
     var runtime = TopologyProjectFormat.CreateRuntime(document);
     var options = new SimulationWorldOptions(
@@ -2429,7 +2429,7 @@ static void TestV3TimetableAndIntervalTerminalBoundaries()
 static void TestComprehensiveSampleProject()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.3.0-完整功能驗證範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "12-中型-五站完整營運範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到完整功能範例存檔：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
@@ -2588,7 +2588,7 @@ static void TestComprehensiveSampleProject()
 static void TestFourTrackExpressPassingScenario()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到雙島四股越行驗證範例：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
@@ -2677,7 +2677,7 @@ static void TestFourTrackExpressPassingScenario()
 static void TestMultipleStationOvertakeCandidates()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
     var source = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
     var primary = source.Infrastructure!.StationOvertakeFacilities!.Single();
     var nearerAlternative = primary with
@@ -2710,7 +2710,7 @@ static void TestMultipleStationOvertakeCandidates()
 static void TestSimultaneousBidirectionalOvertakes()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.4.0-雙島四股快速車越行驗證.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
     var document = CreateBidirectionalOvertakeDocument(
         SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath)));
     var (world, _, _) = CreateWorldFromProjectDocument(document);
@@ -3500,7 +3500,7 @@ static void TestCentralSidingAnchoredStationTurnback()
 static void TestTurnbackScenarioSampleProject()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "V3.3.0-端點站前與中間站中央避車線折返檢核.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "07-小型-三站尾軌袋狀軌折返範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到折返檢核範例：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));

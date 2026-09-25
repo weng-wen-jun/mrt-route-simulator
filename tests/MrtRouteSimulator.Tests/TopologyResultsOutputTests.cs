@@ -1,4 +1,4 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
 /// <summary>
 /// 結果層專用回歸案例。此檔刻意不加入共用 runner；由主測試 runner
@@ -8,7 +8,7 @@ internal static class TopologyResultsOutputTests
 {
     public static void InboundTopologyResultsUseGlobalDisplayPositions()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(
@@ -104,7 +104,7 @@ internal static class TopologyResultsOutputTests
     public static void TrainCenterResultsRequireStationEvents()
     {
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            Path.Combine(FindRepositoryRoot(), "samples", "PDF-RearTurnback.mrtsim.json")));
+            Path.Combine(FindRepositoryRoot(), "samples", "09-小型-三站站後尾軌折返範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(document);
         var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
             runtime.DispatchPlan.Runs.Count, ServicePatterns: runtime.ServicePatterns,

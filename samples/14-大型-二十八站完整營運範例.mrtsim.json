@@ -1,7 +1,7 @@
-{
+﻿{
   "schemaVersion": 8,
-  "projectId": "LARGE-AIRPORT-LINE-FULL-DEMO",
-  "projectName": "\u5927\u578B\u6A5F\u5834\u7DDA\u5B8C\u6574\u71DF\u904B\u793A\u7BC4\u7BC4\u4F8B",
+  "projectId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO",
+  "projectName": "14-大型-二十八站完整營運範例",
   "train": {
     "maxSpeedMetersPerSecond": 22.22222222222222,
     "accelerationMetersPerSecondSquared": 1.2,
@@ -74,11 +74,11 @@
       "preferredPlatformIds": null
     },
     {
-      "id": "AIRPORT-DIRECT",
-      "displayName": "\u6A5F\u5834\u76F4\u9054\u8ECA",
+      "id": "EXPRESS",
+      "displayName": "\u5FEB\u901F\u8ECA",
       "colorHex": "#7B3FA1",
       "runPrefix": "A",
-      "defaultStopPatternId": "AIRPORT-DIRECT-O20",
+      "defaultStopPatternId": "EXPRESS-O20",
       "defaultVehicleTypeId": "EMU-100",
       "priority": 10,
       "canRequestOvertake": true,
@@ -225,8 +225,8 @@
       ]
     },
     {
-      "id": "AIRPORT-DIRECT-O20",
-      "displayName": "\u6A5F\u5834\u76F4\u9054\u8ECA O01/O08/O11/O16/O20 \u505C\u9760\u4E26\u65BC O20 \u6298\u8FD4",
+      "id": "EXPRESS-O20",
+      "displayName": "\u5FEB\u901F\u8ECA O01/O08/O11/O16/O20 \u505C\u9760\u4E26\u65BC O20 \u6298\u8FD4",
       "instructions": [
         {
           "stationId": "O01",
@@ -917,24 +917,24 @@
       {
         "plannedDepartureTimeSeconds": 500,
         "direction": "Outbound",
-        "serviceTypeId": "AIRPORT-DIRECT",
+        "serviceTypeId": "EXPRESS",
         "vehicleTypeId": "EMU-100",
-        "stopPatternId": "AIRPORT-DIRECT-O20",
+        "stopPatternId": "EXPRESS-O20",
         "originPlatformId": "PLATFORM:O01:DOWN",
-        "vehicleId": "AIRPORT-DIRECT-01",
-        "serviceRunId": "AIRPORT-DIRECT-DOWN-01",
+        "vehicleId": "EXPRESS-01",
+        "serviceRunId": "EXPRESS-DOWN-01",
         "continueAfterTerminal": true,
-        "continuationServiceRunId": "AIRPORT-DIRECT-UP-01"
+        "continuationServiceRunId": "EXPRESS-UP-01"
       },
       {
         "plannedDepartureTimeSeconds": 2600,
         "direction": "Inbound",
-        "serviceTypeId": "AIRPORT-DIRECT",
+        "serviceTypeId": "EXPRESS",
         "vehicleTypeId": "EMU-100",
-        "stopPatternId": "AIRPORT-DIRECT-O20",
+        "stopPatternId": "EXPRESS-O20",
         "originPlatformId": "PLATFORM:O20:UP",
-        "vehicleId": "AIRPORT-DIRECT-01",
-        "serviceRunId": "AIRPORT-DIRECT-UP-01",
+        "vehicleId": "EXPRESS-01",
+        "serviceRunId": "EXPRESS-UP-01",
         "continueAfterTerminal": false,
         "continuationServiceRunId": null
       },
@@ -992,7 +992,7 @@
     "nodes": [
       {
         "nodeId": "NODE:O01",
-        "name": "O01 \u6A5F\u5834\u7AEF",
+        "name": "O01 \u7AD9",
         "kind": "Ordinary",
         "schematicPosition": 190,
         "schematicLane": null
@@ -1111,7 +1111,7 @@
       },
       {
         "nodeId": "NODE:O16",
-        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9",
+        "name": "O16 \u7AD9",
         "kind": "Ordinary",
         "schematicPosition": 19450,
         "schematicLane": null
@@ -2107,7 +2107,7 @@
     "stations": [
       {
         "stationId": "O01",
-        "name": "O01 \u6A5F\u5834\u7AEF",
+        "name": "O01 \u7AD9",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "PLATFORM:O01:DOWN",
@@ -2264,7 +2264,7 @@
       },
       {
         "stationId": "O16",
-        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9",
+        "name": "O16 \u7AD9",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "PLATFORM:O16:DOWN",
@@ -2370,7 +2370,7 @@
         "displaySide": "Auto",
         "platformId": "PLATFORM:O01:DOWN",
         "stationId": "O01",
-        "name": "O01 \u6A5F\u5834\u7AEF \u4E0B\u884C\u6708\u53F0",
+        "name": "O01 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O01:O02",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 0,
@@ -2388,7 +2388,7 @@
         "displaySide": "Auto",
         "platformId": "PLATFORM:O01:UP",
         "stationId": "O01",
-        "name": "O01 \u6A5F\u5834\u7AEF \u4E0A\u884C\u6708\u53F0",
+        "name": "O01 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O02:O01",
         "platformStartOffsetMeters": 1277,
         "platformEndOffsetMeters": 1377,
@@ -2982,7 +2982,7 @@
         "displaySide": "Auto",
         "platformId": "PLATFORM:O16:DOWN",
         "stationId": "O16",
-        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9 \u4E0B\u884C\u6708\u53F0",
+        "name": "O16 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:DOWN:O16:O17",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 0,
@@ -3000,7 +3000,7 @@
         "displaySide": "Auto",
         "platformId": "PLATFORM:O16:UP",
         "stationId": "O16",
-        "name": "O16 \u4E2D\u592E\u8F49\u4E58\u7AD9 \u4E0A\u884C\u6708\u53F0",
+        "name": "O16 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:UP:O17:O16",
         "platformStartOffsetMeters": 1278,
         "platformEndOffsetMeters": 1278,
@@ -3388,7 +3388,7 @@
         "allowsPassengerService": false,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": [
-          "AIRPORT-DIRECT",
+          "EXPRESS",
           "SECTION"
         ]
       },
@@ -3409,7 +3409,7 @@
         "allowsPassengerService": false,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": [
-          "AIRPORT-DIRECT",
+          "EXPRESS",
           "SECTION"
         ]
       },
@@ -3430,7 +3430,7 @@
         "allowsPassengerService": false,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": [
-          "AIRPORT-DIRECT"
+          "EXPRESS"
         ]
       },
       {
@@ -3450,7 +3450,7 @@
         "allowsPassengerService": false,
         "allowedVehicleTypeIds": [],
         "allowedServiceTypeIds": [
-          "AIRPORT-DIRECT"
+          "EXPRESS"
         ]
       }
     ],
@@ -3942,8 +3942,8 @@
       {
         "operationId": "TURNBACK-001",
         "facilityId": "FACILITY:POCKET-001",
-        "arrivalServiceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
-        "departureServiceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
+        "arrivalServiceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
+        "departureServiceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
         "minimumDwellTimeSeconds": 30
       }
     ],
@@ -4033,38 +4033,38 @@
       {
         "operationId": "PASSING-001",
         "facilityId": "FACILITY:PASS-001",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
-        "expressServiceTypeId": "AIRPORT-DIRECT"
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
+        "expressServiceTypeId": "EXPRESS"
       },
       {
         "operationId": "PASSING:O04:DOWN:SECTION",
         "facilityId": "FACILITY:PASS-001",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
         "expressServiceTypeId": "SECTION"
       },
       {
         "operationId": "PASSING-002",
         "facilityId": "FACILITY:PASS-002",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
-        "expressServiceTypeId": "AIRPORT-DIRECT"
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
+        "expressServiceTypeId": "EXPRESS"
       },
       {
         "operationId": "PASSING:O04:UP:SECTION",
         "facilityId": "FACILITY:PASS-002",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
         "expressServiceTypeId": "SECTION"
       },
       {
         "operationId": "PASSING-003",
         "facilityId": "FACILITY:PASS-003",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
-        "expressServiceTypeId": "AIRPORT-DIRECT"
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
+        "expressServiceTypeId": "EXPRESS"
       },
       {
         "operationId": "PASSING-004",
         "facilityId": "FACILITY:PASS-004",
-        "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
-        "expressServiceTypeId": "AIRPORT-DIRECT"
+        "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
+        "expressServiceTypeId": "EXPRESS"
       }
     ],
     "stationOperations": [
@@ -4157,8 +4157,8 @@
   },
   "serviceRoutes": [
     {
-      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN",
-      "name": "\u5927\u578B\u6A5F\u5834\u7DDAminimal baseline \u4E0B\u884C",
+      "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
+      "name": "\u5408\u6210\u9577\u8DEF\u7DDA minimal baseline \u4E0B\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:DOWN:O01:O02",
@@ -4449,8 +4449,8 @@
       ]
     },
     {
-      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP",
-      "name": "\u5927\u578B\u6A5F\u5834\u7DDAminimal baseline \u4E0A\u884C",
+      "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
+      "name": "\u5408\u6210\u9577\u8DEF\u7DDA minimal baseline \u4E0A\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:UP:O26:O25",
@@ -4744,11 +4744,11 @@
   "directionRouteBindings": [
     {
       "direction": "Outbound",
-      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:DOWN"
+      "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN"
     },
     {
       "direction": "Inbound",
-      "serviceRouteId": "LARGE-AIRPORT-LINE-FULL-DEMO:UP"
+      "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP"
     }
   ]
 }

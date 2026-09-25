@@ -1,7 +1,7 @@
-{
+﻿{
   "schemaVersion": 8,
   "projectId": "V4-FULL-FUNCTION",
-  "projectName": "V4 \u5B8C\u6574\u529F\u80FD\u9A57\u8B49\u7DDA\uFF08\u539F V3.3 \u7BC4\u4F8B\uFF09",
+  "projectName": "12-中型-五站完整營運範例",
   "train": {
     "maxSpeedMetersPerSecond": 22.2222222,
     "accelerationMetersPerSecondSquared": 1,

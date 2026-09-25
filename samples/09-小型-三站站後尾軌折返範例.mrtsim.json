@@ -1,7 +1,7 @@
-{
+﻿{
   "schemaVersion": 8,
   "projectId": "STATION-TEMPLATE",
-  "projectName": "\u5074\u5F0F\u6708\u53F0\u4E8C\u80A1\u9053",
+  "projectName": "09-小型-三站站後尾軌折返範例",
   "train": {
     "maxSpeedMetersPerSecond": 16.666666666666668,
     "accelerationMetersPerSecondSquared": 1,
@@ -131,6 +131,18 @@
     "manualTimetableRows": [
       {
         "plannedDepartureTimeSeconds": 0,
+        "direction": "Inbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU",
+        "stopPatternId": "ALL",
+        "originPlatformId": "C:U",
+        "vehicleId": "V1",
+        "serviceRunId": "UP-1",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "DOWN-1"
+      },
+      {
+        "plannedDepartureTimeSeconds": 1000,
         "direction": "Outbound",
         "serviceTypeId": "LOCAL",
         "vehicleTypeId": "EMU",
@@ -138,18 +150,6 @@
         "originPlatformId": "A:D",
         "vehicleId": "V1",
         "serviceRunId": "DOWN-1",
-        "continueAfterTerminal": false,
-        "continuationServiceRunId": null
-      },
-      {
-        "plannedDepartureTimeSeconds": 0,
-        "direction": "Inbound",
-        "serviceTypeId": "LOCAL",
-        "vehicleTypeId": "EMU",
-        "stopPatternId": "ALL",
-        "originPlatformId": "C:U",
-        "vehicleId": "V2",
-        "serviceRunId": "UP-1",
         "continueAfterTerminal": false,
         "continuationServiceRunId": null
       }
@@ -212,6 +212,48 @@
         "kind": "Switch",
         "schematicPosition": 1800,
         "schematicLane": -1
+      },
+      {
+        "nodeId": "U100",
+        "name": "U100",
+        "kind": "Switch",
+        "schematicPosition": -100,
+        "schematicLane": -1
+      },
+      {
+        "nodeId": "U200",
+        "name": "U200",
+        "kind": "Switch",
+        "schematicPosition": -200,
+        "schematicLane": -1
+      },
+      {
+        "nodeId": "UB",
+        "name": "UB",
+        "kind": "BufferStop",
+        "schematicPosition": -400,
+        "schematicLane": -1
+      },
+      {
+        "nodeId": "D100",
+        "name": "D100",
+        "kind": "Switch",
+        "schematicPosition": -100,
+        "schematicLane": 1
+      },
+      {
+        "nodeId": "D200",
+        "name": "D200",
+        "kind": "Switch",
+        "schematicPosition": -200,
+        "schematicLane": 1
+      },
+      {
+        "nodeId": "DB",
+        "name": "DB",
+        "kind": "BufferStop",
+        "schematicPosition": -400,
+        "schematicLane": 1
       }
     ],
     "edges": [
@@ -292,12 +334,132 @@
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 16.666666666666668,
         "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "TU0",
+        "fromNodeId": "UN0",
+        "toNodeId": "U100",
+        "lengthMeters": 100,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "TU1",
+        "fromNodeId": "U100",
+        "toNodeId": "U200",
+        "lengthMeters": 100,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": -1,
+        "trackEdgeId": "TU2",
+        "fromNodeId": "U200",
+        "toNodeId": "UB",
+        "lengthMeters": 200,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "TD0",
+        "fromNodeId": "D100",
+        "toNodeId": "DN0",
+        "lengthMeters": 100,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "TD1",
+        "fromNodeId": "D200",
+        "toNodeId": "D100",
+        "lengthMeters": 100,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": 1,
+        "trackEdgeId": "TD2",
+        "fromNodeId": "DB",
+        "toNodeId": "D200",
+        "lengthMeters": 200,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "X1",
+        "fromNodeId": "U200",
+        "toNodeId": "D100",
+        "lengthMeters": 140,
+        "directionality": "Bidirectional",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "X2",
+        "fromNodeId": "U100",
+        "toNodeId": "D200",
+        "lengthMeters": 140,
+        "directionality": "Bidirectional",
+        "kind": "Crossover",
+        "defaultSpeedLimitMetersPerSecond": 6.944444444444445,
+        "conflictResourceIds": [
+          "TURN"
+        ]
       }
     ],
     "stations": [
       {
         "stationId": "A",
-        "name": "\u897F\u7AEF\u7AD9",
+        "name": "\u5CF6\u5F0F\u6708\u53F0\u7AD9\u5F8C\u6298\u8FD4",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "A:D",
@@ -306,7 +468,7 @@
       },
       {
         "stationId": "B",
-        "name": "\u5074\u5F0F\u6708\u53F0\u4E8C\u80A1\u9053",
+        "name": "\u4E2D\u9593\u7AD9",
         "defaultDwellTimeSeconds": 30,
         "platformIds": [
           "B:D",
@@ -327,8 +489,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "1",
-        "platformBodyId": "",
-        "displaySide": "Below",
+        "platformBodyId": "A",
+        "displaySide": "Above",
         "platformId": "A:D",
         "stationId": "A",
         "name": "A\u7AD9 1\u6708\u53F0",
@@ -345,8 +507,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
-        "platformBodyId": "",
-        "displaySide": "Above",
+        "platformBodyId": "A",
+        "displaySide": "Below",
         "platformId": "A:U",
         "stationId": "A",
         "name": "A\u7AD9 2\u6708\u53F0",
@@ -363,8 +525,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "1",
-        "platformBodyId": "",
-        "displaySide": "Below",
+        "platformBodyId": "B",
+        "displaySide": "Above",
         "platformId": "B:D",
         "stationId": "B",
         "name": "B\u7AD9 1\u6708\u53F0",
@@ -381,8 +543,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
-        "platformBodyId": "",
-        "displaySide": "Above",
+        "platformBodyId": "B",
+        "displaySide": "Below",
         "platformId": "B:U",
         "stationId": "B",
         "name": "B\u7AD9 2\u6708\u53F0",
@@ -399,8 +561,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "1",
-        "platformBodyId": "",
-        "displaySide": "Below",
+        "platformBodyId": "C",
+        "displaySide": "Above",
         "platformId": "C:D",
         "stationId": "C",
         "name": "C\u7AD9 1\u6708\u53F0",
@@ -417,8 +579,8 @@
       {
         "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
-        "platformBodyId": "",
-        "displaySide": "Above",
+        "platformBodyId": "C",
+        "displaySide": "Below",
         "platformId": "C:U",
         "stationId": "C",
         "name": "C\u7AD9 2\u6708\u53F0",
@@ -433,7 +595,13 @@
         "allowedServiceTypeIds": []
       }
     ],
-    "resources": [],
+    "resources": [
+      {
+        "resourceId": "TURN",
+        "name": "\u6298\u8FD4\u9032\u8DEF\u5171\u7528\u885D\u7A81\u5340",
+        "kind": "Crossover"
+      }
+    ],
     "speedLimits": [],
     "gradients": [],
     "curves": [],
@@ -461,13 +629,208 @@
         "fromDirection": "Forward",
         "toTrackEdgeId": "U0",
         "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TU0",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TU1",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TU1",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TU2",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TU2",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TU2",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "TU2",
+        "fromDirection": "Reverse",
+        "toTrackEdgeId": "X1",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "X1",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TD0",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TU0",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "X2",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "X2",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TD2",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "TD2",
+        "fromDirection": "Reverse",
+        "toTrackEdgeId": "TD2",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TD2",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TD1",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "TD1",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "TD0",
+        "toDirection": "Forward"
       }
     ],
-    "turnbackFacilities": [],
-    "turnbackOperations": [],
+    "turnbackFacilities": [
+      {
+        "facilityId": "TURN",
+        "name": "\u7AD9\u5F8C\u5C3E\u8ECC\u6298\u8FD4",
+        "kind": "TailTrack",
+        "arrivalTrackEdgeId": "U0",
+        "arrivalStopOffsetMeters": 470,
+        "departureTrackEdgeId": "D0",
+        "departureStartOffsetMeters": 130,
+        "traversals": [
+          {
+            "trackEdgeId": "TU0",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TU1",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TU2",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TU2",
+            "direction": "Reverse"
+          },
+          {
+            "trackEdgeId": "X1",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TD0",
+            "direction": "Forward"
+          }
+        ],
+        "facilityTrackEdgeIds": [],
+        "turnbackStopAfterTraversalIndex": null,
+        "turnbackStopPosition": {
+          "trackEdgeId": "TU2",
+          "offsetMeters": 160
+        },
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      },
+      {
+        "facilityId": "TURN:TAIL2",
+        "name": "\u7D93\u7B2C\u4E8C\u6E21\u7DDA\u4F7F\u7528\u4E0B\u884C\u5C3E\u8ECC\u6298\u8FD4",
+        "kind": "TailTrack",
+        "arrivalTrackEdgeId": "U0",
+        "arrivalStopOffsetMeters": 470,
+        "departureTrackEdgeId": "D0",
+        "departureStartOffsetMeters": 130,
+        "traversals": [
+          {
+            "trackEdgeId": "TU0",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "X2",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TD2",
+            "direction": "Reverse"
+          },
+          {
+            "trackEdgeId": "TD2",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TD1",
+            "direction": "Forward"
+          },
+          {
+            "trackEdgeId": "TD0",
+            "direction": "Forward"
+          }
+        ],
+        "facilityTrackEdgeIds": [],
+        "turnbackStopAfterTraversalIndex": null,
+        "turnbackStopPosition": {
+          "trackEdgeId": "TD2",
+          "offsetMeters": 40
+        },
+        "conflictResourceIds": [
+          "TURN"
+        ]
+      }
+    ],
+    "turnbackOperations": [
+      {
+        "operationId": "TURN",
+        "facilityId": "TURN",
+        "arrivalServiceRouteId": "UP",
+        "departureServiceRouteId": "DOWN",
+        "minimumDwellTimeSeconds": 30
+      },
+      {
+        "operationId": "TURN:TAIL2",
+        "facilityId": "TURN:TAIL2",
+        "arrivalServiceRouteId": "UP:TAIL2",
+        "departureServiceRouteId": "DOWN:TAIL2",
+        "minimumDwellTimeSeconds": 30
+      }
+    ],
     "passingFacilities": [],
     "passingOperations": [],
-    "stationOperations": []
+    "stationOperations": [
+      {
+        "stationOperationId": "A:TURN",
+        "stationId": "A",
+        "arrivalPlatformIds": [
+          "A:U"
+        ],
+        "departurePlatformIds": [
+          "A:D"
+        ],
+        "turnbackOperationIds": [
+          "TURN"
+        ],
+        "passingOperationIds": [],
+        "defaultDwellTimeSeconds": 0
+      },
+      {
+        "stationOperationId": "A:TAIL2",
+        "stationId": "A",
+        "arrivalPlatformIds": [
+          "A:U"
+        ],
+        "departurePlatformIds": [
+          "A:D"
+        ],
+        "turnbackOperationIds": [
+          "TURN:TAIL2"
+        ],
+        "passingOperationIds": [],
+        "defaultDwellTimeSeconds": 0
+      }
+    ]
   },
   "serviceRoutes": [
     {
@@ -542,6 +905,82 @@
           "stationId": "A",
           "candidatePlatformIds": [
             "A:U"
+          ]
+        }
+      ]
+    },
+    {
+      "serviceRouteId": "UP:TAIL2",
+      "name": "\u4E0A\u884C\u9032\u8DEF",
+      "traversals": [
+        {
+          "trackEdgeId": "U2",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "U1",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "U0",
+          "direction": "Forward"
+        }
+      ],
+      "stops": [
+        {
+          "stationId": "C",
+          "candidatePlatformIds": [
+            "C:U"
+          ]
+        },
+        {
+          "stationId": "B",
+          "candidatePlatformIds": [
+            "B:U"
+          ]
+        },
+        {
+          "stationId": "A",
+          "candidatePlatformIds": [
+            "A:U"
+          ]
+        }
+      ]
+    },
+    {
+      "serviceRouteId": "DOWN:TAIL2",
+      "name": "\u4E0B\u884C\u9032\u8DEF",
+      "traversals": [
+        {
+          "trackEdgeId": "D0",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "D1",
+          "direction": "Forward"
+        },
+        {
+          "trackEdgeId": "D2",
+          "direction": "Forward"
+        }
+      ],
+      "stops": [
+        {
+          "stationId": "A",
+          "candidatePlatformIds": [
+            "A:D"
+          ]
+        },
+        {
+          "stationId": "B",
+          "candidatePlatformIds": [
+            "B:D"
+          ]
+        },
+        {
+          "stationId": "C",
+          "candidatePlatformIds": [
+            "C:D"
           ]
         }
       ]

@@ -1,7 +1,7 @@
-{
+﻿{
   "schemaVersion": 8,
   "projectId": "V4-PASSING-CHECK",
-  "projectName": "\u4E09\u80A1\u9053\u4E00\u5CF6\u4E00\u5074\u5FEB\u901F\u8ECA\u8D8A\u884C\u9A57\u8B49",
+  "projectName": "03-小型-三站快速越行範例",
   "train": {
     "maxSpeedMetersPerSecond": 27.7777778,
     "accelerationMetersPerSecondSquared": 1,

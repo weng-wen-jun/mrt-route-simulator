@@ -1,6 +1,6 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
-internal sealed record LargeAirportLineScenarioStages(
+internal sealed record SyntheticLongRouteScenarioStages(
     TopologyProjectDocument MinimalBaseline,
     TopologyProjectDocument FullStationChain,
     TopologyProjectDocument ServicePatterns,
@@ -11,30 +11,30 @@ internal sealed record LargeAirportLineScenarioStages(
     IReadOnlyList<TopologyScenarioStageValidation> StageValidations);
 
 /// <summary>
-/// Rebuildable source for the de-identified Large Airport Line full demonstration sample.
-/// Station-center chainages are source-backed planning reference data. Facility geometry, dwell
+/// Rebuildable source for the de-identified Synthetic Long Route full demonstration sample.
+/// Station-center chainages are retained planning reference data. Facility geometry, dwell
 /// times, rolling-stock performance and timetable offsets remain synthetic test values.
 /// </summary>
-internal static class LargeAirportLineFullScenarioBuilder
+internal static class SyntheticLongRouteFullScenarioBuilder
 {
-    internal const string ProjectId = "LARGE-AIRPORT-LINE-FULL-DEMO";
+    internal const string ProjectId = "SYNTHETIC-LONG-ROUTE-FULL-DEMO";
     internal const string DownRouteId = ProjectId + ":DOWN";
     internal const string UpRouteId = ProjectId + ":UP";
     internal const string VehicleTypeId = "EMU-100";
     internal const string FullLineServiceId = "FULL-LINE";
     internal const string SectionServiceId = "SECTION";
-    internal const string AirportDirectServiceId = "AIRPORT-DIRECT";
+    internal const string ExpressServiceId = "EXPRESS";
     internal const string FullLinePatternId = "FULL-LINE-ALL";
     internal const string O04HoldingPatternId = "FULL-LINE-O04-HOLD";
     internal const string O13HoldingPatternId = "FULL-LINE-O13-HOLD";
     internal const string SectionPatternId = "SECTION-O20";
-    internal const string AirportDirectPatternId = "AIRPORT-DIRECT-O20";
-    internal const string AirportDirectRunId = "AIRPORT-DIRECT-DOWN-01";
-    internal const string AirportDirectUpRunId = "AIRPORT-DIRECT-UP-01";
+    internal const string ExpressPatternId = "EXPRESS-O20";
+    internal const string ExpressRunId = "EXPRESS-DOWN-01";
+    internal const string ExpressUpRunId = "EXPRESS-UP-01";
     internal const string SectionDownRunId = "SECTION-DOWN-01";
     internal const string SectionUpRunId = "SECTION-UP-01";
     internal const double FullRouteLengthMeters = 29_943;
-    internal const double AirportSectionLengthMeters = 23_833;
+    internal const double SectionRouteLengthMeters = 23_833;
 
     internal static readonly string[] StationIds =
     [
@@ -43,8 +43,8 @@ internal static class LargeAirportLineFullScenarioBuilder
         "O23", "O24", "O25", "O26"
     ];
 
-    // Source-backed station-center chainage (m).  Interstation distances must be
-    // derived from this single table; do not introduce a second interval table.
+    // Retained station-center chainage (m). Interstation distances must be derived from
+    // this single table; do not introduce a second interval table.
     internal static readonly IReadOnlyDictionary<string, double> StationChainages =
         new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
         {
@@ -57,11 +57,11 @@ internal static class LargeAirportLineFullScenarioBuilder
             ["O23"] = 26_388, ["O24"] = 28_118, ["O25"] = 28_873, ["O26"] = 30_133
         };
 
-    internal static readonly HashSet<string> AirportDirectStops = new(
+    internal static readonly HashSet<string> ExpressStops = new(
         ["O01", "O08", "O11", "O16", "O20"],
         StringComparer.OrdinalIgnoreCase);
 
-    public static LargeAirportLineScenarioStages BuildStages()
+    public static SyntheticLongRouteScenarioStages BuildStages()
     {
         var minimal = BuildMinimalBaseline();
         var builder = TopologyScenarioBuilder.FromMinimalBaseline(minimal);
@@ -102,7 +102,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             smokeDurationSeconds: 30);
         var result = builder.Build();
 
-        return new LargeAirportLineScenarioStages(
+        return new SyntheticLongRouteScenarioStages(
             minimal,
             stationChain,
             servicePatterns,
@@ -120,7 +120,7 @@ internal static class LargeAirportLineFullScenarioBuilder
         var template = StationLayoutTemplateService.Build(StationLayoutTemplateKind.IslandTwoTracks) with
         {
             ProjectId = ProjectId,
-            ProjectName = "大型機場線minimal baseline",
+            ProjectName = "13-中型-六站主要站示範範例",
             Train = new ProjectTrainSettings(80d / 3.6d, 1.2, 1.5, 30, 30, 30),
             Operations = new ProjectOperationalSettings(1, 0.1, 65, 40d / 3.6d, 0, 100, 1.5, 2, 0.2, 0.2, 1, 5, 5),
             Simulation = new ProjectRunSettings(2, null, 0, 1, OperationProfileMode.RealisticOperations,
@@ -168,7 +168,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             document = MoveTerminalPlatform(document, UpPlatform("O01"));
         }
         // SchematicPosition is an existing presentation-only field.  Here it records
-        // the source-backed station-center projection; it is never used to infer port
+        // the retained station-center projection; it is never used to infer port
         // sides or physical connectivity.
         document = document with
         {
@@ -190,7 +190,7 @@ internal static class LargeAirportLineFullScenarioBuilder
         {
             ProjectId = ProjectId,
             ProjectName = stationIds.Count == StationIds.Length
-                ? "大型機場線完整營運示範範例"
+                ? "14-大型-二十八站完整營運範例"
                 : template.ProjectName
         };
     }
@@ -198,22 +198,22 @@ internal static class LargeAirportLineFullScenarioBuilder
     private static TopologyProjectDocument AddServicePatterns(TopologyProjectDocument document)
     {
         var full = Pattern(FullLinePatternId, "全程車全站停靠", StationIds, _ => StopPatternAction.Stop);
-        var airportSectionStations = StationIds.Take(StationIndex("O20") + 1).ToArray();
+        var sectionStations = StationIds.Take(StationIndex("O20") + 1).ToArray();
         // Pass means non-stop on the normal mainline in this synthetic scenario.  Keep the
         // optional passing-speed override unset so a higher-priority train is not capped at
         // an unrelated demonstration value before reaching a real passing facility.
-        var section = Pattern(SectionPatternId, "區間車 O01－O20（O04 通過越行、O08 後站站停）", airportSectionStations, stationId =>
+        var section = Pattern(SectionPatternId, "區間車 O01－O20（O04 通過越行、O08 後站站停）", sectionStations, stationId =>
             StationIndex(stationId) is > 0 and < 7 ? StopPatternAction.Pass : StopPatternAction.Stop,
             dwellSeconds: 10);
-        var direct = Pattern(AirportDirectPatternId, "機場直達車 O01/O08/O11/O16/O20 停靠並於 O20 折返", airportSectionStations,
-            stationId => AirportDirectStops.Contains(stationId) ? StopPatternAction.Stop : StopPatternAction.Pass,
+        var direct = Pattern(ExpressPatternId, "快速車 O01/O08/O11/O16/O20 停靠並於 O20 折返", sectionStations,
+            stationId => ExpressStops.Contains(stationId) ? StopPatternAction.Stop : StopPatternAction.Pass,
             dwellSeconds: 20);
 
         var rows = new[]
         {
             Row(0, TrainDirection.Outbound, FullLineServiceId, FullLinePatternId, "O01", "STAGE2-LOCAL", "STAGE2-LOCAL-DOWN"),
             Row(30, TrainDirection.Inbound, FullLineServiceId, FullLinePatternId, "O26", "STAGE2-UP", "STAGE2-LOCAL-UP"),
-            Row(180, TrainDirection.Outbound, AirportDirectServiceId, AirportDirectPatternId, "O01", "STAGE2-DIRECT", "STAGE2-DIRECT-DOWN")
+            Row(180, TrainDirection.Outbound, ExpressServiceId, ExpressPatternId, "O01", "STAGE2-EXPRESS", "STAGE2-EXPRESS-DOWN")
         };
 
         return document with
@@ -224,7 +224,7 @@ internal static class LargeAirportLineFullScenarioBuilder
                 new ProjectServiceType(FullLineServiceId, "全程車", "#D26523", "F", FullLinePatternId, VehicleTypeId, 0),
                 new ProjectServiceType(SectionServiceId, "區間車", "#19607D", "S", SectionPatternId, VehicleTypeId, 5,
                     CanRequestOvertake: true),
-                new ProjectServiceType(AirportDirectServiceId, "機場直達車", "#7B3FA1", "A", AirportDirectPatternId,
+                new ProjectServiceType(ExpressServiceId, "快速車", "#7B3FA1", "A", ExpressPatternId,
                     VehicleTypeId, 10, CanRequestOvertake: true)
             ],
             StopPatterns = [full, section, direct],
@@ -276,7 +276,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             TurnbackOperationIds = [operation.OperationId],
             DefaultDwellTimeSeconds = 30
         };
-        var turnbackPatternIds = new HashSet<string>([SectionPatternId, AirportDirectPatternId], StringComparer.OrdinalIgnoreCase);
+        var turnbackPatternIds = new HashSet<string>([SectionPatternId, ExpressPatternId], StringComparer.OrdinalIgnoreCase);
         var rows = new[]
         {
             Row(0, TrainDirection.Outbound, SectionServiceId, SectionPatternId, "O01", "SECTION-VEHICLE-01",
@@ -337,7 +337,7 @@ internal static class LargeAirportLineFullScenarioBuilder
         var expressPlatformId = $"PLATFORM:{stationId}:{directionCode}:THROUGH";
         var routeId = direction == TrainDirection.Outbound ? DownRouteId : UpRouteId;
 
-        // O04 is centered on the source-backed station node: branch 240 m before it,
+        // O04 is centered on the retained station node: branch 240 m before it,
         // platform from 170 to 310 m, and rejoin 240 m beyond it.  Splitting both
         // neighboring edges preserves their combined length and every station chainage.
         // O13 retains its existing synthetic passing layout.
@@ -407,7 +407,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             TrackEdgeId = mainlineStationEdge.TrackEdgeId,
             AllowsPassengerService = false,
             AllowedServiceTypeIds = new HashSet<string>(
-                stationId == "O04" ? [SectionServiceId, AirportDirectServiceId] : [AirportDirectServiceId],
+                stationId == "O04" ? [SectionServiceId, ExpressServiceId] : [ExpressServiceId],
                 StringComparer.OrdinalIgnoreCase)
         };
         document = document with
@@ -435,7 +435,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             mainlineStationEdge.LengthMeters,
             80d / 3.6d,
             routeId,
-            AirportDirectServiceId));
+            ExpressServiceId));
         var passingEdge = document.Topology.Edges.Single(edge => !priorEdgeIds.Contains(edge.TrackEdgeId));
         // Keep the physical port metadata independent from the drawing, but give the WPF schematic
         // enough lane information to draw a tangential throat instead of a vertical same-X jump.
@@ -554,14 +554,14 @@ internal static class LargeAirportLineFullScenarioBuilder
         };
         var rows = new[]
         {
-            // Synthetic off-peak group: DIRECT overtakes one FULL at O04 and another at O13,
+            // Synthetic off-peak group: EXPRESS overtakes one FULL at O04 and another at O13,
             // terminates at O20, then continues back to O01 with the same physical vehicle.
             Row(0, TrainDirection.Outbound, FullLineServiceId, O13HoldingPatternId, "O01", "FULL-O13", "FULL-O13-DOWN"),
             Row(60, TrainDirection.Outbound, FullLineServiceId, O04HoldingPatternId, "O01", "FULL-O04", "FULL-O04-DOWN"),
-            Row(500, TrainDirection.Outbound, AirportDirectServiceId, AirportDirectPatternId, "O01", "AIRPORT-DIRECT-01",
-                AirportDirectRunId, continueAfterTerminal: true, continuationServiceRunId: AirportDirectUpRunId),
-            Row(2600, TrainDirection.Inbound, AirportDirectServiceId, AirportDirectPatternId, "O20", "AIRPORT-DIRECT-01",
-                AirportDirectUpRunId),
+            Row(500, TrainDirection.Outbound, ExpressServiceId, ExpressPatternId, "O01", "EXPRESS-01",
+                ExpressRunId, continueAfterTerminal: true, continuationServiceRunId: ExpressUpRunId),
+            Row(2600, TrainDirection.Inbound, ExpressServiceId, ExpressPatternId, "O20", "EXPRESS-01",
+                ExpressUpRunId),
             Row(30, TrainDirection.Inbound, FullLineServiceId, FullLinePatternId, "O26", "FULL-UP-01", "FULL-UP-01"),
             // Synthetic peak group: SECTION follows and overtakes a separate FULL at O04, then turns at O20.
             Row(2600, TrainDirection.Outbound, FullLineServiceId, O04HoldingPatternId, "O01", "FULL-SECTION-O04",
@@ -678,9 +678,9 @@ internal static class LargeAirportLineFullScenarioBuilder
             continuationServiceRunId);
 
     private static double DistanceFromPrevious(IReadOnlyList<string> stationIds, int index) =>
-        SourceChainage(stationIds[index]) - SourceChainage(stationIds[index - 1]);
+        RetainedChainage(stationIds[index]) - RetainedChainage(stationIds[index - 1]);
 
-    internal static double SourceChainage(string stationId) =>
+    internal static double RetainedChainage(string stationId) =>
         StationChainages.TryGetValue(stationId, out var chainage)
             ? chainage
             : throw new InvalidOperationException($"未知車站 {stationId}。");
@@ -694,8 +694,8 @@ internal static class LargeAirportLineFullScenarioBuilder
     private static string[] MinimalStationIds() => ["O01", "O08", "O11", "O16", "O20", "O26"];
     private static string StationName(string id) => id switch
     {
-        "O01" => "O01 機場端",
-        "O16" => "O16 中央轉乘站",
+        "O01" => "O01 站",
+        "O16" => "O16 站",
         _ => $"{id} 站"
     };
     private static string Node(string stationId) => $"NODE:{stationId}";

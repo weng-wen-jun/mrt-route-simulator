@@ -1,4 +1,4 @@
-# MRT Route Simulation Engine - Model Specification V4.0.2
+﻿# MRT Route Simulation Engine - Model Specification V4.0.2
 
 > 現行規格（2026-08-31）。V3.0～V3.4 章節僅保留歷史模型說明；V2 寫實運行已改為 topology-native runtime。
 
@@ -77,7 +77,7 @@ StationId + PlatformId + TrackPosition + traversal index + chainage
 - 停站模式以交易式 UI 編輯名稱、停站／跨站、停站秒數覆寫及通過速限；取消不套用，刪除受引用項目會說明阻擋原因。
 - 手動發車計畫開啟時自動選取目前模式；端點可退出、建立反向續行，或指定接續既有的反向車次，同一實體車輛沿用 `VehicleId`。
 - V3.3 區間統計支援方向、車輛、車次、車型、服務、停站模式、模擬秒範圍及是否包含運行中等篩選，並輸出實際軌跡中的移動閉塞受限秒數。
-- `V3.3.0-完整功能驗證範例.mrtsim.json` 同時涵蓋上述功能、雙向派車及五類空間參考點，作為自動化與 Windows UI 驗收基準。
+- `12-中型-五站完整營運範例.mrtsim.json` 同時涵蓋上述功能、雙向派車及五類空間參考點，作為自動化與 Windows UI 驗收基準。
 
 ## V3.2.0 本輪變更
 

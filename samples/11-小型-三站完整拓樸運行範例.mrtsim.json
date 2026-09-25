@@ -1,12 +1,12 @@
-{
+﻿{
   "schemaVersion": 8,
-  "projectId": "V4-TOPOLOGY-BASELINE",
-  "projectName": "V4 topology \u57FA\u7DDA\u9A57\u8B49\u7DDA",
+  "projectId": "V4-TOPOLOGY-COMPREHENSIVE-RUNTIME",
+  "projectName": "11-小型-三站完整拓樸運行範例",
   "train": {
     "maxSpeedMetersPerSecond": 22.2222222,
     "accelerationMetersPerSecondSquared": 1,
     "decelerationMetersPerSecondSquared": 1,
-    "defaultDwellTimeSeconds": 30,
+    "defaultDwellTimeSeconds": 20,
     "originTurnaroundTimeSeconds": 30,
     "terminalTurnaroundTimeSeconds": 30
   },
@@ -26,19 +26,19 @@
     "absoluteMinimumGapMeters": 100
   },
   "simulation": {
-    "trainCount": 1,
+    "trainCount": 7,
     "headwaySeconds": null,
     "startClockSeconds": 0,
     "playbackSpeed": 1,
     "profileMode": "RealisticOperations",
-    "movingBlockMode": "Independent",
+    "movingBlockMode": "Control",
     "brakingEstimationMode": "Service",
     "engineKind": "V2RealisticOperations"
   },
   "vehicleTypes": [
     {
       "id": "EMU-100",
-      "displayName": "\u57FA\u7DDA\u5217\u8ECA",
+      "displayName": "\u5B8C\u6574\u9A57\u8B49\u5217\u8ECA",
       "lengthMeters": 100,
       "maxSpeedMetersPerSecond": 22.2222222,
       "accelerationMetersPerSecondSquared": 1,
@@ -88,7 +88,7 @@
         {
           "stationId": "M",
           "action": "Stop",
-          "dwellTimeSeconds": 30,
+          "dwellTimeSeconds": 150,
           "passingSpeedLimitMetersPerSecond": null
         },
         {
@@ -122,95 +122,185 @@
           "passingSpeedLimitMetersPerSecond": null
         }
       ]
+    },
+    {
+      "id": "POCKET-TURNBACK",
+      "displayName": "\u4E2D\u592E\u888B\u72C0\u8ECC\u6298\u8FD4",
+      "instructions": [
+        {
+          "stationId": "W",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "M",
+          "action": "Turnback",
+          "dwellTimeSeconds": 30,
+          "passingSpeedLimitMetersPerSecond": null
+        }
+      ]
     }
   ],
   "dispatch": {
-    "activeMode": "SimpleHeadway",
+    "activeMode": "ManualTimetable",
     "vehicleAssignmentMode": "Automatic",
-    "simpleHeadwayPlans": [
+    "simpleHeadwayPlans": [],
+    "manualTimetableRows": [
       {
+        "plannedDepartureTimeSeconds": 0,
         "direction": "Outbound",
-        "firstDepartureTimeSeconds": 0,
-        "headwaySeconds": 300,
-        "runCount": 1,
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "ALL-STOPS",
+        "originPlatformId": "P-W-D",
+        "vehicleId": "LOCAL-01",
+        "serviceRunId": "LOCAL-DOWN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 90,
+        "direction": "Outbound",
+        "serviceTypeId": "EXPRESS",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "EXPRESS-SKIP-M",
+        "originPlatformId": "P-W-D",
+        "vehicleId": "EXPRESS-01",
+        "serviceRunId": "EXPRESS-DOWN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 400,
+        "direction": "Outbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "POCKET-TURNBACK",
+        "originPlatformId": "P-W-D",
+        "vehicleId": "POCKET-02",
+        "serviceRunId": "POCKET-DEMO-DOWN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 700,
+        "direction": "Outbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "POCKET-TURNBACK",
+        "originPlatformId": "P-W-D",
+        "vehicleId": "POCKET-01",
+        "serviceRunId": "POCKET-DOWN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
+      },
+      {
+        "plannedDepartureTimeSeconds": 1200,
+        "direction": "Outbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "ALL-STOPS",
+        "originPlatformId": "P-W-D",
+        "vehicleId": "TAIL-01",
+        "serviceRunId": "TAIL-DOWN",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "TAIL-UP"
+      },
+      {
+        "plannedDepartureTimeSeconds": 1500,
+        "direction": "Inbound",
+        "serviceTypeId": "LOCAL",
+        "vehicleTypeId": "EMU-100",
+        "stopPatternId": "ALL-STOPS",
+        "originPlatformId": "P-E-U",
+        "vehicleId": null,
+        "serviceRunId": "TAIL-UP",
+        "continueAfterTerminal": true,
+        "continuationServiceRunId": "TAIL-DOWN-RETURN"
+      },
+      {
+        "plannedDepartureTimeSeconds": 1900,
+        "direction": "Outbound",
         "serviceTypeId": "LOCAL",
         "vehicleTypeId": "EMU-100",
         "stopPatternId": "ALL-STOPS",
         "originPlatformId": "P-W-D",
         "vehicleId": null,
-        "continueAfterTerminal": false
+        "serviceRunId": "TAIL-DOWN-RETURN",
+        "continueAfterTerminal": false,
+        "continuationServiceRunId": null
       }
-    ],
-    "manualTimetableRows": []
+    ]
   },
   "topology": {
     "nodes": [
       {
         "nodeId": "N-W",
-        "name": "\u897F\u7AEF",
+        "name": "\u897F\u7AEF\u7AD9\u5834",
         "kind": "Boundary",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "N-M-ENTRY",
-        "name": "\u4E2D\u592E\u7AD9\u897F\u5074\u5206\u5C94",
+        "name": "\u4E2D\u592E\u7AD9\u897F\u5074\u5206\u6B67",
         "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "N-M",
-        "name": "\u4E2D\u592E\u7AD9",
-        "kind": "Junction",
+        "name": "\u4E2D\u592E\u7AD9\u6771\u5074\u5408\u6D41",
+        "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "N-E",
-        "name": "\u6771\u7AEF",
+        "name": "\u6771\u7AEF\u7AD9\u5834",
         "kind": "Boundary",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
-        "nodeId": "N-T",
-        "name": "\u6771\u7AEF\u5C3E\u8ECC\u7AEF",
+        "nodeId": "N-W-X",
+        "name": "\u897F\u7AEF\u6E21\u7DDA",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N-E-X",
+        "name": "\u6771\u7AEF\u6E21\u7DDA",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "N-W-T",
+        "name": "\u897F\u7AEF\u5C3E\u8ECC\u6B62\u885D",
         "kind": "BufferStop",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
-        "nodeId": "N-T-W",
-        "name": "\u897F\u7AEF\u5C3E\u8ECC\u7AEF",
+        "nodeId": "N-E-T",
+        "name": "\u6771\u7AEF\u5C3E\u8ECC\u6B62\u885D",
         "kind": "BufferStop",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "N-P",
-        "name": "\u4E2D\u592E\u907F\u8ECA\u7DDA\u7AEF",
+        "name": "\u4E2D\u592E\u888B\u72C0\u8ECC\u6B62\u885D",
         "kind": "BufferStop",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
-        "nodeId": "TAIL-OUT:THROAT",
-        "name": "\u6771\u7AEF\u5C3E\u8ECC\u6298\u8FD4\u9053\u5C94",
-        "kind": "Switch",
-        "schematicPosition": null,
-        "schematicLane": null
-      },
-      {
-        "nodeId": "TAIL-W-OUT:THROAT",
-        "name": "\u897F\u7AEF\u5C3E\u8ECC\u6298\u8FD4\u9053\u5C94",
-        "kind": "Switch",
-        "schematicPosition": null,
-        "schematicLane": null
-      },
-      {
-        "nodeId": "POCKET-OUT:THROAT",
-        "name": "\u4E2D\u592E\u907F\u8ECA\u7DDA\u6298\u8FD4\u9053\u5C94",
+        "nodeId": "N-P-X",
+        "name": "\u4E2D\u592E\u888B\u72C0\u8ECC\u532F\u5408\u9053\u5C94",
         "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
@@ -285,38 +375,8 @@
       {
         "fromPortSide": "B",
         "toPortSide": "A",
-        "schematicLane": null,
-        "trackEdgeId": "TAIL-OUT",
-        "fromNodeId": "TAIL-OUT:THROAT",
-        "toNodeId": "N-T",
-        "lengthMeters": 180,
-        "directionality": "Bidirectional",
-        "kind": "TailTrack",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
-        "conflictResourceIds": [
-          "RES-TAIL"
-        ]
-      },
-      {
-        "fromPortSide": "A",
-        "toPortSide": "B",
-        "schematicLane": null,
-        "trackEdgeId": "TAIL-W-OUT",
-        "fromNodeId": "TAIL-W-OUT:THROAT",
-        "toNodeId": "N-T-W",
-        "lengthMeters": 180,
-        "directionality": "Bidirectional",
-        "kind": "TailTrack",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
-        "conflictResourceIds": [
-          "RES-TAIL-W"
-        ]
-      },
-      {
-        "fromPortSide": "B",
-        "toPortSide": "A",
         "schematicLane": 3,
-        "trackEdgeId": "PASS-LOOP-M",
+        "trackEdgeId": "PASS-M",
         "fromNodeId": "N-M-ENTRY",
         "toNodeId": "N-M",
         "lengthMeters": 400,
@@ -331,105 +391,135 @@
         "fromPortSide": "B",
         "toPortSide": "A",
         "schematicLane": null,
-        "trackEdgeId": "POCKET-OUT",
-        "fromNodeId": "POCKET-OUT:THROAT",
+        "trackEdgeId": "POCKET-M",
+        "fromNodeId": "N-P-X",
         "toNodeId": "N-P",
-        "lengthMeters": 140,
+        "lengthMeters": 220,
         "directionality": "Bidirectional",
         "kind": "PocketTrack",
         "defaultSpeedLimitMetersPerSecond": 8.3333333,
         "conflictResourceIds": [
-          "RES-POCKET"
+          "RES-POCKET-M"
         ]
       },
       {
         "fromPortSide": "B",
         "toPortSide": "A",
         "schematicLane": null,
-        "trackEdgeId": "TAIL-OUT:ENTRY",
+        "trackEdgeId": "E-CROSS-OUT",
         "fromNodeId": "N-E",
-        "toNodeId": "TAIL-OUT:THROAT",
+        "toNodeId": "N-E-X",
         "lengthMeters": 180,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
         "conflictResourceIds": [
-          "RES-TAIL"
+          "RES-E-SWITCH"
+        ]
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "E-TAIL",
+        "fromNodeId": "N-E-X",
+        "toNodeId": "N-E-T",
+        "lengthMeters": 220,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
+        "conflictResourceIds": [
+          "RES-E-TAIL"
         ]
       },
       {
         "fromPortSide": "A",
         "toPortSide": "B",
         "schematicLane": null,
-        "trackEdgeId": "TAIL-OUT:EXIT",
-        "fromNodeId": "TAIL-OUT:THROAT",
+        "trackEdgeId": "E-CROSS-RETURN",
+        "fromNodeId": "N-E-X",
         "toNodeId": "N-E",
         "lengthMeters": 180,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
         "conflictResourceIds": [
-          "RES-TAIL"
+          "RES-E-SWITCH"
         ]
       },
       {
         "fromPortSide": "A",
         "toPortSide": "B",
         "schematicLane": null,
-        "trackEdgeId": "TAIL-W-OUT:ENTRY",
+        "trackEdgeId": "W-CROSS-OUT",
         "fromNodeId": "N-W",
-        "toNodeId": "TAIL-W-OUT:THROAT",
+        "toNodeId": "N-W-X",
         "lengthMeters": 180,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
         "conflictResourceIds": [
-          "RES-TAIL-W"
+          "RES-W-SWITCH"
+        ]
+      },
+      {
+        "fromPortSide": "A",
+        "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "W-TAIL",
+        "fromNodeId": "N-W-X",
+        "toNodeId": "N-W-T",
+        "lengthMeters": 220,
+        "directionality": "Bidirectional",
+        "kind": "TailTrack",
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
+        "conflictResourceIds": [
+          "RES-W-TAIL"
         ]
       },
       {
         "fromPortSide": "B",
         "toPortSide": "A",
         "schematicLane": null,
-        "trackEdgeId": "TAIL-W-OUT:EXIT",
-        "fromNodeId": "TAIL-W-OUT:THROAT",
+        "trackEdgeId": "W-CROSS-RETURN",
+        "fromNodeId": "N-W-X",
         "toNodeId": "N-W",
         "lengthMeters": 180,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
-        "defaultSpeedLimitMetersPerSecond": 8.3333333,
+        "defaultSpeedLimitMetersPerSecond": 6.9444444,
         "conflictResourceIds": [
-          "RES-TAIL-W"
+          "RES-W-SWITCH"
         ]
       },
       {
         "fromPortSide": "B",
         "toPortSide": "A",
         "schematicLane": null,
-        "trackEdgeId": "POCKET-OUT:ENTRY",
+        "trackEdgeId": "P-CROSS-OUT",
         "fromNodeId": "N-M",
-        "toNodeId": "POCKET-OUT:THROAT",
-        "lengthMeters": 180,
+        "toNodeId": "N-P-X",
+        "lengthMeters": 100,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
         "defaultSpeedLimitMetersPerSecond": 8.3333333,
         "conflictResourceIds": [
-          "RES-POCKET"
+          "RES-POCKET-M"
         ]
       },
       {
         "fromPortSide": "A",
         "toPortSide": "B",
         "schematicLane": null,
-        "trackEdgeId": "POCKET-OUT:EXIT",
-        "fromNodeId": "POCKET-OUT:THROAT",
+        "trackEdgeId": "P-CROSS-RETURN",
+        "fromNodeId": "N-P-X",
         "toNodeId": "N-M",
-        "lengthMeters": 180,
+        "lengthMeters": 100,
         "directionality": "ForwardOnly",
         "kind": "Crossover",
         "defaultSpeedLimitMetersPerSecond": 8.3333333,
         "conflictResourceIds": [
-          "RES-POCKET"
+          "RES-POCKET-M"
         ]
       }
     ],
@@ -465,7 +555,7 @@
     ],
     "platforms": [
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "1",
         "platformBodyId": "",
         "displaySide": "Below",
@@ -475,7 +565,7 @@
         "trackEdgeId": "DOWN-W-M",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 140,
-        "stopPositionOffsetMeters": 140,
+        "stopPositionOffsetMeters": 70,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -483,7 +573,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
         "platformBodyId": "M:PASSING-ISLAND",
         "displaySide": "Below",
@@ -493,7 +583,7 @@
         "trackEdgeId": "DOWN-M-LOCAL",
         "platformStartOffsetMeters": 130,
         "platformEndOffsetMeters": 270,
-        "stopPositionOffsetMeters": 270,
+        "stopPositionOffsetMeters": 200,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -501,7 +591,25 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
+        "platformNumber": "1",
+        "platformBodyId": "M:PASSING-ISLAND",
+        "displaySide": "Above",
+        "platformId": "P-M-PASS",
+        "stationId": "M",
+        "name": "\u4E2D\u592E\u7AD9\u5FEB\u901F\u901A\u904E\u7DDA",
+        "trackEdgeId": "PASS-M",
+        "platformStartOffsetMeters": 130,
+        "platformEndOffsetMeters": 270,
+        "stopPositionOffsetMeters": 200,
+        "allowedDirection": "Outbound",
+        "effectiveLengthMeters": 140,
+        "allowsPassengerService": true,
+        "allowedVehicleTypeIds": [],
+        "allowedServiceTypeIds": []
+      },
+      {
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "1",
         "platformBodyId": "",
         "displaySide": "Below",
@@ -511,7 +619,7 @@
         "trackEdgeId": "DOWN-M-E",
         "platformStartOffsetMeters": 960,
         "platformEndOffsetMeters": 1100,
-        "stopPositionOffsetMeters": 1100,
+        "stopPositionOffsetMeters": 1030,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -519,7 +627,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
         "platformBodyId": "",
         "displaySide": "Above",
@@ -529,7 +637,7 @@
         "trackEdgeId": "UP-E-M",
         "platformStartOffsetMeters": 0,
         "platformEndOffsetMeters": 140,
-        "stopPositionOffsetMeters": 140,
+        "stopPositionOffsetMeters": 70,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -537,7 +645,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "3",
         "platformBodyId": "",
         "displaySide": "Above",
@@ -547,7 +655,7 @@
         "trackEdgeId": "UP-M-W",
         "platformStartOffsetMeters": 130,
         "platformEndOffsetMeters": 270,
-        "stopPositionOffsetMeters": 270,
+        "stopPositionOffsetMeters": 200,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -555,7 +663,7 @@
         "allowedServiceTypeIds": []
       },
       {
-        "stopPositionReference": "TrainFront",
+        "stopPositionReference": "TrainCenter",
         "platformNumber": "2",
         "platformBodyId": "",
         "displaySide": "Above",
@@ -565,26 +673,8 @@
         "trackEdgeId": "UP-M-W",
         "platformStartOffsetMeters": 960,
         "platformEndOffsetMeters": 1100,
-        "stopPositionOffsetMeters": 1100,
+        "stopPositionOffsetMeters": 1030,
         "allowedDirection": "Inbound",
-        "effectiveLengthMeters": 140,
-        "allowsPassengerService": true,
-        "allowedVehicleTypeIds": [],
-        "allowedServiceTypeIds": []
-      },
-      {
-        "stopPositionReference": "TrainFront",
-        "platformNumber": "1",
-        "platformBodyId": "M:PASSING-ISLAND",
-        "displaySide": "Above",
-        "platformId": "P-M-PASS",
-        "stationId": "M",
-        "name": "\u4E2D\u592E\u7AD9\u5FEB\u901F\u901A\u904E\u7DDA",
-        "trackEdgeId": "PASS-LOOP-M",
-        "platformStartOffsetMeters": 130,
-        "platformEndOffsetMeters": 270,
-        "stopPositionOffsetMeters": 270,
-        "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
         "allowedVehicleTypeIds": [],
@@ -593,29 +683,39 @@
     ],
     "resources": [
       {
-        "resourceId": "RES-TAIL",
+        "resourceId": "RES-PASS-M",
+        "name": "\u4E2D\u592E\u5F85\u907F\u7DDA",
+        "kind": "Switch"
+      },
+      {
+        "resourceId": "RES-POCKET-M",
+        "name": "\u4E2D\u592E\u888B\u72C0\u8ECC",
+        "kind": "PocketTrack"
+      },
+      {
+        "resourceId": "RES-E-SWITCH",
+        "name": "\u6771\u7AEF\u6E21\u7DDA",
+        "kind": "Crossover"
+      },
+      {
+        "resourceId": "RES-E-TAIL",
         "name": "\u6771\u7AEF\u5C3E\u8ECC",
         "kind": "TailTrack"
       },
       {
-        "resourceId": "RES-TAIL-W",
+        "resourceId": "RES-W-SWITCH",
+        "name": "\u897F\u7AEF\u6E21\u7DDA",
+        "kind": "Crossover"
+      },
+      {
+        "resourceId": "RES-W-TAIL",
         "name": "\u897F\u7AEF\u5C3E\u8ECC",
         "kind": "TailTrack"
-      },
-      {
-        "resourceId": "RES-PASS-M",
-        "name": "\u4E2D\u592E\u7AD9\u5FEB\u901F\u901A\u904E\u7DDA",
-        "kind": "Switch"
-      },
-      {
-        "resourceId": "RES-POCKET",
-        "name": "\u4E2D\u592E\u907F\u8ECA\u7DDA",
-        "kind": "PocketTrack"
       }
     ],
     "speedLimits": [
       {
-        "speedLimitId": "LIMIT-DOWN-M",
+        "speedLimitId": "LIMIT-DOWN-M-E",
         "trackEdgeId": "DOWN-M-E",
         "startOffsetMeters": 400,
         "endOffsetMeters": 650,
@@ -643,24 +743,6 @@
     ],
     "directedConnections": [
       {
-        "fromTrackEdgeId": "UP-M-W",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-W-OUT:ENTRY",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "TAIL-W-OUT",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-W-OUT",
-        "toDirection": "Reverse"
-      },
-      {
-        "fromTrackEdgeId": "TAIL-W-OUT:EXIT",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "DOWN-W-M",
-        "toDirection": "Forward"
-      },
-      {
         "fromTrackEdgeId": "DOWN-W-M",
         "fromDirection": "Forward",
         "toTrackEdgeId": "DOWN-M-LOCAL",
@@ -669,7 +751,7 @@
       {
         "fromTrackEdgeId": "DOWN-W-M",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "PASS-LOOP-M",
+        "toTrackEdgeId": "PASS-M",
         "toDirection": "Forward"
       },
       {
@@ -681,23 +763,17 @@
       {
         "fromTrackEdgeId": "DOWN-M-LOCAL",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "POCKET-OUT:ENTRY",
+        "toTrackEdgeId": "P-CROSS-OUT",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "PASS-LOOP-M",
+        "fromTrackEdgeId": "PASS-M",
         "fromDirection": "Forward",
         "toTrackEdgeId": "DOWN-M-E",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "POCKET-OUT",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "POCKET-OUT",
-        "toDirection": "Reverse"
-      },
-      {
-        "fromTrackEdgeId": "POCKET-OUT:EXIT",
+        "fromTrackEdgeId": "P-CROSS-RETURN",
         "fromDirection": "Forward",
         "toTrackEdgeId": "UP-M-W",
         "toDirection": "Forward"
@@ -711,165 +787,191 @@
       {
         "fromTrackEdgeId": "DOWN-M-E",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-OUT:ENTRY",
+        "toTrackEdgeId": "E-CROSS-OUT",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "TAIL-OUT",
+        "fromTrackEdgeId": "E-CROSS-OUT",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-OUT",
-        "toDirection": "Reverse"
+        "toTrackEdgeId": "E-TAIL",
+        "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "TAIL-OUT:EXIT",
+        "fromTrackEdgeId": "E-TAIL",
+        "fromDirection": "Reverse",
+        "toTrackEdgeId": "E-CROSS-RETURN",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "E-CROSS-RETURN",
         "fromDirection": "Forward",
         "toTrackEdgeId": "UP-E-M",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "TAIL-OUT:ENTRY",
+        "fromTrackEdgeId": "UP-M-W",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-OUT",
+        "toTrackEdgeId": "W-CROSS-OUT",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "TAIL-OUT",
-        "fromDirection": "Reverse",
-        "toTrackEdgeId": "TAIL-OUT:EXIT",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "TAIL-W-OUT:ENTRY",
+        "fromTrackEdgeId": "W-CROSS-OUT",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "TAIL-W-OUT",
+        "toTrackEdgeId": "W-TAIL",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "TAIL-W-OUT",
+        "fromTrackEdgeId": "W-TAIL",
         "fromDirection": "Reverse",
-        "toTrackEdgeId": "TAIL-W-OUT:EXIT",
+        "toTrackEdgeId": "W-CROSS-RETURN",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "POCKET-OUT:ENTRY",
+        "fromTrackEdgeId": "W-CROSS-RETURN",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "POCKET-OUT",
+        "toTrackEdgeId": "DOWN-W-M",
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "POCKET-OUT",
+        "fromTrackEdgeId": "POCKET-M",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "POCKET-M",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "E-TAIL",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "E-TAIL",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "W-TAIL",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "W-TAIL",
+        "toDirection": "Reverse"
+      },
+      {
+        "fromTrackEdgeId": "P-CROSS-OUT",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "POCKET-M",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "POCKET-M",
         "fromDirection": "Reverse",
-        "toTrackEdgeId": "POCKET-OUT:EXIT",
+        "toTrackEdgeId": "P-CROSS-RETURN",
         "toDirection": "Forward"
       }
     ],
     "turnbackFacilities": [
       {
         "facilityId": "FAC-TAIL-E",
-        "name": "\u6771\u7AEF\u5C3E\u8ECC\u6298\u8FD4",
+        "name": "\u6771\u7AEF\u5BE6\u9AD4\u6E21\u7DDA\u5C3E\u8ECC\u6298\u8FD4",
         "kind": "TailTrack",
         "arrivalTrackEdgeId": "DOWN-M-E",
-        "arrivalStopOffsetMeters": 1100,
+        "arrivalStopOffsetMeters": 1030,
         "departureTrackEdgeId": "UP-E-M",
-        "departureStartOffsetMeters": 140,
+        "departureStartOffsetMeters": 70,
         "traversals": [
           {
-            "trackEdgeId": "TAIL-OUT:ENTRY",
+            "trackEdgeId": "E-CROSS-OUT",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "TAIL-OUT",
+            "trackEdgeId": "E-TAIL",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "TAIL-OUT",
+            "trackEdgeId": "E-TAIL",
             "direction": "Reverse"
           },
           {
-            "trackEdgeId": "TAIL-OUT:EXIT",
+            "trackEdgeId": "E-CROSS-RETURN",
             "direction": "Forward"
           }
         ],
         "facilityTrackEdgeIds": [],
         "turnbackStopAfterTraversalIndex": null,
         "turnbackStopPosition": {
-          "trackEdgeId": "TAIL-OUT",
-          "offsetMeters": 160
+          "trackEdgeId": "E-TAIL",
+          "offsetMeters": 180
         },
         "conflictResourceIds": [
-          "RES-TAIL"
+          "RES-E-SWITCH",
+          "RES-E-TAIL"
         ]
       },
       {
         "facilityId": "FAC-TAIL-W",
-        "name": "\u897F\u7AEF\u5C3E\u8ECC\u6298\u8FD4",
+        "name": "\u897F\u7AEF\u5BE6\u9AD4\u6E21\u7DDA\u5C3E\u8ECC\u6298\u8FD4",
         "kind": "TailTrack",
         "arrivalTrackEdgeId": "UP-M-W",
-        "arrivalStopOffsetMeters": 1100,
+        "arrivalStopOffsetMeters": 1030,
         "departureTrackEdgeId": "DOWN-W-M",
-        "departureStartOffsetMeters": 140,
+        "departureStartOffsetMeters": 70,
         "traversals": [
           {
-            "trackEdgeId": "TAIL-W-OUT:ENTRY",
+            "trackEdgeId": "W-CROSS-OUT",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "TAIL-W-OUT",
+            "trackEdgeId": "W-TAIL",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "TAIL-W-OUT",
+            "trackEdgeId": "W-TAIL",
             "direction": "Reverse"
           },
           {
-            "trackEdgeId": "TAIL-W-OUT:EXIT",
+            "trackEdgeId": "W-CROSS-RETURN",
             "direction": "Forward"
           }
         ],
         "facilityTrackEdgeIds": [],
         "turnbackStopAfterTraversalIndex": null,
         "turnbackStopPosition": {
-          "trackEdgeId": "TAIL-W-OUT",
-          "offsetMeters": 160
+          "trackEdgeId": "W-TAIL",
+          "offsetMeters": 180
         },
         "conflictResourceIds": [
-          "RES-TAIL-W"
+          "RES-W-SWITCH",
+          "RES-W-TAIL"
         ]
       },
       {
         "facilityId": "FAC-POCKET-M",
-        "name": "\u4E2D\u592E\u907F\u8ECA\u7DDA\u6298\u8FD4",
+        "name": "\u4E2D\u592E\u5BE6\u9AD4\u888B\u72C0\u8ECC\u6298\u8FD4",
         "kind": "PocketTrack",
         "arrivalTrackEdgeId": "DOWN-M-LOCAL",
-        "arrivalStopOffsetMeters": 270,
+        "arrivalStopOffsetMeters": 200,
         "departureTrackEdgeId": "UP-M-W",
-        "departureStartOffsetMeters": 270,
+        "departureStartOffsetMeters": 200,
         "traversals": [
           {
-            "trackEdgeId": "POCKET-OUT:ENTRY",
+            "trackEdgeId": "P-CROSS-OUT",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "POCKET-OUT",
+            "trackEdgeId": "POCKET-M",
             "direction": "Forward"
           },
           {
-            "trackEdgeId": "POCKET-OUT",
+            "trackEdgeId": "POCKET-M",
             "direction": "Reverse"
           },
           {
-            "trackEdgeId": "POCKET-OUT:EXIT",
+            "trackEdgeId": "P-CROSS-RETURN",
             "direction": "Forward"
           }
         ],
         "facilityTrackEdgeIds": [],
         "turnbackStopAfterTraversalIndex": null,
         "turnbackStopPosition": {
-          "trackEdgeId": "POCKET-OUT",
-          "offsetMeters": 120
+          "trackEdgeId": "POCKET-M",
+          "offsetMeters": 180
         },
         "conflictResourceIds": [
-          "RES-POCKET"
+          "RES-POCKET-M"
         ]
       }
     ],
@@ -899,7 +1001,7 @@
     "passingFacilities": [
       {
         "facilityId": "FAC-PASS-M",
-        "name": "\u4E2D\u592E\u7AD9\u5FEB\u901F\u901A\u904E\u7DDA",
+        "name": "\u4E2D\u592E\u7AD9\u5BE6\u9AD4\u5FEB\u901F\u901A\u904E\u7DDA",
         "stationId": "M",
         "arrivalTrackEdgeId": "DOWN-W-M",
         "arrivalOffsetMeters": 700,
@@ -907,7 +1009,7 @@
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
-            "trackEdgeId": "PASS-LOOP-M",
+            "trackEdgeId": "PASS-M",
             "direction": "Forward"
           }
         ],

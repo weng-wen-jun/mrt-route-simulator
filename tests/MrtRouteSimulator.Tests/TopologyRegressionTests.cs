@@ -1,4 +1,4 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
 internal static class TopologyRegressionTests
 {
@@ -426,7 +426,7 @@ internal static class TopologyRegressionTests
 
     public static void Schema8TopologyBaselineSampleLoadsAndBuildsWorld()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         True(File.Exists(samplePath), "找不到 Schema 8 topology baseline 範例。 ");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         Equal(TopologyProjectFormat.CurrentSchemaVersion, document.SchemaVersion);
@@ -538,7 +538,7 @@ internal static class TopologyRegressionTests
                 ServiceTypes: runtime.ServiceTypes,
                 Topology: runtime.Topology).CreateWorld();
             var boundedEndSeconds = Path.GetFileName(samplePath).Equals(
-                "大型機場線-完整營運示範範例.mrtsim.json",
+                "14-大型-二十八站完整營運範例.mrtsim.json",
                 StringComparison.OrdinalIgnoreCase)
                 ? 8000
                 : 3600;
@@ -558,7 +558,7 @@ internal static class TopologyRegressionTests
             True(world.GetSnapshot().Trains.All(train => !train.IsActive),
                 $"範例推進 {boundedEndSeconds:0} 秒後不得殘留無界接續或卡住的列車：{Path.GetFileName(samplePath)}");
 
-            if (Path.GetFileName(samplePath).Equals("V3.4.0-雙島四股快速車越行驗證.mrtsim.json", StringComparison.OrdinalIgnoreCase))
+            if (Path.GetFileName(samplePath).Equals("03-小型-三站快速越行範例.mrtsim.json", StringComparison.OrdinalIgnoreCase))
             {
                 var overtakeCompleted = world.Events.Any(item => item.EventType == SimulationEventType.OvertakeCompleted
                     && item.ServiceRunId == "RUN-EXPRESS-001");
@@ -579,7 +579,7 @@ internal static class TopologyRegressionTests
                     "越行範例的快速車實際軌跡必須進入 D02-EXPRESS。 ");
             }
 
-            if (Path.GetFileName(samplePath).Equals("V3.3.0-端點站前與中間站中央避車線折返檢核.mrtsim.json", StringComparison.OrdinalIgnoreCase))
+            if (Path.GetFileName(samplePath).Equals("07-小型-三站尾軌袋狀軌折返範例.mrtsim.json", StringComparison.OrdinalIgnoreCase))
             {
                 True(world.Events.Any(item => item.EventType == SimulationEventType.TailTrackReached
                         && item.TrackEdgeId == "PO"),
@@ -593,7 +593,7 @@ internal static class TopologyRegressionTests
 
     public static void ShortApproachBrakesBeforeStopPoint()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V3.3.0-完整功能驗證範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "12-中型-五站完整營運範例.mrtsim.json");
         var saved = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var document = saved with { Operations = saved.Operations with { ApproachDistanceMeters = 65 } };
         var runtime = TopologyProjectFormat.CreateRuntime(document);
@@ -622,7 +622,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologySimulationWorldDoesNotConstructCompatibilityRoute()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var world = new SimulationWorld(
             new TopologySimulationDefinition(
@@ -643,7 +643,7 @@ internal static class TopologyRegressionTests
 
     public static void ComprehensiveTopologySampleExercisesAllPhysicalFacilities()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
         True(File.Exists(samplePath), "找不到完整 topology 執行驗證範例。 ");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
 
@@ -798,7 +798,7 @@ internal static class TopologyRegressionTests
 
     public static void TurnbackStopPositionUsesPhysicalOffsetAndImmediateReverse()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var world = new SimulationWorld(
@@ -826,7 +826,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologyResultsUseResolvedStopsWithoutCompatibilityRoute()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(
@@ -985,7 +985,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldTurnsBackThroughTopologyFacilityWithoutVirtualTrack()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var down = document.ServiceRoutes.Single(item => item.ServiceRouteId == "DOWN");
@@ -1031,7 +1031,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldTurnsBackAtPocketTrackWithoutVirtualLocation()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var world = new SimulationWorld(
@@ -1065,6 +1065,66 @@ internal static class TopologyRegressionTests
         True(world.Events.Any(item => item.EventType == SimulationEventType.RouteReleased
                 && item.ResourceIds?.Contains("RES-POCKET") == true),
             "袋狀軌資源必須在車尾淨空後釋放。 ");
+
+        var dispatch = new ResolvedDispatchPlan(
+            DispatchPlanningMode.ManualTimetable,
+            VehicleAssignmentMode.ExplicitOnly,
+            TimeSpan.Zero,
+            [
+                new PlannedServiceRun("POCKET-DOWN", TimeSpan.Zero, TrainDirection.Outbound,
+                    "POCKET-EMU", "DEFAULT_VEHICLE", "LOCAL", "POCKET-TURN", "P-W-D", 0,
+                    continueAfterTerminal: true, continuationServiceRunId: "POCKET-UP"),
+                new PlannedServiceRun("POCKET-UP", TimeSpan.FromSeconds(600), TrainDirection.Inbound,
+                    "POCKET-EMU", "DEFAULT_VEHICLE", "LOCAL", "NORMAL-STOP", "P-M-U", 1)
+            ]);
+        var scheduledWorld = new SimulationWorld(
+            new TopologySimulationDefinition(
+                graph,
+                document.ServiceRoutes.Single(item => item.ServiceRouteId == "DOWN"),
+                document.ServiceRoutes.Single(item => item.ServiceRouteId == "UP")),
+            new TrainParameters(22.2222222, 1, 1, 20, 30, 30),
+            OperationalParameters.CreateDefault(),
+            1,
+            movingBlockMode: MovingBlockMode.Independent,
+            servicePatterns:
+            [
+                new ServicePattern("POCKET-TURN", "袋狀軌折返",
+                    [new StationServiceInstruction("M", StationServiceMode.Turnback, DwellTimeSeconds: 0)]),
+                new ServicePattern("NORMAL-STOP", "正常上下客",
+                    [new StationServiceInstruction("M", StationServiceMode.Stop, DwellTimeSeconds: 25)])
+            ],
+            dispatchPlan: dispatch);
+        scheduledWorld.AdvanceTo(900);
+
+        var reached = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.TailTrackReached
+            && item.VehicleId == "POCKET-EMU" && item.TrackEdgeId == "POCKET-OUT");
+        var returned = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.TailTrackReturnStarted
+            && item.VehicleId == "POCKET-EMU" && item.TrackEdgeId == "POCKET-OUT");
+        True(returned.SimulationTimeSeconds - reached.SimulationTimeSeconds > 30,
+            "接續車次的班表等待必須發生在袋狀軌內。 ");
+        var pocketDeparture = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.Departure
+            && item.ServiceRunId == "POCKET-UP" && item.TrackEdgeId == "POCKET-OUT");
+        True(pocketDeparture.SimulationTimeSeconds >= 600,
+            "反向車次必須在袋狀軌內依班表時間發車。 ");
+        var stationArrival = scheduledWorld.Events.First(item => item.EventType == SimulationEventType.Arrival
+            && item.ServiceRunId == "POCKET-UP" && item.TrackEdgeId == "UP-M-W");
+        var stationDeparture = scheduledWorld.Events.First(item => item.EventType == SimulationEventType.Departure
+            && item.ServiceRunId == "POCKET-UP" && item.SimulationTimeSeconds > stationArrival.SimulationTimeSeconds);
+        True(stationDeparture.SimulationTimeSeconds - stationArrival.SimulationTimeSeconds is >= 25 and < 26,
+            "返回正線月台後只能執行設定的 25 秒上下客停站。 ");
+        True(stationArrival.SimulationTimeSeconds > pocketDeparture.SimulationTimeSeconds,
+            "正線車站必須是反向車次從袋狀軌發車後的下一次停站。 ");
+        var timetable = OperationsTimetable.Build(
+            scheduledWorld.GetTopologyResultContext(), dispatch, [], scheduledWorld.Events);
+        var stationRow = timetable.Single(item => item.ServiceRunId == "POCKET-UP" && item.StationId == "M");
+        True(stationRow.ActualDwellSeconds is >= 25 and < 26,
+            "時刻表不可把袋狀軌發車事件誤配到正線車站停站。 ");
+        var pocketRow = timetable.Single(item => item.ServiceRunId == "POCKET-UP"
+            && item.StationId == "FAC-POCKET-M");
+        True(pocketRow.ActualDepartureTimeSeconds is >= 600 and < 601,
+            "時刻表必須以袋狀軌作為反向車次的起點。 ");
+        False(timetable.Any(item => item.ServiceRunId == "POCKET-UP" && item.StationId == "E"),
+            "中段袋狀軌折返車次不可顯示未經過的上行端點站。 ");
     }
 
     public static void ParallelPassingEdgesRemainSeparateForOccupancyAndGraphSafety()
@@ -1123,7 +1183,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldPassesLocalTrainThroughPhysicalTopologyFacility()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(
@@ -1193,7 +1253,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologyTurnbackPreservesVehicleAndActivatesContinuationRun()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(

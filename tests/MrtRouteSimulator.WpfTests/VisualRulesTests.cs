@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -49,10 +49,10 @@ internal static class VisualRulesTests
         try
         {
             foreach (var path in paths)
-            foreach (var width in System.IO.Path.GetFileName(path).Equals("大型機場線-完整營運示範範例.mrtsim.json", StringComparison.Ordinal)
+            foreach (var width in System.IO.Path.GetFileName(path).Equals("14-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal)
                 ? new[] { 720, 1200, 1370, 2512 }
                 : new[] { 720, 1200 })
-            foreach (var stopTime in System.IO.Path.GetFileName(path).StartsWith("V4.0.0-完整", StringComparison.Ordinal)
+            foreach (var stopTime in System.IO.Path.GetFileName(path).StartsWith("11-小型-三站完整拓樸", StringComparison.Ordinal)
                 ? new[] { 0d, 120d, 311.5d } : new[] { 0d })
             {
                 var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
@@ -244,9 +244,9 @@ internal static class VisualRulesTests
         var labels = canvas.Children.OfType<FrameworkElement>().Where(e => e.Tag?.GetType().Name == "StationLabelAnchor").ToArray();
         var bodies = canvas.Children.OfType<Rectangle>().Where(e => e.Tag?.GetType().Name == "PlatformBodyAnchor").ToArray();
         Require(bodies.Length > 0, "實際月臺圖形不可為空。");
-        if (sample.ProjectId is "V4-TOPOLOGY-COMPREHENSIVE-RUNTIME" or "LARGE-AIRPORT-LINE-FULL-DEMO")
+        if (sample.ProjectId is "V4-TOPOLOGY-COMPREHENSIVE-RUNTIME" or "SYNTHETIC-LONG-ROUTE-FULL-DEMO")
         {
-            if (sample.ProjectId == "LARGE-AIRPORT-LINE-FULL-DEMO")
+            if (sample.ProjectId == "SYNTHETIC-LONG-ROUTE-FULL-DEMO")
             {
                 foreach (var facility in sample.Topology.PassingFacilities)
                 {

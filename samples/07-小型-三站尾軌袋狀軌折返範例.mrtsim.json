@@ -1,7 +1,7 @@
-{
+﻿{
   "schemaVersion": 8,
   "projectId": "V4-TURNBACK-CHECK",
-  "projectName": "\u7AEF\u9EDE\u7AD9\u5F8C\u5C3E\u8ECC\u8207\u4E2D\u9593\u7AD9\u4E2D\u592E\u888B\u72C0\u8ECC\u6298\u8FD4\u6AA2\u6838",
+  "projectName": "07-小型-三站尾軌袋狀軌折返範例",
   "train": {
     "maxSpeedMetersPerSecond": 22.2222222,
     "accelerationMetersPerSecondSquared": 1,

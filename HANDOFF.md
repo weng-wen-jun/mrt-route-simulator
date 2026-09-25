@@ -136,7 +136,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 最新 `QA_REPORT.md` 的 V4.0.2 驗證基準：
 
 - Release build：**0 warnings / 0 errors**。
-- Engine runner：**161 / 161** 通過；大型機場線 full sample focused tests **15 / 15** 通過。WPF runner 的既有範例通過，但 full sample editor-720 在 `EDGE:PASS-002` 回報 55.3° 示意突折，14-sample WPF gate 尚未完成。
+- Engine runner：**161 / 161** 通過；合成長路線 full sample focused tests **15 / 15** 通過。WPF runner 的既有範例通過，但 full sample editor-720 在 `EDGE:PASS-002` 回報 55.3° 示意突折，14-sample WPF gate 尚未完成。
 - WPF runner：既有範例的載入／計畫時間軸／雙向預覽與輸出檢核通過；去識別化 full sample editor-720 仍在 `EDGE:PASS-002` 回報 55.3° 示意突折，因此 14-sample WPF gate 尚未完成。
 - PDF 分頁已改為各頁重繪標題、圖例、座標軸與頁內列車標籤；A4 兩頁輸出已以 Poppler 渲染檢查，未見跨頁切斷。
 - `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已完成大型 sample 的分階段 Structural／Operational gate，Scenario Manifest 規範同步寫入 `samples/README.md`。
@@ -149,7 +149,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 依 `TODO.md`「現行待辦」，交接時仍需注意：
 
 1. **Legacy port migration**：已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不可從示意位置直接猜測實體方向。仍須完成原生桌面流程驗收，並確認產品是否要把遷移後側別設為所有舊檔的全面強制政策。
-2. **大型機場線大型案例**：Schema 8 full sample 與 15/15 focused regression 已完成；正式逐站來源、平縱面、車輛／號誌參數、完整營運班表與工程化幾何仍刻意保留為限制，不能把目前 synthetic values 宣稱為正式設計。
+2. **合成長路線大型案例**：Schema 8 full sample 與 15/15 focused regression 已完成；正式逐站來源、平縱面、車輛／號誌參數、完整營運班表與工程化幾何仍刻意保留為限制，不能把目前 synthetic values 宣稱為正式設計。
 3. **桌面／DPI 完整驗收**：已完成部分實機抽查，但不同 DPI、8,000 秒連續播放、O04／O13 越行與 O20 pocket 折返關鍵畫面仍未完成完整驗收。
 
 PDF 分頁輸出與通用 `TopologyScenarioBuilder` 已於 2026-09-19 完成；不要把這兩項重新列為待辦。

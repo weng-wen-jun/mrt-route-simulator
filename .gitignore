@@ -16,6 +16,9 @@ artifacts/
 .codex-remote-attachments/
 tmp/
 
+# Local external reference material
+/外部檔案參考/
+
 # NuGet packages
 *.nupkg
 packages/

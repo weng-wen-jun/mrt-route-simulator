@@ -1,9 +1,9 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
-internal static class LargeAirportLineFullScenarioTests
+internal static class SyntheticLongRouteFullScenarioTests
 {
-    private static readonly Lazy<LargeAirportLineScenarioStages> Stages = new(
-        LargeAirportLineFullScenarioBuilder.BuildStages);
+    private static readonly Lazy<SyntheticLongRouteScenarioStages> Stages = new(
+        SyntheticLongRouteFullScenarioBuilder.BuildStages);
     private static readonly Lazy<ScenarioExecution> Execution = new(RunFullScenario);
 
     public static void PrintKeyEventReport()
@@ -26,7 +26,7 @@ internal static class LargeAirportLineFullScenarioTests
         var stages = Stages.Value;
         var document = stages.FullStationChain;
         Equal(28, document.Topology.Stations.Count, "完整站鏈必須有 28 個邏輯車站。 ");
-        SequenceEqual(LargeAirportLineFullScenarioBuilder.StationIds,
+        SequenceEqual(SyntheticLongRouteFullScenarioBuilder.StationIds,
             document.Topology.Stations.Select(station => station.StationId),
             "站序必須包含 O01～O26、O08a 與 O15a。 ");
         Equal(56, document.Topology.Platforms.Count, "每站必須各有上下行月台。 ");
@@ -35,20 +35,20 @@ internal static class LargeAirportLineFullScenarioTests
             "完整站鏈每條主線 edge 都必須明列 physical port sides。 ");
         Equal(52, document.Topology.DirectedConnections.Count,
             "上下行各 27 個 traversal 應各有 26 個明確有向接續。 ");
-        Equal(27, document.ServiceRoutes.Single(route => route.ServiceRouteId == LargeAirportLineFullScenarioBuilder.DownRouteId).Traversals.Count,
+        Equal(27, document.ServiceRoutes.Single(route => route.ServiceRouteId == SyntheticLongRouteFullScenarioBuilder.DownRouteId).Traversals.Count,
             "下行 ServiceRoute 必須涵蓋完整站鏈。 ");
-        Equal(27, document.ServiceRoutes.Single(route => route.ServiceRouteId == LargeAirportLineFullScenarioBuilder.UpRouteId).Traversals.Count,
+        Equal(27, document.ServiceRoutes.Single(route => route.ServiceRouteId == SyntheticLongRouteFullScenarioBuilder.UpRouteId).Traversals.Count,
             "上行 ServiceRoute 必須涵蓋完整站鏈。 ");
-        Equal(LargeAirportLineFullScenarioBuilder.DownRouteId,
+        Equal(SyntheticLongRouteFullScenarioBuilder.DownRouteId,
             document.DirectionRouteBindings.Single(binding => binding.Direction == TrainDirection.Outbound).ServiceRouteId,
             "下行 directionRouteBinding 必須指向完整站鏈。 ");
-        Equal(LargeAirportLineFullScenarioBuilder.UpRouteId,
+        Equal(SyntheticLongRouteFullScenarioBuilder.UpRouteId,
             document.DirectionRouteBindings.Single(binding => binding.Direction == TrainDirection.Inbound).ServiceRouteId,
             "上行 directionRouteBinding 必須指向完整站鏈。 ");
         Equal(7, stages.StageValidations.Count,
             "minimal、station chain、service、turnback、兩個 passing 與 timetable 都必須留下 gate 結果。 ");
         True(stages.StageValidations.All(validation => validation.StructuralPassed && validation.OperationalPassed),
-            "每個 LargeAirportLine builder stage 都必須通過 Structural 與 Operational gate。 ");
+            "每個 SyntheticLongRoute builder stage 都必須通過 Structural 與 Operational gate。 ");
         TopologyProjectFormat.Validate(document);
     }
 
@@ -58,11 +58,11 @@ internal static class LargeAirportLineFullScenarioTests
         foreach (var platform in document.Topology.Platforms)
         {
             Equal(StopPositionReference.TrainCenter, platform.StopPositionReference,
-                $"大型 full sample 月台 {platform.PlatformId} 必須以車體中心定位。 ");
+                $"合成長路線 full sample 月台 {platform.PlatformId} 必須以車體中心定位。 ");
             Close((platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2,
                 platform.StopPositionOffsetMeters,
                 0.001,
-                $"大型 full sample 月台 {platform.PlatformId} 的停點必須是月台中心。 ");
+                $"合成長路線 full sample 月台 {platform.PlatformId} 的停點必須是月台中心。 ");
         }
     }
 
@@ -84,15 +84,15 @@ internal static class LargeAirportLineFullScenarioTests
             .Select(group => group.First())
             .ToArray();
 
-        True(samples.Length >= LargeAirportLineFullScenarioBuilder.StationIds.Length * 2 - 2,
+        True(samples.Length >= SyntheticLongRouteFullScenarioBuilder.StationIds.Length * 2 - 2,
             "上下行全程車的停站軌跡必須留下足夠的中心停車樣本。 ");
         var halfTrainLength = execution.Document.Operations.TrainLengthMeters / 2;
         foreach (var sample in samples)
         {
             var platform = execution.Document.Topology.Platforms.Single(item => item.PlatformId == sample.PlatformId);
             var route = routes[sample.Direction == TrainDirection.Outbound
-                ? LargeAirportLineFullScenarioBuilder.DownRouteId
-                : LargeAirportLineFullScenarioBuilder.UpRouteId];
+                ? SyntheticLongRouteFullScenarioBuilder.DownRouteId
+                : SyntheticLongRouteFullScenarioBuilder.UpRouteId];
             var navigator = new TopologyRouteNavigator(graph, route);
             var head = new TopologyTraversalCursor(
                 navigator.ServiceRouteId,
@@ -137,46 +137,46 @@ internal static class LargeAirportLineFullScenarioTests
             .Where(stationId => stationId is not null)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         True(events.Any(item => item.EventType == SimulationEventType.Departure && item.StationId == "O01")
-            && LargeAirportLineFullScenarioBuilder.StationIds.Skip(1).All(arrivals.Contains),
+            && SyntheticLongRouteFullScenarioBuilder.StationIds.Skip(1).All(arrivals.Contains),
             "O01 發車的全程車必須實際完成 28 站全停（起點以 Departure、其餘以 Arrival 證明）。 ");
         True(events.Any(item => item.EventType == SimulationEventType.ServiceEnded),
             "全程車必須完成 O26 並退出營運。 ");
     }
 
-    public static void RouteLengthsDeriveFromSourceBackedChainages()
+    public static void RouteLengthsMatchRetainedChainages()
     {
         var document = Stages.Value.FullStationChain;
         var route = document.ServiceRoutes.Single(item =>
-            item.ServiceRouteId == LargeAirportLineFullScenarioBuilder.DownRouteId);
+            item.ServiceRouteId == SyntheticLongRouteFullScenarioBuilder.DownRouteId);
         var edgeLengths = document.Topology.Edges.ToDictionary(
             item => item.TrackEdgeId,
             item => item.LengthMeters,
             StringComparer.OrdinalIgnoreCase);
         var projection = new StationChainageProjection(document);
-        foreach (var stationId in LargeAirportLineFullScenarioBuilder.StationIds)
-            Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId), projection.StationCenters[stationId], 0.001,
-                $"{stationId} 的 station-center projected chainage 必須等於 source-backed chainage。 ");
-        var cumulativeChainage = LargeAirportLineFullScenarioBuilder.SourceChainage("O01");
-        for (var index = 1; index < LargeAirportLineFullScenarioBuilder.StationIds.Length; index++)
+        foreach (var stationId in SyntheticLongRouteFullScenarioBuilder.StationIds)
+            Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId), projection.StationCenters[stationId], 0.001,
+                $"{stationId} 的 station-center projected chainage 必須等於 retained chainage。 ");
+        var cumulativeChainage = SyntheticLongRouteFullScenarioBuilder.RetainedChainage("O01");
+        for (var index = 1; index < SyntheticLongRouteFullScenarioBuilder.StationIds.Length; index++)
         {
-            var previous = LargeAirportLineFullScenarioBuilder.StationIds[index - 1];
-            var stationId = LargeAirportLineFullScenarioBuilder.StationIds[index];
-            var expectedDistance = LargeAirportLineFullScenarioBuilder.SourceChainage(stationId)
-                - LargeAirportLineFullScenarioBuilder.SourceChainage(previous);
+            var previous = SyntheticLongRouteFullScenarioBuilder.StationIds[index - 1];
+            var stationId = SyntheticLongRouteFullScenarioBuilder.StationIds[index];
+            var expectedDistance = SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId)
+                - SyntheticLongRouteFullScenarioBuilder.RetainedChainage(previous);
             var actualDistance = edgeLengths[route.Traversals[index - 1].TrackEdgeId];
             Close(expectedDistance, actualDistance, 0.001,
-                $"{previous}→{stationId} 必須由相鄰 source-backed chainage 相減產生。 ");
+                $"{previous}→{stationId} 必須由相鄰 retained chainage 相減產生。 ");
             cumulativeChainage += actualDistance;
-            Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId), cumulativeChainage, 0.001,
-                $"{stationId} 的主線投影中心必須對齊 source-backed chainage。 ");
+            Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId), cumulativeChainage, 0.001,
+                $"{stationId} 的主線投影中心必須對齊 retained chainage。 ");
         }
 
         var fullLength = route.Traversals.Sum(item => edgeLengths[item.TrackEdgeId]);
-        var o20TraversalCount = Array.IndexOf(LargeAirportLineFullScenarioBuilder.StationIds, "O20");
+        var o20TraversalCount = Array.IndexOf(SyntheticLongRouteFullScenarioBuilder.StationIds, "O20");
         var o20Length = route.Traversals.Take(o20TraversalCount).Sum(item => edgeLengths[item.TrackEdgeId]);
-        Close(LargeAirportLineFullScenarioBuilder.FullRouteLengthMeters, fullLength, 0.001,
+        Close(SyntheticLongRouteFullScenarioBuilder.FullRouteLengthMeters, fullLength, 0.001,
             "O01-O26 必須等於 30,133m - 190m = 29,943m。 ");
-        Close(LargeAirportLineFullScenarioBuilder.AirportSectionLengthMeters, o20Length, 0.001,
+        Close(SyntheticLongRouteFullScenarioBuilder.SectionRouteLengthMeters, o20Length, 0.001,
             "O01-O20 必須等於 24,023m - 190m = 23,833m。 ");
     }
 
@@ -199,8 +199,8 @@ internal static class LargeAirportLineFullScenarioTests
             Topology: runtime.Topology).CreateWorld();
         world.AdvanceTo(8_000);
 
-        AssertAllStopJourney(world, "MIN-DOWN-01", LargeAirportLineFullScenarioBuilder.StationIds);
-        AssertAllStopJourney(world, "MIN-UP-01", LargeAirportLineFullScenarioBuilder.StationIds.Reverse().ToArray());
+        AssertAllStopJourney(world, "MIN-DOWN-01", SyntheticLongRouteFullScenarioBuilder.StationIds);
+        AssertAllStopJourney(world, "MIN-UP-01", SyntheticLongRouteFullScenarioBuilder.StationIds.Reverse().ToArray());
         var violations = world.Events
             .Where(item => item.EventType is SimulationEventType.Collision or SimulationEventType.StationStopViolation)
             .Take(5)
@@ -213,11 +213,11 @@ internal static class LargeAirportLineFullScenarioTests
             "Full Station Chain 雙向全停列車必須都正常退出營運。 ");
     }
 
-    public static void AirportDirectSkipStopWorks()
+    public static void ExpressSkipStopWorks()
     {
         var execution = Execution.Value;
         var events = execution.World.Events
-            .Where(item => item.ServiceRunId == LargeAirportLineFullScenarioBuilder.AirportDirectRunId)
+            .Where(item => item.ServiceRunId == SyntheticLongRouteFullScenarioBuilder.ExpressRunId)
             .ToArray();
         var stopped = events.Where(item => item.EventType == SimulationEventType.Arrival)
             .Select(item => item.StationId)
@@ -228,18 +228,18 @@ internal static class LargeAirportLineFullScenarioTests
             .Where(id => id is not null)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         True(events.Any(item => item.EventType == SimulationEventType.Departure && item.StationId == "O01")
-            && LargeAirportLineFullScenarioBuilder.AirportDirectStops.Where(id => id != "O01").All(stopped.Contains),
-            "機場直達車必須由 O01 發車並停靠 O08/O11/O16/O20。 ");
+            && SyntheticLongRouteFullScenarioBuilder.ExpressStops.Where(id => id != "O01").All(stopped.Contains),
+            "快速車必須由 O01 發車並停靠 O08/O11/O16/O20。 ");
         True(new[] { "O02", "O03", "O04", "O05", "O08a", "O15a", "O19" }.All(passed.Contains),
-            "機場直達車必須以 StationPassed 事件證明 O01-O20 中間站 skip-stop。 ");
+            "快速車必須以 StationPassed 事件證明 O01-O20 中間站 skip-stop。 ");
         var passInstructions = execution.Document.StopPatterns
-            .Single(item => item.Id == LargeAirportLineFullScenarioBuilder.AirportDirectPatternId)
+            .Single(item => item.Id == SyntheticLongRouteFullScenarioBuilder.ExpressPatternId)
             .Instructions
             .Where(item => item.Action == StopPatternAction.Pass)
             .ToArray();
         True(passInstructions.Length > 0
             && passInstructions.All(item => item.PassingSpeedLimitMetersPerSecond is null),
-            "大型機場線高等列車的 skip-stop 指令不應暗含 60 km/h 通過速限。 ");
+            "合成長路線高等列車的 skip-stop 指令不應暗含 60 km/h 通過速限。 ");
         var nonFacilityPasses = events
             .Where(item => item.EventType == SimulationEventType.StationPassed
                 && item.StationId is "O02" or "O03" or "O05" or "O08a" or "O15a" or "O19")
@@ -247,10 +247,10 @@ internal static class LargeAirportLineFullScenarioTests
         True(nonFacilityPasses.Length > 0
             && nonFacilityPasses.All(item => item.SpeedMetersPerSecond * 3.6 > 70),
             "未設定通過速限的高等列車應以主線／車型速限通過，不得被示範資料暗中壓到 60 km/h。 ");
-        True(!passed.Overlaps(LargeAirportLineFullScenarioBuilder.AirportDirectStops),
-            "直達停靠站不可同時記為跨站。 ");
+        True(!passed.Overlaps(SyntheticLongRouteFullScenarioBuilder.ExpressStops),
+            "快速車停靠站不可同時記為跨站。 ");
         True(events.All(item => item.StationId is not ("O21" or "O22" or "O23" or "O24" or "O25" or "O26")),
-            "AIRPORT-DIRECT 的下行與折返上行事件都不得觸及 O21-O26。 ");
+            "EXPRESS 的下行與折返上行事件都不得觸及 O21-O26。 ");
     }
 
     public static void O20TurnbackCompletes()
@@ -267,25 +267,25 @@ internal static class LargeAirportLineFullScenarioTests
             execution,
             facility,
             "SECTION-VEHICLE-01",
-            LargeAirportLineFullScenarioBuilder.SectionDownRunId,
-            LargeAirportLineFullScenarioBuilder.SectionUpRunId,
+            SyntheticLongRouteFullScenarioBuilder.SectionDownRunId,
+            SyntheticLongRouteFullScenarioBuilder.SectionUpRunId,
             "區間車");
     }
 
-    public static void AirportDirectTurnsAtO20AndReturns()
+    public static void ExpressTurnsAtO20AndReturns()
     {
         var execution = Execution.Value;
         var facility = execution.Document.Topology.TurnbackFacilities.Single();
         AssertO20Turnback(
             execution,
             facility,
-            "AIRPORT-DIRECT-01",
-            LargeAirportLineFullScenarioBuilder.AirportDirectRunId,
-            LargeAirportLineFullScenarioBuilder.AirportDirectUpRunId,
-            "機場直達車");
-        var events = execution.World.Events.Where(item => item.VehicleId == "AIRPORT-DIRECT-01").ToArray();
+            "EXPRESS-01",
+            SyntheticLongRouteFullScenarioBuilder.ExpressRunId,
+            SyntheticLongRouteFullScenarioBuilder.ExpressUpRunId,
+            "快速車");
+        var events = execution.World.Events.Where(item => item.VehicleId == "EXPRESS-01").ToArray();
         True(events.All(item => item.StationId is not ("O21" or "O22" or "O23" or "O24" or "O25" or "O26")),
-            "AIRPORT-DIRECT 折返前後都不得觸及 O21-O26。 ");
+            "EXPRESS 折返前後都不得觸及 O21-O26。 ");
     }
 
     private static void AssertO20Turnback(
@@ -326,50 +326,50 @@ internal static class LargeAirportLineFullScenarioTests
 
     public static void O04OvertakingCompletesSafely() => AssertOvertake(
         "O04",
-        LargeAirportLineFullScenarioBuilder.AirportDirectRunId,
-        "AIRPORT-DIRECT-01",
+        SyntheticLongRouteFullScenarioBuilder.ExpressRunId,
+        "EXPRESS-01",
         "FULL-O04");
 
     public static void O13OvertakingCompletesSafely() => AssertOvertake(
         "O13",
-        LargeAirportLineFullScenarioBuilder.AirportDirectRunId,
-        "AIRPORT-DIRECT-01",
+        SyntheticLongRouteFullScenarioBuilder.ExpressRunId,
+        "EXPRESS-01",
         "FULL-O13");
 
     public static void SectionOvertakesAtO04ThenTurnsAtO20()
     {
         var section = Execution.Value.Document.ServiceTypes.Single(item => item.Id ==
-            LargeAirportLineFullScenarioBuilder.SectionServiceId);
+            SyntheticLongRouteFullScenarioBuilder.SectionServiceId);
         var full = Execution.Value.Document.ServiceTypes.Single(item => item.Id ==
-            LargeAirportLineFullScenarioBuilder.FullLineServiceId);
+            SyntheticLongRouteFullScenarioBuilder.FullLineServiceId);
         True(section.CanRequestOvertake && section.Priority > full.Priority,
             "SECTION 必須明列較高 priority 與 CanRequestOvertake。 ");
         AssertOvertake(
             "O04",
-            LargeAirportLineFullScenarioBuilder.SectionDownRunId,
+            SyntheticLongRouteFullScenarioBuilder.SectionDownRunId,
             "SECTION-VEHICLE-01",
             "FULL-SECTION-O04");
         True(Execution.Value.World.Events.Any(item => item.VehicleId == "SECTION-VEHICLE-01"
                 && item.EventType == SimulationEventType.DirectionChanged
-                && item.ServiceRunId == LargeAirportLineFullScenarioBuilder.SectionUpRunId),
+                && item.ServiceRunId == SyntheticLongRouteFullScenarioBuilder.SectionUpRunId),
             "SECTION 在 O04 完成越行後必須繼續到 O20 並折返為上行車次。 ");
     }
 
-    public static void AirportDirectCompletesTwoOvertakes()
+    public static void ExpressCompletesTwoOvertakes()
     {
         var execution = Execution.Value;
         var facilityIds = execution.Document.Topology.PassingOperations
-            .Where(operation => operation.ServiceRouteId == LargeAirportLineFullScenarioBuilder.DownRouteId
-                && operation.ExpressServiceTypeId == LargeAirportLineFullScenarioBuilder.AirportDirectServiceId)
+            .Where(operation => operation.ServiceRouteId == SyntheticLongRouteFullScenarioBuilder.DownRouteId
+                && operation.ExpressServiceTypeId == SyntheticLongRouteFullScenarioBuilder.ExpressServiceId)
             .Select(operation => operation.FacilityId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var completed = execution.World.Events
             .Where(item => item.EventType == SimulationEventType.OvertakeCompleted
-                && item.ServiceRunId == LargeAirportLineFullScenarioBuilder.AirportDirectRunId)
+                && item.ServiceRunId == SyntheticLongRouteFullScenarioBuilder.ExpressRunId)
             .Select(item => item.ResourceId)
             .ToArray();
-        Equal(2, completed.Length, "同一班機場直達車必須完成兩次實體越行。 ");
+        Equal(2, completed.Length, "同一班快速車必須完成兩次實體越行。 ");
         True(facilityIds.All(facilityId => completed.Contains(facilityId, StringComparer.OrdinalIgnoreCase)),
             "兩次越行必須分別使用 O04 與 O13 facility。 ");
     }
@@ -418,7 +418,7 @@ internal static class LargeAirportLineFullScenarioTests
                 var edges = document.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId,
                     StringComparer.OrdinalIgnoreCase);
                 var projection = new StationChainageProjection(document);
-                Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId),
+                Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId),
                     projection.StationCenters[stationId], 0.001, "O04 站心里程不可因配線而移動。 ");
                 foreach (var facility in facilities)
                 {
@@ -444,7 +444,7 @@ internal static class LargeAirportLineFullScenarioTests
                         Close(170, platform.PlatformStartOffsetMeters, 0.001, "O04 月臺起點應在岔出點後 170 m。 ");
                         Close(240, platform.StopPositionOffsetMeters, 0.001, "O04 月臺中心應在岔出點後 240 m。 ");
                         Close(310, platform.PlatformEndOffsetMeters, 0.001, "O04 月臺終點應在岔出點後 310 m。 ");
-                        Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId),
+                        Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId),
                             projection.ToChainage(new TrackPosition(platform.TrackEdgeId, 240))!.Value,
                             0.001, "O04 月臺中心投影應對齊來源站心。 ");
                     }
@@ -456,7 +456,7 @@ internal static class LargeAirportLineFullScenarioTests
                         0.001, "O04 月臺中心至下一站實體距離必須維持來源站距。 ");
                 }
                 foreach (var route in document.ServiceRoutes)
-                    Close(LargeAirportLineFullScenarioBuilder.FullRouteLengthMeters,
+                    Close(SyntheticLongRouteFullScenarioBuilder.FullRouteLengthMeters,
                         route.Traversals.Sum(traversal => edges[traversal.TrackEdgeId].LengthMeters),
                         0.001, "O04 分岔與匯入不得改變主線 ServiceRoute 總長。 ");
                 True(document.ServiceRoutes.All(route => route.Traversals.All(traversal =>
@@ -488,7 +488,7 @@ internal static class LargeAirportLineFullScenarioTests
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var vehicleId in new[]
                  {
-                     "FULL-O04", "FULL-O13", "FULL-SECTION-O04", "AIRPORT-DIRECT-01", "FULL-UP-01",
+                     "FULL-O04", "FULL-O13", "FULL-SECTION-O04", "EXPRESS-01", "FULL-UP-01",
                      "SECTION-VEHICLE-01"
                  })
             True(endedVehicles.Contains(vehicleId), $"車輛 {vehicleId} 必須留下 ServiceEnded。 ");
@@ -499,7 +499,7 @@ internal static class LargeAirportLineFullScenarioTests
         var source = Stages.Value.FullScenario;
         var json = TopologyProjectFormat.Serialize(source);
         var roundTrip = TopologyProjectFormat.Deserialize(json);
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "大型機場線-完整營運示範範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
         var artifact = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         Equal(TopologyProjectFormat.CurrentSchemaVersion, roundTrip.SchemaVersion);
         Equal(28, roundTrip.Topology.Stations.Count);
@@ -535,10 +535,10 @@ internal static class LargeAirportLineFullScenarioTests
     {
         var execution = Execution.Value;
         var facilityId = execution.Document.Topology.PassingOperations.Single(item =>
-            item.ServiceRouteId == LargeAirportLineFullScenarioBuilder.DownRouteId
-            && item.ExpressServiceTypeId == (expressRunId == LargeAirportLineFullScenarioBuilder.SectionDownRunId
-                ? LargeAirportLineFullScenarioBuilder.SectionServiceId
-                : LargeAirportLineFullScenarioBuilder.AirportDirectServiceId)
+            item.ServiceRouteId == SyntheticLongRouteFullScenarioBuilder.DownRouteId
+            && item.ExpressServiceTypeId == (expressRunId == SyntheticLongRouteFullScenarioBuilder.SectionDownRunId
+                ? SyntheticLongRouteFullScenarioBuilder.SectionServiceId
+                : SyntheticLongRouteFullScenarioBuilder.ExpressServiceId)
             && execution.Document.Topology.PassingFacilities.Single(facility => facility.FacilityId == item.FacilityId)
                 .StationId == stationId).FacilityId;
         var facility = execution.Document.Topology.PassingFacilities.Single(item => item.FacilityId == facilityId);
@@ -547,7 +547,7 @@ internal static class LargeAirportLineFullScenarioTests
             && item.ServiceRunId == expressRunId
             && item.ResourceId == facility.FacilityId);
         Equal(localVehicleId, requested.RelatedVehicleId,
-            $"{stationId} 必須由指定普通車先抵達並成為直達車越行對象。 ");
+            $"{stationId} 必須由指定普通車先抵達並成為快速車越行對象。 ");
         var localArrival = execution.World.Events.Last(item => item.EventType == SimulationEventType.Arrival
             && item.VehicleId == localVehicleId
             && item.StationId == stationId
@@ -559,7 +559,7 @@ internal static class LargeAirportLineFullScenarioTests
                 item.TrackEdgeId == localArrival.TrackEdgeId).Kind,
             $"{stationId} 待避普通車的到站 edge 必須明確是 Siding。 ");
         True(localArrival.SimulationTimeSeconds < requested.SimulationTimeSeconds,
-            $"{stationId} 必須由普通車先抵達，直達車後到才提出越行。 ");
+            $"{stationId} 必須由普通車先抵達，快速車後到才提出越行。 ");
         var completed = execution.World.Events.Single(item => item.EventType == SimulationEventType.OvertakeCompleted
             && item.ServiceRunId == expressRunId
             && item.ResourceId == facility.FacilityId);
@@ -578,7 +578,7 @@ internal static class LargeAirportLineFullScenarioTests
             && item.StationId == stationId
             && item.SimulationTimeSeconds >= requested.SimulationTimeSeconds);
         True(localDeparture.SimulationTimeSeconds >= released.SimulationTimeSeconds,
-            $"{stationId} 普通車必須等直達車車尾淨空、facility resource 釋放後才離站。 ");
+            $"{stationId} 普通車必須等快速車車尾淨空、facility resource 釋放後才離站。 ");
     }
 
     private static ScenarioExecution RunFullScenario()

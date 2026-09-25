@@ -1,4 +1,4 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
 internal static class StationChainageTests
 {
@@ -8,7 +8,7 @@ internal static class StationChainageTests
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "MrtRouteSimulator.slnx"))) directory = directory.Parent;
         if (directory is null) throw new InvalidOperationException("找不到完整範例。");
         var comprehensive = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(directory.FullName,
-            "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json")));
+            "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
         var comprehensiveMap = new StationChainageProjection(comprehensive);
         foreach (var platform in comprehensive.Topology.Platforms)
         {
@@ -42,11 +42,11 @@ internal static class StationChainageTests
         }
     }
 
-    public static void LargeAirportLinePassingPlatformCentersStayAligned()
+    public static void SyntheticLongRoutePassingPlatformCentersStayAligned()
     {
         var directory = FindRoot();
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(directory.FullName,
-            "samples", "大型機場線-完整營運示範範例.mrtsim.json")));
+            "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
         var projection = new StationChainageProjection(document);
 
         foreach (var stationId in new[] { "O04", "O13" })

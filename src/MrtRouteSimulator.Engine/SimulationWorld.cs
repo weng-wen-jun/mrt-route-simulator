@@ -2731,6 +2731,13 @@ public sealed class SimulationWorld
             return false;
         }
 
+        RecordTurnaroundDeparture(train);
+        return true;
+    }
+
+    private void RecordTurnaroundDeparture(MutableTrain train, TurnbackFacilityDefinition? pocketOrigin = null)
+    {
+        var fromPocketTrack = pocketOrigin is not null;
         train.TurnaroundPrepared = false;
         train.ActualDepartureTime = CurrentTimeSeconds;
         train.Phase = OperationalPhase.Accelerating;
@@ -2744,7 +2751,9 @@ public sealed class SimulationWorld
                 $"{train.ServiceRunId} 接續發車延後 {delay:0.0} 秒。",
                 train.Position,
                 0,
-                delaySeconds: delay);
+                resourceId: pocketOrigin?.FacilityId,
+                delaySeconds: delay,
+                omitStationIdentity: fromPocketTrack);
         }
         AddEvent(
             SimulationEventType.DirectionChanged,
@@ -2752,9 +2761,12 @@ public sealed class SimulationWorld
             null,
             $"車輛 {train.VehicleId} 折返，開始新車次 {train.ServiceRunId}。",
             train.Position,
-            0);
-        AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0);
-        return true;
+            0,
+            resourceId: pocketOrigin?.FacilityId,
+            omitStationIdentity: fromPocketTrack);
+        AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0,
+            resourceId: pocketOrigin?.FacilityId,
+            omitStationIdentity: fromPocketTrack);
     }
 
     private void PrepareTurnaround(
@@ -3254,7 +3266,21 @@ public sealed class SimulationWorld
                 return;
             }
 
+            if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack
+                && train.ContinuationServiceRunId is { } continuationId
+                && _dispatchRunsById.TryGetValue(continuationId, out var continuation)
+                && CurrentTimeSeconds + NumericalTolerance < RelativeScheduleSeconds(
+                    continuation.PlannedDepartureTime, _dispatchPlan!.ScheduleAnchorTime))
+            {
+                return;
+            }
+
             PrepareTurnaround(train, movement.Operation);
+            if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack)
+            {
+                // 反向車次從袋狀軌折返停點發車；返回正線月台是該車次的下一次停站。
+                RecordTurnaroundDeparture(train, pocketOrigin: movement.Facility);
+            }
             if (movement.ReturnStartCursor is { } returnStartCursor)
             {
                 SetTrainRuntimeTopologyCursor(train, navigator, returnStartCursor);
@@ -3400,6 +3426,14 @@ public sealed class SimulationWorld
             null,
             train.Direction,
             departurePatternDwell ?? departureStation.DwellTimeSeconds);
+        if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack)
+        {
+            train.DwellRemaining = Math.Max(train.DwellRemaining, FixedTimeStepSeconds);
+            train.Phase = OperationalPhase.Dwelling;
+            AddEvent(SimulationEventType.DwellStarted, train, null,
+                $"{train.ServiceRunId} 在 {departureStation.StationId} 正常上下客停站。", train.Position, 0);
+            return;
+        }
         train.AwaitingTopologyTurnbackDeparture = true;
         if (train.DwellRemaining > NumericalTolerance)
         {
@@ -4857,7 +4891,8 @@ public sealed class SimulationWorld
         double speed,
         string? resourceId = null,
         double? delaySeconds = null,
-        IReadOnlyList<string>? resourceIds = null)
+        IReadOnlyList<string>? resourceIds = null,
+        bool omitStationIdentity = false)
     {
         if (train is not null)
         {
@@ -4877,7 +4912,7 @@ public sealed class SimulationWorld
             train?.ServiceClassId ?? string.Empty,
             train?.PatternId ?? string.Empty,
             train?.VehicleTypeId ?? "DEFAULT_VEHICLE",
-            train?.PlatformId,
+            omitStationIdentity ? null : train?.PlatformId,
             resourceId,
             train?.PlannedDepartureTime,
             delaySeconds,
@@ -4886,7 +4921,7 @@ public sealed class SimulationWorld
             train?.OffsetMeters,
             train?.ServiceRouteTraversalIndex,
             train?.ProjectedChainageMeters,
-            StationId: train is not null && eventType is (SimulationEventType.Arrival
+            StationId: !omitStationIdentity && train is not null && eventType is (SimulationEventType.Arrival
                 or SimulationEventType.Departure or SimulationEventType.DwellStarted or SimulationEventType.StationPassed)
                     ? GetCurrentStationId(train) : null);
         _events.Add(item);

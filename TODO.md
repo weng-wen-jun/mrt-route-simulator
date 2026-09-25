@@ -1,12 +1,12 @@
-# V4.0.2 交付狀態與後續清單
+﻿# V4.0.2 交付狀態與後續清單
 
 > 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
 
-> **4.0.2 整合狀態：自動化驗證完成**：大型機場線、O04 路線圖與長時間播放效能 Phase 1／parallel worker 已合併至 `codex/integrate-v4.0.2-worktrees`。整合分支已完成 Release build、Engine 173/173、完整 WPF runner 與大型 full sample 定向 WPF playback 診斷；8,000 秒 benchmark 與原生桌面人工驗收仍待完成。以下 `[x]` 表示功能已實作並通過目前適用的驗證，不把尚未完成的桌面 gate 視為完成。
+> **4.0.2 整合狀態：自動化驗證完成**：合成長路線、O04 路線圖與長時間播放效能 Phase 1／parallel worker 已合併至 `codex/integrate-v4.0.2-worktrees`。整合分支已完成 Release build、Engine 173/173、完整 WPF runner 與大型 full sample 定向 WPF playback 診斷；8,000 秒 benchmark 與原生桌面人工驗收仍待完成。以下 `[x]` 表示功能已實作並通過目前適用的驗證，不把尚未完成的桌面 gate 視為完成。
 
 ## V4.0.2 進版摘要（2026-09-20）
 
-- [x] 大型機場線 full sample 以七階段 builder 建立 28 站 Schema 8 topology，涵蓋 FULL-LINE／SECTION／AIRPORT-DIRECT、O20 pocket 折返及 O04／O13 越行；整合分支 Engine 173/173、完整 WPF runner 與定向 WPF playback 診斷通過，原生桌面驗收歸入下方 UI 人工／顯示邊界。
+- [x] 合成長路線 full sample 以七階段 builder 建立 28 站 Schema 8 topology，涵蓋 FULL-LINE／SECTION／EXPRESS、O20 pocket 折返及 O04／O13 越行；整合分支 Engine 173/173、完整 WPF runner 與定向 WPF playback 診斷通過，原生桌面驗收歸入下方 UI 人工／顯示邊界。
 - [x] 與 GitHub `main`（`77c7c99`）比對後納入現行分支的四個新增提交：full sample、操作測試、去識別化／驗證文件及播放路線顯示區調整。
 - [x] 【V4-PLAYBACK-PERF-PHASE1】完成 ActualWorld-only playback、planned completion、retention regression 與獨立 benchmark；整合分支保留該架構並通過 Release build／Engine 173/173／完整 WPF runner，同一 sample 的 8,000 秒 benchmark仍待補跑，詳見 `QA_REPORT.md`。
 - [ ] 原生桌面不同 DPI、8,000 秒連續播放與 O04／O13／O20 關鍵畫面的完整人工驗收仍待完成。
@@ -70,7 +70,7 @@
 
 ## V4.0.0 桌面人工驗收（2026-08-31）
 
-- [x] 【V4-UI-MANUAL-01】以 Windows WPF 實際讀取 `V4.0.0-topology-baseline.mrtsim.json`、建立與播放 Schema 8 topology 世界、檢視實際進出站時刻表，並完成 CSV／PNG／PDF 匯出與讀回。輸出位於 `artifacts/V4.0.0-topology-manual-ui.*`。
+- [x] 【V4-UI-MANUAL-01】以 Windows WPF 實際讀取 `10-小型-三站完整拓樸基準範例.mrtsim.json`、建立與播放 Schema 8 topology 世界、檢視實際進出站時刻表，並完成 CSV／PNG／PDF 匯出與讀回。輸出位於 `artifacts/V4.0.0-topology-manual-ui.*`。
 
 ## 現行待辦
 
@@ -80,7 +80,7 @@
 - [ ] 【V4-LEGACY-PORT-MIGRATION】已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不從示意位置推定實體方向。仍須完成原生桌面流程驗收，並確認產品是否要將遷移後的明確側別設為所有舊檔的全面強制政策。
 
 - [x] 【V4-SAMPLE-SCENARIO-BUILDER-01】已新增可重用 `TopologyScenarioBuilder`／`TopologyScenarioValidation`：以既有 Schema 8 document、quick builder 與 topology-native `SimulationWorld` 分階段驗證 minimal topology baseline、station chain、service pattern、turnback、passing facility 與 timetable；Structural／Operational gate 可獨立執行，Regression 由 Release／Engine／WPF 流程負責。`samples/README.md` 已補 Scenario Manifest 欄位規範；`.mrtsim.json` 維持為輸出／載入範例，不建立第二套 Domain Model 或 runtime。新增回歸後 Engine 145/145 通過。
-- [ ] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】已完成 source-backed Full Station Chain：O01～O26（含 O08a、O15a）28 站、上下行主線、平台、ServiceRoute、directionRouteBindings 與 directedConnections；所有 27 段主線投影距離均由 station-center chainage 相減，O01–O26 為 29.943 km。完整 operational sample 仍待後續分階段驗證 Service patterns、O20 turnback、O04/O13 passing、peak/off-peak timetable；不得因既有 synthetic regression scenario 而宣稱此工作完成。O26 turnaround geometry、月台／車輛／dwell、設施幾何、坡度、曲線與速限仍非正式設計值。
+- [ ] 【V4-SAMPLE-SYNTHETIC-LONG-ROUTE-01】已保留 O01～O26（含 O08a、O15a）28 站代碼與既有站心里程，建有上下行主線、平台、ServiceRoute、directionRouteBindings 與 directedConnections；所有 27 段主線投影距離均由 station-center chainage 相減，O01–O26 為 29.943 km。完整 operational sample 仍待後續分階段驗證 Service patterns、turnback、passing 與代表性班表；月台／車輛／dwell、設施幾何、坡度、曲線與速限仍為示範值。保留的站碼與站距可能與外部資料比對，不能宣稱完全匿名。
 
 - [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。現行 full sample editor-720 另有 `EDGE:PASS-002` 55.3° 示意突折；仍須先修正該顯示 gate，再補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
 
@@ -117,7 +117,7 @@
 - [x] 【首次發現：V3.2.0／V3.2-ENG-01】【修正版本：V3.3.0】V2 寫實引擎以各車次的車型目錄作為性能權威來源，實際套用最高速度、加速度、營運／緊急煞車、Jerk、牽引衰減、惰行減速度與車長；V2 首頁隱藏不使用的 V1 全域性能欄位。
 - [x] 【首次發現：V3.2.0／V3.2-STAT-01】【修正版本：V3.3.0】V2 區間統計補齊方向、車輛、車次、車型、服務、停站模式與模擬秒範圍篩選；由軌跡約束精確累積移動閉塞受限秒數，UI 與 CSV 同步輸出。
 - [x] 【首次發現：V3.2.0／V3.2-DOC-01】【修正版本：V3.3.0】統一「產品版本 V3.3.0／V1 基礎引擎／V2 寫實引擎／Schema 7」名詞，歷史需求移出現行清單。
-- [x] 【首次發現：V3.2.0／V3.2-SAMPLE-01】【修正版本：V3.3.0】新增 `V3.3.0-完整功能驗證範例.mrtsim.json`，直接驗證停站秒數覆寫、跨站速限、單一資料來源、雙向派車、折返接續與五類空間參考點。
+- [x] 【首次發現：V3.2.0／V3.2-SAMPLE-01】【修正版本：V3.3.0】新增 `12-中型-五站完整營運範例.mrtsim.json`，直接驗證停站秒數覆寫、跨站速限、單一資料來源、雙向派車、折返接續與五類空間參考點。
 - [x] 【驗證版本：V3.3.0】隔離 Release 建置 0 警告、0 錯誤；自動化測試 75/75 通過；Windows UI 已載入完整範例、建立並播放至端點作業完成，確認退出列車消失且指定反向車次接續。原 Release 輸出因正在執行的 V3.2.0 程式鎖定 DLL，故未強制關閉程式覆寫。
 
 ## 已完成的既有 UI 修正

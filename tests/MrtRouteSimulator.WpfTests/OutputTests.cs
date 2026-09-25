@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -17,7 +17,7 @@ internal static class OutputTests
         var output = Path.Combine(root, "artifacts", "output-qa");
         Directory.CreateDirectory(output);
 
-        var complete = Load(root, "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+        var complete = Load(root, "11-小型-三站完整拓樸運行範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(complete.Window, "完整拓撲");
@@ -28,7 +28,7 @@ internal static class OutputTests
             WpfTestWait.Close(complete.Window);
         }
 
-        var rearTurnback = Load(root, "PDF-RearTurnback.mrtsim.json");
+        var rearTurnback = Load(root, "09-小型-三站站後尾軌折返範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(rearTurnback.Window, "TrainCenter 尾軌折返");

@@ -1,4 +1,4 @@
-# MRT 路線進出站時間模擬器 — Codex 專案導覽與修改規則
+﻿# MRT 路線進出站時間模擬器 — Codex 專案導覽與修改規則
 
 > 用途：供 Codex / 自動化程式代理在修改本專案前快速判斷「功能屬於哪一層、先讀哪些檔案、哪些資料是權威來源、修改後必須驗證什麼」。
 >
@@ -279,7 +279,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7（legacy 匯入／固定時刻�
 2. `SimulationProject.cs`（若影響 legacy 匯入或固定時刻表）
 3. `MainWindow.ProjectFiles.cs`／`MainWindow.Topology.cs`
 4. `tests/MrtRouteSimulator.Tests/Program.cs`／`TopologyRegressionTests.cs`
-5. `samples/V4.0.0-topology-baseline.mrtsim.json` 與完整 topology 範例
+5. `samples/10-小型-三站完整拓樸基準範例.mrtsim.json` 與完整 topology 範例
 6. `MODEL_SPEC.md`
 7. 必要時 `README.md`／`CHANGELOG.md`
 
@@ -391,11 +391,11 @@ SimulationWorld.Tick() = 固定 0.1 s
 
 ### Topology samples
 
-- `samples/V4.0.0-topology-baseline.mrtsim.json`
-- `samples/V4.0.0-完整拓撲執行驗證範例.mrtsim.json`
+- `samples/10-小型-三站完整拓樸基準範例.mrtsim.json`
+- `samples/11-小型-三站完整拓樸運行範例.mrtsim.json`
 - `samples/README.md`
 
-用途：Schema 8 基線與完整 physical facility 情境驗證；`samples` 內舊 V3.x 檔名只保留情境沿革，內容仍是 Schema 8。
+用途：Schema 8 基線與完整 physical facility 情境驗證；samples 內範例檔名依規模排序並使用中文，內容仍是 Schema 8。
 
 ---
 
