@@ -166,10 +166,10 @@ public partial class MainWindow
                     IsEnabled = false;
                     progressWindow.Show();
                 }
-                progress.Report((60, "正在建立模擬與計畫時間軸…"));
+                progress.Report((60, "正在背景建立模擬與完整計畫時間軸…"));
                 var prepared = await Task.Run(() => PrepareTopologyProjectForPlayback(topologyDocument, progress));
                 progress.Report((92, "正在套用讀取結果…"));
-                ApplyPreparedTopologyProjectForPlayback(prepared, lockLegacyInputs: true);
+                await ApplyPreparedTopologyProjectForPlaybackAsync(prepared, lockLegacyInputs: true);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 var migrationStatus = migratedLegacyPorts
@@ -188,12 +188,12 @@ public partial class MainWindow
             var document = archive?.Project ?? await Task.Run(() => SimulationProjectFormat.Deserialize(json));
             if (archive is null)
             {
-                progress.Report((60, "正在將舊格式轉為拓撲並建立模擬…"));
+                progress.Report((60, "正在背景將舊格式轉為拓撲並建立模擬…"));
                 var prepared = await Task.Run(() => PrepareTopologyProjectForPlayback(
                     TopologyProjectFactory.CreateLinearDraft(document),
                     progress));
                 progress.Report((92, "正在套用讀取結果…"));
-                ApplyPreparedTopologyProjectForPlayback(prepared, lockLegacyInputs: true);
+                await ApplyPreparedTopologyProjectForPlaybackAsync(prepared, lockLegacyInputs: true);
                 HideValidation();
                 SetCurrentProjectFile(dialog.FileName);
                 StatusTextBlock.Text = $"已將舊格式版本 {document.SchemaVersion} 專案轉為拓撲專案；請由專案工作區繼續編輯並另存。";
@@ -202,6 +202,7 @@ public partial class MainWindow
             progress.Report((75, "正在建立固定時刻表結果…"));
             var archiveRows = await PrepareFixedTimetableArchiveRowsAsync(archive, progress);
             PausePlayback();
+            await StopCurrentPlaybackResourcesAsync();
             ClearResults();
             ApplyProjectDocument(document);
             ApplyFixedTimetableArchive(archive, archiveRows);
@@ -292,13 +293,13 @@ public partial class MainWindow
                     "目前是 Schema 8 拓撲專案；固定時刻表封存僅支援 legacy Schema 7 動態模擬，請使用 Schema 8 存檔或結果頁匯出。");
             }
 
-            if (!_v2Enabled || _route is null || _v2World is null || _v2DispatchPlan is null
+            if (!_v2Enabled || _route is null || _latestPlaybackFrame is null || _v2DispatchPlan is null
                 || _activeSimulationProjectDocument is null)
             {
                 throw new InvalidOperationException("請先建立 V2 寫實營運模擬。固定時刻表只會封存模擬世界的實際結果。");
             }
 
-            if (!_v2World.IsComplete)
+            if (!_latestPlaybackFrame.IsComplete)
             {
                 throw new InvalidOperationException("請先讓所有列車完成營運循環，再匯出固定時刻表。未完成的動態結果不可封存為固定時刻表。");
             }
@@ -307,7 +308,7 @@ public partial class MainWindow
                 _route,
                 _v2DispatchPlan,
                 _plannedTimetableEvents,
-                _v2World.Events);
+                _latestPlaybackFrame.Events);
             var archive = FixedTimetableArchiveFormat.Create(_activeSimulationProjectDocument, entries);
             var json = FixedTimetableArchiveFormat.Serialize(archive);
             var dialog = new SaveFileDialog

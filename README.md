@@ -1,10 +1,10 @@
 # MRT 路線進出站時間模擬器 V4.0.2
 
-> V4.0.2（2026-09-20）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
+> V4.0.2（2026-09-25 整合版）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前自動化基準為 `161/161 tests`、Release build `0 warnings / 0 errors`（2026-09-20）；WPF runner 的既有範例檢核通過，但去識別化大型 full sample 在 editor-720 的 `EDGE:PASS-002` 仍有 55.3° 示意突折，不能宣稱 14 份範例 WPF gate 全數通過。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；桌面手動驗收及匯出邊界見 `QA_REPORT.md`。
+目前整合分支的 Engine runner 為 `173/173 tests`、Release build `0 warnings / 0 errors`（2026-09-25）；完整 WPF runner 已通過範例載入、playback worker、速度行程與 CSV／PNG／PDF 輸出，另大型 full sample 定向 playback 診斷在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms。原生桌面不同 DPI 與連續播放仍未人工驗收。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；完整驗收邊界見 `QA_REPORT.md`。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
@@ -36,7 +36,7 @@
 
 ## 驗收與限制
 
-自動化與 Windows topology 驗收均已完成。詳見 [`TODO.md`](TODO.md) 和 [`QA_REPORT.md`](QA_REPORT.md)；桌面匯出範例位於 [`artifacts`](artifacts)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
+Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback 診斷已完成；原生桌面不同 DPI／連續播放驗收仍在進行。詳見 [`TODO.md`](TODO.md) 和 [`QA_REPORT.md`](QA_REPORT.md)；桌面匯出範例位於 [`artifacts`](artifacts)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
 
 ## V3.4.2 進站精停修正
 

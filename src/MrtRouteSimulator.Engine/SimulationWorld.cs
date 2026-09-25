@@ -525,11 +525,21 @@ public sealed class SimulationWorld
 
         while (CurrentTimeSeconds + FixedTimeStepSeconds <= targetTimeSeconds + NumericalTolerance)
         {
-            Tick();
+            TickCore();
         }
     }
 
     public SimulationSnapshot Tick()
+    {
+        TickCore();
+        return new SimulationSnapshot(
+            CurrentTimeSeconds,
+            _trains.Select(ToState).ToArray(),
+            _currentSafety,
+            _newEvents.ToArray());
+    }
+
+    private void TickCore()
     {
         _newEvents.Clear();
         CurrentTimeSeconds = Math.Round(CurrentTimeSeconds + FixedTimeStepSeconds, 10);
@@ -564,12 +574,6 @@ public sealed class SimulationWorld
             : ComputeSafetyObservations(recordStatusEvents: true);
         RecordSafetyHistory(_currentSafety);
         RecordTrajectory();
-
-        return new SimulationSnapshot(
-            CurrentTimeSeconds,
-            _trains.Select(ToState).ToArray(),
-            _currentSafety,
-            _newEvents.ToArray());
     }
 
     public void Reset()
@@ -2318,7 +2322,8 @@ public sealed class SimulationWorld
 
         if (isScheduledStop && traveled >= distanceToStation - NumericalTolerance)
         {
-            if (!train.StationStopViolationRecorded)
+            if (!train.StationStopViolationRecorded
+                && StationStopController.ShouldRecordStopViolation(newSpeed))
             {
                 train.StationStopViolationRecorded = true;
                 AddEvent(
@@ -2440,6 +2445,11 @@ public sealed class SimulationWorld
         if (stoppingDistance + StationBrakingLookAheadMeters >= distanceToStation)
         {
             return true;
+        }
+
+        if (desiredAccelerationIfWaiting <= -effectiveBraking + NumericalTolerance)
+        {
+            return false;
         }
 
         var previewAcceleration = jerkLimited
@@ -4315,23 +4325,27 @@ public sealed class SimulationWorld
             followerFootprint.Front,
             leaderNavigator,
             leaderFootprint.Front);
-        var actualGap = TopologyGraphDistance.TryGetFootprintGap(
-            TopologyInfrastructure,
-            followerNavigator,
-            followerFootprint,
-            leaderNavigator,
-            leaderFootprint);
-        if (headDistance is null || actualGap is null)
+        if (headDistance is null)
+        {
+            return false;
+        }
+
+        // The footprint-gap helper repeats the same graph search. The leader
+        // length is already available from the footprint on its own route.
+        var leaderLength = leaderNavigator.TryGetForwardDistance(
+            leaderFootprint.Rear, leaderFootprint.Front);
+        if (leaderLength is null)
         {
             return false;
         }
 
         metrics = new TopologySafetyMetrics(
             headDistance.Value,
-            actualGap.Value,
+            headDistance.Value - leaderLength.Value,
             leaderFootprint);
         return true;
     }
+
 
     private MutableTrain? FindNearestTopologyLeader(MutableTrain follower) =>
         _trains

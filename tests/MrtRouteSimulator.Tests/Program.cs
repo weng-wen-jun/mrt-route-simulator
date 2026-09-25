@@ -95,6 +95,7 @@ var tests = new (string Name, Action Run)[]
     ("V2 固定子步進與 Jerk 受限", TestV2FixedTickAndJerk),
     ("Route 表單輸入會先轉為 topology-native V2 world", TestRouteInputConvertsToTopologyNativeWorld),
     ("實際營運軌跡平順抵站且不越站", TestOperationalTripStopsAtStation),
+    ("停站違規忽略低於 3 km/h 的觸點速度", TestStationStopViolationThreshold),
     ("實際營運長區間包含惰行階段", TestOperationalTripContainsCoasting),
     ("里程速限重疊採最低且方向分離", TestSpeedLimitOverlapAndDirection),
     ("里程速限輸入精度與範圍驗證", TestSpeedLimitValidation),
@@ -123,6 +124,7 @@ var tests = new (string Name, Action Run)[]
     ("同一追撞只記錄一次碰撞事件", TestCollisionEventRecordedOnce),
     ("動態煞車包絡線使到站前速度接近零", TestDynamicStationBrakingContinuity),
     ("StationStopController 以曲線與預測停點控制精停", TestStationStopControllerTracksCurveAndPrediction),
+    ("BasicPhysics 煞車包絡閉式計算與固定步進積分一致", TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps),
     ("進站低速限制解除後仍受精停目標速度約束", TestStationStopControllerPreventsPostNearStopBounce),
     ("SimulationWorld 進站近停後不會重新牽引回彈", TestSimulationWorldStationBrakingDoesNotReaccelerate),
     ("移動閉塞控制不再把高速列車瞬間歸零", TestMovingBlockControlDoesNotHardStop),
@@ -159,6 +161,7 @@ var tests = new (string Name, Action Run)[]
     ("Schema 8 拒絕 legacy 欄位與非本版格式", TopologyRegressionTests.Schema8RejectsLegacyOrWrongVersion),
     ("Schema 8 topology baseline 範例可載入並建立世界", TopologyRegressionTests.Schema8TopologyBaselineSampleLoadsAndBuildsWorld),
     ("所有範例均為有界且完整可執行的 Schema 8 topology 專案", TopologyRegressionTests.AllSamplesLoadAndBuildTopologyWorld),
+    ("65m 進站限速下完成停靠且無高速觸點", TopologyRegressionTests.ShortApproachBrakesBeforeStopPoint),
     ("V4 topology SimulationWorld 不建立 compatibility Route", TopologyRegressionTests.TopologySimulationWorldDoesNotConstructCompatibilityRoute),
     ("V4 完整 topology 範例逐一執行實體越行、袋狀軌與雙端尾軌", TopologyRegressionTests.ComprehensiveTopologySampleExercisesAllPhysicalFacilities),
     ("V4 道岔有向轉向限制約束尋徑與 runtime movement plan", TopologyRegressionTests.DirectedConnectionsRestrictSwitchPathsAndMovementPlans),
@@ -1141,6 +1144,50 @@ static void TestDynamicStationBrakingContinuity()
         0.1,
         jerkLimited: true);
     True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestStationStopViolationThreshold()
+{
+    True(!StationStopController.ShouldRecordStopViolation(2.99 / 3.6), "低於 3 km/h 不應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.0 / 3.6), "剛好 3 km/h 應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.01 / 3.6), "高於 3 km/h 應記錄停站違規。");
+}
+
+static void TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps()
+{
+    var random = new Random(20260923);
+    var speeds = new List<double> { 0, 1e-10, 0.15, 22.22, 33.3333333333 };
+    for (var index = 0; index < 300; index++)
+    {
+        speeds.Add(random.NextDouble() * 45);
+    }
+
+    foreach (var speed in speeds)
+    foreach (var braking in new[] { 0.3, 0.9, 1.6 })
+    foreach (var timeStep in new[] { 0.05, 0.1, 0.2 })
+    {
+        var actual = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            speed, 0.5, braking, 0, timeStep, jerkLimited: false);
+        var expectedSpeed = speed;
+        var expectedDistance = 0d;
+        var expectedDuration = 0d;
+        var expectedAcceleration = 0.5;
+        for (var step = 0; expectedSpeed > 1e-9 && step < 100_000; step++)
+        {
+            expectedAcceleration = -braking;
+            var nextSpeed = Math.Max(0, expectedSpeed - braking * timeStep);
+            expectedDistance += (expectedSpeed + nextSpeed) * 0.5 * timeStep;
+            expectedDuration += timeStep;
+            expectedSpeed = nextSpeed;
+        }
+
+        True(Math.Abs(actual.DistanceMeters - expectedDistance) <= 1e-7 * Math.Max(1, expectedDistance),
+            $"BasicPhysics 煞停距離與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(Math.Abs(actual.DurationSeconds - expectedDuration) <= 1e-8,
+            $"BasicPhysics 煞停時間與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(actual.FinalAccelerationMetersPerSecondSquared == expectedAcceleration,
+            "BasicPhysics 最終加速度須與固定步進相同。");
+    }
 }
 
 static void TestStationStopControllerTracksCurveAndPrediction()

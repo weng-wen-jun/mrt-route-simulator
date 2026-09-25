@@ -256,7 +256,7 @@
                         <TextBlock x:Name="ValidationTextBlock" Foreground="#A83812" TextWrapping="Wrap" FontSize="12" />
                     </ScrollViewer>
                 </Border>
-                <TabControl x:Name="WorkspaceTabControl" Grid.Row="2" Margin="5,8,5,5" Background="White" BorderBrush="{StaticResource BorderBrush}">
+                <TabControl x:Name="WorkspaceTabControl" Grid.Row="2" Margin="5,8,5,5" Background="White" BorderBrush="{StaticResource BorderBrush}" SelectionChanged="WorkspaceTabControl_SelectionChanged">
                     <TabItem x:Name="SimulationTabItem" Header="模擬動畫">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
@@ -272,12 +272,11 @@
                                 <Button x:Name="ObstacleStopButton" Content="⚠ 障礙物急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" IsEnabled="False" Margin="8,0,8,8" />
                                 <StackPanel Orientation="Horizontal" Margin="8,0,8,8" VerticalAlignment="Center">
                                     <TextBlock Text="倍率" VerticalAlignment="Center" Margin="0,0,6,0" />
-                            <ComboBox x:Name="PlaybackSpeedComboBox" Width="76" SelectedIndex="2" AutomationProperties.Name="播放倍率">
+                            <ComboBox x:Name="PlaybackSpeedComboBox" Width="76" SelectedIndex="2" SelectionChanged="PlaybackSpeed_SelectionChanged" AutomationProperties.Name="播放倍率">
                                 <ComboBoxItem Content="1×" Tag="1" />
-                                <ComboBoxItem Content="5×" Tag="5" />
-                                <ComboBoxItem Content="20×" Tag="20" />
+                                <ComboBoxItem Content="10×" Tag="10" />
+                                <ComboBoxItem Content="30×" Tag="30" />
                                 <ComboBoxItem Content="60×" Tag="60" />
-                                <ComboBoxItem Content="120×" Tag="120" />
                             </ComboBox>
                                 </StackPanel>
                                 </WrapPanel>
@@ -294,11 +293,11 @@
                                     <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
                                         <ScrollViewer x:Name="RouteScrollViewer"
                                                       HorizontalScrollBarVisibility="Auto"
-                                                      VerticalScrollBarVisibility="Disabled"
-                                                      PanningMode="HorizontalOnly"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      PanningMode="Both"
                                                       SizeChanged="RouteScrollViewer_SizeChanged"
                                                       AutomationProperties.Name="列車路線圖水平捲動區">
-                                            <Canvas x:Name="RouteCanvas" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
+                                            <Canvas x:Name="RouteCanvas" Height="300" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
                                                     AutomationProperties.Name="列車路線動畫" />
                                         </ScrollViewer>
                                     </Border>
@@ -316,7 +315,7 @@
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </TabItem>
-                                <TabItem Header="完整行程速度曲線">
+                                <TabItem x:Name="SpeedProfileTabItem" Header="完整行程速度曲線">
                                     <Grid Margin="0,6,0,0">
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
@@ -377,7 +376,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="區間物理明細">
+                    <TabItem x:Name="SegmentTabItem" Header="區間物理明細">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -412,7 +411,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="V1／V2 同條件比較">
+                    <TabItem x:Name="ComparisonTabItem" Header="V1／V2 同條件比較">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -445,7 +444,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="資源占用與觀測容量">
+                    <TabItem x:Name="ResourceTabItem" Header="資源占用與觀測容量">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -469,7 +468,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="移動閉塞與煞車">
+                    <TabItem x:Name="SafetyTabItem" Header="移動閉塞與煞車">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -526,7 +525,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="V2 區間統計">
+                    <TabItem x:Name="IntervalStatisticsTabItem" Header="V2 區間統計">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
@@ -604,7 +603,7 @@
                         </Grid>
                     </TabItem>
 
-                    <TabItem Header="列車運行圖／匯出">
+                    <TabItem x:Name="DiagramTabItem" Header="列車運行圖／匯出">
                         <Grid Margin="14">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />

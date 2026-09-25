@@ -1,7 +1,8 @@
 namespace MrtRouteSimulator.Engine;
 
 /// <summary>
-/// 以起始站月台中心為0K的顯示里程。主線按車站中心校準，支線依實體銜接延伸；
+/// 優先使用明確指定的車站中心顯示里程；未指定時以起始站月台中心為0K。
+/// 主線按車站中心校準，支線依實體銜接延伸；
 /// 只提供呈現座標，負值不會寫入edge-local cursor或改變物理長度。
 /// </summary>
 public sealed class StationChainageProjection

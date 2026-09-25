@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using MrtRouteSimulator.Engine;
 
 namespace MrtRouteSimulator.App;
@@ -14,7 +15,8 @@ public partial class MainWindow
         TopologyProjectRuntime Runtime,
         InfrastructureGraphV4 Infrastructure,
         StationChainageProjection StationChainage,
-        SimulationSession Session,
+        SimulationWorld ActualWorld,
+        PlannedTimelineArtifact PlannedTimeline,
         double DurationSeconds,
         IReadOnlyList<PreparedStationRow> OutboundStations);
 
@@ -31,13 +33,12 @@ public partial class MainWindow
     /// 將已驗證的 Schema 8 topology 專案接入現有播放殼。V2 world、結果與預覽皆由
     /// topology service routes 建立；路線圖直接讀取 graph，不建立 compatibility Route。
     /// </summary>
-    private void ConfigureTopologyProjectForPlayback(
+    private async Task ConfigureTopologyProjectForPlaybackAsync(
         TopologyProjectDocument document,
         bool lockLegacyInputs = true)
     {
-        ApplyPreparedTopologyProjectForPlayback(
-            PrepareTopologyProjectForPlayback(document),
-            lockLegacyInputs);
+        var prepared = await Task.Run(() => PrepareTopologyProjectForPlayback(document));
+        await ApplyPreparedTopologyProjectForPlaybackAsync(prepared, lockLegacyInputs);
     }
 
     /// <summary>
@@ -111,6 +112,13 @@ public partial class MainWindow
         progress?.Report((90, $"計畫時間軸完成（{FormatSeconds(candidateSession.PlannedTimelineCompletedAtSeconds ?? 0)}）；正在整理車站資料…"));
         var candidateDurationSeconds = candidateSession.PlannedTimelineCompletedAtSeconds!.Value
             + SimulationWorld.FixedTimeStepSeconds;
+        var plannedTimeline = new PlannedTimelineArtifact(
+            candidateSession.PlannedEvents.Select(simulationEvent => simulationEvent with
+            {
+                ResourceIds = simulationEvent.ResourceIds?.ToImmutableArray()
+            }).ToImmutableArray(),
+            candidateSession.PlannedTrajectory.ToImmutableArray(),
+            candidateSession.PlannedTimelineCompletedAtSeconds.Value);
         var candidateStationRows = new List<PreparedStationRow>();
         var outboundStops = candidateSession.ActualWorld.GetTopologyResultContext().GetStops(TrainDirection.Outbound);
         for (var index = 0; index < outboundStops.Count; index++)
@@ -130,7 +138,8 @@ public partial class MainWindow
             runtime,
             infrastructure,
             candidateChainage,
-            candidateSession,
+            candidateSession.ActualWorld,
+            plannedTimeline,
             candidateDurationSeconds,
             candidateStationRows);
     }
@@ -149,7 +158,7 @@ public partial class MainWindow
     }
 
     /// <summary>在候選專案完整準備成功後，才替換目前的 WPF 播放狀態。</summary>
-    private void ApplyPreparedTopologyProjectForPlayback(
+    private async Task ApplyPreparedTopologyProjectForPlaybackAsync(
         PreparedTopologyProjectPlayback prepared,
         bool lockLegacyInputs)
     {
@@ -157,7 +166,21 @@ public partial class MainWindow
         var runtime = prepared.Runtime;
         var infrastructure = prepared.Infrastructure;
 
+        var candidateWorker = new SimulationPlaybackWorker(prepared.ActualWorld);
+        PlaybackFrame initialFrame;
+        try
+        {
+            initialFrame = await candidateWorker.Ready;
+            candidateWorker.TryReadLatestFrame(out _);
+        }
+        catch
+        {
+            await candidateWorker.DisposeAsync();
+            throw;
+        }
+
         PausePlayback();
+        await StopCurrentPlaybackResourcesAsync();
         ClearResults();
         _route = null;
         _parameters = runtime.TrainParameters;
@@ -172,10 +195,6 @@ public partial class MainWindow
         _activeSimulationProjectDocument = null;
         _v2DispatchPlan = runtime.DispatchPlan;
         _v2Enabled = true;
-        _v2Session = prepared.Session;
-        _playbackDurationSeconds = prepared.DurationSeconds;
-        _plannedTimetableEvents = prepared.Session.PlannedEvents;
-        _v2PlannedMinimumIntervalSeconds = document.Simulation.HeadwaySeconds;
         ApplyTopologyCatalogRows(document);
         _suppressEngineModeSelectionChanged = true;
         try
@@ -187,7 +206,33 @@ public partial class MainWindow
             _suppressEngineModeSelectionChanged = false;
         }
         ApplyEngineModeUiState();
+        _playbackWorker = candidateWorker;
+        _latestPlaybackFrame = initialFrame;
+        _lastRenderedPlaybackFrameSequence = 0;
+        _resultAccumulator.ConfigureTimetable(null, initialFrame.GetTopologyResultContext(),
+            runtime.DispatchPlan, [], []);
+        _resultAccumulator.ConfigureIntervalStatistics(null, initialFrame.GetTopologyResultContext());
+        _resultAccumulator.ConfigureComparison(null, initialFrame.GetTopologyResultContext(),
+            runtime.DispatchPlan,
+            document.VehicleTypes.Select(item => new VehicleTypeDefinition(
+                item.Id, item.DisplayName, item.LengthMeters, item.MaxSpeedMetersPerSecond,
+                item.AccelerationMetersPerSecondSquared, item.ServiceBrakeDecelerationMetersPerSecondSquared,
+                item.EmergencyBrakeDecelerationMetersPerSecondSquared, item.JerkMetersPerSecondCubed,
+                item.TractionDecayPerSecond, item.CoastingDecelerationMetersPerSecondSquared,
+                item.DefaultStopPatternId)),
+            document.StopPatterns.Select(pattern => new StopPatternDefinition(
+                pattern.Id, pattern.DisplayName,
+                pattern.Instructions.Select(instruction => new StopPatternInstruction(
+                    instruction.StationId, instruction.Action, instruction.DwellTimeSeconds,
+                    instruction.PassingSpeedLimitMetersPerSecond)))),
+            runtime.TrainParameters, []);
+        _playbackDurationSeconds = prepared.DurationSeconds;
+        _plannedTimelineArtifact = prepared.PlannedTimeline;
+        _plannedTimetableEvents = prepared.PlannedTimeline.Events;
+        _resultAccumulator.SetPlannedTimetableEvents(_plannedTimetableEvents, initialFrame.Events);
+        _v2PlannedMinimumIntervalSeconds = document.Simulation.HeadwaySeconds;
         PopulateFilterControls(runtime.DispatchPlan);
+        RefreshIntervalFilterOptions();
         RouteIdTextBox.Text = document.ProjectId;
         RouteNameTextBox.Text = document.ProjectName;
         StationRows.Clear();
@@ -209,8 +254,8 @@ public partial class MainWindow
         SpeedSummaryText.Text = $"{runtime.TrainParameters.MaxSpeedMetersPerSecond * 3.6:0.#} km/h";
         ObstacleStopButton.IsEnabled = true;
         PlayButton.IsEnabled = true;
-        PlaybackStatusText.Text = "拓撲專案已就緒，按「播放」查看列車運行。";
         PopulateV2Results();
+        PlaybackStatusText.Text = "實際營運與完整計畫時間軸已就緒，可開始播放。";
     }
 
     private void ApplyTopologyCatalogRows(TopologyProjectDocument document)

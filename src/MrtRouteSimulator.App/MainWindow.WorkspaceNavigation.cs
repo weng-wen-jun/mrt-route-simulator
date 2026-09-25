@@ -23,7 +23,7 @@ public partial class MainWindow
         StatusTextBlock.Text = "已切換至分析結果。";
     }
 
-    private void OpenTopologyWorkspace(ProjectWorkspacePage initialPage)
+    private async void OpenTopologyWorkspace(ProjectWorkspacePage initialPage)
     {
         HideValidation();
         try
@@ -37,7 +37,7 @@ public partial class MainWindow
                 return;
             }
 
-            ConfigureTopologyProjectForPlayback(editor.Result);
+            await ConfigureTopologyProjectForPlaybackAsync(editor.Result);
             StatusTextBlock.Text = "專案工作區變更已套用；可直接播放或前往分析結果。";
         }
         catch (SimulationValidationException exception)

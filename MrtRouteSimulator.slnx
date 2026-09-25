@@ -3,4 +3,5 @@
   <Project Path="src/MrtRouteSimulator.App/MrtRouteSimulator.App.csproj" />
   <Project Path="tests/MrtRouteSimulator.Tests/MrtRouteSimulator.Tests.csproj" />
   <Project Path="tests/MrtRouteSimulator.WpfTests/MrtRouteSimulator.WpfTests.csproj" />
+  <Project Path="tests/MrtRouteSimulator.PlaybackBenchmarks/MrtRouteSimulator.PlaybackBenchmarks.csproj" />
 </Solution>
