@@ -13,7 +13,7 @@
   "operations": {
     "jerkMetersPerSecondCubed": 1,
     "coastingRatio": 0.2,
-    "approachDistanceMeters": 250,
+    "approachDistanceMeters": 65,
     "approachSpeedMetersPerSecond": 12,
     "tractionFadeRatio": 0.1,
     "trainLengthMeters": 120,

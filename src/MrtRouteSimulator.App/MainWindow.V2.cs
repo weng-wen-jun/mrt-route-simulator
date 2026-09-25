@@ -38,7 +38,7 @@ public partial class MainWindow
         ServicePatternRows.Clear();
         LoadSampleInputCatalogs();
         CoastingRatioTextBox.Text = "0.15";
-        ApproachDistanceTextBox.Text = "180";
+        ApproachDistanceTextBox.Text = "65";
         ApproachSpeedTextBox.Text = "0";
         ReactionTimeTextBox.Text = "1.5";
         OperationModeComboBox.SelectedIndex = 1;

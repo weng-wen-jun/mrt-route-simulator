@@ -122,7 +122,7 @@ internal static class LargeAirportLineFullScenarioBuilder
             ProjectId = ProjectId,
             ProjectName = "大型機場線minimal baseline",
             Train = new ProjectTrainSettings(80d / 3.6d, 1.2, 1.5, 30, 30, 30),
-            Operations = new ProjectOperationalSettings(1, 0.1, 180, 40d / 3.6d, 0, 100, 1.5, 2, 0.2, 0.2, 1, 5, 5),
+            Operations = new ProjectOperationalSettings(1, 0.1, 65, 40d / 3.6d, 0, 100, 1.5, 2, 0.2, 0.2, 1, 5, 5),
             Simulation = new ProjectRunSettings(2, null, 0, 1, OperationProfileMode.RealisticOperations,
                 MovingBlockMode.Control, BrakingEstimationMode.Service),
             VehicleTypes = [VehicleType()],
@@ -337,15 +337,65 @@ internal static class LargeAirportLineFullScenarioBuilder
         var expressPlatformId = $"PLATFORM:{stationId}:{directionCode}:THROUGH";
         var routeId = direction == TrainDirection.Outbound ? DownRouteId : UpRouteId;
 
-        // Synthetic geometry: split 200 m before the station node, then add a parallel siding.
-        // Local trains follow the service route into that siding and stop there; higher-priority trains
-        // use the original mainline edge as the physical passing traversal.
-        document = TopologyEditingService.SplitEdge(document, originalArrivalEdge, 200);
+        // O04 is centered on the source-backed station node: branch 240 m before it,
+        // platform from 170 to 310 m, and rejoin 240 m beyond it.  Splitting both
+        // neighboring edges preserves their combined length and every station chainage.
+        // O13 retains its existing synthetic passing layout.
+        var symmetricO04 = stationId == "O04";
+        var arrivalLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == originalArrivalEdge).LengthMeters;
+        document = TopologyEditingService.SplitEdge(document, originalArrivalEdge,
+            symmetricO04 ? arrivalLength - 240 : 200);
         var arrivalEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":A", StringComparison.OrdinalIgnoreCase));
         var mainlineStationEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":B", StringComparison.OrdinalIgnoreCase));
-        var stopOffset = Math.Min(320, mainlineStationEdge.LengthMeters - 20);
+        var facilityDepartureEdge = departureEdge;
+        if (symmetricO04)
+        {
+            document = TopologyEditingService.SplitEdge(document, departureEdge, 240);
+            var departureThroat = document.Topology.Edges.Single(edge =>
+                edge.TrackEdgeId.StartsWith(departureEdge + ":A", StringComparison.OrdinalIgnoreCase));
+            var postMergeEdge = document.Topology.Edges.Single(edge =>
+                edge.TrackEdgeId.StartsWith(departureEdge + ":B", StringComparison.OrdinalIgnoreCase));
+            facilityDepartureEdge = postMergeEdge.TrackEdgeId;
+            // Replace the two mainline half-throats with one continuous 480 m
+            // through edge.  The station node remains a synthetic source-chainage
+            // presentation anchor; physical train traversals use the two switch nodes.
+            mainlineStationEdge = mainlineStationEdge with
+            {
+                ToNodeId = departureThroat.ToNodeId,
+                ToPortSide = departureThroat.ToPortSide,
+                LengthMeters = 480
+            };
+            document = document with
+            {
+                Topology = document.Topology with
+                {
+                    Edges = document.Topology.Edges
+                        .Where(edge => edge.TrackEdgeId != departureThroat.TrackEdgeId)
+                        .Select(edge => edge.TrackEdgeId == mainlineStationEdge.TrackEdgeId
+                            ? mainlineStationEdge : edge).ToArray()
+                },
+                ServiceRoutes = document.ServiceRoutes.Select(route => route.ServiceRouteId == routeId
+                    ? route with { Traversals = route.Traversals
+                        .Where(traversal => traversal.TrackEdgeId != departureThroat.TrackEdgeId).ToArray() }
+                    : route).ToArray()
+            };
+            document = document with
+            {
+                Topology = document.Topology with
+                {
+                    DirectedConnections = document.Topology.DirectedConnections
+                        .Where(connection => connection.FromTrackEdgeId != departureThroat.TrackEdgeId
+                            && connection.ToTrackEdgeId != departureThroat.TrackEdgeId).ToArray()
+                }
+            };
+            document = document with
+            {
+                Topology = document.Topology with { DirectedConnections = DirectedTrackConnectionRules.Build(document) }
+            };
+        }
+        var stopOffset = symmetricO04 ? 240 : Math.Min(320, mainlineStationEdge.LengthMeters - 20);
         document = MovePlatform(document, localPlatformId, mainlineStationEdge.TrackEdgeId, stopOffset);
         var localPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == localPlatformId);
         var expressPlatform = localPlatform with
@@ -377,9 +427,9 @@ internal static class LargeAirportLineFullScenarioBuilder
             $"{stationId} synthetic {directionText}側線待避",
             stationId,
             arrivalEdge.ToNodeId,
-            Node(stationId),
+            symmetricO04 ? mainlineStationEdge.ToNodeId : Node(stationId),
             arrivalEdge.TrackEdgeId,
-            departureEdge,
+            facilityDepartureEdge,
             localPlatformId,
             expressPlatformId,
             mainlineStationEdge.LengthMeters,

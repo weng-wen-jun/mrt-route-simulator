@@ -13,7 +13,7 @@
   "operations": {
     "jerkMetersPerSecondCubed": 1,
     "coastingRatio": 0.1,
-    "approachDistanceMeters": 180,
+    "approachDistanceMeters": 65,
     "approachSpeedMetersPerSecond": 11.11111111111111,
     "tractionFadeRatio": 0,
     "trainLengthMeters": 100,
@@ -1209,20 +1209,34 @@
       },
       {
         "nodeId": "NODE:SPLIT-002",
-        "name": "EDGE:UP:O05:O04 \u5206\u5272\u9EDE",
+        "name": "EDGE:DOWN:O04:O05 \u5206\u5272\u9EDE",
         "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:SPLIT-003",
-        "name": "EDGE:DOWN:O12:O13 \u5206\u5272\u9EDE",
+        "name": "EDGE:UP:O05:O04 \u5206\u5272\u9EDE",
         "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
       },
       {
         "nodeId": "NODE:SPLIT-004",
+        "name": "EDGE:UP:O04:O03 \u5206\u5272\u9EDE",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NODE:SPLIT-005",
+        "name": "EDGE:DOWN:O12:O13 \u5206\u5272\u9EDE",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NODE:SPLIT-006",
         "name": "EDGE:UP:O14:O13 \u5206\u5272\u9EDE",
         "kind": "Switch",
         "schematicPosition": null,
@@ -1277,32 +1291,6 @@
         "fromNodeId": "NODE:O03",
         "toNodeId": "NODE:O02",
         "lengthMeters": 630,
-        "directionality": "ForwardOnly",
-        "kind": "Mainline",
-        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
-        "conflictResourceIds": []
-      },
-      {
-        "fromPortSide": "A",
-        "toPortSide": "B",
-        "schematicLane": null,
-        "trackEdgeId": "EDGE:UP:O04:O03",
-        "fromNodeId": "NODE:O04",
-        "toNodeId": "NODE:O03",
-        "lengthMeters": 2270,
-        "directionality": "ForwardOnly",
-        "kind": "Mainline",
-        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
-        "conflictResourceIds": []
-      },
-      {
-        "fromPortSide": "B",
-        "toPortSide": "A",
-        "schematicLane": null,
-        "trackEdgeId": "EDGE:DOWN:O04:O05",
-        "fromNodeId": "NODE:O04",
-        "toNodeId": "NODE:O05",
-        "lengthMeters": 600,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1932,7 +1920,7 @@
         "trackEdgeId": "EDGE:DOWN:O03:O04:A-001",
         "fromNodeId": "NODE:O03",
         "toNodeId": "NODE:SPLIT-001",
-        "lengthMeters": 200,
+        "lengthMeters": 2030,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1944,8 +1932,21 @@
         "schematicLane": 0.5,
         "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
         "fromNodeId": "NODE:SPLIT-001",
-        "toNodeId": "NODE:O04",
-        "lengthMeters": 2070,
+        "toNodeId": "NODE:SPLIT-002",
+        "lengthMeters": 480,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "EDGE:DOWN:O04:O05:B-001",
+        "fromNodeId": "NODE:SPLIT-002",
+        "toNodeId": "NODE:O05",
+        "lengthMeters": 360,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1957,8 +1958,8 @@
         "schematicLane": 2,
         "trackEdgeId": "EDGE:PASS-001",
         "fromNodeId": "NODE:SPLIT-001",
-        "toNodeId": "NODE:O04",
-        "lengthMeters": 2070,
+        "toNodeId": "NODE:SPLIT-002",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1972,8 +1973,8 @@
         "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O05:O04:A-001",
         "fromNodeId": "NODE:O05",
-        "toNodeId": "NODE:SPLIT-002",
-        "lengthMeters": 200,
+        "toNodeId": "NODE:SPLIT-003",
+        "lengthMeters": 360,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1981,12 +1982,12 @@
       },
       {
         "fromPortSide": "B",
-        "toPortSide": "B",
+        "toPortSide": "A",
         "schematicLane": -0.5,
         "trackEdgeId": "EDGE:UP:O05:O04:B-001",
-        "fromNodeId": "NODE:SPLIT-002",
-        "toNodeId": "NODE:O04",
-        "lengthMeters": 400,
+        "fromNodeId": "NODE:SPLIT-003",
+        "toNodeId": "NODE:SPLIT-004",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -1995,11 +1996,24 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "EDGE:UP:O04:O03:B-001",
+        "fromNodeId": "NODE:SPLIT-004",
+        "toNodeId": "NODE:O03",
+        "lengthMeters": 2030,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
         "schematicLane": -2,
         "trackEdgeId": "EDGE:PASS-002",
-        "fromNodeId": "NODE:SPLIT-002",
-        "toNodeId": "NODE:O04",
-        "lengthMeters": 400,
+        "fromNodeId": "NODE:SPLIT-003",
+        "toNodeId": "NODE:SPLIT-004",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2013,7 +2027,7 @@
         "schematicLane": null,
         "trackEdgeId": "EDGE:DOWN:O12:O13:A-001",
         "fromNodeId": "NODE:O12",
-        "toNodeId": "NODE:SPLIT-003",
+        "toNodeId": "NODE:SPLIT-005",
         "lengthMeters": 200,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
@@ -2025,7 +2039,7 @@
         "toPortSide": "A",
         "schematicLane": 0.5,
         "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
-        "fromNodeId": "NODE:SPLIT-003",
+        "fromNodeId": "NODE:SPLIT-005",
         "toNodeId": "NODE:O13",
         "lengthMeters": 660,
         "directionality": "ForwardOnly",
@@ -2038,7 +2052,7 @@
         "toPortSide": "A",
         "schematicLane": 2,
         "trackEdgeId": "EDGE:PASS-003",
-        "fromNodeId": "NODE:SPLIT-003",
+        "fromNodeId": "NODE:SPLIT-005",
         "toNodeId": "NODE:O13",
         "lengthMeters": 660,
         "directionality": "ForwardOnly",
@@ -2054,7 +2068,7 @@
         "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O14:O13:A-001",
         "fromNodeId": "NODE:O14",
-        "toNodeId": "NODE:SPLIT-004",
+        "toNodeId": "NODE:SPLIT-006",
         "lengthMeters": 200,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
@@ -2066,7 +2080,7 @@
         "toPortSide": "B",
         "schematicLane": -0.5,
         "trackEdgeId": "EDGE:UP:O14:O13:B-001",
-        "fromNodeId": "NODE:SPLIT-004",
+        "fromNodeId": "NODE:SPLIT-006",
         "toNodeId": "NODE:O13",
         "lengthMeters": 645,
         "directionality": "ForwardOnly",
@@ -2079,7 +2093,7 @@
         "toPortSide": "B",
         "schematicLane": -2,
         "trackEdgeId": "EDGE:PASS-004",
-        "fromNodeId": "NODE:SPLIT-004",
+        "fromNodeId": "NODE:SPLIT-006",
         "toNodeId": "NODE:O13",
         "lengthMeters": 645,
         "directionality": "ForwardOnly",
@@ -2447,10 +2461,10 @@
         "platformId": "PLATFORM:O03:UP",
         "stationId": "O03",
         "name": "O03 \u7AD9 \u4E0A\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:UP:O04:O03",
-        "platformStartOffsetMeters": 2270,
-        "platformEndOffsetMeters": 2270,
-        "stopPositionOffsetMeters": 2270,
+        "trackEdgeId": "EDGE:UP:O04:O03:B-001",
+        "platformStartOffsetMeters": 2030,
+        "platformEndOffsetMeters": 2030,
+        "stopPositionOffsetMeters": 2030,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -2466,9 +2480,9 @@
         "stationId": "O04",
         "name": "O04 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:PASS-001",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -2484,9 +2498,9 @@
         "stationId": "O04",
         "name": "O04 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:PASS-002",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -3366,9 +3380,9 @@
         "stationId": "O04",
         "name": "O04 \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
         "trackEdgeId": "EDGE:DOWN:O03:O04:B-001",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": false,
@@ -3387,9 +3401,9 @@
         "stationId": "O04",
         "name": "O04 \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
         "trackEdgeId": "EDGE:UP:O05:O04:B-001",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": false,
@@ -3484,13 +3498,7 @@
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "EDGE:DOWN:O03:O04:B-001",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:DOWN:O04:O05",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "EDGE:DOWN:O04:O05",
+        "fromTrackEdgeId": "EDGE:DOWN:O04:O05:B-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:DOWN:O05:O06",
         "toDirection": "Forward"
@@ -3766,13 +3774,7 @@
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "EDGE:UP:O05:O04:B-001",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:UP:O04:O03",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "EDGE:UP:O04:O03",
+        "fromTrackEdgeId": "EDGE:UP:O04:O03:B-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:UP:O03:O02",
         "toDirection": "Forward"
@@ -3820,6 +3822,12 @@
         "toDirection": "Forward"
       },
       {
+        "fromTrackEdgeId": "EDGE:DOWN:O03:O04:B-001",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "EDGE:DOWN:O04:O05:B-001",
+        "toDirection": "Forward"
+      },
+      {
         "fromTrackEdgeId": "EDGE:DOWN:O03:O04:A-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:PASS-001",
@@ -3828,13 +3836,19 @@
       {
         "fromTrackEdgeId": "EDGE:PASS-001",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:DOWN:O04:O05",
+        "toTrackEdgeId": "EDGE:DOWN:O04:O05:B-001",
         "toDirection": "Forward"
       },
       {
         "fromTrackEdgeId": "EDGE:UP:O05:O04:A-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:UP:O05:O04:B-001",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "EDGE:UP:O05:O04:B-001",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "EDGE:UP:O04:O03:B-001",
         "toDirection": "Forward"
       },
       {
@@ -3846,7 +3860,7 @@
       {
         "fromTrackEdgeId": "EDGE:PASS-002",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:UP:O04:O03",
+        "toTrackEdgeId": "EDGE:UP:O04:O03:B-001",
         "toDirection": "Forward"
       },
       {
@@ -3939,8 +3953,8 @@
         "name": "O04 synthetic \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O04",
         "arrivalTrackEdgeId": "EDGE:DOWN:O03:O04:A-001",
-        "arrivalOffsetMeters": 200,
-        "departureTrackEdgeId": "EDGE:DOWN:O04:O05",
+        "arrivalOffsetMeters": 2030,
+        "departureTrackEdgeId": "EDGE:DOWN:O04:O05:B-001",
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
@@ -3959,8 +3973,8 @@
         "name": "O04 synthetic \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O04",
         "arrivalTrackEdgeId": "EDGE:UP:O05:O04:A-001",
-        "arrivalOffsetMeters": 200,
-        "departureTrackEdgeId": "EDGE:UP:O04:O03",
+        "arrivalOffsetMeters": 360,
+        "departureTrackEdgeId": "EDGE:UP:O04:O03:B-001",
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
@@ -4163,7 +4177,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:DOWN:O04:O05",
+          "trackEdgeId": "EDGE:DOWN:O04:O05:B-001",
           "direction": "Forward"
         },
         {
@@ -4543,7 +4557,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:UP:O04:O03",
+          "trackEdgeId": "EDGE:UP:O04:O03:B-001",
           "direction": "Forward"
         },
         {

@@ -2229,7 +2229,16 @@ public sealed class SimulationWorld
         }
 
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
-        if (isScheduledStop && stationStopControl is { RequiresServiceBraking: true })
+        // 預視此 Tick 原本的加速度指令；一旦進入停站全煞，保持煞車，
+        // 避免速度目標暫時放寬時重新牽引而錯過停車點。
+        if (isScheduledStop && (train.StationBrakingActive
+            || stationStopControl is { RequiresServiceBraking: true }
+            || ShouldBeginStationBraking(
+                train,
+                distanceToStation,
+                desiredAcceleration,
+                effectiveServiceBraking,
+                stationStopControl!.PredictedStoppingDistanceMeters)))
         {
             train.StationBrakingActive = true;
             desiredAcceleration = -effectiveServiceBraking;
@@ -2410,7 +2419,8 @@ public sealed class SimulationWorld
         MutableTrain train,
         double distanceToStation,
         double desiredAccelerationIfWaiting,
-        double effectiveBraking)
+        double effectiveBraking,
+        double? precomputedStoppingDistance = null)
     {
         if (distanceToStation <= StationBrakingLookAheadMeters)
         {
@@ -2419,13 +2429,14 @@ public sealed class SimulationWorld
 
         var jerkLimited = ProfileMode == OperationProfileMode.RealisticOperations;
         var performance = GetVehiclePerformance(train);
-        var stoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
-            train.Speed,
-            train.Acceleration,
-            effectiveBraking,
-            performance.JerkMetersPerSecondCubed,
-            FixedTimeStepSeconds,
-            jerkLimited).DistanceMeters;
+        var stoppingDistance = precomputedStoppingDistance
+            ?? BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+                train.Speed,
+                train.Acceleration,
+                effectiveBraking,
+                performance.JerkMetersPerSecondCubed,
+                FixedTimeStepSeconds,
+                jerkLimited).DistanceMeters;
         if (stoppingDistance + StationBrakingLookAheadMeters >= distanceToStation)
         {
             return true;

@@ -201,8 +201,14 @@ internal static class LargeAirportLineFullScenarioTests
 
         AssertAllStopJourney(world, "MIN-DOWN-01", LargeAirportLineFullScenarioBuilder.StationIds);
         AssertAllStopJourney(world, "MIN-UP-01", LargeAirportLineFullScenarioBuilder.StationIds.Reverse().ToArray());
-        True(world.Events.All(item => item.EventType is not (SimulationEventType.Collision or SimulationEventType.StationStopViolation)),
-            "Full Station Chain 雙向全停 smoke test 不得發生 Collision 或 StationStopViolation。 ");
+        var violations = world.Events
+            .Where(item => item.EventType is SimulationEventType.Collision or SimulationEventType.StationStopViolation)
+            .Take(5)
+            .Select(item => $"{item.SimulationTimeSeconds:0.0}s/{item.ServiceRunId}/{item.Message}")
+            .ToArray();
+        True(violations.Length == 0,
+            "Full Station Chain 雙向全停 smoke test 不得發生 Collision 或 StationStopViolation："
+            + string.Join("；", violations));
         True(world.GetSnapshot().Trains.All(train => !train.IsActive),
             "Full Station Chain 雙向全停列車必須都正常退出營運。 ");
     }
@@ -407,6 +413,57 @@ internal static class LargeAirportLineFullScenarioTests
             True(document.Topology.PassingOperations.Any(operation => operation.FacilityId == facilities[0].FacilityId)
                 && document.Topology.PassingOperations.Any(operation => operation.FacilityId == facilities[1].FacilityId),
                 $"{stationId} 上下行 facility 都必須納入正式 PassingOperation，不可孤立。 ");
+            if (stationId == "O04")
+            {
+                var edges = document.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId,
+                    StringComparer.OrdinalIgnoreCase);
+                var projection = new StationChainageProjection(document);
+                Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId),
+                    projection.StationCenters[stationId], 0.001, "O04 站心里程不可因配線而移動。 ");
+                foreach (var facility in facilities)
+                {
+                    var localPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == facility.LocalPlatformId);
+                    var expressPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == facility.ExpressPlatformId);
+                    var arrival = edges[facility.ArrivalTrackEdgeId];
+                    var departure = edges[facility.DepartureTrackEdgeId];
+                    var siding = edges[localPlatform.TrackEdgeId];
+                    var through = edges[expressPlatform.TrackEdgeId];
+                    var outbound = facility.LocalPlatformId.Contains(":DOWN", StringComparison.OrdinalIgnoreCase);
+                    Close(outbound ? 2030 : 360, arrival.LengthMeters, 0.001,
+                        "O04 分岔點必須在月臺中心前 240 m。 ");
+                    Close(outbound ? 360 : 2030, departure.LengthMeters, 0.001,
+                        "O04 匯入點必須在月臺中心後 240 m。 ");
+                    Close(480, siding.LengthMeters, 0.001, "O04 側線分岔至匯入必須為 480 m。 ");
+                    Close(480, through.LengthMeters, 0.001, "O04 通過正線分岔至匯入必須為 480 m。 ");
+                    Equal(arrival.ToNodeId, siding.FromNodeId);
+                    Equal(arrival.ToNodeId, through.FromNodeId);
+                    Equal(departure.FromNodeId, siding.ToNodeId);
+                    Equal(departure.FromNodeId, through.ToNodeId);
+                    foreach (var platform in new[] { localPlatform, expressPlatform })
+                    {
+                        Close(170, platform.PlatformStartOffsetMeters, 0.001, "O04 月臺起點應在岔出點後 170 m。 ");
+                        Close(240, platform.StopPositionOffsetMeters, 0.001, "O04 月臺中心應在岔出點後 240 m。 ");
+                        Close(310, platform.PlatformEndOffsetMeters, 0.001, "O04 月臺終點應在岔出點後 310 m。 ");
+                        Close(LargeAirportLineFullScenarioBuilder.SourceChainage(stationId),
+                            projection.ToChainage(new TrackPosition(platform.TrackEdgeId, 240))!.Value,
+                            0.001, "O04 月臺中心投影應對齊來源站心。 ");
+                    }
+                    var expectedBefore = outbound ? 2270 : 600;
+                    var expectedAfter = outbound ? 600 : 2270;
+                    Close(expectedBefore, arrival.LengthMeters + localPlatform.StopPositionOffsetMeters,
+                        0.001, "O04 前一站至月臺中心實體距離必須維持來源站距。 ");
+                    Close(expectedAfter, siding.LengthMeters - localPlatform.StopPositionOffsetMeters + departure.LengthMeters,
+                        0.001, "O04 月臺中心至下一站實體距離必須維持來源站距。 ");
+                }
+                foreach (var route in document.ServiceRoutes)
+                    Close(LargeAirportLineFullScenarioBuilder.FullRouteLengthMeters,
+                        route.Traversals.Sum(traversal => edges[traversal.TrackEdgeId].LengthMeters),
+                        0.001, "O04 分岔與匯入不得改變主線 ServiceRoute 總長。 ");
+                True(document.ServiceRoutes.All(route => route.Traversals.All(traversal =>
+                    edges[traversal.TrackEdgeId].FromNodeId != "NODE:O04"
+                    && edges[traversal.TrackEdgeId].ToNodeId != "NODE:O04")),
+                    "O04 站心 node 僅保留來源里程錨點，列車運行必須使用具實體接點的邊。 ");
+            }
         }
     }
 

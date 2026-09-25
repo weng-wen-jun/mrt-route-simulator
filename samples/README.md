@@ -57,7 +57,7 @@
   - SECTION：O01↔O20，尖峰服務，O20 為營運終點並使用站後袋式儲車軌折返。
   - AIRPORT-DIRECT：O01↔O20，離峰服務，停靠 O01／O08／O11／O16／O20，O20 終止，不前往 O26。
   - 尖峰為 FULL-LINE＋SECTION；離峰為 FULL-LINE＋AIRPORT-DIRECT；參考規劃的代表班距、旅行時間、列車數、450 人／列及 O15a～O16 需求值只作合理性／容量目標，不作 exact-equality regression。
-  - O04／O13 是 2 側式月台＋4 股道的雙向越行／待避概念；普通車駛入外側 `Siding` 側線停靠待避，高等列車保持在內側 `Mainline` 正線通過。O04 為高架、O13 為地下。1.5 分鐘是營運配置目標，不取代 moving block、occupancy、braking 或 rear-clear 安全模型。
+  - O04／O13 是 2 側式月台＋4 股道的雙向越行／待避概念；普通車駛入外側 `Siding` 側線停靠待避，高等列車保持在內側 `Mainline` 正線通過。O04 上下行均在月臺中心前 240 m 岔出、後 240 m 匯入；140 m 月臺在分岔後 170～310 m，中心為 240 m。O04 為高架、O13 為地下。1.5 分鐘是營運配置目標，不取代 moving block、occupancy、braking 或 rear-clear 安全模型。
 - synthetic test values／非正式設計值：
   - 平台實際長度與停點、O04／O13 道岔位置與 crossover 幾何、O20 pocket 長度、O26 折返精確幾何。
   - Full sample 的停站語意明確使用 `StopPositionReference.TrainCenter`，並令停點等於月臺幾何中心；O01／O26 終端目的月臺以 100m synthetic platform 置於邊界前 50m，確保整列車仍在實體 edge 內。
@@ -65,10 +65,10 @@
   - 各站 dwell、O20 折返秒數、pocket／passing facility 長度、停點、速限、資源占用與釋放時間。
   - 代表性 dispatch offset 與待避 dwell；目前 builder 的 0／30／60／500／2,600／3,000／5,600 秒是 runtime regression input，不是正式班表。
 - 已建模：28 個邏輯車站、上下行月台與主線 ServiceRoute、`directedConnections`、`directionRouteBindings`、FULL-LINE／SECTION／AIRPORT-DIRECT stop patterns、O20 topology-native pocket traversal、O04／O13 passing facility、VehicleId／ServiceRunId 接續，以及越行／rear-clear／折返／退出事件的 focused regression 情境。
-- 刻意省略或尚未可工程化：平縱面、曲線／坡度／曲線限速、正式 turnout 型號與岔速、正式平台有效長度、正式車輛／號誌／閉塞參數、正式尖峰／離峰 timetable、fleet cycle／layover、完整容量客流模型及 O16 樓層／轉乘的列車 physics。O04／O13 的四股道只是 synthetic planning concept；目前可執行 facility 的細部幾何、port side 與方向對稱性仍屬 synthetic，不能視為工程配線。
+- 刻意省略或尚未可工程化：平縱面、曲線／坡度／曲線限速、正式 turnout 型號與岔速、正式平台有效長度、正式車輛／號誌／閉塞參數、正式尖峰／離峰 timetable、fleet cycle／layover、完整容量客流模型及 O16 樓層／轉乘的列車 physics。O04／O13 的四股道只是 synthetic planning concept；目前可執行 facility 的細部幾何與 port side 仍屬 synthetic，不能視為工程配線。O04 的 `NODE:O04` 僅保留來源站心里程作顯示錨點，並非車輛行經的實體接點；上下行列車由各自的分岔／匯入節點及連續 480 m edge 通過站區。
 - 代表性 runtime regression 班表：`FULL-O13` 於 0 秒、`FULL-UP-01` 於 30 秒、`FULL-O04` 於 60 秒、`AIRPORT-DIRECT-01` 於 500 秒、其上行接續於 2,600 秒、`FULL-SECTION-O04` 於 2,600 秒、`SECTION-DOWN-01` 於 3,000 秒、其上行接續於 5,600 秒。builder 將尖峰 SECTION 與離峰 AIRPORT-DIRECT 放在同一份代表班表，只為在單一 runtime regression 中觀察多服務、越行與折返；不表示三種服務是正式同時營運，也不表示這些 offset 是正式時刻。
-- 預期關鍵事件（目前 deterministic regression 實測）：AIRPORT-DIRECT 約於 624.5／676.3 秒完成 O04 越行請求／完成、1,252.0／1,303.8 秒完成 O13 越行請求／完成、1,858.1 秒抵達 O20 pocket 停點、2,600.0 秒換為上行車次；SECTION 約於 3,124.5／3,176.3 秒完成 O04 越行請求／完成、4,704.5 秒抵達 O20 pocket 停點、5,600.0 秒換為上行車次，並於 7,446.5 秒退出營運。普通車須等 express rear-clear 後離開待避進路；FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。
-- 目前驗證狀態（2026-09-22）：builder 的 7 個階段 Structural／Operational gate、focused LargeAirportLine scenario tests 17/17、Release build（0 warnings／0 errors）及完整 Engine runner 170/170 通過；WPF 離屏 runner 的其他已執行範例通過，但本 sample editor-720 仍在 `EDGE:PASS-002` 回報 46.3° 示意突折，14-sample WPF gate 尚未完成。原生桌面不同 DPI、O04／O13 越行與 O20 折返的連續播放目視仍未執行，不能用離屏 runner 代替。
+- 預期關鍵事件：AIRPORT-DIRECT 依序完成 O04、O13 越行，再進入 O20 pocket 折返；SECTION 在 O04 越行後進入 O20 pocket 折返。普通車須等 express rear-clear 與衝突資源釋放後離開待避進路；FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。O04 幾何更新後，舊版精確事件秒數不再適用。
+- 目前驗證狀態（2026-09-25）：builder 的 7 個階段 Structural／Operational gate、Release solution build（0 warnings／0 errors）、完整 Engine runner **170/170**、O04／O13 雙向四股實體 topology、兩次越行與 rear-clear、Schema 8 round-trip 均通過。進站控制的下一步煞停預視及啟動後持續煞車已消除 65 m 設定下 full station chain、完整情境與 V3.3 sample 的 `StationStopViolation`。原生桌面不同 DPI、O04／O13 越行與 O20 折返的連續播放目視仍需驗證，不能用離屏 runner 代替。
 - 已知限制：此案例的通過結果只代表 synthetic topology-native sample 可執行，以及目前列出的 runtime 事件可被驗證；不代表任何正式路線設計、實際站距、四股道配線、號誌安全能力、正式容量或營運時刻表。
 
 ## PDF 站型範例
