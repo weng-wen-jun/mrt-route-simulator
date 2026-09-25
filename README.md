@@ -1,25 +1,25 @@
-﻿# MRT 路線進出站時間模擬器 V4.0.1
+# MRT 路線進出站時間模擬器 V4.0.2
 
-> V4.0.1（2026-08-31）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
+> V4.0.2（2026-09-25 整合版）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前自動化基準為 `127/127 tests`、Release build `0 warnings / 0 errors`（2026-09-11），另有12範例×主圖／編輯器×兩寬度的48圖版面檢核及完整載入測試。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；桌面手動驗收及匯出邊界見 `QA_REPORT.md`。
+目前整合分支的 Engine runner 為 `173/173 tests`、Release build `0 warnings / 0 errors`（2026-09-25）；完整 WPF runner 已通過範例載入、playback worker、速度行程與 CSV／PNG／PDF 輸出，另大型 full sample 定向 playback 診斷在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms。原生桌面不同 DPI 與連續播放仍未人工驗收。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/AUDIT-2026-09-11.md)；完整驗收邊界見 `QA_REPORT.md`。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
 ## 直接使用
 
-1. 開啟 V4.0.1 桌面程式或自行建置 Release 版本。
+1. 開啟 V4.0.2 桌面程式或自行建置 Release 版本。
 2. 雙擊 `MRT路線進出站時間模擬器.exe`。
 3. 第一次可直接使用六站示範資料，按「計算並建立模擬」。
-4. 從「檔案 → 讀取存檔」載入 [`samples/V4.0.0-topology-baseline.mrtsim.json`](samples/V4.0.0-topology-baseline.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇五站營運、折返或越行情境；所有範例均為 Schema 8。
+4. 從「檔案 → 讀取存檔」載入 [`samples/V4.0.0-topology-baseline.mrtsim.json`](samples/V4.0.0-topology-baseline.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇大型機場線、PDF 站型、折返或越行情境；所有範例均為 Schema 8。
 5. 在「模擬動畫」播放、暫停或重設；其他分頁可查看時刻表、區間物理、移動閉塞與列車運行圖。
 6. 模擬全部完成後，從「檔案 → 匯出完成後固定時刻表」建立可重複讀取的封存檔；從「檔案」可存取專案或重新讀取封存。
 
 本機需要 Microsoft .NET 10 Desktop Runtime。本專案不使用帳號、資料庫、遙測或執行時網路連線，也沒有第三方 NuGet 套件。
 
-## V4.0.1 Track-first topology
+## V4.0.2 Track-first topology
 
 - `InfrastructureGraphV4` 的 physical truth 是 `TrackNode`、`TrackEdge`、edge-local `TrackPosition` 與附著其上的 `PlatformDefinitionV4`；車站不再是此新 topology 的實體端點。
 - `LinearInfrastructureBuilder` 會把線性三站 A—B—C 建成 A→B、B→C 與 C→B、B→A 四條獨立 edge，而非兩條全線 edge；快速表單轉 Schema 8 時會補齊兩端實體尾軌與折返資源。
@@ -36,7 +36,7 @@
 
 ## 驗收與限制
 
-自動化與 Windows topology 驗收均已完成。詳見 [`TODO.md`](TODO.md) 和 [`QA_REPORT.md`](QA_REPORT.md)；桌面匯出範例位於 [`artifacts`](artifacts)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
+Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback 診斷已完成；原生桌面不同 DPI／連續播放驗收仍在進行。詳見 [`TODO.md`](TODO.md) 和 [`QA_REPORT.md`](QA_REPORT.md)；桌面匯出範例位於 [`artifacts`](artifacts)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
 
 ## V3.4.2 進站精停修正
 
@@ -58,7 +58,7 @@
 - 停站模式新增「折返」。將中央避車線建成路線中的虛擬站點、設為 `CentralSidingTurnback`，再把該站設成「折返」，即可讓區間車停靠、占用避車線資源並反向接續車次。
 - 站後折返可在折返設定的股道清單指定一條下行、一條上行 `TailTrack`；兩線共同端點以 `TAIL:<折返設定編號>` 表示執行期虛擬節點。列車先依到達方向駛入尾軌、在該點停等，再改走反方向尾軌返回端點站接續新車次；未配置成對尾軌的既有設定維持原本的時間抽象行為。
 - 寫實引擎的進站煞車鎖定與 2 m 近停吸附門檻一致，避免 Jerk 受限減速在停車點前解除煞車並短暫重新牽引。
-- Engine 以 `SimulationSession` 統一實際與計畫世界；長時間或大量列車的非互動分析可選擇降採樣或僅事件軌跡留存，預設完整留存不改變既有畫面與匯出。
+- Engine 以 `SimulationSession` 統一實際與計畫世界；Schema 8 topology 互動播放的 ActualWorld 使用 0.5 秒 trajectory retention，並保留事件、相位、方向、edge／traversal、站點、月台與 constraint 狀態轉折。CSV／區間統計目前消費這份互動歷史；真正 0.1 秒 Full trajectory 的離線匯出尚未與互動留存分離，詳見後續 TODO。
 - 模擬全部完成後，可匯出 `.mrttimetable.json` 固定時刻表封存。封存保留完成當下的 Schema 7 專案設定與每個車次／車站的實際到離站、停站、誤點與狀態；重新讀取後直接顯示凍結結果，不會重算。
 
 ## V3.3.0 基礎功能
@@ -133,7 +133,7 @@
 
 ## 軟體版本控制
 
-- 目前版本為 `V4.0.1`，唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`。
+- 目前版本為 `V4.0.2`，唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`。
 - 建置時會同步套用到組件、檔案、資訊版本、主視窗標題及測試標題。
 - Bug 修正增加修訂版本；新功能或其他變更增加次版本並把修訂版本歸零；未經使用者明確要求不得升主版本。
 - 完整規則見 `VERSIONING.md`，各版內容見 `CHANGELOG.md`。Git commit、tag 與 GitHub 推送只在使用者明確要求發布時執行。
@@ -152,8 +152,8 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 
 - `src/MrtRouteSimulator.Engine`：V1 解析模型、V2 軌跡規劃、速限服務與 `SimulationWorld`。
 - `src/MrtRouteSimulator.App`：WPF 桌面介面、圖形與離線匯出。
-- `samples`：五份可直接執行的 Schema 8 topology 範例，涵蓋基線、五站營運、實體折返與實體越行；舊檔名僅保留情境沿革。
-- `tests/MrtRouteSimulator.Tests`：107 項無外部測試框架的自動化測試，包含完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
+- `samples`：14 份可直接執行的 Schema 8 topology 範例，涵蓋基線、大型機場線 minimal／full、PDF 站型、實體折返與實體越行；舊檔名僅保留情境沿革。
+- `tests/MrtRouteSimulator.Tests`：161 項無外部測試框架的自動化測試，包含大型 sample 分階段 gate、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
 - `Directory.Build.props`：軟體版本的單一來源。
 - `VERSIONING.md`／`CHANGELOG.md`：進版規則與版本變更紀錄。
 - `MODEL_SPEC.md`：資料結構、公式、API、狀態與邊界。
@@ -162,9 +162,9 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 
 ## 使用與安全界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.0.1 仍支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.0.2 仍支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
 
-目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.0.1 已完成範圍內。服務類型與車型維持分離目錄。
+目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.0.2 已完成範圍內。服務類型與車型維持分離目錄。
 ## 依 PDF 建立站場（2026-09-09）
 
 在專案工作區「快速建立」的「依參考圖建立站場」選擇站型，按「以此站型重新起稿」，檢查後套用。此按鈕會替換工作區草稿；取消工作區會保留原專案。亦可直接讀取 `samples/PDF-*.mrtsim.json`。

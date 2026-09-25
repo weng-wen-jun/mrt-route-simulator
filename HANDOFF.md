@@ -1,6 +1,6 @@
 # MRT 路線進出站時間模擬器 — 開發交接指南
 
-> 適用版本：V4.0.1
+> 適用版本：V4.0.2
 > 目的：讓新的開發者或自動化程式代理在不重新考古整個 repository 的前提下，快速理解目前架構、權威資料來源、未完成工作與驗證方式。
 
 ## 1. 先讀什麼
@@ -8,13 +8,13 @@
 開始修改前，依下列順序建立共同上下文：
 
 1. `AGENTS.md`：功能對應模組、責任邊界、修改前後檢查與禁止事項。
-2. `MODEL_SPEC.md`：V4.0.1 模型、資料型別、物理與 topology runtime 契約。
+2. `MODEL_SPEC.md`：V4.0.2 模型、資料型別、物理與 topology runtime 契約。
 3. `TODO.md`：**只有「現行待辦」內未勾選項目代表目前尚未完成的工作**。
 4. `QA_REPORT.md`：最近一次實際驗證、測試數、人工驗收範圍與已知限制。
 5. `CHANGELOG.md`：需要追溯版本變更時再讀。
 6. `README.md`：使用方式與一般專案說明。
 
-版本不要從文件標題、檔名或 UI 標籤猜測；產品版本的單一權威來源是 `Directory.Build.props`。目前為 **V4.0.1**。
+版本不要從文件標題、檔名或 UI 標籤猜測；產品版本的單一權威來源是 `Directory.Build.props`。目前為 **V4.0.2**。
 
 ## 2. 目前架構一句話
 
@@ -34,7 +34,7 @@ Results / Visualization / Export
 
 核心依賴原則：**UI 可以呼叫 Engine；Engine 不應依賴 WPF。**
 
-## 3. V4.0.1 必須守住的契約
+## 3. V4.0.2 必須守住的契約
 
 ### 3.1 V2 權威位置
 
@@ -131,13 +131,13 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 
 發車、到站、停站、跨站、折返、反向接續、退出營運、資源鎖定／釋放、多列車安全與 facility traversal 先從這裡查。
 
-## 5. 目前交付狀態（2026-09-19）
+## 5. 目前交付狀態（2026-09-20）
 
-最新 `QA_REPORT.md` 的 V4.0.1 驗證基準：
+最新 `QA_REPORT.md` 的 V4.0.2 驗證基準：
 
 - Release build：**0 warnings / 0 errors**。
-- Engine runner：**145 / 145** 通過。
-- 完整 WPF runner：通過；包含目前 13 個範例、速度圖、移動閉塞方向篩選、完整 topology、TrainCenter 情境與 CSV／PNG／PDF 輸出。
+- Engine runner：**161 / 161** 通過；大型機場線 full sample focused tests **15 / 15** 通過。WPF runner 的既有範例通過，但 full sample editor-720 在 `EDGE:PASS-002` 回報 55.3° 示意突折，14-sample WPF gate 尚未完成。
+- WPF runner：既有範例的載入／計畫時間軸／雙向預覽與輸出檢核通過；去識別化 full sample editor-720 仍在 `EDGE:PASS-002` 回報 55.3° 示意突折，因此 14-sample WPF gate 尚未完成。
 - PDF 分頁已改為各頁重繪標題、圖例、座標軸與頁內列車標籤；A4 兩頁輸出已以 Poppler 渲染檢查，未見跨頁切斷。
 - `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已完成大型 sample 的分階段 Structural／Operational gate，Scenario Manifest 規範同步寫入 `samples/README.md`。
 - 離屏 WPF／程式驗證不等於不同 DPI 與完整桌面連續播放人工驗收。
@@ -149,8 +149,8 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy 匯入／固定時�
 依 `TODO.md`「現行待辦」，交接時仍需注意：
 
 1. **Legacy port migration**：已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不可從示意位置直接猜測實體方向。仍須完成原生桌面流程驗收，並確認產品是否要把遷移後側別設為所有舊檔的全面強制政策。
-2. **臺中機場捷運大型案例**：尚缺 O01～O26（含 O08a、O15a）的正式來源資料與完整營運班表；未經來源或明確 synthetic 核准，不可把目前 O01～O06 baseline 擴寫成真實案例。
-3. **桌面／DPI 完整驗收**：已完成部分實機抽查，但不同 DPI、折返／交會關鍵畫面與連續播放仍未完成完整驗收。
+2. **大型機場線大型案例**：Schema 8 full sample 與 15/15 focused regression 已完成；正式逐站來源、平縱面、車輛／號誌參數、完整營運班表與工程化幾何仍刻意保留為限制，不能把目前 synthetic values 宣稱為正式設計。
+3. **桌面／DPI 完整驗收**：已完成部分實機抽查，但不同 DPI、8,000 秒連續播放、O04／O13 越行與 O20 pocket 折返關鍵畫面仍未完成完整驗收。
 
 PDF 分頁輸出與通用 `TopologyScenarioBuilder` 已於 2026-09-19 完成；不要把這兩項重新列為待辦。
 處理待辦時，完成條件必須同時反映到 source、tests、`QA_REPORT.md`，並在確認真正完成後更新 `TODO.md`。
@@ -202,7 +202,7 @@ powershell -ExecutionPolicy Bypass -File tests/ValidateStationConstruction.ps1
 ## 10. 新接手者第一個小時建議
 
 1. 讀完本檔與 `AGENTS.md` 的「Codex 先讀這裡」。
-2. 閱讀 `MODEL_SPEC.md` 最前面的 V4.0.1 Track-first topology 執行契約。
+2. 閱讀 `MODEL_SPEC.md` 最前面的 V4.0.2 Track-first topology 執行契約。
 3. 只看 `TODO.md` 的「現行待辦」。
 4. 閱讀 `QA_REPORT.md` 最新一節與「桌面實機驗收進度」。
 5. 跑一次 Release build、Engine runner、WPF runner，建立自己的 clean baseline。

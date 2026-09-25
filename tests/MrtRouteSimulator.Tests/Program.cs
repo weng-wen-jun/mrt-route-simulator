@@ -1,8 +1,43 @@
 using System.Text.Json.Nodes;
 using MrtRouteSimulator.Engine;
 
+if (args.Length == 1 && args[0].Equals("--report-large-full-sample", StringComparison.OrdinalIgnoreCase))
+{
+    LargeAirportLineFullScenarioTests.PrintKeyEventReport();
+    return;
+}
+
+if (args.Length == 2 && args[0].Equals("--write-large-full-sample", StringComparison.OrdinalIgnoreCase))
+{
+    var outputPath = Path.GetFullPath(args[1]);
+    var outputDirectory = Path.GetDirectoryName(outputPath)
+        ?? throw new InvalidOperationException("輸出路徑缺少目錄。 ");
+    Directory.CreateDirectory(outputDirectory);
+    File.WriteAllText(outputPath, TopologyProjectFormat.Serialize(LargeAirportLineFullScenarioBuilder.BuildFull()));
+    Console.WriteLine($"已輸出大型機場線 full Schema 8 sample：{outputPath}");
+    return;
+}
+
 var tests = new (string Name, Action Run)[]
 {
+    ("大型機場線 full station chain 完整驗證", LargeAirportLineFullScenarioTests.FullStationChainValidates),
+    ("大型機場線列車停點對齊月台中心", LargeAirportLineFullScenarioTests.FullSampleStopsUsePlatformCenters),
+    ("大型機場線實際停車中心對齊月台中心", LargeAirportLineFullScenarioTests.FullSampleDwellCentersMatchPlatformCenters),
+    ("大型機場線 source-backed chainage 與站間距", LargeAirportLineFullScenarioTests.RouteLengthsDeriveFromSourceBackedChainages),
+    ("大型機場線 full station chain 雙向全停 smoke test", LargeAirportLineFullScenarioTests.FullStationChainBidirectionalAllStopCompletes),
+    ("大型機場線全程車 28 站全停完成", LargeAirportLineFullScenarioTests.FullLineAllStopCompletes),
+    ("大型機場線機場直達車 skip-stop", LargeAirportLineFullScenarioTests.AirportDirectSkipStopWorks),
+    ("大型機場線 SECTION O20 topology-native 袋狀軌折返", LargeAirportLineFullScenarioTests.O20TurnbackCompletes),
+    ("大型機場線 DIRECT O20 折返且不進入 O21-O26", LargeAirportLineFullScenarioTests.AirportDirectTurnsAtO20AndReturns),
+    ("大型機場線 SECTION O04 越行後 O20 折返", LargeAirportLineFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
+    ("大型機場線 O04 越行與 rear-clear", LargeAirportLineFullScenarioTests.O04OvertakingCompletesSafely),
+    ("大型機場線 O13 越行與 rear-clear", LargeAirportLineFullScenarioTests.O13OvertakingCompletesSafely),
+    ("大型機場線直達車完成兩次實體越行", LargeAirportLineFullScenarioTests.AirportDirectCompletesTwoOvertakes),
+    ("大型機場線 O04／O13 雙向四股實體 topology", LargeAirportLineFullScenarioTests.O04AndO13AreBidirectionalFourTrackStations),
+    ("大型機場線完整情境無碰撞與停站違規", LargeAirportLineFullScenarioTests.NoCollisionOrStationStopViolation),
+    ("大型機場線代表性班表所有列車完成", LargeAirportLineFullScenarioTests.AllExpectedTrainsComplete),
+    ("大型機場線 full sample Schema 8 round-trip", LargeAirportLineFullScenarioTests.Schema8RoundTripPreservesFullScenario),
+    ("大型機場線 full sample 建立 topology-native world", LargeAirportLineFullScenarioTests.CreatesTopologyNativeSimulationWorld),
     ("V4 尾軌折返後反向終點月台停站與首站", TopologyTurnbackRegressionTests.PhysicalTailTurnbackStopsAtFirstReverseStation),
     ("V4 尾軌折返 0 秒停站仍等待接續班表", TopologyTurnbackRegressionTests.PhysicalTailTurnbackWaitsForScheduledDepartureWithZeroDwell),
     ("V4 topology 上行結果輸出與方向篩選", TopologyResultsOutputTests.InboundTopologyResultsUseGlobalDisplayPositions),
@@ -25,6 +60,7 @@ var tests = new (string Name, Action Run)[]
     ("單端 physical port metadata 拒絕", DirectionPortTests.OneSidedPortMetadataIsRejected),
     ("原地折返同 edge 反向 traversal 合法", DirectionPortTests.InteriorSameEdgeReverseTurnbackRemainsLegal),
     ("physical port metadata Schema 8 round-trip 保留", DirectionPortTests.PortMetadataRoundTripsThroughSchema8),
+    ("大型機場線 O04／O13 passing 平台中心顯示里程一致", StationChainageTests.LargeAirportLinePassingPlatformCentersStayAligned),
     ("PDF 七種站場往返及完整運行", StationLayoutTemplateTests.BuildsAndRoundTripsAllStationLayoutTemplates),
     ("PDF 站前站後折返實體軌跡及接續", StationLayoutTemplateTests.BuildsFacilityTemplatesWithPhysicalTraversals),
     ("PDF 三四股道實際使用側線", StationLayoutTemplateTests.ThreeAndFourTrackTemplatesExposeAdditionalPhysicalTracks),
@@ -59,6 +95,7 @@ var tests = new (string Name, Action Run)[]
     ("V2 固定子步進與 Jerk 受限", TestV2FixedTickAndJerk),
     ("Route 表單輸入會先轉為 topology-native V2 world", TestRouteInputConvertsToTopologyNativeWorld),
     ("實際營運軌跡平順抵站且不越站", TestOperationalTripStopsAtStation),
+    ("停站違規忽略低於 3 km/h 的觸點速度", TestStationStopViolationThreshold),
     ("實際營運長區間包含惰行階段", TestOperationalTripContainsCoasting),
     ("里程速限重疊採最低且方向分離", TestSpeedLimitOverlapAndDirection),
     ("里程速限輸入精度與範圍驗證", TestSpeedLimitValidation),
@@ -72,7 +109,13 @@ var tests = new (string Name, Action Run)[]
     ("CSV 支援跨日時間及必要欄位", TestTrajectoryCsv),
     ("軌跡降採樣保留端點與相位轉折", TestTrajectoryDecimation),
     ("軌跡留存策略不改變事件且可限制取樣", TestTraceRetentionPolicies),
+    ("安全歷程降採樣不改變目前安全與狀態轉折", TestSafetyObservationRetentionPolicies),
     ("模擬會話統一推進實際與計畫世界", TestSimulationSession),
+    ("播放只推進實際世界並保留計畫時間軸", TestSimulationSessionAdvancesActualOnly),
+    ("計畫時間軸以營運完成停止並保留完成時間", TestPlannedTimelineStopsAtCompletion),
+    ("計畫時間軸定期回報模擬時間與車次進度", TestPlannedTimelineReportsProgress),
+    ("計畫時間軸涵蓋延遲發車與接續車次後才完成", TestPlannedTimelineHandlesDelayedContinuation),
+    ("計畫時間軸等待資源解除後才完成", TestPlannedTimelineWaitsForResource),
     ("V2 首班列車在零秒準時啟用", TestInitialV2Departure),
     ("極短班距碰撞保護不產生負里程", TestCollisionProtectionClampsRouteBoundary),
     ("障礙物急停可指定列車與排程時間", TestScheduledObstacleStop),
@@ -81,6 +124,7 @@ var tests = new (string Name, Action Run)[]
     ("同一追撞只記錄一次碰撞事件", TestCollisionEventRecordedOnce),
     ("動態煞車包絡線使到站前速度接近零", TestDynamicStationBrakingContinuity),
     ("StationStopController 以曲線與預測停點控制精停", TestStationStopControllerTracksCurveAndPrediction),
+    ("BasicPhysics 煞車包絡閉式計算與固定步進積分一致", TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps),
     ("進站低速限制解除後仍受精停目標速度約束", TestStationStopControllerPreventsPostNearStopBounce),
     ("SimulationWorld 進站近停後不會重新牽引回彈", TestSimulationWorldStationBrakingDoesNotReaccelerate),
     ("移動閉塞控制不再把高速列車瞬間歸零", TestMovingBlockControlDoesNotHardStop),
@@ -117,6 +161,7 @@ var tests = new (string Name, Action Run)[]
     ("Schema 8 拒絕 legacy 欄位與非本版格式", TopologyRegressionTests.Schema8RejectsLegacyOrWrongVersion),
     ("Schema 8 topology baseline 範例可載入並建立世界", TopologyRegressionTests.Schema8TopologyBaselineSampleLoadsAndBuildsWorld),
     ("所有範例均為有界且完整可執行的 Schema 8 topology 專案", TopologyRegressionTests.AllSamplesLoadAndBuildTopologyWorld),
+    ("65m 進站限速下完成停靠且無高速觸點", TopologyRegressionTests.ShortApproachBrakesBeforeStopPoint),
     ("V4 topology SimulationWorld 不建立 compatibility Route", TopologyRegressionTests.TopologySimulationWorldDoesNotConstructCompatibilityRoute),
     ("V4 完整 topology 範例逐一執行實體越行、袋狀軌與雙端尾軌", TopologyRegressionTests.ComprehensiveTopologySampleExercisesAllPhysicalFacilities),
     ("V4 道岔有向轉向限制約束尋徑與 runtime movement plan", TopologyRegressionTests.DirectedConnectionsRestrictSwitchPathsAndMovementPlans),
@@ -152,12 +197,15 @@ var tests = new (string Name, Action Run)[]
 
 var passed = 0;
 var failures = new List<string>();
+var selectedTests = args.Length >= 2 && args[0].Equals("--filter", StringComparison.OrdinalIgnoreCase)
+    ? tests.Where(test => test.Name.Contains(args[1], StringComparison.OrdinalIgnoreCase)).ToArray()
+    : tests;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 Console.WriteLine($"MRT 路線進出站時間模擬器 {ProductVersion.Current} - 自動化測試");
 Console.WriteLine(new string('=', 58));
 
-foreach (var test in tests)
+foreach (var test in selectedTests)
 {
     try
     {
@@ -174,7 +222,7 @@ foreach (var test in tests)
 }
 
 Console.WriteLine(new string('-', 58));
-Console.WriteLine($"結果：{passed}/{tests.Length} 通過，{failures.Count} 失敗");
+Console.WriteLine($"結果：{passed}/{selectedTests.Length} 通過，{failures.Count} 失敗");
 
 if (failures.Count > 0)
 {
@@ -673,9 +721,9 @@ static void TestTraceRetentionPolicies()
     var decimated = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.Decimated(2) }).CreateWorld();
     var eventsOnly = (options with { TraceRetentionPolicy = SimulationTraceRetentionPolicy.EventsOnly }).CreateWorld();
 
-    full.AdvanceTo(60);
-    decimated.AdvanceTo(60);
-    eventsOnly.AdvanceTo(60);
+    full.AdvanceTo(240);
+    decimated.AdvanceTo(240);
+    eventsOnly.AdvanceTo(240);
 
     True(decimated.Trajectory.Count < full.Trajectory.Count,
         "降採樣留存應少於完整 0.1 秒軌跡，但不得改變引擎推進。" );
@@ -684,6 +732,73 @@ static void TestTraceRetentionPolicies()
     Equal(0, eventsOnly.Trajectory.Count);
     True(decimated.Trajectory.Any(sample => sample.Phase == OperationalPhase.Accelerating),
         "降採樣留存至少應保留車次的初始相位。" );
+
+    var stateChanges = full.Trajectory
+        .OrderBy(sample => sample.SimulationTimeSeconds)
+        .Zip(full.Trajectory.OrderBy(sample => sample.SimulationTimeSeconds).Skip(1),
+            (previous, current) => (Previous: previous, Current: current))
+        .Where(pair => !string.Equals(pair.Previous.TrackEdgeId, pair.Current.TrackEdgeId, StringComparison.Ordinal)
+            || pair.Previous.ServiceRouteTraversalIndex != pair.Current.ServiceRouteTraversalIndex)
+        .ToArray();
+    True(stateChanges.Any(pair => !string.Equals(pair.Previous.TrackEdgeId, pair.Current.TrackEdgeId, StringComparison.Ordinal)),
+        "完整 topology 軌跡應涵蓋至少一個 TrackEdgeId 轉換。" );
+    True(stateChanges.Any(pair => pair.Previous.ServiceRouteTraversalIndex != pair.Current.ServiceRouteTraversalIndex),
+        "完整 topology 軌跡應涵蓋至少一個 ServiceRouteTraversalIndex 轉換。" );
+    foreach (var change in stateChanges)
+    {
+        True(decimated.Trajectory.Any(sample =>
+                Math.Abs(sample.SimulationTimeSeconds - change.Current.SimulationTimeSeconds) < 1e-9
+                && string.Equals(sample.TrackEdgeId, change.Current.TrackEdgeId, StringComparison.Ordinal)
+                && sample.ServiceRouteTraversalIndex == change.Current.ServiceRouteTraversalIndex),
+            "降採樣不可省略 topology edge 或 traversal index 狀態轉折。" );
+    }
+}
+
+static void TestSafetyObservationRetentionPolicies()
+{
+    var options = new SimulationWorldOptions(
+        CreateFiveStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        2,
+        InitialDepartureIntervalSeconds: 15,
+        MovingBlockMode: MovingBlockMode.Control,
+        TraceRetentionPolicy: SimulationTraceRetentionPolicy.Full);
+    var full = (options with
+    {
+        SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Full
+    }).CreateWorld();
+    var decimated = (options with
+    {
+        SafetyObservationRetentionPolicy = SafetyObservationRetentionPolicy.Decimated(1)
+    }).CreateWorld();
+
+    full.AdvanceTo(60);
+    decimated.AdvanceTo(60);
+
+    True(full.SafetyHistory.Count > 0, "安全歷程回歸至少需要一組相鄰列車觀測。" );
+    True(decimated.SafetyHistory.Count < full.SafetyHistory.Count,
+        "安全歷程降採樣應顯著少於每 0.1 秒完整留存。" );
+    True(full.GetSnapshot().SafetyObservations.SequenceEqual(decimated.GetSnapshot().SafetyObservations),
+        "Full 與 Decimated 不得改變目前 tick 的安全觀測。" );
+    Equal(full.Events.Count, decimated.Events.Count);
+    foreach (var transition in full.SafetyHistory
+                 .GroupBy(item => (item.FollowerVehicleId, item.LeaderVehicleId, item.TrackId))
+                 .SelectMany(group => group.OrderBy(item => item.SimulationTimeSeconds)
+                     .Zip(group.OrderBy(item => item.SimulationTimeSeconds).Skip(1), (previous, current) =>
+                         (Previous: previous, Current: current))
+                     .Where(pair => pair.Previous.Status != pair.Current.Status)
+                     .Select(pair => pair.Current)
+                     .Append(group.OrderBy(item => item.SimulationTimeSeconds).First())))
+    {
+        True(decimated.SafetyHistory.Any(item =>
+                item.FollowerVehicleId == transition.FollowerVehicleId
+                && item.LeaderVehicleId == transition.LeaderVehicleId
+                && item.TrackId == transition.TrackId
+                && item.Status == transition.Status
+                && Math.Abs(item.SimulationTimeSeconds - transition.SimulationTimeSeconds) < 1e-9),
+            "安全狀態轉折與每組第一筆觀測不可被降採樣遺失。" );
+    }
 }
 
 static void TestSimulationSession()
@@ -716,6 +831,191 @@ static void TestSimulationSession()
     NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
     True(session.PlannedEvents.Count > 0, "重設播放不應遺失已建立的計畫事件時間線。" );
     True(session.PlannedTrajectory.SequenceEqual(previewSamples), "推進和重設不可覆寫完整計畫軌跡。");
+}
+
+static void TestSimulationSessionAdvancesActualOnly()
+{
+    var actualOptions = new SimulationWorldOptions(
+        CreateThreeStationRoute(),
+        CreateParameters(),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent);
+    var plannedOptions = actualOptions with
+    {
+        ProfileMode = OperationProfileMode.BasicPhysics,
+        MovingBlockMode = MovingBlockMode.Independent
+    };
+    var session = new SimulationSession(actualOptions, plannedOptions);
+    session.PreparePlannedTimeline(180);
+    var plannedEvents = session.PlannedEvents.ToArray();
+    var plannedTrajectory = session.PlannedTrajectory.ToArray();
+
+    var snapshot = session.AdvanceActualTo(10);
+
+    NearlyEqual(10, snapshot.SimulationTimeSeconds, 1e-9);
+    NearlyEqual(10, session.ActualWorld.CurrentTimeSeconds, 1e-9);
+    NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+    True(session.PlannedEvents.SequenceEqual(plannedEvents),
+        "ActualWorld-only 播放不可修改已準備的計畫事件時間軸。" );
+    True(session.PlannedTrajectory.SequenceEqual(plannedTrajectory),
+        "ActualWorld-only 播放不可修改已準備的計畫軌跡。" );
+}
+
+static void TestPlannedTimelineStopsAtCompletion()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                vehicleId: "EMU-PLANNED-01", serviceRunId: "RUN-PLANNED-01")],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var options = new SimulationWorldOptions(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 2, 2),
+        OperationalParameters.CreateDefault(),
+        1,
+        InitialDepartureIntervalSeconds: 60,
+        MovingBlockMode: MovingBlockMode.Independent,
+        DispatchPlan: dispatch,
+        VehicleTypes: vehicles);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(1000);
+
+    True(session.PlannedTimelineCompletedAtSeconds is > 0 and < 1000,
+        "計畫時間軸應在最後車次完成時停止，而不是跑滿 fail-safe 上限。" );
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded),
+        "完成型計畫時間軸必須保留最後車次退出事件。" );
+    NearlyEqual(0, session.PlannedWorld.CurrentTimeSeconds, 1e-9);
+}
+
+static void TestPlannedTimelineReportsProgress()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                vehicleId: "EMU-PROGRESS-01", serviceRunId: "RUN-PROGRESS-01")],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var options = new SimulationWorldOptions(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 2, 2),
+        OperationalParameters.CreateDefault(),
+        1,
+        MovingBlockMode: MovingBlockMode.Independent,
+        DispatchPlan: dispatch,
+        VehicleTypes: vehicles);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+    var updates = new List<SimulationTimelineProgress>();
+    var progress = new Progress<SimulationTimelineProgress>(updates.Add);
+
+    session.PreparePlannedTimelineUntilComplete(1000, progress, TimeSpan.Zero);
+
+    True(updates.Count > 2, "計畫時間軸應在準備期間持續回報進度，而非只有開始與結束。" );
+    NearlyEqual(0, updates[0].SimulationTimeSeconds, 1e-9);
+    True(updates[0].TotalTrainCount == 1, "進度回報應包含計畫車次總數。" );
+    True(updates[^1].IsComplete, "最後一筆計畫進度應標記為完成。" );
+    True(updates[^1].TotalTrainCount == updates[^1].CompletedTrainCount,
+        "計畫完成時，進度回報應顯示所有車次已完成。" );
+    True(updates[^1].EventCount > 0 && updates[^1].TrajectorySampleCount > 0,
+        "計畫進度應包含事件與軌跡樣本數。" );
+    True(updates[^1].SimulationTimeSeconds > updates[0].SimulationTimeSeconds,
+        "計畫進度的模擬時間應隨 tick 推進。" );
+}
+
+static void TestPlannedTimelineHandlesDelayedContinuation()
+{
+    var route = CreateThreeStationRoute();
+    var (vehicles, services, stops) = CreatePlanningCatalogs();
+    var dispatch = DispatchPlanExpander.Expand(
+        new DispatchPlanDefinition(
+            [],
+            [
+                new ManualTimetableRow(TimeSpan.Zero, TrainDirection.Outbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    vehicleId: "EMU-TIMELINE-01", serviceRunId: "RUN-TIMELINE-DOWN",
+                    continueAfterTerminal: true, continuationServiceRunId: "RUN-TIMELINE-UP"),
+                new ManualTimetableRow(TimeSpan.FromSeconds(300), TrainDirection.Inbound, "LOCAL", "EMU-6", "ALL_STOP",
+                    serviceRunId: "RUN-TIMELINE-UP")
+            ],
+            DispatchPlanningMode.ManualTimetable),
+        vehicles,
+        services,
+        stops);
+    var options = new SimulationWorldOptions(
+        route,
+        new TrainParameters(22.222, 1, 1, 0, 2, 2),
+        OperationalParameters.CreateDefault(),
+        1,
+        MovingBlockMode: MovingBlockMode.Independent,
+        DispatchPlan: dispatch,
+        VehicleTypes: vehicles);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(1000);
+
+    var continuationDeparture = session.PlannedEvents
+        .Where(item => item.EventType == SimulationEventType.Departure && item.ServiceRunId == "RUN-TIMELINE-UP")
+        .OrderBy(item => item.SimulationTimeSeconds)
+        .Last();
+    True(continuationDeparture.SimulationTimeSeconds >= 300 - 0.1,
+        "接續車次不得在排定延遲發車時間前被計畫時間軸省略。" );
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.DirectionChanged
+        && item.ServiceRunId == "RUN-TIMELINE-UP"),
+        "計畫時間軸必須先完成端點折返，才能進入接續車次。" );
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded
+        && item.ServiceRunId == "RUN-TIMELINE-UP"),
+        "計畫完成條件必須等待接續車次退出營運。" );
+    True(!session.PlannedEvents.Any(item => item.EventType == SimulationEventType.ServiceEnded
+        && item.ServiceRunId == "RUN-TIMELINE-DOWN"),
+        "仍有接續車次時，前一段車次不得被當成整體營運完成。" );
+    True(session.PlannedTimelineCompletedAtSeconds is not null
+        && session.PlannedTimelineCompletedAtSeconds.Value > continuationDeparture.SimulationTimeSeconds,
+        "計畫完成時間必須晚於延遲發車的接續車次。" );
+}
+
+static void TestPlannedTimelineWaitsForResource()
+{
+    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+    var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+    var runtime = TopologyProjectFormat.CreateRuntime(document);
+    var options = new SimulationWorldOptions(
+        Route: null,
+        TrainParameters: runtime.TrainParameters,
+        OperationalParameters: runtime.OperationalParameters,
+        TrainCount: runtime.DispatchPlan.Runs.Count,
+        ProfileMode: document.Simulation.ProfileMode,
+        MovingBlockMode: document.Simulation.MovingBlockMode,
+        ServicePatterns: runtime.ServicePatterns,
+        DispatchPlan: runtime.DispatchPlan,
+        VehicleTypes: runtime.VehicleTypes,
+        ServiceTypes: runtime.ServiceTypes,
+        Topology: runtime.Topology);
+    var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
+
+    session.PreparePlannedTimelineUntilComplete(4000);
+
+    True(session.PlannedEvents.Any(item => item.EventType == SimulationEventType.DepartureDelayed)
+        && session.PlannedEvents.Any(item => item.EventType == SimulationEventType.RouteReserved)
+        && session.PlannedEvents.Any(item => item.EventType == SimulationEventType.RouteReleased),
+        "計畫時間軸必須保留資源鎖定／釋放造成的延遲發車，不可因班表時間已到就提前完成。" );
+    True(session.PlannedEvents.Count(item => item.EventType == SimulationEventType.ServiceEnded)
+        == runtime.DispatchPlan.Runs.Count(item => !item.ContinueAfterTerminal),
+        "計畫完成條件必須等待所有未接續車次退出營運。" );
+    True(session.PlannedTimelineCompletedAtSeconds is not null
+        && session.PlannedTimelineCompletedAtSeconds.Value < 4000,
+        "計畫時間軸不得跑滿 fail-safe 上限才回報完成。" );
 }
 
 static void TestInitialV2Departure()
@@ -844,6 +1144,50 @@ static void TestDynamicStationBrakingContinuity()
         0.1,
         jerkLimited: true);
     True(envelope.DistanceMeters > 0 && envelope.DurationSeconds > 0, "動態煞停距離與時間必須為正值。");
+}
+
+static void TestStationStopViolationThreshold()
+{
+    True(!StationStopController.ShouldRecordStopViolation(2.99 / 3.6), "低於 3 km/h 不應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.0 / 3.6), "剛好 3 km/h 應記錄停站違規。");
+    True(StationStopController.ShouldRecordStopViolation(3.01 / 3.6), "高於 3 km/h 應記錄停站違規。");
+}
+
+static void TestBasicPhysicsBrakingEnvelopeMatchesFixedSteps()
+{
+    var random = new Random(20260923);
+    var speeds = new List<double> { 0, 1e-10, 0.15, 22.22, 33.3333333333 };
+    for (var index = 0; index < 300; index++)
+    {
+        speeds.Add(random.NextDouble() * 45);
+    }
+
+    foreach (var speed in speeds)
+    foreach (var braking in new[] { 0.3, 0.9, 1.6 })
+    foreach (var timeStep in new[] { 0.05, 0.1, 0.2 })
+    {
+        var actual = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            speed, 0.5, braking, 0, timeStep, jerkLimited: false);
+        var expectedSpeed = speed;
+        var expectedDistance = 0d;
+        var expectedDuration = 0d;
+        var expectedAcceleration = 0.5;
+        for (var step = 0; expectedSpeed > 1e-9 && step < 100_000; step++)
+        {
+            expectedAcceleration = -braking;
+            var nextSpeed = Math.Max(0, expectedSpeed - braking * timeStep);
+            expectedDistance += (expectedSpeed + nextSpeed) * 0.5 * timeStep;
+            expectedDuration += timeStep;
+            expectedSpeed = nextSpeed;
+        }
+
+        True(Math.Abs(actual.DistanceMeters - expectedDistance) <= 1e-7 * Math.Max(1, expectedDistance),
+            $"BasicPhysics 煞停距離與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(Math.Abs(actual.DurationSeconds - expectedDuration) <= 1e-8,
+            $"BasicPhysics 煞停時間與固定步進不同：v={speed}, b={braking}, h={timeStep}。");
+        True(actual.FinalAccelerationMetersPerSecondSquared == expectedAcceleration,
+            "BasicPhysics 最終加速度須與固定步進相同。");
+    }
 }
 
 static void TestStationStopControllerTracksCurveAndPrediction()
@@ -1020,7 +1364,7 @@ static void TestExpressServicePassesStation()
     var pass = world.Events.Single(item => item.EventType == SimulationEventType.StationPassed
         && item.Direction == TrainDirection.Outbound
         && Math.Abs(item.PositionMeters - 1000) < 0.01);
-    True(pass.SpeedMetersPerSecond * 3.6 > 30, "未指定通過速限時不得被固定 30 km/h 進站值限制。");
+    True(pass.SpeedMetersPerSecond * 3.6 > 70, "未指定通過速限時不得被 60 km/h 等固定進站值莫名限制。");
     True(world.Events.All(item => item.EventType != SimulationEventType.Arrival
         || item.Direction != TrainDirection.Outbound
         || Math.Abs(item.PositionMeters - 1000) > 0.01), "跨站車不得在跨站車站產生抵達事件。");

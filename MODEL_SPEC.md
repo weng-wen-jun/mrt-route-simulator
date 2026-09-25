@@ -1,10 +1,10 @@
-# MRT Route Simulation Engine - Model Specification V4.0.1
+# MRT Route Simulation Engine - Model Specification V4.0.2
 
 > 現行規格（2026-08-31）。V3.0～V3.4 章節僅保留歷史模型說明；V2 寫實運行已改為 topology-native runtime。
 
-產品版本為 V4.0.1。V1 解析模型可保留 `Route` 作為輸入 adapter；V2 `SimulationWorld` 一律使用 Schema 8 的 `InfrastructureGraphV4 + ServiceRoute`，不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
+產品版本為 V4.0.2。V1 解析模型可保留 `Route` 作為輸入 adapter；V2 `SimulationWorld` 一律使用 Schema 8 的 `InfrastructureGraphV4 + ServiceRoute`，不持有 compatibility `Route` 或 legacy `InfrastructureGraph`。
 
-## V4.0.1 Track-first topology 執行契約
+## V4.0.2 Track-first topology 執行契約
 
 V2 的權威位置與資料流：
 
@@ -320,7 +320,7 @@ SimulationEngine.GetTrainStates(simulationTimeSeconds)
 
 ## 8. 自動化測試
 
-測試執行器目前包含 107 項案例。Topology regression 驗證 domain、projection、正常主線、topology-first entry、有向道岔轉向、完整 physical facilities、passing rear-clear、edge-local physical turnback、Schema 8 編輯交易、dependency guard 與 legacy Schema 7 匯入轉換。
+測試執行器目前包含 161 項案例。Topology regression 驗證 domain、projection、正常主線、topology-first entry、有向道岔轉向、完整 physical facilities、passing rear-clear、edge-local physical turnback、Schema 8 編輯交易、dependency guard、legacy Schema 7 匯入轉換與大型 sample 分階段 gate。
 
 - 無限制性能、零距離及非法性能。
 - 5000 m 長距離梯形速度曲線。
@@ -407,7 +407,7 @@ v_next = max(0, v + a_next × dt)
 d_stop += (v + v_next) / 2 × dt
 ```
 
-`StationStopController` 先以距離－速度煞車曲線限制高速段；全煞停點預測越過停車點時才要求營運煞車。最後 12 m 再改用低速終端速度曲線，目標速度在 2 m 近停吸附邊界收斂至零，避免暫時低速後回到一般線速牽引。每一步先限制加速度變化，再更新速度與位置，正常運行的速度、加速度與位置保持連續。一般情況只有同時符合距停車點 `0.5 m` 及速度不高於 `0.15 m/s` 才判定到站；若殘距不超過 `2 m` 且速度已低於該門檻，則直接以停車點完成到站。若高速越過停車點，保持煞車並記錄 `StationStopViolation`，不得無條件把速度歸零。障礙物急停是明確事件，可瞬間把指定前車速度設為 0，不納入正常連續性要求。
+`StationStopController` 先以距離－速度煞車曲線限制高速段；全煞停點預測越過停車點時要求營運煞車，並預看下一 Tick 若沿目前允許加速度前進後的煞停距離，避免進站限速後短暫加速造成晚煞。最後 12 m 再改用低速終端速度曲線，目標速度在 2 m 近停吸附邊界收斂至零，避免暫時低速後回到一般線速牽引。每一步先限制加速度變化，再更新速度與位置，正常運行的速度、加速度與位置保持連續。一般情況只有同時符合距停車點 `0.5 m` 及速度不高於 `0.15 m/s` 才判定到站；若殘距不超過 `2 m` 且速度已低於該門檻，則直接以停車點完成到站。若以至少 `3 km/h` 觸及停車點，保持煞車並記錄 `StationStopViolation`；低於 `3 km/h` 仍按原到站與煞車流程處理，但不記錄違規事件。不得無條件把速度歸零。障礙物急停是明確事件，可瞬間把指定前車速度設為 0，不納入正常連續性要求。
 
 ## 11. SimulationWorld
 
@@ -501,7 +501,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 ## 16. 輸入驗證與邊界
 
-| 輸入／情境 | V4.0.1 現行保留行為 |
+| 輸入／情境 | V4.0.2 現行保留行為 |
 |---|---|
 | 速限起點大於等於終點 | validation error |
 | 速限超過全線或不是 10 m 精度 | validation error |
@@ -516,7 +516,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 | 監視模式或障礙範圍被侵入 | 夾在合法路線邊界、停止並只記錄一次碰撞 |
 | 起點或終點設為跨站 | validation error |
 | 服務、停站模式或車次參照缺漏 | validation error，不猜測或補建執行資料 |
-| 高速越過停車點 | 保持煞車並記錄停站超限，不以單 Tick 歸零掩蓋 |
+| 以至少 3 km/h 觸及停車點 | 保持煞車並記錄停站超限，不以單 Tick 歸零掩蓋 |
 | 專案檔破損或版本未知 | 拒絕讀取，UI 目前設定不變 |
 | 空間參考點坡度使有效加／減速度小於等於 0 | validation error，不產生容量或折返旅行時間 |
 | 未續行列車完成端點停站／清車 | 產生 `ServiceEnded`，設為 `OutOfService` 並從活動路線圖移除 |

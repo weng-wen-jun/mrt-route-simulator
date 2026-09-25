@@ -1466,7 +1466,10 @@ internal sealed class TopologyEditorWindow : Window
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            state.Draft.Topology.Edges, mainlineY, laneSpacing / 2);
+            state.Draft.Topology.Edges, mainlineY, laneSpacing / 2, state.Draft.Topology.Platforms,
+            state.Draft.Topology.DirectedConnections,
+            StationSchematicPresentation.UsesCompactLaneTransitions(state.Draft, width),
+            state.Draft.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, state.Draft, width);
 
         var platformVisuals = new List<(
@@ -1488,7 +1491,7 @@ internal sealed class TopologyEditorWindow : Window
         }
 
         var stationCenters = StationSchematicPresentation.DrawPlatforms(canvas, state.Draft.Topology.Platforms,
-            state.Draft.Topology.Edges, edgeGeometries, mainlineY);
+            state.Draft.Topology.Edges, edgeGeometries, mainlineY, state.Draft.Topology.PassingFacilities);
         var stationVisuals = state.Draft.Topology.Stations
             .Select(station =>
             {
@@ -1520,18 +1523,39 @@ internal sealed class TopologyEditorWindow : Window
                 ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
             var outgoing = connection.ToDirection == TraversalDirection.Forward
                 ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+            var fromEdge = state.Draft.Topology.Edges.FirstOrDefault(edge =>
+                edge.TrackEdgeId.Equals(connection.FromTrackEdgeId, StringComparison.OrdinalIgnoreCase));
+            var toEdge = state.Draft.Topology.Edges.FirstOrDefault(edge =>
+                edge.TrackEdgeId.Equals(connection.ToTrackEdgeId, StringComparison.OrdinalIgnoreCase));
+            var allowLaneTurn = fromEdge is not null && toEdge is not null
+                && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
+                    || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
             StationSchematicPresentation.DrawConnection(canvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
-                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})");
+                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
+                allowLaneTurn);
         }
 
         foreach (var edge in state.Draft.Topology.Edges)
         {
             if (!edgeGeometries.TryGetValue(edge.TrackEdgeId, out var geometry)) continue;
+            var emphasizeSideTrack = edgeGeometries.Count >= 32
+                && edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.Siding;
+            if (emphasizeSideTrack)
+            {
+                canvas.Children.Add(new Polyline
+                {
+                    Points = new PointCollection(geometry.Points),
+                    Stroke = Brushes.White,
+                    StrokeThickness = 7,
+                    StrokeLineJoin = PenLineJoin.Round,
+                    IsHitTestVisible = false
+                });
+            }
             var line = new Polyline
             {
                 Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(railColor),
-                StrokeThickness = 5,
+                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
+                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)}\n{edge.LengthMeters:0.#} m"
             };

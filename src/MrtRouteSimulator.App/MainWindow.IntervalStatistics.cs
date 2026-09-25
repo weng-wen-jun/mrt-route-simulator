@@ -11,7 +11,7 @@ namespace MrtRouteSimulator.App;
 public partial class MainWindow
 {
     private int _lastIntervalRefreshSecond = -1;
-    private SimulationWorld? _intervalFilterSourceWorld;
+    private PlaybackFrame? _intervalFilterSourceFrame;
 
     private void RefreshIntervalStatistics_Click(object sender, RoutedEventArgs e) => PopulateIntervalStatistics();
 
@@ -21,7 +21,7 @@ public partial class MainWindow
 
     private void PopulateIntervalStatistics(bool throttled = false)
     {
-        if (!_v2Enabled || _v2World is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null)
         {
             IntervalStatisticRows.Clear();
             JourneyStatisticRows.Clear();
@@ -29,7 +29,7 @@ public partial class MainWindow
             return;
         }
 
-        var currentSecond = (int)Math.Floor(_v2World.CurrentTimeSeconds);
+        var currentSecond = (int)Math.Floor(_latestPlaybackFrame.CurrentTimeSeconds);
         if (throttled && currentSecond == _lastIntervalRefreshSecond) return;
         _lastIntervalRefreshSecond = currentSecond;
         RefreshIntervalFilterOptions();
@@ -85,7 +85,7 @@ public partial class MainWindow
 
     private IntervalStatisticsResult BuildIntervalStatisticsResult()
     {
-        if (_v2World is null)
+        if (_latestPlaybackFrame is null)
         {
             throw new InvalidOperationException("請先建立 V2 模擬。");
         }
@@ -112,25 +112,26 @@ public partial class MainWindow
         {
             throw new InvalidOperationException("篩選開始秒不可大於結束秒。");
         }
-        return _activeTopologyProjectDocument is null
-            ? IntervalStatistics.Analyze(
-                _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
-                _v2World.Trajectory,
-                _v2World.Events,
-                _v2World.SpeedLimits.Limits,
-                filter)
-            : IntervalStatistics.Analyze(
-                _v2World.GetTopologyResultContext(),
-                _v2World.Trajectory,
-                _v2World.Events,
-                filter);
+        return _resultAccumulator.BuildIntervalStatistics(filter)
+            ?? (_activeTopologyProjectDocument is null
+                ? IntervalStatistics.Analyze(
+                    _route ?? throw new InvalidOperationException("相容 V2 區間統計需要路線資料。"),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    _latestPlaybackFrame.SpeedLimits.Limits,
+                    filter)
+                : IntervalStatistics.Analyze(
+                    _latestPlaybackFrame.GetTopologyResultContext(),
+                    _latestPlaybackFrame.Trajectory,
+                    _latestPlaybackFrame.Events,
+                    filter));
     }
 
     private void RefreshIntervalFilterOptions()
     {
-        if (_v2World is null || ReferenceEquals(_intervalFilterSourceWorld, _v2World)) return;
-        _intervalFilterSourceWorld = _v2World;
-        var runs = _v2World.DispatchPlan?.Runs ?? [];
+        if (_latestPlaybackFrame is null || ReferenceEquals(_intervalFilterSourceFrame, _latestPlaybackFrame)) return;
+        _intervalFilterSourceFrame = _latestPlaybackFrame;
+        var runs = _latestPlaybackFrame.DispatchPlan?.Runs ?? [];
         SetFilterOptions(IntervalVehicleComboBox, runs
             .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId))
             .Select(item => new CatalogOption(item.VehicleId!, item.VehicleId!)));
@@ -175,7 +176,7 @@ public partial class MainWindow
     {
         try
         {
-            if (!_v2Enabled || _v2World is null)
+            if (!_v2Enabled || _latestPlaybackFrame is null)
             {
                 throw new InvalidOperationException("請先建立並播放 V2 寫實模擬。");
             }
@@ -190,7 +191,7 @@ public partial class MainWindow
                 FileName = "V2資源占用與觀測容量.csv"
             };
             if (dialog.ShowDialog(this) != true) return;
-            var result = ResourceOccupancyAnalysis.Analyze(_v2World.Events, _v2World.CurrentTimeSeconds);
+            var result = _resultAccumulator.BuildResourceOccupancy(_latestPlaybackFrame.CurrentTimeSeconds);
             File.WriteAllText(dialog.FileName, ResourceOccupancyAnalysis.BuildCsv(result),
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             StatusTextBlock.Text = $"已匯出：{dialog.FileName}";

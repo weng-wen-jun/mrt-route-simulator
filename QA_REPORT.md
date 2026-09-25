@@ -1,15 +1,174 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+> **4.0.2 整合狀態：自動化驗證完成**：三個來源工作樹的程式與測試內容已合併至 `codex/integrate-v4.0.2-worktrees`，整合分支 Release build、Engine runner、完整 WPF runner 與大型 full sample 定向 WPF playback 診斷均已通過。原生桌面不同 DPI、長時間桌面播放與人工畫面驗收尚未完成。下方標示「來源工作樹」的數字保留歷史證據，不能冒充整合分支結果。
+
+## 4.0.2 整合分支目前驗證（2026-09-25）
+
+- Release build：0 warnings／0 errors。
+- Engine runner：**173/173 passed，0 failed**。
+- 大型 full sample 定向 WPF playback：PASS；60× 播放約 3.06 秒推進 180.4 模擬秒，觀測約 59.0×，輸入最大間隔 41.7 ms；同時確認 O04／O13 顯示接軌、站中心／月台中心投影及播放期間停站違規規則。
+- Engine-only benchmark：大型 full sample 推進 180 模擬秒耗時 0.97 秒，有效速度約 185.46×；此數字只代表 Engine 計算，不代表 UI 播放倍率或桌面操作流暢度。
+- 完整 WPF runner：PASS；涵蓋範例載入、playback worker、速度行程與 CSV／PNG／PDF 輸出 gate。
+- 原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 pocket 換端關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。
+
+## V4.0.2 大型機場線停車中心修正（2026-09-22）
+
+- 大型機場線 full sample 的 56 個月台明確使用 `StopPositionReference.TrainCenter`，停點與月臺幾何中心一致；O01／O26 終端目的月臺保留完整 100m 車體所需的邊界前置空間。
+- `SimulationWorld` 以有序 ServiceRoute navigator 解析中心停點；列車頭可跨越站界到相鄰 edge，車體中心仍落在原月臺中心，不寫入超出 edge 的 offset。
+- 來源工作樹紀錄：Release build 0 warnings／0 errors；完整 Engine runner **170/170** 通過，包含上下行全程車實際停車中心回歸；Schema 8 sample round-trip 通過。此數字不代表整合分支結果。
+- WPF runner 已執行，但在 full sample editor-720 的既有 `EDGE:PASS-002` 46.3° 示意突折停止；原生桌面／不同 DPI／8,000 秒連續播放仍未完成人工驗收。
+
+## V4.0.2 大型機場線 full sample（2026-09-20）
+
+- 新增 `samples/大型機場線-完整營運示範範例.mrtsim.json`，並保留既有 minimal sample。主要原始碼是測試專案內的 staged builder，JSON 為可載入輸出；minimal → 28 站完整鏈 → services → O20 pocket → O04 passing → O13 passing → timetable 共 7 個階段均先做 Structural／Operational gate。
+- 去識別化參考 `外部檔案參考/大型機場線_模擬參考.md` 固定本 synthetic scenario 的服務邊界：AIRPORT-DIRECT 為 O01↔O20，停 O01／O08／O11／O16／O20，不前往 O26；FULL-LINE 為 O01↔O26 全停，SECTION 為 O01↔O20。29.9 km 與 O01～O20 23.8 km 僅是 synthetic aggregate targets；逐站距離分配、platform／train 尺寸、性能、dwell、facility 幾何／速限、port side 與 dispatch offset 均不是任何正式路線資料。
+- O20 以 topology-native 站後袋式儲車軌完成 SECTION 與 AIRPORT-DIRECT 同 `VehicleId`、不同 `ServiceRunId` 的實體換端；O04／O13 各有上下行 PassingFacility，共 4 條通過 edge。O04 同時驗證 SECTION 越行，AIRPORT-DIRECT 依序於 O04／O13 兩次越行；普通車均等 express 車尾淨空及 resource 釋放後才離站。
+- 代表班表把尖峰 FULL-LINE＋SECTION 與離峰 FULL-LINE＋AIRPORT-DIRECT 合併到同一 regression runtime，只為覆蓋多服務、越行與折返，不是正式同時營運班表。deterministic 事件：DIRECT 於 624.5／676.3 秒、1,252.0／1,303.8 秒提出／完成 O04、O13 越行，1,858.1 秒抵達 O20 pocket，2,600.0 秒換為上行；SECTION 於 3,124.5／3,176.3 秒提出／完成 O04 越行，4,704.5 秒抵達 O20 pocket，5,600.0 秒換為上行，7,446.5 秒退出。
+- 來源工作樹驗證紀錄（非整合結果）：Release build 0 warnings／0 errors；Engine runner **161/161**、0 失敗（含新增 focused 15/15 與 14-sample 有界 gate）。WPF runner 的既有範例檢核通過，但 full sample editor-720 在 `EDGE:PASS-002` 回報 55.3° 示意突折，因此不能宣稱 14 份 sample 的 WPF runner 全數通過；此顯示層問題不改變 physical port metadata 或 Engine topology 驗證。
+- 尚未完成的人工驗收：原生 WPF 不同 DPI、8,000 秒連續播放、O04／O13 越行與 O20 pocket 換端的關鍵畫面目視。本節的自動 WPF runner 不代表上述桌面人工驗收已完成；sample 也不能用於工程設計、號誌設計、安全認證或正式時刻表。
+
+> 以下 Phase 1 數據是 `codex/playback-performance-phase1` 來源工作樹的獨立驗證紀錄；合併後尚未重跑，不代表本次 4.0.2 整合分支已通過相同閘門。
+
+## 長時間播放效能 Phase 1：修改前基準（2026-09-20）
+
+以使用者指定的真正 full sample `D:\AI\codex\mrt-route-simulator\samples\臺中機場捷運-完整營運示範範例.mrtsim.json` 執行獨立 benchmark runner；該檔案目前位於原工作樹，不在此 Phase branch 內：
+
+```powershell
+dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Performance.csproj -c Release --no-restore -- "D:\AI\codex\mrt-route-simulator\samples\臺中機場捷運-完整營運示範範例.mrtsim.json" 8000
+```
+
+基準 runner 先建立與 WPF 相同的 topology `SimulationWorldOptions`（`Full` trajectory retention），再量測單一 ActualWorld、現行雙 world `SimulationSession.AdvanceTo(8000)` 與現行 `PreparePlannedTimeline`。本次在暫時 e57d16b 基準 worktree 以同一絕對 sample 路徑重跑；wall time 不是硬 timing unit test，修改後以同一 sample 比較。
+
+| 項目 | 修改前基準 |
+|---|---:|
+| ActualWorld requested / current time | 8000 / 8000 s |
+| ActualWorld elapsed | 220,220.04 ms |
+| ActualWorld fixed ticks / ms per tick | 80000 / 2.75275 ms |
+| ActualWorld trajectory / safety / events | 204736 / 113646 / 621 |
+| ActualWorld working-set delta / managed-memory delta | +88,854,528 / +71,515,280 bytes |
+| 現行雙 world `AdvanceTo(8000)` elapsed / ms per tick | 307,819.40 / 3.84774 ms |
+| 雙 world actual trajectory / planned trajectory | 204736 / 200977 |
+| 雙 world actual safety / actual events / planned events | 113646 / 621 / 662 |
+| Planned requested duration | 12246.50 s |
+| Planned timeline elapsed / last event | 83,442.88 ms / 7398.8 s |
+| Planned trajectory / events | 200977 / 662 |
+
+基準 runner 的 planned world 在封存 `PlannedEvents`／`PlannedTrajectory` 後立即 reset，因此不再把 reset 後的 `PlannedWorld.SafetyHistory.Count = 0` 當成 planned safety metric；本表只列有效的 planned trajectory／event 封存結果。
+
+本基準確認目前 WPF 路徑的兩項待修來源：播放 API 會同時推進 ActualWorld 與 PlannedWorld；planned timeline 會依固定預估 duration 推進，而不是以 `SimulationWorld.IsComplete` 為完成條件。`tests/MrtRouteSimulator.Performance` 會保留作為後續比較用 diagnostic，不將 wall time 寫成穩定性 unit test。
+
+## 長時間播放效能 Phase 1：修改後結果（2026-09-20）
+
+同一 benchmark、同一絕對 sample 路徑與 `AdvanceTo(8000)` 範圍重跑；另加入實際 WPF playback 所用的 `AdvanceActualTo` measurement：
+
+| 項目 | 修改後結果 |
+|---|---:|
+| ActualWorld requested / current time | 8000 / 8000 s |
+| ActualWorld elapsed / fixed ticks / ms per tick | 256,219.26 ms / 80000 / 3.20274 ms |
+| ActualWorld trajectory / safety / events | 42742 / 11401 / 621 |
+| ActualWorld working-set delta / managed-memory delta | +31,924,224 / +9,575,008 bytes |
+| 實際 playback `AdvanceActualTo(8000)` elapsed / ms per tick | 254,826.85 / 3.18534 ms |
+| 實際 playback trajectory / safety / events | 42742 / 11401 / 621 |
+| 實際 playback 後 PlannedWorld current time | 0 s（未被推進） |
+| 舊雙 world `AdvanceTo(8000)` elapsed / ms per tick | 338,864.96 / 4.23581 ms |
+| 雙 world actual trajectory / planned trajectory | 42742 / 200977 |
+| 雙 world actual safety / actual events / planned events | 11401 / 621 / 662 |
+| Planned max duration（latest dispatch + baseline × 2） | 14462.00 s |
+| Planned actual completion / last event | 7398.8 / 7398.8 s |
+| Planned trajectory / events | 200977 / 662 |
+
+本輪修正後 runner 會輸出 `samplePath`／`sampleSource`，避免只看檔名而誤用 branch 內另一份 topology sample；planned safety history 不列入，因為 timeline 封存後 planned world 會 reset。
+
+相較修改前，同一 full sample 的互動 ActualWorld trajectory 由 204736 降至 42742（約少 79.1%），歷史 safety observation 由 113646 降至 11401（約少 90.0%）；working-set delta 由約 88.9 MB 降至約 31.9 MB，managed-memory delta 由約 71.5 MB 降至約 9.6 MB。wall time 受 JIT／GC／OS 與 retention policy 影響，這次單 world elapsed 並未宣稱改善；Phase 1 的主要效益是移除正常 playback 的 planned 推進及控制歷史資料成長。實際 playback path 不再推進 PlannedWorld；固定 tick 仍為 0.1 秒，未改 physics、occupancy、moving block、rear-clear 或 safety decision。
+
+本 Phase 已完成：
+
+- `SimulationSession.AdvanceActualTo()` 與 WPF ActualWorld-only playback。
+- `PreparePlannedTimelineUntilComplete(maxDurationSeconds)`，以 `SimulationWorld.IsComplete` 為完成條件，超過 fail-safe 會回報 validation error；記錄 `PlannedTimelineCompletedAtSeconds`。
+- topology interactive ActualWorld `Decimated(0.5)` trajectory 與 `Decimated(1.0)` safety history；planned chart 仍使用 Full retention。
+- 獨立 benchmark runner 與 retention／completion regression。
+
+本 Phase 的 CSV／區間統計／圖表目前仍消費 interactive ActualWorld 的 0.5 秒樣本加事件與狀態轉折；尚未提供獨立的 0.1 秒 Full trajectory offline export。這是刻意保留的輸出精度邊界，已列入 `TODO.md` 的 `V4-PLAYBACK-PERF-PHASE4`，不把互動留存誤稱為完整高解析歷史。
+
+尚未解決（刻意留給後續階段）：
+
+- Engine 單 tick < 1.67 ms 的 hot-path 優化。
+- simulation worker／single-writer background task／immutable playback snapshot。
+- adaptive UI render FPS、hidden-tab lazy rendering、incremental result accumulator。
+
+最終驗證閘門：
+
+- `dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore`：0 warnings／0 errors。
+- `dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore`：150/150 通過，0 失敗；包含 fixed 0.1 s、moving block、collision、turnback、passing、rear-clear、ActualWorld-only、completion、delayed/resource operation 與 safety retention regression。
+- `dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore`：PASS WPF visual rules；完整 sample matrix、計畫時間軸、雙向預覽、速度圖、CSV／PNG／PDF 輸出通過。
+- `tests/MrtRouteSimulator.Performance` Release build／benchmark：通過；`git diff --check`：通過。
+- 本輪未執行 60× 原生桌面連續播放人工 smoke；這仍屬 Phase 2／桌面驗收範圍，不以離屏 WPF runner 代替。
+## O04 越行側線外觀與上下行鏡射（2026-09-25）
+
+- 原大型範例的 O04 下行側線長 2,070 m，繪圖從 O03 後方一路偏離正線，形成長楔形；上下行月臺中心到實體匯入節點僅 90 m。只改畫線會讓列車在接點跳離圖上的側線。
+- 原工作樹的可重建大型範例已將 O04 上下行分別重建為 480 m 的平行正線／側線：140 m 月臺落在 offset 170–310 m，停點在 240 m；岔出與匯入節點各距月臺中心 240 m。相鄰邊分段後總里程維持不變，`SimulationWorld`、車輛 cursor 與固定 0.1 秒步進未改。WPF 大型圖以月臺中心前 240 m 開始側線 Y 過渡，並在實體出口節點回到正線；X 仍取 `StationChainageProjection` 的 edge-local 映射。
+- 大型樣本 WPF 診斷檢查 O04／O13 接軌連續、月臺與停點對位、上下行軌距鏡射，以及 O04 月臺中心前後 240 m 的實體節點與畫面座標。播放分支 Release build 0 警告／0 錯誤、Engine 148/148、完整 WPF runner PASS；用重生的正式大型樣本執行 60× 診斷 PASS，觀測 58.9×、最大輸入間隔 42.7 ms，並確認播放期間沒有 `StationStopViolation`。離屏截圖顯示 O04 上下行短分岔對稱；原生桌面與不同 DPI 仍需人工確認。
+- 原工作樹最初完整 Engine runner 為 167/170，full station chain、完整情境及 V3.3 sample 均有 `StationStopViolation`。軌跡顯示停點前反覆煞車／再加速，持續全煞開始過晚。現在控制器預視下一個固定步進，並在停站煞車啟動後保持煞車；保留 65 m 設定及正常速度連續性。原工作樹 Release build 0 警告／0 錯誤、完整 Engine runner **170/170**，包括先前 8.58／9.3 km/h 紀錄的 V3.3 範例。
+
+> 本節數字與 60× 診斷均為 `codex/playback-parallel-architecture` 等來源工作樹紀錄；整合分支尚未重跑，不能視為 4.0.2 整合驗證結果。
+
+## O03→O04 路線圖速度失真修正（2026-09-25）
+
+- 根因在 WPF `StationSchematicPresentation.ApplyChainage` 的大型圖例外壓縮：O04 實體越行側線長 2,070 m，畫面卻把兩端強制放在 O04 站心左右約 32 px；前一段 O03→分岔點僅 200 m，反而承擔大部分站間畫面距離。`StationChainageProjection` 的 O03 2.007K、O04 4.277K、O05 4.877K 本身連續，不能改動實體里程或列車 cursor 來修這個畫面問題。
+- 移除越行軌端點的人工壓縮，軌道和列車標記按 edge-local offset 使用同一畫面幾何；物理長度、0.1 秒步進和安全計算不變。
+- 大型樣本的 WPF 畫面規則現以所有明確站心的來源里程檢查站名與月臺 X 座標，檢查每個月臺中心對應站心，逐段檢查下行主線實體端點的畫面 X 與顯示里程，並確認相鄰 edge 接點連續。舊規則將 O03 後 200 m 的分岔點移到 O04 旁約 27 px，新規則可由端點投影偏差檢出。
+- Release build 0 警告／0 錯誤，Engine 148/148、完整 WPF runner PASS；大型樣本 WPF 60× 診斷 PASS，觀測 58.8×、輸入最長間隔 48.8 ms。這是離屏測試結果，原生桌面與不同 DPI 尚未人工驗收。
+
+## O04→O05 路線圖視覺跳躍修正（2026-09-24）
+
+- 原因：大型機場線存檔的 O04 實體節點為來源里程 4,467 m、O05 為 5,067 m，兩站實體軌道為 600 m；播放分支的顯示投影卻從 O04 越行月臺在長邊上的 320 m 停點推得 2.527K，將 O04→O05 畫成 2,350 m。原樣本 O04 下行側線長 2,070 m，停點離站點仍有 1,750 m，使圖上先幾乎不動、再快速跨到 O05。
+- 顯示里程現在使用存檔提供的明確站心位置，並以起點站 190 m 作零點；O04 顯示 4.277K、O05 顯示 4.877K。越行正線以所屬路線的進出邊和車站中心投影，月臺中心同站對齊。實體 edge 長度、列車 cursor、安全距離和固定 0.1 秒 tick 均未更動。
+- 原工作樹的可重建 builder 與大型樣本只調整 O04 四個月臺：下行停點 320→1,980 m，上行 320→310 m；其餘欄位和原有未提交設定保留。原檔與候選檔逐行比對僅此四個月臺欄位組不同，重產後 SHA-256 相同。播放分支 WPF 診斷檢查站心、O04 月臺靠近站點、正線與側線出站接軌連續；60× 約 58.8×、輸入最大間隔 38.4 ms。Release build 0 警告／0 錯誤，播放分支 Engine 146/146、完整 WPF runner PASS。
+- 原工作樹的 65 m 進站設定在本次煞車修正前產生 41 筆 `StationStopViolation`；此事件表示列車以非零速度觸及停點，不能直接當成車體超出月臺的筆數。控制器原本在進站限速後短暫恢復加速，只檢查目前煞停包絡，沒有預看下一個 0.1 秒步進可能造成的晚煞；V3.3 完整範例因此曾以 8.58／9.3 km/h 觸及停點。現在使用共用的下一步煞停預測，並只在觸點速度至少 3 km/h 時記錄違規，低速觸點仍維持煞車與到站流程。以同一份 65 m 大型樣本推進 8,000 秒，41→0 筆違規且全車完成，耗時 8.92 秒；V3.3 完整範例 7→0 筆。Release build 0 警告／0 錯誤，Engine 148/148、完整 WPF runner PASS；修正後大型 WPF 診斷 60× 觀測 58.9×、輸入最長間隔 42.4 ms。原生桌面與不同 DPI 尚未人工驗收。
+
+## 路線圖填滿畫面、33 ms 刷新與列車點選（2026-09-24）
+
+- 模擬分頁的路線圖區域改為填滿剩餘高度，畫布依可視高度調整；小視窗保留必要的垂直捲動，站名與月臺版面檢核為零警告。運行列車標記可點選，會選取對應 VehicleId 並開啟「完整行程速度曲線」。
+- UI timer 原已是 33 ms；本輪將 worker 畫面發布及路線圖自身節流改為 33 ms，並解除路線圖被列車狀態列 50 ms 節流包住的限制。列車狀態列維持 50 ms、速度圖維持 250 ms；Engine 固定 0.1 秒 tick 未變。
+- 28 站大型樣本 720 px WPF 診斷：60× 播放 3.07 秒推進 180.4 模擬秒，觀測 58.8×；UI 輸入最大間隔 36.1 ms，固定配線重建次數 3→3。自動點選運行列車後，速度圖分頁及車輛選單均對應該車。此為測試視窗結果，原生桌面與不同 DPI 尚未人工驗收。
+- Release build：0 warnings／0 errors；Engine：146/146；完整 WPF runner：PASS；`git diff --check`：PASS。
+
+## 28 站大型存檔播放與路線圖修正（2026-09-24）
+
+- 以 `D:\AI\codex\mrt-route-simulator\samples\大型機場線-完整營運示範範例.mrtsim.json` 驗證。列車安全距離原先對同一車對重跑 graph search，且每個 0.1 秒 tick 重找不變的有向節點路徑；現以基礎設施實例及接軌 traversal 為鍵快取橋接長度，保留動態車頭／車尾局部距離計算。600 秒 benchmark 由 47.83 秒降至 1.69 秒，事件 SHA-256 同為 `CEA84C253B4593757E504FA57C6FBAF8D34067284322A26F3073CCEE020DB87E`。
+- 同一大型存檔推進 8,000 秒／80,000 tick，7.98 秒完成且 `worldComplete=True`。WPF 顯示視窗的 60× 診斷在約 3.07 秒實際時間推進 180.2 秒，觀測約 58.7×；固定配線重建次數維持 1 次，輸入計時器最長間隔 203.3 ms。此為測試視窗結果，仍需在使用者桌面與 DPI 設定下人工確認操作感。
+- 路線圖採原版的大型路線最小站距、水平捲動、獨立路線／即時列車／速度曲線分頁，並修正 O04／O13 重複站名、平台編號與合法越行接軌的示意位置。大型樣本診斷檢查每站唯一標籤、版面警告為零、無配線待修警告、60× 推進及固定配線不重建；輸出 `large-playback-route.png` 供人工檢視。
+- Release build：0 warnings／0 errors；Engine：146/146；完整 WPF runner：PASS；`git diff --check`：PASS。大型 sample 位於另一個工作樹，未將該工作樹未提交的 JSON 複製入本分支。
+
+## Playback 架構補強與路線圖刷新（2026-09-23）
+
+- 模擬路線圖獨立採 100 ms 刷新；拓撲、軌道、月台與標籤依專案及畫布尺寸快取，更新時只替換列車標記。列車狀態與時鐘仍採 50 ms、其他圖表 250 ms。WPF 測試確認固定配線在同尺寸時重用、尺寸改變時重建；尚未做原生桌面連續播放的主觀流暢度驗收。
+- B2 已補時刻表、V1/V2 比較的新增事件累積，以及區間／全程統計的新增事件與軌跡累積。完整拓撲與尾軌折返樣本推進至 3,600 秒後，時刻表、V1/V2、區間與全程統計均與既有完整分析一致；區間統計的控制事件使用追加索引與時間二分查詢，不在每次顯示時重掃事件歷史。
+- 修正計畫時間軸接近 2,536 秒終點時，浮點誤差使背景迴圈反覆要求不足 0.1 秒步進的死迴圈。完整 WPF runner 現已通過長行程、全分頁與 CSV／PNG／PDF 輸出；舊測試改為先切入延遲刷新的結果分頁再驗證。
+- Release build：0 warnings／0 errors；Engine：146/146；完整 WPF runner：PASS；`git diff --check`：PASS。Engine 新測試檢查 BasicPhysics 閉式煞車包絡與原固定步進積分一致。
+- 代表性 `V4.0.0-完整拓撲執行驗證範例` 有 7 車次。ActualWorld 推進 8,000 模擬秒三次，wall elapsed 2.39／2.40／2.47 秒，總平均 0.030／0.030／0.031 ms/tick；13442 trajectory、3282 safety、99 events，working set 終值約 77–78 MiB。三次事件序列 SHA-256 均為 `4F4F67E105A92544BF56FF34BD15E3A952FB494975678F5C6527A7A1BC0C22B2`。列車約 2,610 秒已全部完成，因此總平均包含後段空載 tick，不可當作運行中單 tick 成本。這個工作樹沒有 28 站臺中機場線 full sample，不能以此數值代表該大型路線。
+- 計畫模式同範例推進 2,536 秒的單獨量測約 3.10 秒；完整 WPF runner 中的計畫時間軸也順利完成。依目前樣本 Engine 耗時遠低於 60× 的 1.667 ms/tick 門檻，暫不啟動 C 階段 tick 平行化；需先取得大型樣本及原生桌面 profile 才能判定真正瓶頸。
+- 仍未完成原生桌面 1×／10×／30×／60× 操作、不同 DPI、UI FPS／最長卡頓實測及 O04／O13／O20 畫面驗收；目前無法宣稱路線圖已達主觀流暢度目標。
+
+## Playback worker 與分級刷新第一階段紀錄（2026-09-23，後續結果見上節）
+
+- B1 已將實際 `SimulationWorld` 交由單一播放 worker 擁有；命令佇列依序且可靠，UI frame 使用容量 1、丟棄舊 frame 的 bounded channel。WPF 消費 immutable frame，不再直接讀取 worker 正在修改的 world；0.1 秒 Engine tick 及拓撲安全流程未改。
+- 計畫時間軸改由獨立背景 worker 建立 artifact；實際播放可在計畫運算期間啟動。工作者支援播放／暫停／重設、倍率與安全模式命令、障礙物事件、關閉與換檔清理，並以 generation ID 隔離舊 frame。
+- B2 目前部分完成：事件、軌跡與安全歷史以獨立 cursor 只擷取新增資料，資源 Reserve／Release 占用由 accumulator 增量維護。時刻表、區間／全程統計及 V1/V2 比較仍在資料變更且分頁需要時呼叫既有完整分析，尚未達到所有結果 `O(new data)`。
+- B3 加入差分列更新、事件 append 上限 300、隱藏分頁延遲刷新與分級刷新週期；播放狀態 tooltip 提供 worker、結果累加及 UI render 計時資訊。拓撲互動軌跡採 0.2 秒留存間隔，Physics 仍逐一執行 0.1 秒 tick；本輪未驗證高解析離線匯出。
+- Release build：0 warnings／0 errors；Engine：145/145 通過；WPF playback worker targeted runner：PASS，涵蓋 latest-frame、可靠命令、固定步進、增量資源、暫停／重設及 worker 清理。
+- 完整拓撲 WPF 長行程 runner 需背景計算 2,536 秒計畫時間軸。本輪執行超過 700 秒 CPU 仍未完成，之後中止；WPF 完整 runner 與 CSV／PNG／PDF 長情境輸出 runner 均未完成，不宣稱通過。視窗／DPI 桌面人工驗收、1×／10×／30×／60×播放及 8,000 秒前後效能基準亦未執行。
+- B2 全結果增量化與代表性效能基準列為後續工作。C 階段 Engine tick 平行提案／leader 查找尚未實作；需待 B 階段完整驗收並 profile 確認 Engine 熱點後再評估，以維持 topology 資源仲裁與 deterministic single-writer 行為。
 ## 大型 sample builder、PDF 分頁與 GPT-use 乾淨整合（2026-09-19）
 
-- 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、臺中主要站簡化 sample 與 `.github/pull_request_template.md`。
+- 本節結果來自 `codex/integrate-large-route-clean`：以最新 `origin/GPT-use` 為基底，非直接 merge 舊分支；保留 13 個 Schema 8 sample、大型機場線主要站簡化 sample 與 `.github/pull_request_template.md`。
 - 本次重新執行 `dotnet build MrtRouteSimulator.slnx -c Release`、Engine runner、WPF runner 及 `git diff --check`；以下數字是本次整合分支實際結果，不沿用 `a61d4bc` 的舊執行紀錄。
 
 - 速度圖按 VehicleId 串接上下行及折返，保留計畫預覽／實際截至目前的區別；重設及換檔不保留舊列車。移動閉塞仍可獨立按方向、配對及時間篩選，列車退出後可查歷史。
 - 尾軌返回反向終點月台後產生到站、停站及出站事件；0 秒停站仍等待接續班表，正常停站案例須滿足反向停站時間。
 - 時刻表、區間及比較使用結構化站號／月台識別；TrainCenter 車頭經過中心但尚未到站時，不提早完成區間。上行顯示里程、預覽結果初始化及全程時間摘要一併修正。
 - Release build：0 warnings／0 errors；Engine：145/145，0 失敗；WPF runner：PASS；`git diff --check`：PASS。完整 WPF runner 包含 13 個範例、720／1200px 速度圖、閉塞方向篩選、完整拓撲及 TrainCenter 範例推進 3600 秒，以及 CSV／PNG／PDF 輸出。
-- 臺中主要站簡化 sample 經本次整合修正為可驗證的 minimal baseline：直達模式的 O26 為合法終點停靠，topology 內明列 10 段主線 `directedConnections`；仍只使用 synthetic test values，不宣稱正式路線資料。
+- 大型機場線主要站簡化 sample 經本次整合修正為可驗證的 minimal baseline：直達模式的 O26 為合法終點停靠，topology 內明列 10 段主線 `directedConnections`；仍只使用 synthetic test values，不宣稱正式路線資料。
 - `TopologyScenarioBuilder`／`TopologyScenarioValidation` 已加入可重用的 minimal baseline → station chain → service pattern → turnback → passing → timetable 分階段流程；Structural／Operational smoke gate 與 3 組 regression tests 通過。`samples/README.md` 已補 Scenario Manifest 與正式／synthetic 資料界線。
 - Legacy port migration 已加入明確 edge assignment API、缺資料盤點與 WPF 遷移引導；選擇相容讀取時會明確保留「方向尚未確認」狀態，不從示意位置猜測側別。Engine migration regression 已加入，完整桌面互動仍待驗收；完整 Engine runner 為 145/145。
 - 輸出證據位於 `artifacts/output-qa/`。PDF 分頁改為各頁重繪標題、圖例、座標軸與頁內標籤；`complete-diagram.pdf` 以 `pdfinfo` 確認為 A4 兩頁，並以 Poppler 渲染檢查白底、頁面標題、座標軸及跨頁列車標籤未被切斷。頁內同點標籤重疊仍屬來源圖表的既有呈現限制。
@@ -233,7 +392,7 @@
 
 ## 驗收界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，目前尚未完成的 V4 交付項目為 `V4-LEGACY-PORT-MIGRATION`、`V4-SAMPLE-TAICHUNG-AIRPORT-01` 與 `V4-UI-TRACK-DIAGRAM-MANUAL-01`。PDF 分頁與通用大型 sample scenario builder 已完成；桌面項目仍只完成部分抽查，尚待不同 DPI、折返／交會關鍵畫面與連續播放驗收。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統。Schema 8、physical facility traversal、occupancy／footprint、topology-native safety、V2 內部 Route 相依移除與已完成的 V4 UI／正式驗收均保留為歷史通過事項；依現行 `TODO.md`，目前尚未完成的 V4 交付項目包含 `V4-LEGACY-PORT-MIGRATION`、`V4-UI-TRACK-DIAGRAM-MANUAL-01` 及長時間播放效能 Phase 2～4。去識別化大型 sample scenario builder 已完成 Engine gate，但 full sample WPF editor-720 尚有 `EDGE:PASS-002` 示意突折；桌面項目仍只完成部分抽查，尚待不同 DPI、折返／交會關鍵畫面與連續播放驗收。Phase 1 的來源分支建置、測試與 benchmark 紀錄也須在本次整合後重新執行，才能作為整合分支的驗證證據。
 
 以下屬遠期修正或非產品目標：
 

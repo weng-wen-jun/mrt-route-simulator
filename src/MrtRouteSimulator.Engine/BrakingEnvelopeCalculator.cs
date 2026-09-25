@@ -27,6 +27,17 @@ public static class BrakingEnvelopeCalculator
             ValidatePositive(jerkMetersPerSecondCubed, "Jerk");
         }
 
+        // BasicPhysics has a constant deceleration at every fixed substep. Sum the same
+        // trapezoids directly instead of iterating hundreds of preview steps on every tick.
+        if (!jerkLimited)
+        {
+            return CalculateConstantDeceleration(
+                speedMetersPerSecond,
+                accelerationMetersPerSecondSquared,
+                brakingMetersPerSecondSquared,
+                timeStepSeconds);
+        }
+
         var speed = speedMetersPerSecond;
         var acceleration = accelerationMetersPerSecondSquared;
         var distance = 0d;
@@ -53,6 +64,56 @@ public static class BrakingEnvelopeCalculator
         }
 
         return new BrakingEnvelopeResult(distance, duration, acceleration);
+    }
+
+    private static BrakingEnvelopeResult CalculateConstantDeceleration(
+        double speed,
+        double initialAcceleration,
+        double braking,
+        double timeStep)
+    {
+        if (speed <= SpeedTolerance)
+        {
+            return new BrakingEnvelopeResult(0, 0, initialAcceleration);
+        }
+
+        var speedChangePerStep = braking * timeStep;
+        if (speedChangePerStep == 0)
+        {
+            throw new InvalidOperationException("動態煞車包絡線未能在合理步數內收斂至停止。");
+        }
+
+        if (double.IsPositiveInfinity(speedChangePerStep))
+        {
+            return new BrakingEnvelopeResult(Math.Max(0, speed * 0.5 * timeStep),
+                timeStep, -braking);
+        }
+
+        var requiredSteps = Math.Ceiling((speed - SpeedTolerance) / speedChangePerStep);
+        if (requiredSteps > MaximumSteps)
+        {
+            throw new InvalidOperationException("動態煞車包絡線未能在合理步數內收斂至停止。");
+        }
+
+        var steps = Math.Max(1, (int)requiredSteps);
+        while (steps > 1 && speed - (steps - 1) * speedChangePerStep <= SpeedTolerance)
+        {
+            steps--;
+        }
+
+        while (speed - steps * speedChangePerStep > SpeedTolerance)
+        {
+            if (++steps > MaximumSteps)
+            {
+                throw new InvalidOperationException("動態煞車包絡線未能在合理步數內收斂至停止。");
+            }
+        }
+
+        var finalSpeed = Math.Max(0, speed - steps * speedChangePerStep);
+        var distance = timeStep * (steps * speed
+            - speedChangePerStep * steps * (steps - 1) * 0.5
+            + (finalSpeed - speed) * 0.5);
+        return new BrakingEnvelopeResult(Math.Max(0, distance), steps * timeStep, -braking);
     }
 
     internal static double MoveToward(double current, double target, double maximumChange)

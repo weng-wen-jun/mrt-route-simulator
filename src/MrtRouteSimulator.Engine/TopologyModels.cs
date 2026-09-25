@@ -133,8 +133,8 @@ public sealed record TurnbackOperationDefinition
 }
 
 /// <summary>
-/// 站內待避／越行的正式實體分歧路徑。普通車維持 mainline stop，快速車以同一個
-/// topology cursor 經 Traversals 繞過月台，再接回同一條 ServiceRoute；絕不使用 virtual track。
+/// 站內待避／越行的正式實體分歧路徑。普通車依 ServiceRoute 駛入 LocalPlatformId 所在的側線，
+/// 高等列車以同一個 topology cursor 經 Traversals 的正線通過，再接回同一條 ServiceRoute；絕不使用 virtual track。
 /// </summary>
 public sealed record PassingFacilityDefinition
 {

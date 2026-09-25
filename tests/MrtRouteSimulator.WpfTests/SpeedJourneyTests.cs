@@ -18,8 +18,23 @@ internal static class SpeedJourneyTests
         {
             var path = Path.Combine(root, "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
-            Invoke(window, "ConfigureTopologyProjectForPlayback", document, true);
-            var session = (SimulationSession)Field(window, "_v2Session")!;
+            WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
+            Console.WriteLine("  長行程測試專案載入完成");
+            // Schema 8 loads now prepare the complete planned timeline inside the
+            // isolated candidate session before the worker is swapped in.  The
+            // legacy background-task field is therefore legitimately null here;
+            // keep the diagnostic compatible with both preparation paths.
+            var plannedTask = Field(window, "_plannedTimelineTask") as Task;
+            var plannedDuration = (double)Field(window, "_playbackDurationSeconds")!;
+            Console.WriteLine($"  計畫範圍 {plannedDuration:0.0} 秒；背景工作狀態 {plannedTask?.Status.ToString() ?? "候選準備已完成"}");
+            if (plannedTask is not null)
+            {
+                _ = plannedTask.ContinueWith(task => Console.WriteLine($"  計畫背景工作結束：{task.Status}"), TaskScheduler.Default);
+            }
+            WpfTestWait.WaitForPlannedTimeline(window);
+            Console.WriteLine("  計畫時間軸完成");
+            var worker = (SimulationPlaybackWorker)Field(window, "_playbackWorker")!;
+            var plan = (PlannedTimelineArtifact)Field(window, "_plannedTimelineArtifact")!;
             var selector = (ComboBox)window.FindName("SpeedProfileRunComboBox");
             selector.SelectionChanged += (_, _) => Invoke(window, "DrawV2SpeedProfile");
             var source = (TextBlock)window.FindName("SpeedProfileSourceText");
@@ -32,20 +47,23 @@ internal static class SpeedJourneyTests
             Layout(canvas, 720);
             Invoke(window, "DrawV2SpeedProfile");
             Require(source.Text.StartsWith("計畫預覽"), $"未播放時應顯示同會話的計畫預覽：{source.Text}, {canvas.ActualWidth}x{canvas.ActualHeight}, {selector.SelectedItem}。");
-            CheckJourney(canvas, session.PlannedTrajectory.Where(s => s.VehicleId == "TAIL-01").ToArray());
-            var planCount = session.PlannedTrajectory.Count;
-            session.AdvanceTo(1201);
+            CheckJourney(canvas, plan.Trajectory.Where(s => s.VehicleId == "TAIL-01").ToArray());
+            var planCount = plan.Trajectory.Length;
+            WpfTestWait.Advance(window, 1201);
+            Console.WriteLine("  實際推進至 1201 秒完成");
             Invoke(window, "DrawV2SpeedProfile");
             Require(source.Text == "實際（截至目前）", "剛發車的實際資料不可標示為已完成全程。");
-            session.AdvanceTo(3600);
-            Require(session.ActualWorld.Trajectory.Where(s => s.VehicleId == "TAIL-01")
+            WpfTestWait.Advance(window, 3600);
+            Console.WriteLine("  實際推進至 3600 秒完成");
+            var frame = WpfTestWait.LatestFrame(window);
+            Require(frame.Trajectory.Where(s => s.VehicleId == "TAIL-01")
                 .Select(s => s.ServiceRunId).Distinct().Count() >= 2, "情境必須包含同車折返接續。");
             foreach (var width in new[] { 720, 1200 })
             {
                 Layout(canvas, width);
                 Invoke(window, "DrawV2SpeedProfile");
                 Require(source.Text == "V2 實際", "播放後應使用實際軌跡。");
-                CheckJourney(canvas, session.ActualWorld.Trajectory.Where(s => s.VehicleId == "TAIL-01").ToArray());
+                CheckJourney(canvas, frame.Trajectory.Where(s => s.VehicleId == "TAIL-01").ToArray());
                 Save(canvas, Path.Combine(root, "artifacts", "output-qa", $"tail-complete-speed-{width}.png"));
             }
             foreach (var id in selector.Items.Cast<string>().ToArray())
@@ -55,13 +73,12 @@ internal static class SpeedJourneyTests
                 Require(canvas.Children.OfType<Polyline>().Count() == 2, $"列車 {id} 的速度與速限線缺失。");
             }
             var directions = (ComboBox)window.FindName("SafetyDirectionComboBox");
+            ((TabControl)window.FindName("WorkspaceTabControl")).SelectedItem = window.FindName("SafetyTabItem");
             var statuses = (ComboBox)window.FindName("SafetyStatusComboBox");
             statuses.SelectedIndex = 0;
-            var observation = session.ActualWorld.SafetyHistory.First();
-            typeof(MainWindow).GetField("_playbackTimeSeconds", BindingFlags.Instance | BindingFlags.NonPublic)!
-                .SetValue(window, 3600d);
+            var observation = frame.SafetyHistory.First();
             directions.SelectedIndex = 0;
-            Invoke(window, "UpdateV2PlaybackView");
+            Invoke(window, "UpdateV2PlaybackView", true);
             Require(((TextBlock)window.FindName("OneWaySummaryText")).Text.Contains("V2 實際平均"),
                 "已完成實際車次不可顯示尚無完成行程。");
             Require(((TextBlock)window.FindName("CycleSummaryText")).Text.Contains("已完成列車平均"),
@@ -84,22 +101,29 @@ internal static class SpeedJourneyTests
                 Require((bool)Invoke(window, "MatchesSafetyFilters", observation with { Direction = direction })!, "閉塞同方向必須通過篩選。");
                 Require(!(bool)Invoke(window, "MatchesSafetyFilters", observation with
                 { Direction = direction == TrainDirection.Outbound ? TrainDirection.Inbound : TrainDirection.Outbound })!, "閉塞另一方向必須排除。");
-                Invoke(window, "UpdateV2PlaybackView");
+                Invoke(window, "UpdateV2PlaybackView", true);
                 Require(pairs.Items.Cast<string>().All(key => key.Contains(direction == TrainDirection.Outbound ? "下行" : "上行")),
                     "歷史配對選單不可混入反向資料。");
             }
             selector.SelectedItem = "TAIL-01";
-            session.Reset();
+            WpfTestWait.Wait(worker.ResetAsync());
+            Invoke(window, "UpdateV2PlaybackView", true);
             Invoke(window, "DrawV2SpeedProfile");
-            Require(source.Text.StartsWith("計畫預覽") && session.PlannedTrajectory.Count == planCount,
+            Require(source.Text.StartsWith("計畫預覽") && plan.Trajectory.Length == planCount,
                 "重設必須保留計畫預覽且不混入上一輪實際軌跡。");
-            Invoke(window, "ConfigureTopologyProjectForPlayback", StationLayoutTemplateService.Build(StationLayoutTemplateKind.SideTwoTracks), true);
+            WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", StationLayoutTemplateService.Build(StationLayoutTemplateKind.SideTwoTracks), true));
+            Console.WriteLine("  換檔驗證完成");
             Require(!selector.Items.Contains("TAIL-01"), "換檔不可殘留上一專案列車。");
             Require(selector.Items.Cast<string>().Distinct().Count() == selector.Items.Count,
                 "選車事件重入時不可重複加入列車。");
             Console.WriteLine("[通過] 全列車速度圖：計畫／實際、折返雙向接續、兩寬度、重設／換檔及閉塞方向獨立篩選");
         }
-        finally { window.Close(); }
+        finally
+        {
+            Console.WriteLine("  長行程 worker cleanup 開始");
+            WpfTestWait.Close(window);
+            Console.WriteLine("  長行程 worker cleanup 完成");
+        }
     }
 
     private static void CheckJourney(Canvas canvas, TrajectorySample[] samples)

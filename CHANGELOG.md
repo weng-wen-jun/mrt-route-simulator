@@ -2,7 +2,34 @@
 
 本檔依軟體版本由新到舊記錄。Git 標籤使用小寫 `v`，軟體畫面使用大寫 `V`。
 
+## V4.0.2 - 2026-09-20
+
+### 三個工作樹整合與播放穩定性（2026-09-25）
+
+- 整合大型機場線／O04 路線圖修正、播放效能 Phase 1 與 parallel playback worker 三個工作樹；保留 Schema 8 topology、固定 0.1 秒 Engine tick 與 topology-native `SimulationWorld` 作為唯一物理資料流。
+- 播放改由 single-writer worker 管理實際 world，使用 immutable latest-frame snapshot、可靠命令、背景計畫時間軸、增量結果累積與分級 UI 刷新；路線圖可獨立以 33 ms 更新，列車點選會導向對應的完整速度曲線。
+- O04／O13 越行顯示採實體 edge-local 投影，上下行採鏡射幾何；站中心、月台中心、岔出／匯入節點與相鄰 edge 接點納入 WPF 畫面規則檢核。進站控制器保留 65 m 設定，並忽略 3 km/h 以下停站觸點違規。
+
+### 去識別化大型路線範例
+
+- 新增可重建的大型機場線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
+- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`AIRPORT-DIRECT` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
+- 新增去識別化 Scenario Manifest，明確記錄 29.9 km／23.8 km synthetic aggregate target、O20 折返、O04／O13 passing、驗證時間點及尚未工程化的欄位。
+
+### 穩定性、輸出與介面
+
+- 納入大型 sample 的 Structural／Operational／Regression 分階段驗證、legacy track-port migration workflow，以及分頁 PDF 逐頁重繪，讓 Schema 8 topology、匯出與相容讀檔邊界有一致說明。
+- 主畫面播放路線顯示區高度由 260 調整為 320，讓較大型路線與列車標記有較完整的可視空間。
+- 不變更現行 Schema 8 topology、Schema 7 legacy 匯入／固定時刻表相容格式及 topology-native `SimulationWorld` 權威資料流。
+
+### 驗證與限制
+
+- 整合分支 Release build：0 warnings／0 errors；Engine runner **173/173**。完整 WPF runner 已通過範例載入、playback worker、速度行程與 CSV／PNG／PDF 輸出；大型 full sample 的定向 playback 診斷在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms。Engine-only benchmark 為 180 模擬秒／0.97 秒（約 185.46×），不代表 UI 播放倍率。
+- 原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 pocket 換端關鍵畫面的連續目視驗收仍未完成；這些限制保留在 `QA_REPORT.md`。
+
 ## V4.0.1 - 2026-08-31
+
+> 本節保留 v4.0.1 tag 後的工作區歷史紀錄；其中已驗收並納入對外版本的內容，以上方 V4.0.2 摘要為準。
 
 ### 工作區修正（2026-09-14，尚未發布）
 

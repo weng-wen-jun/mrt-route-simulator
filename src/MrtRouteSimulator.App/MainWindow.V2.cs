@@ -3,8 +3,10 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Microsoft.Win32;
 using MrtRouteSimulator.Engine;
 
@@ -12,16 +14,50 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
-    private SimulationSession? _v2Session;
-    private SimulationWorld? _v2World => _v2Session?.ActualWorld;
-    private SimulationWorld? _plannedWorld => _v2Session?.PlannedWorld;
+    private SimulationPlaybackWorker? _playbackWorker;
+    private PlaybackFrame? _latestPlaybackFrame;
+    private PlannedTimelineArtifact? _plannedTimelineArtifact;
+    private Task<PlannedTimelineArtifact>? _plannedTimelineTask;
+    private CancellationTokenSource? _plannedTimelineCancellation;
+    private long _lastRenderedPlaybackFrameSequence;
+    private readonly SimulationResultAccumulator _resultAccumulator = new();
+    private long _lastTrainRenderTimestamp;
+    private long _lastRouteRenderTimestamp;
+    private double _lastRouteRenderMilliseconds;
+    private int _routeStaticRebuildCount;
+    private TopologyRouteVisualCache? _topologyRouteVisualCache;
+
+    private sealed record TopologyRouteVisualCache(
+        InfrastructureGraphV4 Infrastructure,
+        TopologyProjectDocument? Project,
+        double Width,
+        double Height,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> EdgeGeometries,
+        StationChainageProjection? StationChainage,
+        int StaticChildCount);
+    private long _lastSafetyRenderTimestamp;
+    private long _lastChartRenderTimestamp;
+    private long _lastSegmentRefreshTimestamp;
+    private long _lastIntervalRefreshTimestamp;
+    private long _lastResourceRefreshTimestamp;
+    private long _lastComparisonRefreshTimestamp;
+    private long _lastSafetySummaryTimestamp;
+    private int _lastRenderedEventCount;
+    private double _lastAccumulatorMilliseconds;
+    private double _lastUiRenderMilliseconds;
+    private bool _timetableDirty = true;
+    private bool _segmentDetailsDirty = true;
+    private bool _comparisonDirty = true;
+    private bool _resourceOccupancyDirty = true;
+    private bool _intervalStatisticsDirty = true;
+    private bool _safetyHistoryDirty = true;
+    private bool _actualSummaryDirty = true;
     private ResolvedDispatchPlan? _v2DispatchPlan;
     private SimulationProjectDocument? _activeSimulationProjectDocument;
     private IReadOnlyList<SimulationEvent> _plannedTimetableEvents = [];
     private bool _v2Enabled;
     private bool _updatingSpeedProfileSelection;
     private double? _v2PlannedMinimumIntervalSeconds;
-
     public ObservableCollection<ServicePatternInputRow> ServicePatternRows { get; } = [];
 
     public ObservableCollection<SafetyRow> SafetyRows { get; } = [];
@@ -33,7 +69,7 @@ public partial class MainWindow
         ServicePatternRows.Clear();
         LoadSampleInputCatalogs();
         CoastingRatioTextBox.Text = "0.15";
-        ApproachDistanceTextBox.Text = "180";
+        ApproachDistanceTextBox.Text = "65";
         ApproachSpeedTextBox.Text = "0";
         ReactionTimeTextBox.Text = "1.5";
         OperationModeComboBox.SelectedIndex = 1;
@@ -41,13 +77,13 @@ public partial class MainWindow
         BrakingModeComboBox.SelectedIndex = 0;
     }
 
-    private void ConfigureV2World()
+    private async Task ConfigureV2WorldAsync()
     {
         _v2Enabled = EngineModeComboBox.SelectedItem is ComboBoxItem item
             && string.Equals(item.Tag?.ToString(), "V2RealisticOperations", StringComparison.Ordinal);
         if (!_v2Enabled)
         {
-            _v2Session = null;
+            await StopCurrentPlaybackResourcesAsync();
             _v2DispatchPlan = null;
             _activeSimulationProjectDocument = null;
             _plannedTimetableEvents = [];
@@ -58,14 +94,14 @@ public partial class MainWindow
 
         // 主畫面的線性欄位只作為一次性的 quick builder；V2 runtime 一律建立 Schema 8
         // physical graph。建立後，唯一可編輯資料來源是 Schema 8 專案工作區。
-        ConfigureTopologyProjectForPlayback(
+        await ConfigureTopologyProjectForPlaybackAsync(
             TopologyProjectFactory.CreateLinearDraft(CaptureProjectDocument()),
             lockLegacyInputs: true);
     }
 
     private void PopulateV2Results()
     {
-        if (!_v2Enabled || _v2World is null)
+        if (!_v2Enabled || _latestPlaybackFrame is null)
         {
             return;
         }
@@ -73,88 +109,55 @@ public partial class MainWindow
         HeadwaySummaryText.Text = _v2PlannedMinimumIntervalSeconds is { } interval
             ? $"{FormatDuration(interval)}（計畫最短）"
             : "單一／同時發車";
-        PlaybackStatusText.Text = "V2 已就緒；播放時每個 0.1 秒控制與碰撞子步進都會依序執行。";
-        DrawV2Route();
-        DrawV2SpeedProfile();
-        DrawSafetyDistanceChart();
-        DrawTimeDistanceDiagram();
-        PopulateIntervalStatistics();
-        PopulateV3Timetable();
-        PopulateV3SegmentDetails();
-        PopulateV1V2Comparison();
-        PopulateResourceOccupancy();
-        UpdateV2ActualSummary();
+        PlaybackStatusText.Text = _plannedTimelineTask is null && _plannedTimelineArtifact is null
+            ? "V2 已就緒；播放時每個 0.1 秒控制與碰撞子步進都會依序執行。"
+            : "實際營運可立即播放；計畫時間軸正在背景計算。";
+        _timetableDirty = true;
+        _segmentDetailsDirty = true;
+        _comparisonDirty = true;
+        _resourceOccupancyDirty = true;
+        _intervalStatisticsDirty = true;
+        _safetyHistoryDirty = true;
+        _actualSummaryDirty = true;
+        UpdateV2PlaybackView(force: true);
     }
 
-    private void UpdateV2PlaybackView()
+    private async Task<bool> ResetV2PlaybackAsync()
     {
-        if (!_v2Enabled || _v2Session is null)
+        var worker = _playbackWorker;
+        if (worker is null)
         {
-            return;
+            return false;
         }
 
-        var session = _v2Session;
-        var snapshot = session.AdvanceTo(_playbackTimeSeconds);
-        CurrentTrainRows.Clear();
-        foreach (var state in snapshot.Trains.Where(state => state.Phase != OperationalPhase.OutOfService))
+        try
         {
-            CurrentTrainRows.Add(new CurrentTrainRow(
-                state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
-                state.IsActive ? DirectionToChinese(state.Direction) : "—",
-                state.IsActive ? PhaseToChinese(state.Phase) : "待發",
-                session.ActualWorld.GetTrainCenterPosition(state.VehicleId) is { } center
-                    && _stationChainageProjection?.ToChainage(center) is { } centerChainage
-                        ? $"{centerChainage / 1000:0.000}" : "—",
-                $"{state.SpeedMetersPerSecond * 3.6:0.#}",
-                GetV2CurrentLocation(state),
-                state.NextStationId ?? "—"));
+            await worker.ResetAsync();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Reload/close or a worker fault may finish while the UI is
+            // waiting for Reset. Do not let an async-void button handler
+            // surface that expected lifecycle race as an unhandled exception.
+            return false;
         }
 
-        SafetyRows.Clear();
-        foreach (var observation in snapshot.SafetyObservations.Where(MatchesSafetyFilters))
+        if (!ReferenceEquals(worker, _playbackWorker))
         {
-            SafetyRows.Add(new SafetyRow(
-                $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}",
-                observation.TrackId,
-                $"{observation.FollowerFrontPositionMeters / 1000:0.00}",
-                $"{observation.LeaderRearPositionMeters / 1000:0.00}",
-                $"{observation.ActualGapMeters:0.0}",
-                $"{observation.DynamicSafetyDistanceMeters:0.0}",
-                $"{observation.ObstacleBrakingDemandMeters:0.0}",
-                $"{observation.SafetyMarginMeters:0.0}",
-                SafetyStatusToChinese(observation.Status)));
+            return false;
         }
 
-        EventRows.Clear();
-        foreach (var simulationEvent in session.ActualWorld.Events.TakeLast(300).Reverse())
-        {
-            EventRows.Add(new EventRow(
-                TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds),
-                EventTypeToChinese(simulationEvent.EventType),
-                string.IsNullOrWhiteSpace(simulationEvent.VehicleId) ? "—" : ShortVehicle(simulationEvent.VehicleId),
-                $"{simulationEvent.PositionMeters / 1000:0.00}",
-                simulationEvent.Message));
-        }
-
-        RefreshPairFilter(session.ActualWorld.SafetyHistory.Where(MatchesSafetyFilters));
-        UpdateSafetySummary();
-        SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
-        DrawV2Route(snapshot);
-        DrawV2SpeedProfile();
-        DrawSafetyDistanceChart();
-        DrawTimeDistanceDiagram();
-        PopulateIntervalStatistics(throttled: true);
-        PopulateV3Timetable();
-        PopulateV3SegmentDetails();
-        PopulateV1V2Comparison();
-        PopulateResourceOccupancy();
-        UpdateV2ActualSummary();
-        session.ActualWorld.AcknowledgeSnapshotEvents();
-    }
-
-    private void ResetV2Playback()
-    {
-        _v2Session?.Reset();
+        _latestPlaybackFrame = null;
+        _lastRenderedPlaybackFrameSequence = 0;
+        _resultAccumulator.Reset();
+        _lastRenderedEventCount = 0;
+        _timetableDirty = true;
+        _segmentDetailsDirty = true;
+        _comparisonDirty = true;
+        _resourceOccupancyDirty = true;
+        _intervalStatisticsDirty = true;
+        _safetyHistoryDirty = true;
+        _actualSummaryDirty = true;
         SafetyRows.Clear();
         EventRows.Clear();
         IntervalStatisticRows.Clear();
@@ -162,17 +165,83 @@ public partial class MainWindow
         V1V2ComparisonRows.Clear();
         ResourceOccupancyRows.Clear();
         _lastIntervalRefreshSecond = -1;
+        _lastTrainRenderTimestamp = 0;
+        _lastRouteRenderTimestamp = 0;
+        _lastSafetyRenderTimestamp = 0;
+        _lastChartRenderTimestamp = 0;
+        _lastSegmentRefreshTimestamp = 0;
+        _lastIntervalRefreshTimestamp = 0;
+        _lastResourceRefreshTimestamp = 0;
+        _lastComparisonRefreshTimestamp = 0;
+        _lastSafetySummaryTimestamp = 0;
         SafetyPairComboBox.Items.Clear();
         SafetySummaryText.Text = "建立 V2 模擬後顯示安全摘要。";
         DrawSafetyDistanceChart();
         DrawTimeDistanceDiagram();
+        return true;
+    }
+
+    private void ObservePlannedTimelineCompletion(Task<PlannedTimelineArtifact> plannedTask)
+    {
+        _ = plannedTask.ContinueWith(
+            completedTask =>
+            {
+                if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+                {
+                    return;
+                }
+
+                Dispatcher.BeginInvoke(() =>
+                {
+                    if (ReferenceEquals(_plannedTimelineTask, plannedTask))
+                    {
+                        ApplyCompletedPlannedTimeline();
+                    }
+                });
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 
     private void ClearV2Results()
     {
+        _playbackTimer.Stop();
+        _isV2PlaybackPlaying = false;
         // 結束 topology 執行狀態後，使用者必須能重新編輯表單或切換引擎。
         SetQuickBuilderState(locked: false, collapsed: false);
-        _v2Session = null;
+        var worker = _playbackWorker;
+        _playbackWorker = null;
+        if (worker is not null)
+        {
+            _ = DisposePlaybackWorkerSafelyAsync(worker);
+        }
+
+        var plannedTask = _plannedTimelineTask;
+        var plannedCancellation = _plannedTimelineCancellation;
+        _plannedTimelineTask = null;
+        _plannedTimelineCancellation = null;
+        _plannedTimelineArtifact = null;
+        if (plannedCancellation is not null)
+        {
+            plannedCancellation.Cancel();
+            _ = FinishPlannedTimelineSafelyAsync(plannedTask, plannedCancellation);
+        }
+
+        _latestPlaybackFrame = null;
+        _lastRenderedPlaybackFrameSequence = 0;
+        _resultAccumulator.Reset();
+        _resultAccumulator.ClearTimetable();
+        _resultAccumulator.ClearIntervalStatistics();
+        _resultAccumulator.ClearComparison();
+        _lastRenderedEventCount = 0;
+        _timetableDirty = true;
+        _segmentDetailsDirty = true;
+        _comparisonDirty = true;
+        _resourceOccupancyDirty = true;
+        _intervalStatisticsDirty = true;
+        _safetyHistoryDirty = true;
+        _actualSummaryDirty = true;
         _v2DispatchPlan = null;
         _activeSimulationProjectDocument = null;
         _activeTopologyProjectDocument = null;
@@ -196,6 +265,104 @@ public partial class MainWindow
         DrawTimeDistanceDiagram();
     }
 
+    private async Task StopCurrentPlaybackResourcesAsync()
+    {
+        _playbackTimer.Stop();
+        var worker = _playbackWorker;
+        var plannedTask = _plannedTimelineTask;
+        var plannedCancellation = _plannedTimelineCancellation;
+        _playbackWorker = null;
+        _plannedTimelineTask = null;
+        _plannedTimelineCancellation = null;
+        _plannedTimelineArtifact = null;
+        _latestPlaybackFrame = null;
+        _lastRenderedPlaybackFrameSequence = 0;
+        _resultAccumulator.Reset();
+        _resultAccumulator.ClearTimetable();
+        _resultAccumulator.ClearIntervalStatistics();
+        _resultAccumulator.ClearComparison();
+        _lastRenderedEventCount = 0;
+        _plannedTimetableEvents = [];
+        _isV2PlaybackPlaying = false;
+
+        plannedCancellation?.Cancel();
+        var stopWorker = worker is null ? Task.CompletedTask : DisposePlaybackWorkerSafelyAsync(worker);
+        var stopPlanned = FinishPlannedTimelineSafelyAsync(plannedTask, plannedCancellation);
+        await Task.WhenAll(stopWorker, stopPlanned);
+    }
+
+    private static async Task DisposePlaybackWorkerSafelyAsync(SimulationPlaybackWorker worker)
+    {
+        try
+        {
+            await worker.DisposeAsync();
+        }
+        catch (Exception)
+        {
+            // A failed playback worker is already stopped; cleanup must not prevent project replacement.
+        }
+    }
+
+    private static async Task FinishPlannedTimelineSafelyAsync(
+        Task<PlannedTimelineArtifact>? plannedTask,
+        CancellationTokenSource? cancellation)
+    {
+        try
+        {
+            if (plannedTask is not null)
+            {
+                await plannedTask;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+            // Planned timeline failure is reported by the active session's completion poll.
+        }
+        finally
+        {
+            cancellation?.Dispose();
+        }
+    }
+
+    private void ApplyCompletedPlannedTimeline()
+    {
+        var plannedTask = _plannedTimelineTask;
+        if (plannedTask is null || !plannedTask.IsCompleted)
+        {
+            return;
+        }
+
+        _plannedTimelineTask = null;
+        var cancellation = _plannedTimelineCancellation;
+        _plannedTimelineCancellation = null;
+        cancellation?.Dispose();
+        try
+        {
+            _plannedTimelineArtifact = plannedTask.GetAwaiter().GetResult();
+            _plannedTimetableEvents = _plannedTimelineArtifact.Events;
+            _resultAccumulator.SetPlannedTimetableEvents(
+                _plannedTimetableEvents, _latestPlaybackFrame?.Events ?? []);
+            PlaybackStatusText.Text = "計畫時間軸已就緒；實際營運可獨立播放。";
+            _timetableDirty = true;
+            _comparisonDirty = true;
+            _segmentDetailsDirty = true;
+            if (_latestPlaybackFrame is not null)
+            {
+                UpdateV2PlaybackView(force: true);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception exception)
+        {
+            PlaybackStatusText.Text = $"實際營運可播放；計畫時間軸計算失敗：{exception.Message}";
+        }
+    }
+
     private ServicePattern[] BuildServicePatterns() => BuildStopPatternDefinitions()
         .Select(pattern => new ServicePattern(
             pattern.Id,
@@ -213,20 +380,26 @@ public partial class MainWindow
                 item.DwellTimeSeconds)).ToArray()))
         .ToArray();
 
-    private void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_v2World is null)
+        if (_playbackWorker is null)
         {
             return;
         }
 
-        _v2World.SetMovingBlockMode(ParseMovingBlockMode());
-        UpdateV2PlaybackView();
+        try
+        {
+            await _playbackWorker.SetMovingBlockModeAsync(ParseMovingBlockMode());
+            UpdateV2PlaybackView();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
-    private void BrakingMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void BrakingMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_v2World is null || BrakingModeComboBox.SelectedItem is not ComboBoxItem item)
+        if (_playbackWorker is null || BrakingModeComboBox.SelectedItem is not ComboBoxItem item)
         {
             return;
         }
@@ -234,26 +407,31 @@ public partial class MainWindow
         var mode = string.Equals(item.Tag?.ToString(), "Emergency", StringComparison.Ordinal)
             ? BrakingEstimationMode.Emergency
             : BrakingEstimationMode.Service;
-        _v2World.SetBrakingEstimationMode(mode);
-        UpdateV2PlaybackView();
+        try
+        {
+            await _playbackWorker.SetBrakingEstimationModeAsync(mode);
+            UpdateV2PlaybackView();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
-    private void ObstacleStop_Click(object sender, RoutedEventArgs e)
+    private async void ObstacleStop_Click(object sender, RoutedEventArgs e)
     {
-        if (_v2World is null)
+        if (_playbackWorker is null || _latestPlaybackFrame is null)
         {
             return;
         }
 
         var selectedVehicle = ObstacleTrainComboBox.SelectedItem?.ToString();
-        var snapshot = _v2World.GetSnapshot();
         if (string.IsNullOrWhiteSpace(selectedVehicle))
         {
             ShowValidation(["請先選擇要觸發障礙物急停的實際車輛 ID。　"]);
             return;
         }
 
-        var target = snapshot.Trains.FirstOrDefault(train =>
+        var target = _latestPlaybackFrame.Trains.FirstOrDefault(train =>
             train.VehicleId.Equals(selectedVehicle, StringComparison.OrdinalIgnoreCase));
         if (target is null)
         {
@@ -268,31 +446,41 @@ public partial class MainWindow
         }
 
         var delay = ParseNonNegative(ObstacleDelayTextBox, "障礙物急停延遲時間");
-        if (delay > 0)
+        try
         {
-            _v2World.ScheduleObstacleEmergencyStop(target.VehicleId, _v2World.CurrentTimeSeconds + delay);
-            PlaybackStatusText.Text = $"已排程 {target.VehicleId} 於 {delay:0.0} 秒後觸發障礙物急停。";
-        }
-        else
-        {
-            if (!target.IsActive)
+            if (delay > 0)
             {
-                ShowValidation([$"{target.VehicleId} 尚未發車；請輸入大於 0 的延遲秒數，或選擇營運中列車。"]);
-                return;
+                await _playbackWorker.ScheduleObstacleEmergencyStopAsync(target.VehicleId, delay);
+                PlaybackStatusText.Text = $"已排程 {target.VehicleId} 於 {delay:0.0} 秒後觸發障礙物急停。";
+            }
+            else
+            {
+                if (!target.IsActive)
+                {
+                    ShowValidation([$"{target.VehicleId} 尚未發車；請輸入大於 0 的延遲秒數，或選擇營運中列車。"]);
+                    return;
+                }
+
+                await _playbackWorker.TriggerObstacleEmergencyStopAsync(target.VehicleId);
+                PlaybackStatusText.Text = $"已觸發 {target.VehicleId} 障礙物急停；這是保守例外事件。";
             }
 
-            _v2World.TriggerObstacleEmergencyStop(target.VehicleId);
-            PlaybackStatusText.Text = $"已觸發 {target.VehicleId} 障礙物急停；這是保守例外事件。";
+            UpdateV2PlaybackView();
         }
-
-        UpdateV2PlaybackView();
+        catch (SimulationValidationException exception)
+        {
+            ShowValidation(exception.Errors);
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     private void SafetyPair_SelectionChanged(object sender, SelectionChangedEventArgs e) => DrawSafetyDistanceChart();
 
     private void SafetyFilter_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_v2World is not null)
+        if (_latestPlaybackFrame is not null)
         {
             UpdateV2PlaybackView();
         }
@@ -381,7 +569,7 @@ public partial class MainWindow
 
     private void ExportCsv_Click(object sender, RoutedEventArgs e)
     {
-        if (_v2World is null || _v2World.Trajectory.Count == 0)
+        if (_latestPlaybackFrame is null || _latestPlaybackFrame.Trajectory.Count == 0)
         {
             ShowValidation(["請先播放 V2 模擬，產生軌跡後再匯出 CSV。"]);
             return;
@@ -403,7 +591,7 @@ public partial class MainWindow
 
         try
         {
-            var csv = TrajectoryAnalysis.BuildCsv(_v2World.Trajectory, _v2World.Events, _startClockSeconds);
+            var csv = TrajectoryAnalysis.BuildCsv(_latestPlaybackFrame.Trajectory, _latestPlaybackFrame.Events, _startClockSeconds);
             File.WriteAllText(dialog.FileName, csv, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
             StatusTextBlock.Text = $"CSV 已匯出：{dialog.FileName}";
         }
@@ -415,26 +603,29 @@ public partial class MainWindow
 
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
-        RouteCanvas.Children.Clear();
-        var width = RouteCanvas.ActualWidth;
-        var height = RouteCanvas.ActualHeight;
+        var width = PrepareRouteCanvasWidth();
+        var height = PrepareRouteCanvasHeight();
         if (width < 100 || height < 100)
         {
+            RouteCanvas.Children.Clear();
+            _topologyRouteVisualCache = null;
             return;
         }
 
-        if (_v2World is { } topologyWorld)
+        if (_latestPlaybackFrame is { } topologyWorld)
         {
             DrawTopologyGraphRoute(
-                topologyWorld.TopologyInfrastructure,
+                topologyWorld.TopologyInfrastructure!,
                 _activeTopologyProjectDocument,
                 snapshot ?? topologyWorld.GetSnapshot(),
                 width,
                 height,
-                topologyWorld);
+                topologyWorld.TrainCenterPositions);
             return;
         }
 
+        RouteCanvas.Children.Clear();
+        _topologyRouteVisualCache = null;
         if (_route is null)
         {
             return;
@@ -453,9 +644,9 @@ public partial class MainWindow
         DrawSpatialReferencePointGeometry(left, trackWidth, outboundY, inboundY, width, height);
         DrawAfterStationTailTrackGeometry(tailTrackLayouts, left, trackWidth, outboundY, inboundY, width, height);
 
-        if (_v2World is not null)
+        if (_latestPlaybackFrame is not null)
         {
-            foreach (var limit in _v2World.SpeedLimits.Limits)
+            foreach (var limit in _latestPlaybackFrame.SpeedLimits.Limits)
             {
                 var x1 = left + limit.StartPositionMeters / _route.TotalLengthMeters * trackWidth;
                 var x2 = left + limit.EndPositionMeters / _route.TotalLengthMeters * trackWidth;
@@ -492,7 +683,7 @@ public partial class MainWindow
             AddCanvasText(RouteCanvas, $"{station.StationId}\n{station.PositionMeters / 1000:0.00} km", Math.Clamp(x - 28, 0, width - 58), inboundY + 25, 10, Color.FromRgb(55, 66, 86));
         }
 
-        snapshot ??= _v2World?.GetSnapshot();
+        snapshot ??= _latestPlaybackFrame?.GetSnapshot();
         if (snapshot is null)
         {
             return;
@@ -545,8 +736,9 @@ public partial class MainWindow
                 ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}｜{state.ServiceClassId}｜{state.ServicePatternId}\n"
                     + $"{DirectionToChinese(state.Direction)} {state.TrackId}\n"
                     + $"車頭 {state.FrontPositionMeters / 1000:0.00} km｜車尾 {state.RearPositionMeters / 1000:0.00} km\n"
-                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
+                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
             };
+            AttachTrainMarkerNavigation(train, state.VehicleId);
             Canvas.SetLeft(train, Math.Clamp(x - 21.5, 0, width - 43));
             Canvas.SetTop(train, y - 11.5);
             RouteCanvas.Children.Add(train);
@@ -578,8 +770,29 @@ public partial class MainWindow
         SimulationSnapshot snapshot,
         double width,
         double height,
-        SimulationWorld world)
+        IReadOnlyDictionary<string, TrackPosition> trainCenterPositions)
     {
+        var cached = _topologyRouteVisualCache;
+        if (cached is not null
+            && ReferenceEquals(cached.Infrastructure, infrastructure)
+            && ReferenceEquals(cached.Project, topologyProject)
+            && cached.Width == width
+            && cached.Height == RouteCanvas.Height
+            && height <= cached.Height + .5
+            && RouteCanvas.Children.Count >= cached.StaticChildCount)
+        {
+            while (RouteCanvas.Children.Count > cached.StaticChildCount)
+            {
+                RouteCanvas.Children.RemoveAt(RouteCanvas.Children.Count - 1);
+            }
+
+            DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
+                cached.EdgeGeometries, cached.StationChainage, width, height);
+            return;
+        }
+
+        RouteCanvas.Children.Clear();
+        _routeStaticRebuildCount++;
         var stationChainage = topologyProject is null ? null : StationChainageProjection.TryCreate(topologyProject);
         var nodes = infrastructure.Nodes.Values
             .OrderBy(node => node.NodeId, StringComparer.OrdinalIgnoreCase)
@@ -639,7 +852,7 @@ public partial class MainWindow
         var top = 30d;
         var bottom = 28d;
         var usableWidth = Math.Max(1, width - left - right);
-        var mainlineY = height * 0.52;
+        var mainlineY = height * 0.52 + (height < 380 ? 24 : 0);
         var trackSpacing = inboundServiceRoute is null ? 0 : Math.Clamp(height * 0.18, 30, 46);
         var outboundTrackY = mainlineY + trackSpacing / 2;
         var inboundTrackY = mainlineY - trackSpacing / 2;
@@ -801,7 +1014,10 @@ public partial class MainWindow
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2));
+            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), infrastructure.Platforms.Values,
+            infrastructure.DirectedConnections,
+            StationSchematicPresentation.UsesCompactLaneTransitions(topologyProject, width),
+            topologyProject?.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
         var railColor = Color.FromRgb(25, 96, 125);
         StationSchematicPresentation.DrawLegend(RouteCanvas);
@@ -833,7 +1049,7 @@ public partial class MainWindow
         }
 
         var stationCenters = StationSchematicPresentation.DrawPlatforms(RouteCanvas, infrastructure.Platforms.Values,
-            infrastructure.Edges.Values, edgeGeometries, mainlineY);
+            infrastructure.Edges.Values, edgeGeometries, mainlineY, topologyProject?.Topology.PassingFacilities);
         var stationVisuals = infrastructure.Stations.Values
             .Select(station =>
             {
@@ -875,18 +1091,40 @@ public partial class MainWindow
                 ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
             var outgoing = connection.ToDirection == TraversalDirection.Forward
                 ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+            var fromEdge = infrastructure.Edges.GetValueOrDefault(connection.FromTrackEdgeId);
+            var toEdge = infrastructure.Edges.GetValueOrDefault(connection.ToTrackEdgeId);
+            var allowLaneTurn = fromEdge is not null && toEdge is not null
+                && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
+                    || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
             StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
-                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})");
+                $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
+                allowLaneTurn);
         }
 
         foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
         {
             var geometry = edgeGeometries[edge.TrackEdgeId];
+            var emphasizeSideTrack = edgeGeometries.Count >= 32
+                && edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.Siding;
+            if (emphasizeSideTrack)
+            {
+                // The large-route overview intentionally keeps short passing-track
+                // transitions shallow.  Reserve a light outline so the parallel
+                // side track remains visible instead of blending into the mainline.
+                RouteCanvas.Children.Add(new Polyline
+                {
+                    Points = new PointCollection(geometry.Points),
+                    Stroke = Brushes.White,
+                    StrokeThickness = 7,
+                    StrokeLineJoin = PenLineJoin.Round,
+                    IsHitTestVisible = false
+                });
+            }
             RouteCanvas.Children.Add(new Polyline
             {
                 Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(railColor),
-                StrokeThickness = 5,
+                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
+                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)} · {edge.LengthMeters:0.#} m · 預設 {edge.DefaultSpeedLimitMetersPerSecond * 3.6:0.#} km/h"
             });
@@ -947,9 +1185,35 @@ public partial class MainWindow
             s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
         StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
 
+        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, 36);
+        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, 54, 9, Color.FromRgb(108, 119, 132));
+        _topologyRouteVisualCache = new TopologyRouteVisualCache(
+            infrastructure, topologyProject, width, RouteCanvas.Height, edgeGeometries, stationChainage,
+            RouteCanvas.Children.Count);
+        DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
+            edgeGeometries, stationChainage, width, height);
+
+        static (string StartNodeId, string EndNodeId) GetTraversalEndpoints(
+            TrackEdgeDefinition edge,
+            TraversalDirection direction) => direction == TraversalDirection.Forward
+                ? (edge.FromNodeId, edge.ToNodeId)
+                : (edge.ToNodeId, edge.FromNodeId);
+    }
+
+    private void DrawTopologyTrainMarkers(
+        InfrastructureGraphV4 infrastructure,
+        SimulationSnapshot snapshot,
+        IReadOnlyDictionary<string, TrackPosition> trainCenterPositions,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> edgeGeometries,
+        StationChainageProjection? stationChainage,
+        double width,
+        double height)
+    {
         foreach (var state in snapshot.Trains.Where(train => train.IsActive))
         {
-            var centerPosition = world.GetTrainCenterPosition(state.VehicleId);
+            TrackPosition? centerPosition = trainCenterPositions.TryGetValue(state.VehicleId, out var centerPositionValue)
+                ? centerPositionValue
+                : null;
             if (centerPosition is not { } center || !edgeGeometries.TryGetValue(center.TrackEdgeId, out var geometry)
                 || !infrastructure.TryGetEdge(center.TrackEdgeId, out var edge))
             {
@@ -978,22 +1242,31 @@ public partial class MainWindow
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 },
-                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h"
+                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
             };
+            AttachTrainMarkerNavigation(marker, state.VehicleId);
             Canvas.SetLeft(marker, Math.Clamp(point.X - 12, 0, width - 24));
             Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
             RouteCanvas.Children.Add(marker);
         }
+    }
 
-        StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, height - 38);
-        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, height - 21, 9, Color.FromRgb(108, 119, 132));
+    private void AttachTrainMarkerNavigation(Border marker, string vehicleId)
+    {
+        marker.Tag = vehicleId;
+        marker.Cursor = Cursors.Hand;
+        marker.MouseLeftButtonUp += (_, args) =>
+        {
+            SimulationViewTabControl.SelectedItem = SpeedProfileTabItem;
+            if (!SpeedProfileRunComboBox.Items.Contains(vehicleId))
+            {
+                SpeedProfileRunComboBox.Items.Add(vehicleId);
+            }
 
-        static (string StartNodeId, string EndNodeId) GetTraversalEndpoints(
-            TrackEdgeDefinition edge,
-            TraversalDirection direction) => direction == TraversalDirection.Forward
-                ? (edge.FromNodeId, edge.ToNodeId)
-                : (edge.ToNodeId, edge.FromNodeId);
-
+            SpeedProfileRunComboBox.SelectedItem = vehicleId;
+            Dispatcher.BeginInvoke(DrawV2SpeedProfile, DispatcherPriority.Loaded);
+            args.Handled = true;
+        };
     }
 
     private void DrawV2SpeedProfile()
@@ -1003,7 +1276,7 @@ public partial class MainWindow
         canvas.Children.Clear();
         var width = canvas.ActualWidth;
         var height = canvas.ActualHeight;
-        if (width < 100 || height < 100 || _v2World is null || _parameters is null)
+        if (width < 100 || height < 100 || _latestPlaybackFrame is null || _parameters is null)
         {
             return;
         }
@@ -1012,7 +1285,7 @@ public partial class MainWindow
         _updatingSpeedProfileSelection = true;
         try
         {
-            foreach (var vehicleId in _v2World.GetSnapshot().Trains.Select(train => train.VehicleId)
+            foreach (var vehicleId in _latestPlaybackFrame.GetSnapshot().Trains.Select(train => train.VehicleId)
                          .Distinct(StringComparer.Ordinal))
             {
                 if (!SpeedProfileRunComboBox.Items.Contains(vehicleId)) SpeedProfileRunComboBox.Items.Add(vehicleId);
@@ -1024,23 +1297,31 @@ public partial class MainWindow
             }
         }
         finally { _updatingSpeedProfileSelection = false; }
-        var actualSamples = _v2World.Trajectory
+        var actualSamples = _latestPlaybackFrame.Trajectory
             .Where(sample => sample.VehicleId == selectedVehicleId)
             .ToArray();
         var useActual = actualSamples.Length >= 2;
+        var plannedArtifact = _plannedTimelineArtifact;
         var samples = useActual
             ? actualSamples
-            : (_v2Session?.PlannedTrajectory ?? [])
+            : (plannedArtifact?.Trajectory ?? [])
                 .Where(sample => sample.VehicleId == selectedVehicleId)
                 .ToArray();
         if (samples.Length < 2)
         {
-            SpeedProfileSourceText.Text = selectedVehicleId is null ? "尚無列車" : $"{selectedVehicleId} · 尚無軌跡";
-            AddCanvasText(canvas, "播放後顯示所選列車的上下行、停站及折返軌跡。", 16, 18, 12, Color.FromRgb(102, 112, 133));
+            SpeedProfileSourceText.Text = plannedArtifact is null
+                ? "計畫時間軸計算中…"
+                : selectedVehicleId is null ? "尚無列車" : $"{selectedVehicleId} · 尚無軌跡";
+            AddCanvasText(canvas, plannedArtifact is null
+                    ? "實際模擬可先播放；計畫速度圖完成後會自動顯示。"
+                    : "播放後顯示所選列車的上下行、停站及折返軌跡。",
+                16, 18, 12, Color.FromRgb(102, 112, 133));
             return;
         }
 
-        var sourceEvents = useActual ? _v2World.Events : _v2Session!.PlannedEvents;
+        IReadOnlyList<SimulationEvent> sourceEvents = useActual
+            ? _latestPlaybackFrame.Events
+            : plannedArtifact!.Events;
         var complete = sourceEvents.Any(item => item.VehicleId == selectedVehicleId && item.EventType == SimulationEventType.ServiceEnded);
         SpeedProfileSourceText.Text = useActual
             ? complete ? "V2 實際" : "實際（截至目前）"
@@ -1152,12 +1433,12 @@ public partial class MainWindow
         if (sample.TrackSpeedLimitMetersPerSecond is { } limit) return limit;
         if (_activeTopologyProjectDocument is not null
             && sample.TrackEdgeId is { Length: > 0 } edgeId
-            && _v2World!.TopologyInfrastructure.Edges.TryGetValue(edgeId, out var edge))
+            && _latestPlaybackFrame!.TopologyInfrastructure!.Edges.TryGetValue(edgeId, out var edge))
         {
             return Math.Min(edge.DefaultSpeedLimitMetersPerSecond, _parameters!.MaxSpeedMetersPerSecond);
         }
 
-        return _v2World!.SpeedLimits.GetCurrentLimitMetersPerSecond(
+        return _latestPlaybackFrame!.SpeedLimits.GetCurrentLimitMetersPerSecond(
             sample.PositionMeters,
             sample.Direction,
             _parameters!.MaxSpeedMetersPerSecond);
@@ -1174,7 +1455,7 @@ public partial class MainWindow
         SafetyDistanceCanvas.Children.Clear();
         var width = SafetyDistanceCanvas.ActualWidth;
         var height = SafetyDistanceCanvas.ActualHeight;
-        if (width < 120 || height < 100 || _v2World is null || _v2World.SafetyHistory.Count == 0)
+        if (width < 120 || height < 100 || _latestPlaybackFrame is null || _latestPlaybackFrame.SafetyHistory.Count == 0)
         {
             if (width >= 120 && height >= 100)
             {
@@ -1190,9 +1471,9 @@ public partial class MainWindow
             ? parsedWindow
             : double.PositiveInfinity;
         var earliestTime = double.IsFinite(windowSeconds)
-            ? Math.Max(0, _v2World.CurrentTimeSeconds - windowSeconds)
+            ? Math.Max(0, _latestPlaybackFrame.CurrentTimeSeconds - windowSeconds)
             : 0;
-        var history = _v2World.SafetyHistory
+        var history = _latestPlaybackFrame.SafetyHistory
             .Where(item => (selected is null || PairKey(item) == selected)
                 && item.SimulationTimeSeconds >= earliestTime
                 && MatchesSafetyFilters(item))
@@ -1257,7 +1538,7 @@ public partial class MainWindow
         TimeDistanceCanvas.Children.Clear();
         var width = targetWidth;
         var height = Math.Max(380, TimeDistanceCanvas.ActualHeight);
-        if ((_route is null && _activeTopologyProjectDocument is null) || _v2World is null || _plannedWorld is null)
+        if ((_route is null && _activeTopologyProjectDocument is null) || _latestPlaybackFrame is null)
         {
             AddCanvasText(TimeDistanceCanvas, "建立並播放 V2 模擬後顯示時間－里程運行圖。", 22, 22, 13, Color.FromRgb(102, 112, 133));
             return;
@@ -1265,12 +1546,16 @@ public partial class MainWindow
 
         (string StationId, string StationName, double PositionMeters)[] displayStations = _activeTopologyProjectDocument is null
             ? _route!.Stations.Select(station => (station.StationId, station.StationName, station.PositionMeters)).ToArray()
-            : _v2World.GetTopologyResultContext().GetStops(TrainDirection.Outbound)
+            : _latestPlaybackFrame.GetTopologyResultContext().GetStops(TrainDirection.Outbound)
                 .Select(stop => (stop.StationId, stop.StationName, stop.ProjectedChainageMeters)).ToArray();
         var displayRouteName = _activeTopologyProjectDocument?.ProjectName ?? _route!.RouteName;
 
-        var actual = ShowActualCheckBox?.IsChecked == true ? _v2World.Trajectory : [];
-        var planned = ShowPlannedCheckBox?.IsChecked == true ? _plannedWorld.Trajectory : [];
+        IReadOnlyList<TrajectorySample> actual = ShowActualCheckBox?.IsChecked == true
+            ? _latestPlaybackFrame.Trajectory
+            : [];
+        IReadOnlyList<TrajectorySample> planned = ShowPlannedCheckBox?.IsChecked == true
+            ? _plannedTimelineArtifact?.Trajectory ?? []
+            : [];
         if (actual.Count == 0 && planned.Count == 0)
         {
             AddCanvasText(TimeDistanceCanvas, "播放後即時建立運行圖；空圖不會啟動零列車模擬引擎。", 22, 22, 13, Color.FromRgb(102, 112, 133));
@@ -1316,8 +1601,8 @@ public partial class MainWindow
             "時間");
         AddCanvasText(
             TimeDistanceCanvas,
-            $"{displayRouteName}｜計畫／理論與 V2 模擬實際運行圖｜{UiDisplayText.Enum(_v2World.MovingBlockMode)}｜"
-                + $"{(_activeTopologyProjectDocument is null ? $"速限 {_v2World.SpeedLimits.Limits.Count} 段" : "拓撲軌道區段速限")}｜固定時間步進 0.1 秒",
+            $"{displayRouteName}｜計畫／理論與 V2 模擬實際運行圖｜{UiDisplayText.Enum(_latestPlaybackFrame.MovingBlockMode)}｜"
+                + $"{(_activeTopologyProjectDocument is null ? $"速限 {_latestPlaybackFrame.SpeedLimits.Limits.Count} 段" : "拓撲軌道區段速限")}｜固定時間步進 0.1 秒",
             left,
             8,
             14,
@@ -1379,7 +1664,7 @@ public partial class MainWindow
         DrawSeries(planned, isPlanned: true);
         DrawSeries(actual, isPlanned: false);
 
-        foreach (var simulationEvent in _v2World.Events.Where(item =>
+        foreach (var simulationEvent in _latestPlaybackFrame.Events.Where(item =>
                      item.SimulationTimeSeconds >= startTime
                      && item.SimulationTimeSeconds <= endTime
                      && item.EventType is
@@ -1491,23 +1776,23 @@ public partial class MainWindow
 
     private void UpdateSafetySummary()
     {
-        if (_v2World is null || _v2World.SafetyHistory.Count == 0)
+        if (_latestPlaybackFrame is null || _latestPlaybackFrame.SafetyHistory.Count == 0)
         {
-            if (_v2World is null)
+            if (_latestPlaybackFrame is null)
             {
                 SafetySummaryText.Text = "請先建立 V2 寫實引擎模擬。";
             }
-            else if (_v2World.MovingBlockMode == MovingBlockMode.Independent)
+            else if (_latestPlaybackFrame.MovingBlockMode == MovingBlockMode.Independent)
             {
                 SafetySummaryText.Text = "目前為獨立運行模式，不建立移動閉塞相鄰配對；請切換為監視或控制。";
             }
-            else if (_v2World.CurrentTimeSeconds <= 0.001)
+            else if (_latestPlaybackFrame.CurrentTimeSeconds <= 0.001)
             {
                 SafetySummaryText.Text = "模擬尚未播放；第一個 0.1 秒時間步進後才會建立相鄰配對。";
             }
             else
             {
-                var active = _v2World.GetSnapshot().Trains.Count(train => train.IsActive);
+                var active = _latestPlaybackFrame.GetSnapshot().Trains.Count(train => train.IsActive);
                 SafetySummaryText.Text = active < 2
                     ? "目前營運中列車少於兩列，沒有可形成的相鄰配對。"
                     : "目前沒有同方向、同股道的相鄰列車配對；這是正常條件式空白。";
@@ -1515,7 +1800,7 @@ public partial class MainWindow
             return;
         }
 
-        var filteredHistory = _v2World.SafetyHistory.Where(MatchesSafetyFilters).ToArray();
+        var filteredHistory = _latestPlaybackFrame.SafetyHistory.Where(MatchesSafetyFilters).ToArray();
         if (filteredHistory.Length == 0)
         {
             SafetySummaryText.Text = "已有安全觀測，但目前的方向／狀態篩選沒有符合資料。";
@@ -1526,7 +1811,7 @@ public partial class MainWindow
         SafetySummaryText.Text = $"所選方向／狀態全程最低安全裕度 {minimum.SafetyMarginMeters:0.0} m，"
             + $"{ShortVehicle(minimum.FollowerVehicleId)} → {ShortVehicle(minimum.LeaderVehicleId)}，"
             + $"發生於 {minimum.SimulationTimeSeconds:0.0} s；目前估算採用"
-            + $"{(_v2World.BrakingEstimationMode == BrakingEstimationMode.Service ? "營運" : "緊急")}煞車。";
+            + $"{(_latestPlaybackFrame.BrakingEstimationMode == BrakingEstimationMode.Service ? "營運" : "緊急")}煞車。";
     }
 
     private void RefreshPairFilter(IEnumerable<SafetyObservation> observations)
@@ -1571,7 +1856,7 @@ public partial class MainWindow
         {
             SpeedProfileRunComboBox.Items.Clear();
             foreach (var vehicleId in dispatchPlan.Runs.Select(run => run.VehicleId)
-                         .Concat((_v2Session?.PlannedTrajectory ?? []).Select(sample => sample.VehicleId))
+                         .Concat((_plannedTimelineArtifact?.Trajectory ?? []).Select(sample => sample.VehicleId))
                          .Where(id => !string.IsNullOrWhiteSpace(id))
                          .Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
             {
@@ -1593,15 +1878,15 @@ public partial class MainWindow
 
     private void UpdateV2ActualSummary()
     {
-        if (_v2World is null || _v2DispatchPlan is null || _parameters is null)
+        if (_latestPlaybackFrame is null || _v2DispatchPlan is null || _parameters is null)
         {
             return;
         }
 
-        var events = _v2World.Events;
+        var events = _latestPlaybackFrame.Events;
         var topologyResults = _activeTopologyProjectDocument is null
             ? null
-            : _v2World.GetTopologyResultContext();
+            : _latestPlaybackFrame.GetTopologyResultContext();
         var completedTrips = new List<double>();
         foreach (var run in _v2DispatchPlan.Runs)
         {
@@ -1665,8 +1950,8 @@ public partial class MainWindow
                 ? $"{FormatDuration(planned)}（計畫最短）"
                 : "單一／同時發車";
 
-        var peakSpeed = _v2World.Trajectory.Count > 0
-            ? _v2World.Trajectory.Max(sample => sample.SpeedMetersPerSecond) * 3.6
+        var peakSpeed = _latestPlaybackFrame.Trajectory.Count > 0
+            ? _latestPlaybackFrame.Trajectory.Max(sample => sample.SpeedMetersPerSecond) * 3.6
             : 0;
         SpeedSummaryText.Text = peakSpeed > 0
             ? $"{_parameters.MaxSpeedMetersPerSecond * 3.6:0.#} / {peakSpeed:0.#} km/h（V2 實際）"
@@ -1696,7 +1981,7 @@ public partial class MainWindow
 
     private bool HasPendingV2TerminalOutcomes()
     {
-        if (_v2World is null || _v2DispatchPlan is null)
+        if (_latestPlaybackFrame is null || _v2DispatchPlan is null)
         {
             return false;
         }
@@ -1704,14 +1989,14 @@ public partial class MainWindow
         foreach (var run in _v2DispatchPlan.Runs)
         {
             var plannedStart = RelativeDispatchSeconds(run.PlannedDepartureTime, _v2DispatchPlan.ScheduleAnchorTime);
-            if (_v2World.CurrentTimeSeconds + 1e-7 < plannedStart)
+            if (_latestPlaybackFrame.CurrentTimeSeconds + 1e-7 < plannedStart)
             {
                 return true;
             }
 
             if (!run.ContinueAfterTerminal)
             {
-                if (!_v2World.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
+                if (!_latestPlaybackFrame.Events.Any(item => item.EventType == SimulationEventType.ServiceEnded
                     && item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
                     && (string.IsNullOrWhiteSpace(run.VehicleId)
                         || item.VehicleId.Equals(run.VehicleId, StringComparison.OrdinalIgnoreCase))))
@@ -1722,7 +2007,7 @@ public partial class MainWindow
                 continue;
             }
 
-            if (!_v2World.Events.Any(item => item.EventType == SimulationEventType.DirectionChanged
+            if (!_latestPlaybackFrame.Events.Any(item => item.EventType == SimulationEventType.DirectionChanged
                 && (string.IsNullOrWhiteSpace(run.VehicleId)
                     || item.VehicleId.Equals(run.VehicleId, StringComparison.OrdinalIgnoreCase))
                 && item.SimulationTimeSeconds + 1e-7 >= plannedStart))
@@ -1736,7 +2021,7 @@ public partial class MainWindow
 
     private bool EnsureDiagramAvailable()
     {
-        if (_v2World is not null && _v2World.Trajectory.Count > 0)
+        if (_latestPlaybackFrame is not null && _latestPlaybackFrame.Trajectory.Count > 0)
         {
             DrawTimeDistanceDiagram();
             return true;

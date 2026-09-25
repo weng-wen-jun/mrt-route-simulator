@@ -992,9 +992,10 @@ public partial class MainWindow
         }
     }
 
-    private void MarkInputCommitted(string status, Window window)
+    private async void MarkInputCommitted(string status, Window window)
     {
         PausePlayback();
+        await StopCurrentPlaybackResourcesAsync();
         ClearResults();
         StatusTextBlock.Text = status;
         window.Close();

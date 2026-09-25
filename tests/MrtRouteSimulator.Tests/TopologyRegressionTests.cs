@@ -491,7 +491,7 @@ internal static class TopologyRegressionTests
         var samplePaths = Directory.EnumerateFiles(sampleDirectory, "*.mrtsim.json", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        Equal(13, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
+        Equal(14, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
 
         foreach (var samplePath in samplePaths)
         {
@@ -537,7 +537,12 @@ internal static class TopologyRegressionTests
                 VehicleTypes: runtime.VehicleTypes,
                 ServiceTypes: runtime.ServiceTypes,
                 Topology: runtime.Topology).CreateWorld();
-            world.AdvanceTo(3600);
+            var boundedEndSeconds = Path.GetFileName(samplePath).Equals(
+                "大型機場線-完整營運示範範例.mrtsim.json",
+                StringComparison.OrdinalIgnoreCase)
+                ? 8000
+                : 3600;
+            world.AdvanceTo(boundedEndSeconds);
             True(world.Events.Any(item => item.EventType == SimulationEventType.Departure),
                 $"範例建立後未能正常推進：{Path.GetFileName(samplePath)}");
             var collisions = world.Events.Where(item => item.EventType == SimulationEventType.Collision).ToArray();
@@ -551,7 +556,7 @@ internal static class TopologyRegressionTests
                 + string.Join("；", stopViolations.Select(item =>
                     $"t={item.SimulationTimeSeconds:0.0} {item.ServiceRunId}/{item.VehicleId} @ {item.TrackEdgeId}:{item.OffsetMeters:0.0} {item.Message}")));
             True(world.GetSnapshot().Trains.All(train => !train.IsActive),
-                $"範例推進 3600 秒後不得殘留無界接續或卡住的列車：{Path.GetFileName(samplePath)}");
+                $"範例推進 {boundedEndSeconds:0} 秒後不得殘留無界接續或卡住的列車：{Path.GetFileName(samplePath)}");
 
             if (Path.GetFileName(samplePath).Equals("V3.4.0-雙島四股快速車越行驗證.mrtsim.json", StringComparison.OrdinalIgnoreCase))
             {
@@ -584,6 +589,35 @@ internal static class TopologyRegressionTests
                     "折返檢核範例必須完成明列的尾軌接續車次。 ");
             }
         }
+    }
+
+    public static void ShortApproachBrakesBeforeStopPoint()
+    {
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "V3.3.0-完整功能驗證範例.mrtsim.json");
+        var saved = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+        var document = saved with { Operations = saved.Operations with { ApproachDistanceMeters = 65 } };
+        var runtime = TopologyProjectFormat.CreateRuntime(document);
+        var world = new SimulationWorldOptions(
+            Route: null,
+            TrainParameters: runtime.TrainParameters,
+            OperationalParameters: runtime.OperationalParameters,
+            TrainCount: runtime.DispatchPlan.Runs.Count,
+            InitialDepartureIntervalSeconds: document.Simulation.HeadwaySeconds,
+            ProfileMode: document.Simulation.ProfileMode,
+            MovingBlockMode: document.Simulation.MovingBlockMode,
+            ServicePatterns: runtime.ServicePatterns,
+            DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes,
+            ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+
+        world.AdvanceTo(3600);
+        True(world.Events.Any(item => item.EventType == SimulationEventType.Arrival
+                && item.ServiceRunId == "RUN-DOWN-001" && item.PositionMeters == 1200),
+            "65 m 進站設定仍須完成 V02 到站。");
+        True(!world.Events.Any(item => item.EventType == SimulationEventType.StationStopViolation),
+            "65 m 進站設定不應在 V02／V04／V05 留下高速觸點。");
+        True(world.IsComplete, "短進站距離不得使列車卡在停車點。");
     }
 
     public static void TopologySimulationWorldDoesNotConstructCompatibilityRoute()

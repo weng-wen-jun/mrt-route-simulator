@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -33,9 +35,13 @@ public partial class MainWindow : Window
     private double _playbackTimeSeconds;
     private double _playbackDurationSeconds;
     private double _startClockSeconds;
+    private bool _suppressEngineModeSelectionChanged;
+    private bool _isV2PlaybackPlaying;
+    private bool _closeAfterPlaybackShutdown;
     public MainWindow()
     {
         InitializeComponent();
+        SourceInitialized += (_, _) => FitInitialWindowToWorkArea();
         Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
         VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";
         DataContext = this;
@@ -44,6 +50,7 @@ public partial class MainWindow : Window
             Interval = TimeSpan.FromMilliseconds(33)
         };
         _playbackTimer.Tick += PlaybackTimer_Tick;
+        Closing += MainWindow_Closing;
         LoadSampleData();
         ApplyEngineModeUiState();
         Loaded += (_, _) =>
@@ -51,6 +58,37 @@ public partial class MainWindow : Window
             DrawRoute();
             DrawSpeedProfile();
         };
+    }
+
+    /// <summary>
+    /// 預設 1440 x 900 是舒適工作尺寸，不得讓它在較小的可用工作區開啟時超出螢幕。
+    /// 視窗建立後才可取得 WPF 以 DIP 表示的工作區；同時下調本次視窗的最小值，
+    /// 讓 Windows 不會再以 XAML 的固定最小尺寸把視窗推出可視範圍。
+    /// </summary>
+    private void FitInitialWindowToWorkArea()
+    {
+        var workArea = SystemParameters.WorkArea;
+        var (width, minimumWidth) = FitWindowDimension(Width, MinWidth, workArea.Width);
+        var (height, minimumHeight) = FitWindowDimension(Height, MinHeight, workArea.Height);
+
+        MinWidth = minimumWidth;
+        MinHeight = minimumHeight;
+        Width = width;
+        Height = height;
+    }
+
+    private static (double Size, double Minimum) FitWindowDimension(
+        double preferredSize,
+        double declaredMinimum,
+        double availableSize)
+    {
+        if (double.IsNaN(availableSize) || double.IsInfinity(availableSize) || availableSize <= 0)
+        {
+            return (preferredSize, declaredMinimum);
+        }
+
+        var minimum = Math.Min(declaredMinimum, availableSize);
+        return (Math.Clamp(preferredSize, minimum, availableSize), minimum);
     }
 
     public ObservableCollection<StationInputRow> StationRows { get; } = [];
@@ -61,7 +99,11 @@ public partial class MainWindow : Window
 
     public ObservableCollection<CurrentTrainRow> CurrentTrainRows { get; } = [];
 
-    private void LoadSample_Click(object sender, RoutedEventArgs e) => LoadSampleData();
+    private async void LoadSample_Click(object sender, RoutedEventArgs e)
+    {
+        await StopCurrentPlaybackResourcesAsync();
+        LoadSampleData();
+    }
 
     private void FocusV2Settings_Click(object sender, RoutedEventArgs e)
     {
@@ -76,10 +118,11 @@ public partial class MainWindow : Window
         V2SettingsHeading.Focus();
     }
 
-    private void EngineMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void EngineMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!IsLoaded) return;
+        if (!IsLoaded || _suppressEngineModeSelectionChanged) return;
         PausePlayback();
+        await StopCurrentPlaybackResourcesAsync();
         ClearResults();
         ApplyEngineModeUiState();
         PlayButton.IsEnabled = false;
@@ -141,6 +184,7 @@ public partial class MainWindow : Window
         LoadSampleV2Data();
 
         ClearResults();
+        UpdateFixedTimetableArchiveExportState();
         HideValidation();
         StatusTextBlock.Text = "已載入六站示範路線；可直接建立模擬或修改參數。";
     }
@@ -217,7 +261,7 @@ public partial class MainWindow : Window
         StationDataGrid.Items.Refresh();
     }
 
-    private void RunSimulation_Click(object sender, RoutedEventArgs e)
+    private async void RunSimulation_Click(object sender, RoutedEventArgs e)
     {
         PausePlayback();
         HideValidation();
@@ -228,11 +272,11 @@ public partial class MainWindow : Window
         {
             try
             {
-                ConfigureTopologyProjectForPlayback(activeTopology);
+                await ConfigureTopologyProjectForPlaybackAsync(activeTopology);
                 PopulateResults();
                 UpdatePlaybackView();
                 PlayButton.IsEnabled = true;
-                StatusTextBlock.Text = $"V2 拓撲實際營運已由目前專案重新建立：{_v2World?.DispatchPlan?.Runs.Count ?? 0} 列車、{activeTopology.Topology.Stations.Count} 站、固定時間步進 0.1 秒。";
+                StatusTextBlock.Text = $"V2 拓撲實際營運已由目前專案重新建立：{_v2DispatchPlan?.Runs.Count ?? 0} 列車、{activeTopology.Topology.Stations.Count} 站、固定時間步進 0.1 秒。";
                 PlaybackStatusText.Text = "模擬已就緒，按「播放」查看列車運行。";
                 return;
             }
@@ -285,7 +329,7 @@ public partial class MainWindow : Window
             if (useV2Dispatch)
             {
                 // V2 表單輸入會立即轉成 Schema 8 topology；Route 只保留給使用者選擇 V1 時的解析式 adapter。
-                ConfigureV2World();
+                await ConfigureV2WorldAsync();
             }
             else
             {
@@ -302,7 +346,7 @@ public partial class MainWindow : Window
                     trainCount,
                     specifiedHeadwaySeconds,
                     0.1);
-                ConfigureV2World();
+                await ConfigureV2WorldAsync();
             }
 
             if (!_v2Enabled && _simulationEngine is { } v1Engine)
@@ -315,7 +359,7 @@ public partial class MainWindow : Window
             UpdatePlaybackView();
             PlayButton.IsEnabled = true;
             var effectiveTrainCount = _v2Enabled
-                ? _v2World?.DispatchPlan?.Runs.Count ?? trainCount
+                ? _v2DispatchPlan?.Runs.Count ?? trainCount
                 : trainCount;
             StatusTextBlock.Text = $"{(_v2Enabled ? "V2 拓撲實際營運" : "V1 基礎物理")}模擬建立完成：{effectiveTrainCount} 列車、{stationInputs.Length} 站、固定時間步進 0.1 秒。"
                 + (_v2Enabled ? " 後續請由專案工作區修改。" : string.Empty);
@@ -393,16 +437,42 @@ public partial class MainWindow : Window
         PopulateV2Results();
     }
 
-    private void Play_Click(object sender, RoutedEventArgs e)
+    private async void Play_Click(object sender, RoutedEventArgs e)
     {
-        if (_simulationEngine is null && _v2World is null)
+        if (_simulationEngine is null && _playbackWorker is null)
         {
             return;
         }
 
         if (_playbackTimeSeconds >= _playbackDurationSeconds)
         {
-            _playbackTimeSeconds = 0;
+            if (!_v2Enabled)
+            {
+                _playbackTimeSeconds = 0;
+            }
+        }
+
+        if (_v2Enabled && _playbackWorker is not null)
+        {
+            try
+            {
+                if (_latestPlaybackFrame?.IsComplete == true)
+                {
+                    await _playbackWorker.ResetAsync();
+                    UpdateV2PlaybackView();
+                }
+
+                await _playbackWorker.PlayAsync(GetPlaybackSpeed());
+                _isV2PlaybackPlaying = true;
+                _playbackTimer.Start();
+                PlaybackStatusText.Text = $"播放中；要求 {GetPlaybackSpeed():0.#}×，正在量測有效模擬倍率。";
+                StatusTextBlock.Text = "正在播放模擬。";
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+
+            return;
         }
 
         _playbackTimer.Start();
@@ -413,21 +483,50 @@ public partial class MainWindow : Window
     private void Pause_Click(object sender, RoutedEventArgs e)
     {
         PausePlayback();
-        if (_simulationEngine is not null || _v2World is not null)
+        if (_simulationEngine is not null || _playbackWorker is not null)
         {
             PlaybackStatusText.Text = "已暫停；可繼續播放或重設。";
             StatusTextBlock.Text = "模擬已暫停。";
         }
     }
 
-    private void ResetPlayback_Click(object sender, RoutedEventArgs e)
+    private async void PlaybackSpeed_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_playbackWorker is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _playbackWorker.SetPlaybackRateAsync(GetPlaybackSpeed());
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private async void ResetPlayback_Click(object sender, RoutedEventArgs e)
     {
         PausePlayback();
-        _playbackTimeSeconds = 0;
-        if (_simulationEngine is not null || _v2World is not null)
+        if (_simulationEngine is not null || _playbackWorker is not null)
         {
-            _simulationEngine?.Reset();
-            ResetV2Playback();
+            if (_v2Enabled)
+            {
+                if (!await ResetV2PlaybackAsync())
+                {
+                    PlaybackStatusText.Text = _playbackWorker?.Completion.Exception?.GetBaseException() is { } failure
+                        ? $"模擬工作者已停止：{failure.Message}"
+                        : "模擬工作者已停止或專案正在切換；請重新建立模擬。";
+                    return;
+                }
+            }
+            else
+            {
+                _simulationEngine?.Reset();
+            }
+
+            _playbackTimeSeconds = 0;
             UpdatePlaybackView();
             PlaybackStatusText.Text = "已回到首班列車發車時刻。";
             StatusTextBlock.Text = "播放進度已重設。";
@@ -436,7 +535,51 @@ public partial class MainWindow : Window
 
     private void PlaybackTimer_Tick(object? sender, EventArgs e)
     {
-        if (_simulationEngine is null && _v2World is null)
+        try
+        {
+            PlaybackTimer_TickCore();
+        }
+        catch (Exception exception)
+        {
+            PausePlayback();
+            Trace.WriteLine($"Playback stopped after an unexpected UI update failure: {exception}");
+            PlaybackStatusText.Text = $"播放已停止：{exception.Message}";
+            StatusTextBlock.Text = "播放更新失敗；模擬已暫停，專案資料仍保留。";
+        }
+    }
+
+    private void PlaybackTimer_TickCore()
+    {
+        if (_v2Enabled && _playbackWorker is not null)
+        {
+            if (_playbackWorker.Completion.IsFaulted)
+            {
+                _isV2PlaybackPlaying = false;
+                _playbackTimer.Stop();
+                PlaybackStatusText.Text = $"實際模擬已停止：{_playbackWorker.Completion.Exception?.GetBaseException().Message}";
+                StatusTextBlock.Text = "模擬工作者發生錯誤。";
+                return;
+            }
+
+            UpdateV2PlaybackView(force: false);
+            ApplyCompletedPlannedTimeline();
+            if (_latestPlaybackFrame?.IsComplete == true)
+            {
+                _isV2PlaybackPlaying = false;
+                PausePlayback();
+                PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
+                StatusTextBlock.Text = "模擬完整循環已完成。";
+            }
+            else if (_isV2PlaybackPlaying && _latestPlaybackFrame is { } frame)
+            {
+                var performance = frame.Performance;
+                PlaybackStatusText.Text = $"播放中；要求 {performance.RequestedPlaybackRate:0.#}×、有效 {performance.EffectiveSimulationRate:0.#}×；舊畫面略過 {performance.FrameDropCount} 幀。";
+            }
+
+            return;
+        }
+
+        if (_simulationEngine is null)
         {
             PausePlayback();
             return;
@@ -449,20 +592,11 @@ public partial class MainWindow : Window
         }
 
         UpdatePlaybackView();
-        if (_v2Enabled && _v2World?.IsComplete == true)
-        {
-            _playbackTimeSeconds = _v2World.CurrentTimeSeconds;
-            PausePlayback();
-            PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
-            StatusTextBlock.Text = "模擬完整循環已完成。";
-            return;
-        }
-
         if (_playbackTimeSeconds >= _playbackDurationSeconds)
         {
             if (_v2Enabled && HasPendingV2TerminalOutcomes())
             {
-                _playbackDurationSeconds += Math.Max(60, (_v2World?.BaselineCycleTimeSeconds ?? 240) * 0.25);
+                _playbackDurationSeconds += Math.Max(60, (_latestPlaybackFrame?.BaselineCycleTimeSeconds ?? 240) * 0.25);
                 PlaybackStatusText.Text = "仍有車次等待端點退出或折返接續，播放範圍已自動延長。";
             }
             else
@@ -479,7 +613,7 @@ public partial class MainWindow : Window
 
     private void UpdatePlaybackView()
     {
-        if (_simulationEngine is null && _v2World is null)
+        if (_simulationEngine is null && _playbackWorker is null)
         {
             return;
         }
@@ -526,8 +660,8 @@ public partial class MainWindow : Window
         }
 
         RouteCanvas.Children.Clear();
-        var width = RouteCanvas.ActualWidth;
-        var height = RouteCanvas.ActualHeight;
+        var width = PrepareRouteCanvasWidth();
+        var height = PrepareRouteCanvasHeight();
         if (width < 100 || height < 100)
         {
             return;
@@ -720,7 +854,69 @@ public partial class MainWindow : Window
         SpeedCanvas.Children.Add(polyline);
     }
 
+    private const double RouteCanvasMinimumStationPitch = 92;
+    private const double RouteCanvasHorizontalPadding = 120;
+    private double _routeCanvasLayoutViewportHeight = double.NaN;
+
+    private double PrepareRouteCanvasWidth()
+    {
+        var viewportWidth = RouteScrollViewer.ViewportWidth;
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteScrollViewer.ActualWidth;
+        }
+        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        {
+            viewportWidth = RouteCanvas.ActualWidth;
+        }
+
+        var stationCount = _latestPlaybackFrame?.TopologyInfrastructure?.Stations.Count
+            ?? _route?.Stations.Count ?? 0;
+        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount);
+        if (!double.IsFinite(RouteCanvas.Width) || Math.Abs(RouteCanvas.Width - width) > .5)
+        {
+            RouteCanvas.Width = width;
+        }
+        return width;
+    }
+
+    private double PrepareRouteCanvasHeight()
+    {
+        var viewportHeight = RouteScrollViewer.ViewportHeight;
+        if (!double.IsFinite(viewportHeight) || viewportHeight < 1)
+        {
+            viewportHeight = RouteScrollViewer.ActualHeight;
+        }
+
+        var desiredHeight = Math.Max(300, viewportHeight);
+        if (!double.IsFinite(_routeCanvasLayoutViewportHeight)
+            || Math.Abs(_routeCanvasLayoutViewportHeight - viewportHeight) > .5)
+        {
+            _routeCanvasLayoutViewportHeight = viewportHeight;
+            RouteCanvas.Height = desiredHeight;
+        }
+        else if (!double.IsFinite(RouteCanvas.Height) || RouteCanvas.Height < desiredHeight - .5)
+        {
+            RouteCanvas.Height = desiredHeight;
+        }
+
+        // Label collision avoidance can extend the canvas once. Preserve that
+        // height until the viewport itself changes to keep the static rail cache.
+        return RouteCanvas.Height;
+    }
+
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)
+    {
+        var usableViewport = double.IsFinite(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
+        var desiredWidth = stationCount <= 0
+            ? usableViewport
+            : RouteCanvasHorizontalPadding + stationCount * RouteCanvasMinimumStationPitch;
+        return Math.Max(100, Math.Max(usableViewport, desiredWidth));
+    }
+
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
+
+    private void RouteScrollViewer_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
 
     private void SpeedCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawSpeedProfile();
 
@@ -733,6 +929,7 @@ public partial class MainWindow : Window
         _multipleTrainResult = null;
         _simulationEngine = null;
         ClearV2Results();
+        UpdateFixedTimetableArchiveExportState();
         _playbackTimeSeconds = 0;
         _playbackDurationSeconds = 0;
         TimetableRows.Clear();
@@ -752,7 +949,58 @@ public partial class MainWindow : Window
         DrawSpeedProfile();
     }
 
-    private void PausePlayback() => _playbackTimer.Stop();
+    private void PausePlayback()
+    {
+        if (_v2Enabled && _playbackWorker is { } worker)
+        {
+            _isV2PlaybackPlaying = false;
+            _playbackTimer.Stop();
+            _ = PauseWorkerSafelyAsync(worker);
+            return;
+        }
+
+        _playbackTimer.Stop();
+    }
+
+    private async Task PauseWorkerSafelyAsync(SimulationPlaybackWorker worker)
+    {
+        try
+        {
+            await worker.PauseAsync();
+            if (!Dispatcher.HasShutdownStarted && !Dispatcher.HasShutdownFinished)
+            {
+                await Dispatcher.InvokeAsync(() =>
+                {
+                    if (ReferenceEquals(_playbackWorker, worker))
+                    {
+                        UpdateV2PlaybackView(force: true);
+                    }
+                });
+            }
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_closeAfterPlaybackShutdown)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        _closeAfterPlaybackShutdown = true;
+        _playbackTimer.Stop();
+        _ = CloseAfterPlaybackShutdownAsync();
+    }
+
+    private async Task CloseAfterPlaybackShutdownAsync()
+    {
+        await StopCurrentPlaybackResourcesAsync();
+        await Dispatcher.InvokeAsync(Close);
+    }
 
     private double GetPlaybackSpeed()
     {

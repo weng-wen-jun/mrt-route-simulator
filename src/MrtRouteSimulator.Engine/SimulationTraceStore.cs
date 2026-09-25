@@ -77,6 +77,8 @@ internal sealed class SimulationTraceStore
         previous.Phase != current.Phase
         || previous.Direction != current.Direction
         || !string.Equals(previous.TrackId, current.TrackId, StringComparison.Ordinal)
+        || !string.Equals(previous.TrackEdgeId, current.TrackEdgeId, StringComparison.Ordinal)
+        || previous.ServiceRouteTraversalIndex != current.ServiceRouteTraversalIndex
         || !string.Equals(previous.CurrentStationId, current.CurrentStationId, StringComparison.Ordinal)
         || !string.Equals(previous.NextStationId, current.NextStationId, StringComparison.Ordinal)
         || !string.Equals(previous.PlatformId, current.PlatformId, StringComparison.Ordinal)

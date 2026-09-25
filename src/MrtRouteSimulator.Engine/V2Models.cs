@@ -203,7 +203,7 @@ public sealed class OperationalParameters
     public static OperationalParameters CreateDefault() => new(
         jerkMetersPerSecondCubed: 0.65,
         coastingRatio: 0.15,
-        approachDistanceMeters: 180,
+        approachDistanceMeters: 65,
         approachSpeedMetersPerSecond: 0,
         tractionFadeRatio: 0.45,
         trainLengthMeters: 92,

@@ -1,6 +1,6 @@
 # Contributing to MRT Route Simulator
 
-感謝參與本專案。這份文件說明 V4.0.1 的開發流程、架構邊界、驗證要求與 PR 準備方式。開始修改前請先讀 `AGENTS.md`；若涉及模擬模型、topology、物理、安全或 schema，再讀 `MODEL_SPEC.md`。
+感謝參與本專案。這份文件說明 V4.0.2 的開發流程、架構邊界、驗證要求與 PR 準備方式。開始修改前請先讀 `AGENTS.md`；若涉及模擬模型、topology、物理、安全或 schema，再讀 `MODEL_SPEC.md`。
 
 ## 1. 開發分支
 
@@ -22,12 +22,12 @@ git switch -c <type>/<short-topic>
 依任務性質閱讀：
 
 - `AGENTS.md`：責任模組、主要檔案、禁止事項、驗證矩陣。
-- `MODEL_SPEC.md`：V4.0.1 Track-first topology 契約、物理模型與 API 邊界。
+- `MODEL_SPEC.md`：V4.0.2 Track-first topology 契約、物理模型與 API 邊界。
 - `TODO.md`：目前真正尚未完成的工作；只以「現行待辦」未勾選項目為準。
 - `QA_REPORT.md`：最新測試基準、人工驗收範圍與已知限制。
 - `HANDOFF.md`：新接手者的快速交接摘要。
 
-產品版本以 `Directory.Build.props` 為單一權威來源。目前為 **V4.0.1**。
+產品版本以 `Directory.Build.props` 為單一權威來源。目前為 **V4.0.2**。
 
 ## 3. 架構邊界
 
@@ -197,7 +197,7 @@ commit 應小而聚焦，例如：
 fix: keep tail-track return stop on reverse platform
 feat: add guided legacy track-port migration
 test: cover passing rear-clear merge regression
-docs: update V4.0.1 handoff status
+docs: update V4.0.2 handoff status
 ```
 
 避免：

@@ -1,6 +1,28 @@
-# V4.0.1 交付狀態與後續清單
+# V4.0.2 交付狀態與後續清單
 
 > 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
+
+> **4.0.2 整合狀態：自動化驗證完成**：大型機場線、O04 路線圖與長時間播放效能 Phase 1／parallel worker 已合併至 `codex/integrate-v4.0.2-worktrees`。整合分支已完成 Release build、Engine 173/173、完整 WPF runner 與大型 full sample 定向 WPF playback 診斷；8,000 秒 benchmark 與原生桌面人工驗收仍待完成。以下 `[x]` 表示功能已實作並通過目前適用的驗證，不把尚未完成的桌面 gate 視為完成。
+
+## V4.0.2 進版摘要（2026-09-20）
+
+- [x] 大型機場線 full sample 以七階段 builder 建立 28 站 Schema 8 topology，涵蓋 FULL-LINE／SECTION／AIRPORT-DIRECT、O20 pocket 折返及 O04／O13 越行；整合分支 Engine 173/173、完整 WPF runner 與定向 WPF playback 診斷通過，原生桌面驗收歸入下方 UI 人工／顯示邊界。
+- [x] 與 GitHub `main`（`77c7c99`）比對後納入現行分支的四個新增提交：full sample、操作測試、去識別化／驗證文件及播放路線顯示區調整。
+- [x] 【V4-PLAYBACK-PERF-PHASE1】完成 ActualWorld-only playback、planned completion、retention regression 與獨立 benchmark；整合分支保留該架構並通過 Release build／Engine 173/173／完整 WPF runner，同一 sample 的 8,000 秒 benchmark仍待補跑，詳見 `QA_REPORT.md`。
+- [ ] 原生桌面不同 DPI、8,000 秒連續播放與 O04／O13／O20 關鍵畫面的完整人工驗收仍待完成。
+
+## 長時間播放效能後續階段
+
+- [x] 【V4-PLAYBACK-PERF-PHASE2】已整合 single-writer simulation worker、immutable playback snapshot、可靠命令、背景計畫時間軸、adaptive／分級 UI refresh、隱藏分頁延遲刷新與增量結果累積；完整 WPF runner 與大型 full sample 定向 playback 診斷通過，桌面驗收仍待完成。
+- [ ] 【V4-PLAYBACK-PERF-PHASE3】來源工作樹尚未實作 `SimulationWorld` hot-path profiler 優化；目標大型案例單 tick <= 1.5 ms，須先在整合分支完成 profile 再決定是否優化或提出平行化方案。
+- [ ] 【V4-PLAYBACK-PERF-PHASE4】來源工作樹尚未分離互動播放 retention 與 0.1 秒 Full trajectory 的離線 CSV／區間統計／圖表匯出；在此分離完成前，這些結果會消費互動播放的 0.5 秒樣本加狀態轉折，不能宣稱等同完整 0.1 秒歷史。
+
+## Playback worker／分級刷新（2026-09-23）
+
+- [x] 【PLAYBACK-B1/B3】實際 world 單一 worker、可靠命令、latest-frame-wins immutable frame、背景計畫時間軸、分級 UI 刷新、隱藏分頁延遲刷新及 ObservableCollection 差分更新。Release build 0 warnings／0 errors；Engine 145/145；playback worker targeted runner 通過。
+- [x] 【PLAYBACK-B2】時刻表、區間／全程統計、資源占用與 V1/V2 comparison 已消費新增事件／軌跡並與 2 秒、10 秒、重設及 3,600 秒完整分析核對。詳見 `QA_REPORT.md`。
+- [ ] 【PLAYBACK-QA-01】完整 WPF 範例載入、worker、速度行程與 CSV／PNG／PDF runner 已通過；整合分支 8,000 秒 benchmark 及原生桌面 1×／10×／30×／60×、不同 DPI、長時間 UI FPS／最長卡頓仍待完成。詳見 `QA_REPORT.md`。
+- [ ] 【PLAYBACK-PROFILE-01】來源工作樹尚未完成 28 站大型 sample 的整合 profile，Engine hot-path／C 階段尚未實作；待整合分支完成代表性 profile 後，再決定是否需要平行提案或 leader lookup 最佳化。
 
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 
@@ -58,9 +80,9 @@
 - [ ] 【V4-LEGACY-PORT-MIGRATION】已加入缺資料 edge 盤點、逐 edge 明確 A/B assignment API 與 WPF「套用明確側別／保留相容讀取／取消」引導；不從示意位置推定實體方向。仍須完成原生桌面流程驗收，並確認產品是否要將遷移後的明確側別設為所有舊檔的全面強制政策。
 
 - [x] 【V4-SAMPLE-SCENARIO-BUILDER-01】已新增可重用 `TopologyScenarioBuilder`／`TopologyScenarioValidation`：以既有 Schema 8 document、quick builder 與 topology-native `SimulationWorld` 分階段驗證 minimal topology baseline、station chain、service pattern、turnback、passing facility 與 timetable；Structural／Operational gate 可獨立執行，Regression 由 Release／Engine／WPF 流程負責。`samples/README.md` 已補 Scenario Manifest 欄位規範；`.mrtsim.json` 維持為輸出／載入範例，不建立第二套 Domain Model 或 runtime。新增回歸後 Engine 145/145 通過。
-- [ ] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】將臺中機場捷運示範案例由主要站 minimal baseline 分階段擴充：補齊 O01～O26（含 O08a、O15a）車站鏈與月台，再依序加入 O20 區間車折返、O04／O13 越行設施及全程車／機場直達車營運班表。正式來源資料與 synthetic test values 必須在 samples/README.md 明確區分。
+- [ ] 【V4-SAMPLE-TAICHUNG-AIRPORT-01】已完成 source-backed Full Station Chain：O01～O26（含 O08a、O15a）28 站、上下行主線、平台、ServiceRoute、directionRouteBindings 與 directedConnections；所有 27 段主線投影距離均由 station-center chainage 相減，O01–O26 為 29.943 km。完整 operational sample 仍待後續分階段驗證 Service patterns、O20 turnback、O04/O13 passing、peak/off-peak timetable；不得因既有 synthetic regression scenario 而宣稱此工作完成。O26 turnaround geometry、月台／車輛／dwell、設施幾何、坡度、曲線與速限仍非正式設計值。
 
-- [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。另修正窄視窗摘要卡文字裁切並完成新版目視複核。仍須補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
+- [ ] 【V4-UI-TRACK-DIAGRAM-MANUAL-01】2026-09-11～12 已實機讀取 baseline 與完整 topology，抽查兩範例主畫面／編輯器一般及窄視窗，以及越行、袋狀軌返回、尾軌折返等播放畫面；本輪抽查未見站名／設施圖例與列車標記互相遮擋。現行 full sample editor-720 另有 `EDGE:PASS-002` 55.3° 示意突折；仍須先修正該顯示 gate，再補足不同 DPI 與折返／交會關鍵畫面的連續檢查，不能以抽查代表完整驗收；範圍、尺寸與時間點見 QA_REPORT.md「桌面實機驗收進度」。
 
 ## V3.4.2 已完成（2026-08-29）
 
