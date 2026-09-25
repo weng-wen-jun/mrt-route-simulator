@@ -869,6 +869,32 @@ internal static class StationSchematicPresentation
                     var source = geometry.PointAt(ratio);
                     var transitionStart = compactLaneTransitions ? .06 : 0;
                     var transitionEnd = compactLaneTransitions ? .94 : 1;
+                    if (denseFullLine && verifiedSidings.Contains(edge.TrackEdgeId)
+                        && widePassingThroats && platformRanges.TryGetValue(edge.TrackEdgeId, out var passingPlatform))
+                    {
+                        // A long passing edge often places its platform close to
+                        // one endpoint.  Starting the lane transition at ratio 0
+                        // then creates a kilometre-long wedge on the overview,
+                        // even though the physical throat is near the station.
+                        // Keep the platform on the side lane and place the
+                        // visible turnout at a fixed distance before its center,
+                        // including the half-platform length in that distance.
+                        // Use one display distance for both directions so a
+                        // station whose side platforms share the same station
+                        // relative offsets is mirrored around its platform center, even
+                        // when the two physical siding edges have different
+                        // lengths before the station.
+                        const double approachFromPlatformCenterMeters = 240;
+                        var platformCenter = (passingPlatform.Start + passingPlatform.End) / 2;
+                        transitionStart = Math.Max(0,
+                            Math.Min(passingPlatform.Start,
+                                platformCenter - approachFromPlatformCenterMeters) / edge.LengthMeters);
+                        // The return to the through track must finish at the
+                        // physical exit node. Extending or shortening it only
+                        // in the drawing would separate train markers from the
+                        // rail they actually traverse.
+                        transitionEnd = 1;
+                    }
                     var laneY = ratio <= laneStart
                         ? Interpolate(from.Y, y,
                             SmoothStep((ratio - transitionStart) / Math.Max(.001, laneStart - transitionStart)))

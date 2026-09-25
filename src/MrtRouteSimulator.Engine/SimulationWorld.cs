@@ -2219,7 +2219,8 @@ public sealed class SimulationWorld
 
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         if (isScheduledStop
-            && (stationStopControl is { RequiresServiceBraking: true }
+            && (train.StationBrakingActive
+                || stationStopControl is { RequiresServiceBraking: true }
                 || ShouldBeginStationBraking(train, distanceToStation, desiredAcceleration, effectiveServiceBraking,
                     stationStopControl!.PredictedStoppingDistanceMeters)))
         {

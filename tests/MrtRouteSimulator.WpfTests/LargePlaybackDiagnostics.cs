@@ -26,10 +26,6 @@ internal static class LargePlaybackDiagnostics
         foreach (var platform in document.Topology.Platforms.Where(item => item.StationId == "O04"))
         {
             var center = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
-            var edgeLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == platform.TrackEdgeId)
-                .LengthMeters;
-            if (edgeLength - center > 100)
-                throw new InvalidOperationException($"O04 月臺 {platform.PlatformId} 距離實體站點過遠。");
             if (Math.Abs(projection.ToChainage(new TrackPosition(platform.TrackEdgeId, center))!.Value
                 - projection.StationCenters["O04"]) > .001)
                 throw new InvalidOperationException($"O04 月臺 {platform.PlatformId} 未對齊顯示站心。");
@@ -62,12 +58,6 @@ internal static class LargePlaybackDiagnostics
                 .Invoke(window, [null]);
             var routeCache = WpfTestWait.Field(window, "_topologyRouteVisualCache")!;
             var geometries = routeCache.GetType().GetProperty("EdgeGeometries")!.GetValue(routeCache)!;
-            var lookup = geometries.GetType().GetProperty("Item")!;
-            System.Windows.Point Position(string edgeId, double ratio)
-            {
-                var geometry = lookup.GetValue(geometries, [edgeId])!;
-                return (System.Windows.Point)geometry.GetType().GetMethod("PointAt")!.Invoke(geometry, [ratio])!;
-            }
             var labels = canvas.Children.OfType<FrameworkElement>()
                 .Where(element => element.Tag?.GetType().Name == "StationLabelAnchor")
                 .ToArray();
@@ -88,8 +78,7 @@ internal static class LargePlaybackDiagnostics
                 .Single(binding => binding.Direction == TrainDirection.Outbound).ServiceRouteId;
             var outboundRoute = document.ServiceRoutes.Single(route => route.ServiceRouteId == outboundRouteId);
             CheckProjectedRouteEdges(document, projection, outboundRoute, geometries, bodyCenters);
-            if ((Position("EDGE:PASS-001", 1) - Position("EDGE:DOWN:O04:O05", 0)).Length > .5)
-                throw new InvalidOperationException("O04 側線列車位置在出站邊界不連續。");
+            CheckPassingFacilitySchematicGeometry(document, geometries);
             if (canvas.Height + .5 < routeViewport.ViewportHeight)
                 throw new InvalidOperationException("路線圖畫布沒有填滿可視高度。");
             foreach (var stationId in new[] { "O04", "O13" })
@@ -103,15 +92,6 @@ internal static class LargePlaybackDiagnostics
                 throw new InvalidOperationException("大型路線未保留每站最小水平間距。");
             if (canvas.Children.OfType<TextBlock>().Any(item => Equals(item.Tag, "TrackConnectionIssue")))
                 throw new InvalidOperationException("大型路線仍顯示配線待修警告。");
-            System.Windows.Shapes.Polyline Rail(string edgeId) => canvas.Children.OfType<System.Windows.Shapes.Polyline>()
-                .Single(item => item.ToolTip?.ToString()?.StartsWith(edgeId + "\n", StringComparison.Ordinal) == true);
-            foreach (var arrivalEdge in new[] { "EDGE:PASS-001", "EDGE:DOWN:O03:O04:B-001" })
-            {
-                var arrival = Rail(arrivalEdge);
-                var departure = Rail("EDGE:DOWN:O04:O05");
-                if ((arrival.Points[^1] - departure.Points[0]).Length > .5)
-                    throw new InvalidOperationException($"O04 出站圖面不連續：{arrivalEdge}。");
-            }
             var presentation = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.StationSchematicPresentation")!;
             var warnings = (IReadOnlyList<string>)presentation.GetMethod("ValidateStationLabels")!
                 .Invoke(null, [canvas])!;
@@ -209,6 +189,15 @@ internal static class LargePlaybackDiagnostics
             {
                 throw worker.Completion.Exception!.GetBaseException();
             }
+
+            var stopViolations = frame.Events
+                .Where(item => item.EventType == SimulationEventType.StationStopViolation)
+                .Take(3)
+                .Select(item => $"{item.SimulationTimeSeconds:0.0}s {item.ServiceRunId}: {item.Message}")
+                .ToArray();
+            if (stopViolations.Length > 0)
+                throw new InvalidOperationException("大型樣本播放仍發生停站速度違規："
+                    + string.Join("；", stopViolations));
 
             if (observedRate < 50)
             {
@@ -361,6 +350,237 @@ internal static class LargePlaybackDiagnostics
             if (Math.Abs(difference) > 12)
                 throw new InvalidOperationException(
                     $"路線圖車站投影錯誤：{edgeId} {endpoint} ({offset:0.#}m) 畫面 X 偏離來源里程 {difference:0.0}px。");
+        }
+    }
+
+    private static void CheckPassingFacilitySchematicGeometry(
+        TopologyProjectDocument document,
+        object geometries)
+    {
+        var edges = document.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId,
+            StringComparer.OrdinalIgnoreCase);
+        var platforms = document.Topology.Platforms.ToDictionary(platform => platform.PlatformId,
+            StringComparer.OrdinalIgnoreCase);
+        var geometryItem = geometries.GetType().GetProperty("Item")!;
+
+        Point At(string edgeId, double offsetMeters)
+        {
+            var edge = edges[edgeId];
+            var geometry = geometryItem.GetValue(geometries, [edgeId])!;
+            return (Point)geometry.GetType().GetMethod("PointAt")!
+                .Invoke(geometry, [Math.Clamp(offsetMeters / edge.LengthMeters, 0, 1)])!;
+        }
+
+        Point AtNode(string edgeId, string nodeId)
+        {
+            var edge = edges[edgeId];
+            return edge.FromNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase)
+                ? At(edgeId, 0)
+                : edge.ToNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase)
+                    ? At(edgeId, edge.LengthMeters)
+                    : throw new InvalidOperationException($"越行設施 {edgeId} 沒有節點 {nodeId}。");
+        }
+
+        foreach (var stationId in new[] { "O04", "O13" })
+            if (document.Topology.PassingFacilities.Count(facility =>
+                    facility.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)) != 2)
+                throw new InvalidOperationException($"{stationId} 必須有上下行各一座越行設施。");
+
+        foreach (var facility in document.Topology.PassingFacilities
+                     .Where(item => item.StationId.Equals("O04", StringComparison.OrdinalIgnoreCase)
+                         || item.StationId.Equals("O13", StringComparison.OrdinalIgnoreCase)))
+        {
+            var local = platforms[facility.LocalPlatformId];
+            var through = platforms[facility.ExpressPlatformId];
+            var localEdge = edges[local.TrackEdgeId];
+            var throughEdge = edges[through.TrackEdgeId];
+            if (!localEdge.FromNodeId.Equals(throughEdge.FromNodeId, StringComparison.OrdinalIgnoreCase)
+                || !localEdge.ToNodeId.Equals(throughEdge.ToNodeId, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException($"{facility.FacilityId} 側線與正線沒有共用相同進出節點。");
+            }
+
+            var entry = AtNode(facility.ArrivalTrackEdgeId, localEdge.FromNodeId);
+            var localEntry = AtNode(local.TrackEdgeId, localEdge.FromNodeId);
+            var throughEntry = AtNode(through.TrackEdgeId, throughEdge.FromNodeId);
+            if ((entry - localEntry).Length > .51 || (entry - throughEntry).Length > .51)
+                throw new InvalidOperationException($"{facility.FacilityId} 入口接軌端點不連續。");
+
+            var exit = AtNode(facility.DepartureTrackEdgeId, localEdge.ToNodeId);
+            var localExit = AtNode(local.TrackEdgeId, localEdge.ToNodeId);
+            var throughExit = AtNode(through.TrackEdgeId, throughEdge.ToNodeId);
+            if ((exit - localExit).Length > .51 || (exit - throughExit).Length > .51)
+                throw new InvalidOperationException($"{facility.FacilityId} 出口接軌端點不連續。");
+
+            var localCenterOffset = (local.PlatformStartOffsetMeters + local.PlatformEndOffsetMeters) / 2;
+            var throughCenterOffset = (through.PlatformStartOffsetMeters + through.PlatformEndOffsetMeters) / 2;
+            var localCenter = At(local.TrackEdgeId, localCenterOffset);
+            var throughCenter = At(through.TrackEdgeId, throughCenterOffset);
+            if (Math.Abs(localCenter.X - throughCenter.X) > 8)
+                throw new InvalidOperationException($"{facility.FacilityId} 側線／正線月臺中心未對位：X 相差 {localCenter.X - throughCenter.X:0.0}px。");
+            if (Math.Abs(localCenter.Y - throughCenter.Y) < 8)
+                throw new InvalidOperationException($"{facility.FacilityId} 側線／正線月臺沒有保持可辨識的多軌間距。");
+
+            var localStop = At(local.TrackEdgeId, local.StopPositionOffsetMeters);
+            var throughStop = At(through.TrackEdgeId, through.StopPositionOffsetMeters);
+            if (Math.Abs(localStop.X - throughStop.X) > 8)
+                throw new InvalidOperationException($"{facility.FacilityId} 側線／正線停靠位置未對位：X 相差 {localStop.X - throughStop.X:0.0}px。");
+
+        }
+
+        CheckOppositeDirectionSymmetry("O04", 1);
+        // O13 的下／上行 edge 為 660／645 m；資料中的相對站心月臺 offset
+        // 相差 15 m，保留這個 synthetic sample 的近似對稱，不把兩條 edge
+        // 強行視為等長。
+        CheckOppositeDirectionSymmetry("O13", 20);
+
+        void CheckOppositeDirectionSymmetry(string stationId, double offsetToleranceMeters)
+        {
+            var down = document.Topology.PassingFacilities.SingleOrDefault(item =>
+                item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)
+                && item.ArrivalTrackEdgeId.Contains(":DOWN:", StringComparison.OrdinalIgnoreCase));
+            var up = document.Topology.PassingFacilities.SingleOrDefault(item =>
+                item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase)
+                && item.ArrivalTrackEdgeId.Contains(":UP:", StringComparison.OrdinalIgnoreCase));
+            if (down is null || up is null) return;
+
+            var downLocal = platforms[down.LocalPlatformId];
+            var upLocal = platforms[up.LocalPlatformId];
+            var downThrough = platforms[down.ExpressPlatformId];
+            var upThrough = platforms[up.ExpressPlatformId];
+            var downLocalCenterOffset = (downLocal.PlatformStartOffsetMeters
+                + downLocal.PlatformEndOffsetMeters) / 2;
+            var upLocalCenterOffset = (upLocal.PlatformStartOffsetMeters
+                + upLocal.PlatformEndOffsetMeters) / 2;
+
+            void CheckRelativeOffset(string name, double downValue, double upValue)
+            {
+                if (Math.Abs(downValue - upValue) > offsetToleranceMeters)
+                    throw new InvalidOperationException(
+                        $"{stationId} 上下行{name}未以站心鏡射：下行 {downValue:0.#}m、上行 {upValue:0.#}m。");
+            }
+
+            CheckRelativeOffset("月臺起點",
+                downLocalCenterOffset - downLocal.PlatformStartOffsetMeters,
+                upLocalCenterOffset - upLocal.PlatformStartOffsetMeters);
+            CheckRelativeOffset("月臺終點",
+                downLocalCenterOffset - downLocal.PlatformEndOffsetMeters,
+                upLocalCenterOffset - upLocal.PlatformEndOffsetMeters);
+            CheckRelativeOffset("停靠點",
+                downLocalCenterOffset - downLocal.StopPositionOffsetMeters,
+                upLocalCenterOffset - upLocal.StopPositionOffsetMeters);
+            var downLocalCenter = At(downLocal.TrackEdgeId,
+                (downLocal.PlatformStartOffsetMeters + downLocal.PlatformEndOffsetMeters) / 2);
+            var downThroughCenter = At(downThrough.TrackEdgeId,
+                (downThrough.PlatformStartOffsetMeters + downThrough.PlatformEndOffsetMeters) / 2);
+            var upLocalCenter = At(upLocal.TrackEdgeId,
+                (upLocal.PlatformStartOffsetMeters + upLocal.PlatformEndOffsetMeters) / 2);
+            var upThroughCenter = At(upThrough.TrackEdgeId,
+                (upThrough.PlatformStartOffsetMeters + upThrough.PlatformEndOffsetMeters) / 2);
+            if (Math.Abs(downLocalCenter.X - upLocalCenter.X) > 8
+                || Math.Abs(downThroughCenter.X - upThroughCenter.X) > 8)
+            {
+                throw new InvalidOperationException($"{stationId} 上下行月臺中心未以站心鏡射對位。");
+            }
+            CheckMirroredTrackGap("月臺中心", downLocalCenter, downThroughCenter,
+                upLocalCenter, upThroughCenter);
+
+            var downLocalStop = At(downLocal.TrackEdgeId, downLocal.StopPositionOffsetMeters);
+            var downThroughStop = At(downThrough.TrackEdgeId, downThrough.StopPositionOffsetMeters);
+            var upLocalStop = At(upLocal.TrackEdgeId, upLocal.StopPositionOffsetMeters);
+            var upThroughStop = At(upThrough.TrackEdgeId, upThrough.StopPositionOffsetMeters);
+            if (Math.Abs(downLocalStop.X - upLocalStop.X) > 8
+                || Math.Abs(downThroughStop.X - upThroughStop.X) > 8)
+            {
+                throw new InvalidOperationException($"{stationId} 上下行停靠點未以站心鏡射對位。");
+            }
+            CheckMirroredTrackGap("停靠點", downLocalStop, downThroughStop,
+                upLocalStop, upThroughStop);
+
+            if (stationId.Equals("O04", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (var (direction, local, through, centerOffset) in new[]
+                {
+                    ("下行", downLocal, downThrough, downLocalCenterOffset),
+                    ("上行", upLocal, upThrough, upLocalCenterOffset)
+                })
+                {
+                    CheckO04Junction(direction, "岔出", local, through, centerOffset - 240);
+                    CheckO04Junction(direction, "合併", local, through, centerOffset + 240);
+                    var sampleOffsets = new[] { 0d, 120d, 240d, 360d, 480d };
+                    var x = sampleOffsets.Select(offset => At(local.TrackEdgeId, offset).X).ToArray();
+                    var sign = direction == "下行" ? 1 : -1;
+                    var advances = Enumerable.Range(1, x.Length - 1)
+                        .Select(index => sign * (x[index] - x[index - 1])).ToArray();
+                    if (advances.Any(advance => advance <= 1)
+                        || advances.Max() - advances.Min() > 4)
+                        throw new InvalidOperationException(
+                            $"O04 {direction}側線列車在岔出與匯入間的畫面 X 不連續或速度突變。");
+                }
+            }
+
+            // Compare the actual turnout curve at equal distances from the
+            // platform center, rather than merely checking the end points.
+            foreach (var distance in new[] { 100d, 200d })
+            {
+                Point BeforeCenter(string edgeId, double centerOffset)
+                {
+                    var edge = edges[edgeId];
+                    var offset = centerOffset - distance;
+                    if (offset < 0 || offset > edge.LengthMeters) return new(double.NaN, double.NaN);
+                    return At(edgeId, offset);
+                }
+
+                var downLocalPoint = BeforeCenter(downLocal.TrackEdgeId, downLocalCenterOffset);
+                var downThroughPoint = BeforeCenter(downThrough.TrackEdgeId,
+                    (downThrough.PlatformStartOffsetMeters + downThrough.PlatformEndOffsetMeters) / 2);
+                var upLocalPoint = BeforeCenter(upLocal.TrackEdgeId, upLocalCenterOffset);
+                var upThroughPoint = BeforeCenter(upThrough.TrackEdgeId,
+                    (upThrough.PlatformStartOffsetMeters + upThrough.PlatformEndOffsetMeters) / 2);
+                if (!double.IsFinite(downLocalPoint.Y) || !double.IsFinite(downThroughPoint.Y)
+                    || !double.IsFinite(upLocalPoint.Y) || !double.IsFinite(upThroughPoint.Y)) continue;
+                var downGap = downLocalPoint.Y - downThroughPoint.Y;
+                var upGap = upLocalPoint.Y - upThroughPoint.Y;
+                if (Math.Abs(downGap + upGap) > 4)
+                    throw new InvalidOperationException(
+                        $"{stationId} 距站心 {distance:0}m 的上下行轉向未鏡射："
+                        + $"下行 {downGap:0.0}px、上行 {upGap:0.0}px。");
+            }
+
+            void CheckO04Junction(string direction, string name,
+                PlatformDefinitionV4 local, PlatformDefinitionV4 through, double offset)
+            {
+                var localEdge = edges[local.TrackEdgeId];
+                var throughEdge = edges[through.TrackEdgeId];
+                if (offset < 0 || offset > localEdge.LengthMeters
+                    || offset > throughEdge.LengthMeters)
+                {
+                    throw new InvalidOperationException(
+                        $"O04 {direction}{name} offset {offset:0.#}m 超出側線／正線 edge 範圍。");
+                }
+
+                var localPoint = At(local.TrackEdgeId, offset);
+                var throughPoint = At(through.TrackEdgeId, offset);
+                if ((localPoint - throughPoint).Length > .51)
+                {
+                    throw new InvalidOperationException(
+                        $"O04 {direction}{name}未在月臺中心 {(offset - (local.PlatformStartOffsetMeters + local.PlatformEndOffsetMeters) / 2):0.#}m 接軌："
+                        + $"畫面相差 {(localPoint - throughPoint).Length:0.0}px。");
+                }
+            }
+        }
+
+        static void CheckMirroredTrackGap(string scope,
+            Point downLocal, Point downThrough, Point upLocal, Point upThrough)
+        {
+            var downGap = downLocal.Y - downThrough.Y;
+            var upGap = upLocal.Y - upThrough.Y;
+            if (downGap <= 8 || upGap >= -8)
+                throw new InvalidOperationException(
+                    $"上下行{scope}沒有形成上下鏡射軌距：下行 {downGap:0.0}px、上行 {upGap:0.0}px。");
+            if (Math.Abs(Math.Abs(downGap) - Math.Abs(upGap)) > 4)
+                throw new InvalidOperationException(
+                    $"上下行{scope}軌距未鏡射：下行 {downGap:0.0}px、上行 {upGap:0.0}px。");
         }
     }
 }

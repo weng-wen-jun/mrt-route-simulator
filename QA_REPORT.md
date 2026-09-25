@@ -1,5 +1,12 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## O04 越行側線外觀與上下行鏡射（2026-09-25）
+
+- 原大型範例的 O04 下行側線長 2,070 m，繪圖從 O03 後方一路偏離正線，形成長楔形；上下行月臺中心到實體匯入節點僅 90 m。只改畫線會讓列車在接點跳離圖上的側線。
+- 原工作樹的可重建大型範例已將 O04 上下行分別重建為 480 m 的平行正線／側線：140 m 月臺落在 offset 170–310 m，停點在 240 m；岔出與匯入節點各距月臺中心 240 m。相鄰邊分段後總里程維持不變，`SimulationWorld`、車輛 cursor 與固定 0.1 秒步進未改。WPF 大型圖以月臺中心前 240 m 開始側線 Y 過渡，並在實體出口節點回到正線；X 仍取 `StationChainageProjection` 的 edge-local 映射。
+- 大型樣本 WPF 診斷檢查 O04／O13 接軌連續、月臺與停點對位、上下行軌距鏡射，以及 O04 月臺中心前後 240 m 的實體節點與畫面座標。播放分支 Release build 0 警告／0 錯誤、Engine 148/148、完整 WPF runner PASS；用重生的正式大型樣本執行 60× 診斷 PASS，觀測 58.9×、最大輸入間隔 42.7 ms，並確認播放期間沒有 `StationStopViolation`。離屏截圖顯示 O04 上下行短分岔對稱；原生桌面與不同 DPI 仍需人工確認。
+- 原工作樹最初完整 Engine runner 為 167/170，full station chain、完整情境及 V3.3 sample 均有 `StationStopViolation`。軌跡顯示停點前反覆煞車／再加速，持續全煞開始過晚。現在控制器預視下一個固定步進，並在停站煞車啟動後保持煞車；保留 65 m 設定及正常速度連續性。原工作樹 Release build 0 警告／0 錯誤、完整 Engine runner **170/170**，包括先前 8.58／9.3 km/h 紀錄的 V3.3 範例。
+
 ## O03→O04 路線圖速度失真修正（2026-09-25）
 
 - 根因在 WPF `StationSchematicPresentation.ApplyChainage` 的大型圖例外壓縮：O04 實體越行側線長 2,070 m，畫面卻把兩端強制放在 O04 站心左右約 32 px；前一段 O03→分岔點僅 200 m，反而承擔大部分站間畫面距離。`StationChainageProjection` 的 O03 2.007K、O04 4.277K、O05 4.877K 本身連續，不能改動實體里程或列車 cursor 來修這個畫面問題。
