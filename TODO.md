@@ -2,11 +2,20 @@
 
 > 只有本檔「現行待辦」內未勾選的核取方塊用來判定目前尚待修整的工作。歷史版本紀錄不計入待辦數量；V4 架構契約以 `MODEL_SPEC.md` 為準，完成狀態以 source、tests 與 `QA_REPORT.md` 為準。
 
+> **4.0.2 整合狀態：待重新驗證**：本檔合併了大型機場線與長時間播放效能 Phase 1 的來源分支紀錄；合併至 `codex/integrate-v4.0.2-worktrees` 後，尚未重新執行整合分支的 build、tests、benchmark 或桌面人工驗收。以下 `[x]` 僅表示來源工作樹的既有完成紀錄，不代表本次整合已驗證完成。
+
 ## V4.0.2 進版摘要（2026-09-20）
 
 - [x] 大型機場線 full sample 以七階段 builder 建立 28 站 Schema 8 topology，涵蓋 FULL-LINE／SECTION／AIRPORT-DIRECT、O20 pocket 折返及 O04／O13 越行；focused tests 15/15、Engine 161/161 通過。WPF full sample editor-720 仍在 `EDGE:PASS-002` 回報 55.3° 示意突折，歸入下方 UI 人工／顯示驗收邊界。
 - [x] 與 GitHub `main`（`77c7c99`）比對後納入現行分支的四個新增提交：full sample、操作測試、去識別化／驗證文件及播放路線顯示區調整。
+- [x] 【V4-PLAYBACK-PERF-PHASE1】完成 ActualWorld-only playback、planned completion、retention regression 與獨立 benchmark；來源分支的 Release build、Engine 150/150、WPF runner 與 benchmark 均有紀錄，詳見 `QA_REPORT.md`。本條為來源工作樹的既有驗證，整合後仍須重新執行。
 - [ ] 原生桌面不同 DPI、8,000 秒連續播放與 O04／O13／O20 關鍵畫面的完整人工驗收仍待完成。
+
+## 長時間播放效能後續階段
+
+- [ ] 【V4-PLAYBACK-PERF-PHASE2】將 `SimulationWorld` 推進移出 WPF UI thread，採 single-writer simulation worker、immutable playback snapshot 與 adaptive UI refresh；本 Phase 1 不實作。
+- [ ] 【V4-PLAYBACK-PERF-PHASE3】使用 profiler 優化 `SimulationWorld` hot path，目標大型案例單 tick <= 1.5 ms；本 Phase 1 不實作。
+- [ ] 【V4-PLAYBACK-PERF-PHASE4】分離互動播放 retention 與 0.1 秒 Full trajectory 的離線 CSV／區間統計／圖表匯出；在此分離完成前，這些結果會消費互動播放的 0.5 秒樣本加狀態轉折，不能宣稱等同完整 0.1 秒歷史。
 
 ## V4.0.1 工作區與參考圖樣式（2026-09-08）
 
