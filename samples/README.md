@@ -70,11 +70,11 @@
   - Full sample 的停站語意明確使用 `StopPositionReference.TrainCenter`，並令停點等於月臺幾何中心；O01／O26 終端目的月臺以 100m synthetic platform 置於邊界前 50m，確保整列車仍在實體 edge 內。
   - `fromPortSide`／`toPortSide`、平台／列車長度與停點、車輛最高速率、加減速度、jerk、traction/coasting 參數。
   - 各站 dwell、O20 折返秒數、pocket／passing facility 長度、停點、速限、資源占用與釋放時間。
-  - 代表性 dispatch offset 與待避 dwell；目前 builder 的 0／30／60／500／2,600／3,000／5,600 秒是 runtime regression input，不是正式班表。
+  - 代表性 dispatch offset 與普通停站 20 秒、指定車次待避條件；目前 builder 的 0／30／60／500／2,600／3,000／5,600 秒是 runtime regression input，不是正式班表。
 - 已建模：28 個邏輯車站、上下行月台與主線 ServiceRoute、`directedConnections`、`directionRouteBindings`、FULL-LINE／SECTION／EXPRESS stop patterns、O20 topology-native pocket traversal、O04／O13 passing facility、VehicleId／ServiceRunId 接續，以及越行／rear-clear／折返／退出事件的 focused regression 情境。
 - 刻意省略或尚未可工程化：平縱面、曲線／坡度／曲線限速、正式 turnout 型號與岔速、正式平台有效長度、正式車輛／號誌／閉塞參數、正式尖峰／離峰 timetable、fleet cycle／layover、完整容量客流模型及 O16 樓層／轉乘的列車 physics。O04／O13 的四股道只是 synthetic planning concept；目前可執行 facility 的細部幾何與 port side 仍屬 synthetic，不能視為工程配線。O04 的 `NODE:O04` 僅保留來源站心里程作顯示錨點，並非車輛行經的實體接點；上下行列車由各自的分岔／匯入節點及連續 480 m edge 通過站區。
 - 代表性 runtime regression 班表：`FULL-O13` 於 0 秒、`FULL-UP-01` 於 30 秒、`FULL-O04` 於 60 秒、`EXPRESS-01` 於 500 秒、其上行接續於 2,600 秒、`FULL-SECTION-O04` 於 2,600 秒、`SECTION-DOWN-01` 於 3,000 秒、其上行接續於 5,600 秒。builder 將尖峰 SECTION 與離峰 EXPRESS 放在同一份代表班表，只為在單一 runtime regression 中觀察多服務、越行與折返；不表示三種服務是正式同時營運，也不表示這些 offset 是正式時刻。
-- 預期關鍵事件：EXPRESS 依序完成 O04、O13 越行，再進入 O20 pocket 折返；SECTION 在 O04 越行後進入 O20 pocket 折返。普通車須等 express rear-clear 與衝突資源釋放後離開待避進路；FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。O04 幾何更新後，舊版精確事件秒數不再適用。
+- 預期關鍵事件：EXPRESS 依序完成 O04、O13 越行，再進入 O20 pocket 折返；SECTION 在 O04 越行後進入 O20 pocket 折返。O04／O13 待避模式以 `waitForOvertakeServiceRunId` 指定要等的車次，最低停站 20 秒；指定車次跨站通過後，仍須等車尾淨空、衝突資源釋放及安全許可才離開待避進路。舊存檔不含此欄位時沿用原停站秒數。FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。O04 幾何更新後，舊版精確事件秒數不再適用。
 - 目前驗證狀態（2026-09-25）：builder 的 7 個階段 Structural／Operational gate、Release solution build（0 warnings／0 errors）、完整 Engine runner **170/170**、O04／O13 雙向四股實體 topology、兩次越行與 rear-clear、Schema 8 round-trip 均通過。進站控制的下一步煞停預視及啟動後持續煞車已消除 65 m 設定下 full station chain、完整情境與 V3.3 sample 的 `StationStopViolation`。原生桌面不同 DPI、O04／O13 越行與 O20 折返的連續播放目視仍需驗證，不能用離屏 runner 代替。
 - 已知限制：此案例的通過結果只代表 synthetic topology-native sample 可執行，以及目前列出的 runtime 事件可被驗證；不代表任何正式路線設計、實際站距、四股道配線、號誌安全能力、正式容量或營運時刻表。
 

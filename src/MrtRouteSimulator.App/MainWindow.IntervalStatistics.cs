@@ -143,13 +143,17 @@ public partial class MainWindow
 
     private static void SetFilterOptions(ComboBox comboBox, IEnumerable<CatalogOption> options)
     {
-        comboBox.ItemsSource = new[] { new CatalogOption(string.Empty, "全部") }
+        var selectedId = GetSelectedFilterId(comboBox);
+        var allOptions = new[] { new CatalogOption(string.Empty, "全部") }
             .Concat(options
                 .Where(item => !string.IsNullOrWhiteSpace(item.Id))
                 .GroupBy(item => item.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First()))
             .ToArray();
-        comboBox.SelectedIndex = 0;
+        comboBox.ItemsSource = allOptions;
+        comboBox.SelectedItem = allOptions.FirstOrDefault(item =>
+            string.Equals(item.Id, selectedId, StringComparison.OrdinalIgnoreCase))
+            ?? allOptions[0];
     }
 
     private static string? GetSelectedFilterId(ComboBox comboBox) => comboBox.SelectedItem is CatalogOption option

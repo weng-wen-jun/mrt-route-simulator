@@ -9,6 +9,20 @@ internal static class Program
         app.InitializeComponent();
         try
         {
+            if (args.Contains("--large-output-only"))
+            {
+                var root = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal)) ?? ".";
+                OutputTests.RunLarge(System.IO.Path.GetFullPath(root));
+                Console.WriteLine("PASS WPF large outputs");
+                return 0;
+            }
+            if (args.Contains("--workspace-only"))
+            {
+                var root = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal)) ?? ".";
+                TopologyWorkspaceRoundTripTests.Run(System.IO.Path.GetFullPath(root));
+                Console.WriteLine("PASS WPF topology workspace");
+                return 0;
+            }
             if (args.Contains("--large-playback-only"))
             {
                 var sample = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal))
@@ -42,6 +56,8 @@ internal static class Program
             VisualRulesTests.Run();
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            Console.WriteLine("開始 WPF 大型拓撲工作區往返測試");
+            TopologyWorkspaceRoundTripTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
             Console.WriteLine("開始 WPF 播放 worker 測試");
             PlaybackWorkerTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
             Console.WriteLine("開始 WPF 長行程／結果測試");

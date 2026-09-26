@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
         SourceInitialized += (_, _) => FitInitialWindowToWorkArea();
         Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
         VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";

@@ -14,6 +14,15 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
+    private static readonly Color[] LockedRouteColors =
+    [
+        Color.FromRgb(232, 95, 27),
+        Color.FromRgb(190, 42, 116),
+        Color.FromRgb(215, 145, 24),
+        Color.FromRgb(207, 57, 49),
+        Color.FromRgb(160, 57, 119)
+    ];
+
     private SimulationPlaybackWorker? _playbackWorker;
     private PlaybackFrame? _latestPlaybackFrame;
     private PlannedTimelineArtifact? _plannedTimelineArtifact;
@@ -26,6 +35,23 @@ public partial class MainWindow
     private double _lastRouteRenderMilliseconds;
     private int _routeStaticRebuildCount;
     private TopologyRouteVisualCache? _topologyRouteVisualCache;
+
+    private void RouteLockVisibility_Changed(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            AppDisplayPreferences.SaveShowLockedRoutes(ShowLockedRoutesMenuItem.IsChecked);
+        }
+        catch (IOException)
+        {
+            StatusTextBlock.Text = "已切換進路顯示，但無法保存本機畫面設定。";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = "已切換進路顯示，但無法保存本機畫面設定。";
+        }
+        if (IsLoaded) DrawRoute();
+    }
 
     private sealed record TopologyRouteVisualCache(
         InfrastructureGraphV4 Infrastructure,
@@ -52,6 +78,7 @@ public partial class MainWindow
     private bool _intervalStatisticsDirty = true;
     private bool _safetyHistoryDirty = true;
     private bool _actualSummaryDirty = true;
+    private bool _refreshingSafetyPairFilter;
     private ResolvedDispatchPlan? _v2DispatchPlan;
     private SimulationProjectDocument? _activeSimulationProjectDocument;
     private IReadOnlyList<SimulationEvent> _plannedTimetableEvents = [];
@@ -377,7 +404,8 @@ public partial class MainWindow
                     _ => throw new SimulationValidationException(["停站模式動作無效。"])
                 },
                 item.PassingSpeedLimitMetersPerSecond,
-                item.DwellTimeSeconds)).ToArray()))
+                item.DwellTimeSeconds,
+                item.WaitForOvertakeServiceRunId)).ToArray()))
         .ToArray();
 
     private async void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -480,9 +508,16 @@ public partial class MainWindow
 
     private void SafetyFilter_Changed(object sender, SelectionChangedEventArgs e)
     {
+        if (_refreshingSafetyPairFilter)
+        {
+            return;
+        }
+
         if (_latestPlaybackFrame is not null)
         {
-            UpdateV2PlaybackView();
+            // Filter changes are valid while playback is paused. Force a
+            // render because the frame sequence itself has not changed.
+            UpdateV2PlaybackView(force: true);
         }
     }
 
@@ -577,12 +612,12 @@ public partial class MainWindow
 
         var dialog = new SaveFileDialog
         {
-            Title = "匯出軌跡與事件 CSV",
+            Title = "匯出實際全量軌跡與事件 CSV",
             Filter = "CSV 資料 (*.csv)|*.csv",
             DefaultExt = ".csv",
             AddExtension = true,
             OverwritePrompt = true,
-            FileName = $"{GetActiveRouteDisplayName()}_軌跡事件.csv"
+            FileName = $"{GetActiveRouteDisplayName()}_實際全量軌跡事件.csv"
         };
         if (dialog.ShowDialog(this) != true)
         {
@@ -620,7 +655,8 @@ public partial class MainWindow
                 snapshot ?? topologyWorld.GetSnapshot(),
                 width,
                 height,
-                topologyWorld.TrainCenterPositions);
+                topologyWorld.TrainCenterPositions,
+                topologyWorld.ActiveRouteLocks);
             return;
         }
 
@@ -770,7 +806,8 @@ public partial class MainWindow
         SimulationSnapshot snapshot,
         double width,
         double height,
-        IReadOnlyDictionary<string, TrackPosition> trainCenterPositions)
+        IReadOnlyDictionary<string, TrackPosition> trainCenterPositions,
+        IReadOnlyList<LockedRouteSegment> activeRouteLocks)
     {
         var cached = _topologyRouteVisualCache;
         if (cached is not null
@@ -786,6 +823,7 @@ public partial class MainWindow
                 RouteCanvas.Children.RemoveAt(RouteCanvas.Children.Count - 1);
             }
 
+            DrawTopologyRouteLocks(infrastructure, activeRouteLocks, cached.EdgeGeometries);
             DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
                 cached.EdgeGeometries, cached.StationChainage, width, height);
             return;
@@ -1190,6 +1228,7 @@ public partial class MainWindow
         _topologyRouteVisualCache = new TopologyRouteVisualCache(
             infrastructure, topologyProject, width, RouteCanvas.Height, edgeGeometries, stationChainage,
             RouteCanvas.Children.Count);
+        DrawTopologyRouteLocks(infrastructure, activeRouteLocks, edgeGeometries);
         DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
             edgeGeometries, stationChainage, width, height);
 
@@ -1198,6 +1237,94 @@ public partial class MainWindow
             TraversalDirection direction) => direction == TraversalDirection.Forward
                 ? (edge.FromNodeId, edge.ToNodeId)
                 : (edge.ToNodeId, edge.FromNodeId);
+    }
+
+    private void DrawTopologyRouteLocks(
+        InfrastructureGraphV4 infrastructure,
+        IReadOnlyList<LockedRouteSegment> activeRouteLocks,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> edgeGeometries)
+    {
+        if (!ShowLockedRoutesMenuItem.IsChecked) return;
+
+        var connections = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var locked in activeRouteLocks)
+        {
+            if (!infrastructure.TryGetEdge(locked.TrackEdgeId, out var edge)
+                || !edgeGeometries.TryGetValue(locked.TrackEdgeId, out var geometry)) continue;
+
+            var startRatio = Math.Clamp(locked.StartOffsetMeters / edge.LengthMeters, 0, 1);
+            var endRatio = Math.Clamp(locked.EndOffsetMeters / edge.LengthMeters, 0, 1);
+            if (endRatio - startRatio <= 0.0001) continue;
+
+            var points = new PointCollection();
+            for (var step = 0; step <= 12; step++)
+                points.Add(geometry.PointAt(startRatio + (endRatio - startRatio) * step / 12));
+
+            var color = LockedRouteColors[ParseVehicleIndex(locked.VehicleId) % LockedRouteColors.Length];
+            RouteCanvas.Children.Add(new Polyline
+            {
+                Points = points,
+                Stroke = Brushes.White,
+                StrokeThickness = 9,
+                StrokeLineJoin = PenLineJoin.Round,
+                IsHitTestVisible = false
+            });
+            RouteCanvas.Children.Add(new Polyline
+            {
+                Points = points,
+                Stroke = new SolidColorBrush(color),
+                StrokeThickness = 6,
+                StrokeLineJoin = PenLineJoin.Round,
+                ToolTip = $"{locked.VehicleId}｜{locked.ServiceRunId} 已鎖定進路\n"
+                    + $"軌道 {locked.TrackEdgeId} · {locked.StartOffsetMeters:0.#}～{locked.EndOffsetMeters:0.#} m\n"
+                    + $"衝突資源：{string.Join("、", locked.ResourceIds)}"
+            });
+            if (locked.PreviousTraversal is { } previous)
+                DrawLockedRouteConnection(infrastructure, edgeGeometries, previous, locked.Traversal,
+                    locked.VehicleId, locked.ServiceRunId, color, connections);
+            if (locked.NextTraversal is { } next)
+                DrawLockedRouteConnection(infrastructure, edgeGeometries, locked.Traversal, next,
+                    locked.VehicleId, locked.ServiceRunId, color, connections);
+        }
+    }
+
+    private void DrawLockedRouteConnection(
+        InfrastructureGraphV4 infrastructure,
+        IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> edgeGeometries,
+        DirectedTrackTraversal fromTraversal,
+        DirectedTrackTraversal toTraversal,
+        string vehicleId,
+        string serviceRunId,
+        Color color,
+        ISet<string> drawnConnections)
+    {
+        if (fromTraversal.TrackEdgeId.Equals(toTraversal.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+            || !infrastructure.DirectedConnections.Any(connection =>
+                connection.FromTrackEdgeId.Equals(fromTraversal.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+                && connection.FromDirection == fromTraversal.Direction
+                && connection.ToTrackEdgeId.Equals(toTraversal.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+                && connection.ToDirection == toTraversal.Direction)
+            || !edgeGeometries.TryGetValue(fromTraversal.TrackEdgeId, out var fromGeometry)
+            || !edgeGeometries.TryGetValue(toTraversal.TrackEdgeId, out var toGeometry)
+            || !infrastructure.TryGetEdge(fromTraversal.TrackEdgeId, out var fromEdge)
+            || !infrastructure.TryGetEdge(toTraversal.TrackEdgeId, out var toEdge)) return;
+
+        var key = $"{vehicleId}|{fromTraversal.TrackEdgeId}|{fromTraversal.Direction}|{toTraversal.TrackEdgeId}|{toTraversal.Direction}";
+        if (!drawnConnections.Add(key)) return;
+        var from = fromTraversal.Direction == TraversalDirection.Forward ? fromGeometry.To : fromGeometry.From;
+        var to = toTraversal.Direction == TraversalDirection.Forward ? toGeometry.From : toGeometry.To;
+        var incoming = fromTraversal.Direction == TraversalDirection.Forward
+            ? fromGeometry.To - fromGeometry.PointAt(.99) : fromGeometry.From - fromGeometry.PointAt(.01);
+        var outgoing = toTraversal.Direction == TraversalDirection.Forward
+            ? toGeometry.PointAt(.01) - toGeometry.From : toGeometry.PointAt(.99) - toGeometry.To;
+        var allowLaneTurn = fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
+            || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline;
+        var tooltip = $"{vehicleId}｜{serviceRunId} 已鎖定進路接軌\n"
+            + $"{fromTraversal.TrackEdgeId} → {toTraversal.TrackEdgeId}";
+        StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing,
+            Brushes.White, tooltip, allowLaneTurn, 10);
+        StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing,
+            new SolidColorBrush(color), tooltip, allowLaneTurn, 6);
     }
 
     private void DrawTopologyTrainMarkers(
@@ -1330,9 +1457,9 @@ public partial class MainWindow
             + (useActual ? "顯示截至目前的實際運行。" : "顯示計畫模擬時間範圍內的運行。");
 
         var left = 42d;
-        var top = 14d;
+        var top = 26d;
         var right = 15d;
-        var bottom = 38d;
+        var bottom = 62d;
         var plotWidth = width - left - right;
         var plotHeight = height - top - bottom;
         var minTime = samples[0].SimulationTimeSeconds;
@@ -1353,7 +1480,8 @@ public partial class MainWindow
             StrokeThickness = 1.4,
             StrokeDashArray = [4, 3]
         };
-        foreach (var sample in TrajectoryAnalysis.DecimatePreservingCriticalPoints(samples, 450))
+        var displaySamples = TrajectoryAnalysis.DecimatePreservingCriticalPoints(samples, 450);
+        foreach (var sample in displaySamples)
         {
             var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
             var y = top + plotHeight - sample.SpeedMetersPerSecond * 3.6 / maxSpeed * plotHeight;
@@ -1364,6 +1492,8 @@ public partial class MainWindow
 
         canvas.Children.Add(limitLine);
         canvas.Children.Add(speedLine);
+        DrawSpeedLimitLabels(canvas, displaySamples, left, top, plotWidth, plotHeight, minTime, maxTime, maxSpeed);
+        DrawSpeedStopLabels(canvas, displaySamples, left, top + plotHeight, plotWidth, minTime, maxTime);
         var previousDirection = samples[0].Direction;
         var directionChangeIndex = 0;
         foreach (var sample in samples.Skip(1))
@@ -1380,7 +1510,100 @@ public partial class MainWindow
             AddCanvasText(canvas, $"轉{DirectionToChinese(sample.Direction)}", Math.Clamp(x + 3, left, left + plotWidth - 45),
                 top + 18 + directionChangeIndex++ % 2 * 15, 10, Color.FromRgb(85, 94, 112));
         }
-        AddCanvasText(canvas, useActual ? "— 實際速度　- - 軌道速限" : "— 計畫速度　- - 軌道速限", left + 8, top + 2, 10, Color.FromRgb(85, 94, 112));
+        AddCanvasText(canvas, useActual ? "— 實際速度　- - 軌道速限" : "— 計畫速度　- - 軌道速限", left + 8, top - 22, 10, Color.FromRgb(85, 94, 112));
+    }
+
+    private void DrawSpeedLimitLabels(
+        Canvas canvas,
+        IReadOnlyList<TrajectorySample> samples,
+        double left,
+        double top,
+        double plotWidth,
+        double plotHeight,
+        double minTime,
+        double maxTime,
+        double maxSpeed)
+    {
+        var previousLimit = double.NaN;
+        foreach (var sample in samples)
+        {
+            var limit = GetDisplaySpeedLimitMetersPerSecond(sample) * 3.6;
+            if (!double.IsNaN(previousLimit) && Math.Abs(limit - previousLimit) < 0.05) continue;
+            previousLimit = limit;
+
+            var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
+            var y = top + plotHeight - limit / maxSpeed * plotHeight;
+            var label = new TextBlock
+            {
+                Text = $"{limit:0.#}",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(153, 92, 12)),
+                Background = new SolidColorBrush(Color.FromArgb(225, 250, 251, 253)),
+                ToolTip = $"軌道速限 {limit:0.#} km/h",
+                Tag = "SpeedLimitLabel"
+            };
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(label, Math.Clamp(x + 3, left + 2,
+                Math.Max(left + 2, left + plotWidth - label.DesiredSize.Width - 2)));
+            Canvas.SetTop(label, Math.Max(top + 1, y - label.DesiredSize.Height - 2));
+            canvas.Children.Add(label);
+        }
+    }
+
+    private void DrawSpeedStopLabels(
+        Canvas canvas,
+        IReadOnlyList<TrajectorySample> samples,
+        double left,
+        double axisY,
+        double plotWidth,
+        double minTime,
+        double maxTime)
+    {
+        var stopIndex = 0;
+        for (var index = 0; index < samples.Count;)
+        {
+            var first = samples[index];
+            if (first.Phase != OperationalPhase.Dwelling || Math.Abs(first.SpeedMetersPerSecond) > 0.01
+                || string.IsNullOrWhiteSpace(first.CurrentStationId))
+            {
+                index++;
+                continue;
+            }
+
+            var end = index + 1;
+            while (end < samples.Count
+                   && samples[end].Phase == OperationalPhase.Dwelling
+                   && Math.Abs(samples[end].SpeedMetersPerSecond) <= 0.01
+                   && samples[end].CurrentStationId == first.CurrentStationId
+                   && samples[end].ServiceRunId == first.ServiceRunId)
+            {
+                end++;
+            }
+
+            var stopTime = (first.SimulationTimeSeconds + samples[end - 1].SimulationTimeSeconds) / 2;
+            var x = left + (stopTime - minTime) / (maxTime - minTime) * plotWidth;
+            var tooltip = $"{first.CurrentStationId} 停站 · {TrajectoryAnalysis.FormatClock(_startClockSeconds + stopTime)}";
+            canvas.Children.Add(new Line
+            {
+                X1 = x, X2 = x, Y1 = axisY - 5, Y2 = axisY + 4,
+                Stroke = Brushes.SteelBlue, StrokeThickness = 1,
+                ToolTip = tooltip
+            });
+            var label = new TextBlock
+            {
+                Text = first.CurrentStationId,
+                FontSize = 9,
+                Foreground = Brushes.SteelBlue,
+                ToolTip = tooltip,
+                Tag = "StopStationLabel"
+            };
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(label, Math.Clamp(x - label.DesiredSize.Width / 2, left,
+                Math.Max(left, left + plotWidth - label.DesiredSize.Width)));
+            Canvas.SetTop(label, axisY + 20 + stopIndex++ % 2 * 15);
+            canvas.Children.Add(label);
+            index = end;
+        }
     }
 
     private void DrawSpeedTimeAxisTicks(
@@ -1661,12 +1884,20 @@ public partial class MainWindow
             AddCanvasText(TimeDistanceCanvas, TrajectoryAnalysis.FormatClock(_startClockSeconds + time), x - 34, top + plotHeight + 8, 9, Color.FromRgb(82, 93, 111));
         }
 
+        var directionFilter = GetSelectedTag(DiagramDirectionComboBox);
+        var vehicleFilter = DiagramVehicleComboBox.SelectedItem?.ToString();
         DrawSeries(planned, isPlanned: true);
         DrawSeries(actual, isPlanned: false);
 
         foreach (var simulationEvent in _latestPlaybackFrame.Events.Where(item =>
                      item.SimulationTimeSeconds >= startTime
                      && item.SimulationTimeSeconds <= endTime
+                     && (directionFilter == "All"
+                         || directionFilter == "Outbound" && item.Direction == TrainDirection.Outbound
+                         || directionFilter == "Inbound" && item.Direction == TrainDirection.Inbound)
+                     && (string.IsNullOrWhiteSpace(vehicleFilter)
+                         || vehicleFilter == "全部"
+                         || item.VehicleId == vehicleFilter)
                      && item.EventType is
                          SimulationEventType.Departure
                          or SimulationEventType.Arrival
@@ -1726,8 +1957,6 @@ public partial class MainWindow
 
         void DrawSeries(IReadOnlyList<TrajectorySample> source, bool isPlanned)
         {
-            var directionFilter = GetSelectedTag(DiagramDirectionComboBox);
-            var vehicleFilter = DiagramVehicleComboBox.SelectedItem?.ToString();
             var filtered = source.Where(sample =>
                 sample.SimulationTimeSeconds >= startTime
                 && sample.SimulationTimeSeconds <= endTime
@@ -1816,6 +2045,11 @@ public partial class MainWindow
 
     private void RefreshPairFilter(IEnumerable<SafetyObservation> observations)
     {
+        if (_refreshingSafetyPairFilter)
+        {
+            return;
+        }
+
         var selected = SafetyPairComboBox.SelectedItem?.ToString();
         var keys = observations.Select(PairKey).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
         if (keys.SequenceEqual(SafetyPairComboBox.Items.Cast<string>(), StringComparer.Ordinal))
@@ -1823,15 +2057,23 @@ public partial class MainWindow
             return;
         }
 
-        SafetyPairComboBox.Items.Clear();
-        foreach (var key in keys)
+        _refreshingSafetyPairFilter = true;
+        try
         {
-            SafetyPairComboBox.Items.Add(key);
-        }
+            SafetyPairComboBox.Items.Clear();
+            foreach (var key in keys)
+            {
+                SafetyPairComboBox.Items.Add(key);
+            }
 
-        SafetyPairComboBox.SelectedItem = selected is not null && keys.Contains(selected, StringComparer.Ordinal)
-            ? selected
-            : keys.FirstOrDefault();
+            SafetyPairComboBox.SelectedItem = selected is not null && keys.Contains(selected, StringComparer.Ordinal)
+                ? selected
+                : keys.FirstOrDefault();
+        }
+        finally
+        {
+            _refreshingSafetyPairFilter = false;
+        }
     }
 
     private void PopulateFilterControls(ResolvedDispatchPlan dispatchPlan)

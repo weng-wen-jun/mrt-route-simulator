@@ -4,7 +4,7 @@
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前整合分支的 Engine runner 為 `173/173 tests`、Release build `0 warnings / 0 errors`（2026-09-26）；完整 WPF runner 已通過範例載入、playback worker、速度行程與 CSV／PNG／PDF 輸出，另大型 full sample 定向 playback 診斷在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms。原生桌面不同 DPI 與連續播放仍未人工驗收。站場建置的阻擋規則、版面提示及一鍵驗收入口見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，逐檔修正見 [範例檢查表](samples/範例檢查表.md)；完整驗收邊界見 `QA_REPORT.md`。
+目前本地 Release build `0 warnings / 0 errors`、Engine runner `184/184 tests`，完整 WPF runner 亦通過。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項大型播放診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
@@ -15,9 +15,17 @@
 3. 第一次可直接使用六站示範資料，按「計算並建立模擬」。
 4. 從「檔案 → 讀取存檔」載入 [`samples/10-小型-三站完整拓樸基準範例.mrtsim.json`](samples/10-小型-三站完整拓樸基準範例.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇合成路線、七種站場、折返或越行情境；所有範例均為 Schema 8。
 5. 在「模擬動畫」播放、暫停或重設；其他分頁可查看時刻表、區間物理、移動閉塞與列車運行圖。
-6. 模擬全部完成後，從「檔案 → 匯出完成後固定時刻表」建立可重複讀取的封存檔；從「檔案」可存取專案或重新讀取封存。
+6. Schema 8 topology 專案使用「檔案 → 存檔」保存可編輯設定，並從結果頁匯出 CSV／PNG／PDF。「檔案 → 匯出完成後固定時刻表」只保留給 legacy Schema 7 相容動態模擬；讀入的 Schema 7 專案會先轉成 Schema 8，因此轉換後此選項停用。
 
 本機需要 Microsoft .NET 10 Desktop Runtime。本專案不使用帳號、資料庫、遙測或執行時網路連線，也沒有第三方 NuGet 套件。
+
+## 指定車次待避
+
+在主畫面選「營運設定 → 停站模式」，選取停站模式後，於車站指令的「待避指定車次」欄填入快速車的**車次編號**（`ServiceRunId`），例如 `EXPRESS-DOWN-01`。這是單一班次的編號，不是服務類型或列車實體編號。若使用主畫面的快速輸入表單，同名欄位也可輸入，並會與專案工作區及存檔同步。
+
+指定車次待避時，「停站秒數」是最低停留時間。本站必須有可執行的越行設施，指定車次須排在手動班表中、具越行資格，且其停站模式須在本站跨站通過。待避車達到最低停留時間且指定車次通過本站後，才進一步檢查越行車車尾淨空、進路資源及安全條件並放行。未填「待避指定車次」時沿用原本停站秒數與既有待避規則；讀取舊專案不會自動指定車次。
+
+大型 28 站範例的 O04／O13 已示範此設定，最低停站時間為 20 秒。可在「檔案 → 讀取存檔」載入範例，再開啟「營運設定 → 停站模式」查看或修改。
 
 ## V4.0.3 Track-first topology
 
@@ -33,12 +41,16 @@
 - `TrackSpeedLimitService` 使用 `TrackSpeedLimitDefinition` 的 edge-local interval。
 - `TopologySimulationDefinition` 是 V2 world 的正式輸入；world 不提供 compatibility Route 或 legacy InfrastructureGraph。
 - 時刻表、區間統計、運行圖、CSV、PNG/PDF 匯出皆消費 topology 結果 context；投影 chainage 不參與物理或 safety。
+- V4.0.3 的袋狀軌與站後尾軌折返會在實體折返停點等待接續班表並發出反向車次；返回正線月台後只執行設定的上下客停靠時間，時刻表以折返設施的發車事件作為反向車次起點。
+- 互動 ActualWorld 以 0.5 秒間隔保留軌跡，另保留事件與狀態轉折。現行 CSV、區間統計及圖表使用這份互動歷史；獨立的 0.1 秒完整軌跡離線匯出仍列於 [TODO.md](TODO.md)。
 
 ## 驗收與限制
 
-Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback 診斷已完成；原生桌面不同 DPI／連續播放驗收仍在進行。詳見 [`TODO.md`](TODO.md) 和 [`QA_REPORT.md`](QA_REPORT.md)；桌面匯出範例位於 [`artifacts`](artifacts)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
+Engine 自動化與完整 WPF runner 已完成；大型 full sample 的 60× 定向 playback 數值屬 V4.0.2 整合版紀錄，V4.0.3 尚待重測。原生桌面不同 DPI、8,000 秒連續播放及 O04／O13／O20 關鍵畫面仍待人工驗收。詳見 [TODO.md](TODO.md) 與 [CHANGELOG.md](CHANGELOG.md)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
 
 ## V3.4.2 進站精停修正
+
+以下 V3.3～V3.4.2 段落保留當時版本的功能沿革，並非現行 V4 的站場建置步驟。現行專案使用 Schema 8；尾軌、袋狀軌、折返與越行均由實體 topology edge、連續 traversal 及對應作業執行。完整版本沿革見 [CHANGELOG.md](CHANGELOG.md)。
 
 - 排定停站由 Engine 的 `StationStopController` 統一決定目標速度：高速時依剩餘距離、Jerk 與營運煞車能力追蹤煞車曲線；預測全煞停點會越線時才要求營運煞車。
 - 最後 12 m 切入低速精停，目標速度受 3 m/s 上限與距停車點 2 m 邊界共同約束；即使近站低速限制解除，也不會再按一般線速加速。
@@ -58,8 +70,8 @@ Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback �
 - 停站模式新增「折返」。將中央避車線建成路線中的虛擬站點、設為 `CentralSidingTurnback`，再把該站設成「折返」，即可讓區間車停靠、占用避車線資源並反向接續車次。
 - 站後折返可在折返設定的股道清單指定一條下行、一條上行 `TailTrack`；兩線共同端點以 `TAIL:<折返設定編號>` 表示執行期虛擬節點。列車先依到達方向駛入尾軌、在該點停等，再改走反方向尾軌返回端點站接續新車次；未配置成對尾軌的既有設定維持原本的時間抽象行為。
 - 寫實引擎的進站煞車鎖定與 2 m 近停吸附門檻一致，避免 Jerk 受限減速在停車點前解除煞車並短暫重新牽引。
-- Engine 以 `SimulationSession` 統一實際與計畫世界；Schema 8 topology 互動播放的 ActualWorld 使用 0.5 秒 trajectory retention，並保留事件、相位、方向、edge／traversal、站點、月台與 constraint 狀態轉折。CSV／區間統計目前消費這份互動歷史；真正 0.1 秒 Full trajectory 的離線匯出尚未與互動留存分離，詳見後續 TODO。
-- 模擬全部完成後，可匯出 `.mrttimetable.json` 固定時刻表封存。封存保留完成當下的 Schema 7 專案設定與每個車次／車站的實際到離站、停站、誤點與狀態；重新讀取後直接顯示凍結結果，不會重算。
+- 當時的 `SimulationSession` 統一實際與計畫世界；`SimulationTraceRetentionPolicy` 可選完整、降採樣或僅事件，預設完整保留每個活動車輛的 0.1 秒樣本。現行 V4 互動播放改採上節所述的 0.5 秒留存策略。
+- 當時的 legacy Schema 7 動態模擬在全部完成後可匯出 `.mrttimetable.json` 固定時刻表封存，保留專案設定與每個車次／車站的實際到離站、停站、誤點與狀態；重新讀取後直接顯示凍結結果。現行 Schema 8 topology 專案不提供此封存匯出。
 
 ## V3.3.0 基礎功能
 
@@ -97,11 +109,11 @@ Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback �
 - 工作區的驗證訊息可用滑鼠、Enter 或空白鍵開啟對應頁面；可辨識的物件及欄位會一併定位。輸入格式錯誤時會阻擋切頁與套用，取消則保留原專案。
 - 配線圖採棕紅色軌道、方向箭頭及實心矩形月台，支線轉角平滑化。圖形仍依實際 topology 繪製；短月台設有最小顯示寬度，精確長度請看 tooltip，不能以圖上尺寸量測。
 
-- 第一站的「前站 km」必須為 `0`；後續各站填入與前一站距離，Engine 會累加成唯一里程。
+- 使用快速線性起稿表單時，第一站的「前站 km」必須為 `0`，後續各站填入與前一站距離；Schema 8 的實際軌道位置仍以 edge-local offset 為準。
 - UI 的速度使用 km/h，Engine 統一使用 m/s、m/s²、m/s³、m 與 s。
 - V2 首頁隱藏僅 V1 使用的列車數量、指定班距與首班時間；V2 改由發車計畫作為班次基準。播放倍率仍保留。
 - 「停站進站上限」輸入 `0` 表示由動態煞車包絡線自動決定；正值才會作為停站列車的額外進站速度上限，不會套用到跨站車。
-- 停站模式的逐站行為以「停站／跨站／折返」下拉選擇；「折返」僅可用在設定為中央避車線的非端點虛擬站。跨站可另設通過上限。未設定車次計畫時採「普通車／所有車站停靠」。
+- 停站模式的逐站行為以「停站／跨站／折返」下拉選擇；跨站可另設通過上限。Schema 8 的中間站「折返」須配置對應的 `StationOperation`、`TurnbackOperation` 與實體折返進路；legacy 線性輸入則須對應 `CentralSidingTurnback` 空間參考點。未設定車次計畫時採「普通車／所有車站停靠」。
 - 播放倍率只影響畫面更新節奏，V2 Engine 仍依序完成每一個固定子步進。
 
 ### 2. 儲存與讀取專案
@@ -110,9 +122,11 @@ Engine 自動化、完整 WPF runner 及大型 full sample 的定向 playback �
 - 「讀取存檔」只在整份檔案通過格式與數值驗證後套用；格式錯誤、版本不支援或取消操作時，目前設定不會被替換。
 - 新建、編輯與儲存的專案一律使用 `schemaVersion = 8`。合法 Schema 7 舊專案讀取後會轉成 Schema 8 topology draft；Schema 1～6 與未知版本會顯示不支援版本錯誤。
 - 讀取 topology 專案後即可播放；「建立模擬」可重新建立模擬狀態。專案檔不保存播放到一半的瞬時狀態。
-- 若要保存一次完整動態運算的結果，請先播放至所有列車結束營運，選擇「檔案 → 匯出完成後固定時刻表」。此 `.mrttimetable.json` 封存可由同一個「讀取存檔」重新導入，立即查看固定實際時刻；再次按「計算並建立模擬」才會依隨附設定建立新的動態世界。
+- legacy Schema 7 相容動態模擬若要保存完成後的固定結果，須先播放至所有列車結束營運，再選擇「檔案 → 匯出完成後固定時刻表」。此 `.mrttimetable.json` 封存可由「讀取存檔」重新導入。讀入的 Schema 7 專案會轉成 Schema 8 topology draft，轉換後該選項停用；請使用 Schema 8 存檔及結果頁匯出。
 
 ### 3. 設定里程速限
+
+以下「起訖里程」操作適用快速線性起稿與 legacy 輸入；Schema 8 topology 編輯器改用軌道 edge 上的起訖 offset 設定 `TrackSpeedLimitDefinition`，模擬由 `TrackSpeedLimitService` 評估。
 
 - 起訖里程必須使用 `0.01 km` 精度，位於 `0.00 km` 至全線終點，且起點小於終點。
 - 方向由下拉選擇「雙向」、「上行」或「下行」。多筆速限重疊時採最低值。
@@ -150,27 +164,28 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 
 主要檔案：
 
-- `src/MrtRouteSimulator.Engine`：V1 解析模型、V2 軌跡規劃、速限服務與 `SimulationWorld`。
+- `src/MrtRouteSimulator.Engine`：V1 解析模型、V2 topology-native `SimulationWorld`、實體設施 traversal、速限與分析服務。
 - `src/MrtRouteSimulator.App`：WPF 桌面介面、圖形與離線匯出。
-- samples：14 份可直接執行的 Schema 8 topology 範例，依規模排序，涵蓋小型站場、中型路線、大型合成路線、折返與越行。序號僅供排序，不是版本號。
-- `tests/MrtRouteSimulator.Tests`：161 項無外部測試框架的自動化測試，包含大型 sample 分階段 gate、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
+- [samples](samples)：14 份可直接執行的 Schema 8 topology 範例，依規模排序，涵蓋小型站場、中型路線、大型合成路線、折返與越行。序號僅供排序，不是版本號；案例資料界線見 [samples/README.md](samples/README.md)。
+- `tests/MrtRouteSimulator.Tests`：目前 Engine runner 為 184/184 通過，包含大型 sample 分階段 gate、指定車次待避、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
 - `Directory.Build.props`：軟體版本的單一來源。
 - `VERSIONING.md`／`CHANGELOG.md`：進版規則與版本變更紀錄。
-- `MODEL_SPEC.md`：資料結構、公式、API、狀態與邊界。
-- `QA_REPORT.md`：建置、測試、Windows UI 與匯出驗收紀錄。
-- `TODO.md`：原始改善需求、完成狀態與後續界線。
+- [TODO.md](TODO.md)：現行改善需求、完成狀態與後續驗收界線。
 
 ## 使用與安全界線
 
 本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.0.3 仍支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
 
-目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.0.3 已完成範圍內。服務類型與車型維持分離目錄。
+目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.0.3 已完成範圍內，也不宣稱全線自動超車排程或全域營運最佳化。服務類型與車型維持分離目錄。
+
+28 站大型範例保留站碼與站心里程作為回歸對照，不能視為完全去識別化資料；月台、車輛性能、停站時間、設施幾何、速限與派車均為示範假設，正式坡度與曲線資料尚未建模。此範例不代表正式路線、工程設計或時刻表。
+
 ## 依 PDF 建立站場（2026-09-09）
 
 在專案工作區「快速建立」的「依參考圖建立站場」選擇站型，按「以此站型重新起稿」，檢查後套用。此按鈕會替換工作區草稿；取消工作區會保留原專案。亦可直接讀取 `samples/README.md 所列範例`。
 
 提供島式二股、側式二股、一島一側三股、二島四股、站後折返、站前折返與中央袋狀軌七種可執行範例。路線圖採上行在上、下行在下的靠右行駛配置，顯示月台編號、島式共用站體、渡線與尾軌止衝。
 
-三／四股道範例含普通車待避與快速車越行；折返範例含同車反向接續。營運頁可選 ServiceRoute 後「設為下行進路／設為上行進路」；袋狀軌的 `:BYPASS` 進路只停 A、C 站，折返的 `:PLATFORM2`／`:TAIL2` 須將上下行一併選為對應進路。模擬頁的「調整模擬與安全參數…」可設定起始時鐘、播放倍率、反應時間及安全間距。
+三／四股道範例含普通車待避與快速車越行；折返範例含同車反向接續。待避可在「營運設定 → 停站模式」的站點指令填入「待避指定車次」，以車次編號指定要等候跨站通過的快速車；停站秒數仍是最低停留時間。舊專案未填此欄時維持原停站秒數。營運頁可選 ServiceRoute 後「設為下行進路／設為上行進路」；袋狀軌的 `:BYPASS` 進路只停 A、C 站，折返的 `:PLATFORM2`／`:TAIL2` 須將上下行一併選為對應進路。模擬頁的「調整模擬與安全參數…」可設定起始時鐘、播放倍率、反應時間及安全間距。
 
 PDF 提供站型與配置概念，軌長、速限、車型、停站時間及派車為可編輯示範值。共享袋狀軌採發車前保守預約、車尾淨空後放行對向車；示意位置與股道設定不參與運行距離或安全計算。

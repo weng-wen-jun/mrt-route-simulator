@@ -1,7 +1,7 @@
-﻿{
+{
   "schemaVersion": 8,
   "projectId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO",
-  "projectName": "14-大型-二十八站完整營運範例",
+  "projectName": "14-\u5927\u578B-\u4E8C\u5341\u516B\u7AD9\u5B8C\u6574\u71DF\u904B\u7BC4\u4F8B",
   "train": {
     "maxSpeedMetersPerSecond": 22.22222222222222,
     "accelerationMetersPerSecondSquared": 1.2,
@@ -561,8 +561,184 @@
         {
           "stationId": "O04",
           "action": "Stop",
-          "dwellTimeSeconds": 600,
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null,
+          "waitForOvertakeServiceRunId": "EXPRESS-DOWN-01"
+        },
+        {
+          "stationId": "O05",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
           "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O06",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O07",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O08",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O08a",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O09",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O10",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O11",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O12",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O13",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O14",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O15",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O15a",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O16",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O17",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O18",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O19",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O20",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O21",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O22",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O23",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O24",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O25",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O26",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        }
+      ]
+    },
+    {
+      "id": "FULL-LINE-SECTION-O04-HOLD",
+      "displayName": "\u5168\u7A0B\u8ECA\u5168\u505C\uFF08O04 \u5F85\u907F\u5340\u9593\u8ECA\uFF09",
+      "instructions": [
+        {
+          "stationId": "O01",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O02",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O03",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null
+        },
+        {
+          "stationId": "O04",
+          "action": "Stop",
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null,
+          "waitForOvertakeServiceRunId": "SECTION-DOWN-01"
         },
         {
           "stationId": "O05",
@@ -735,7 +911,7 @@
         {
           "stationId": "O04",
           "action": "Stop",
-          "dwellTimeSeconds": 0,
+          "dwellTimeSeconds": 20,
           "passingSpeedLimitMetersPerSecond": null
         },
         {
@@ -795,8 +971,9 @@
         {
           "stationId": "O13",
           "action": "Stop",
-          "dwellTimeSeconds": 600,
-          "passingSpeedLimitMetersPerSecond": null
+          "dwellTimeSeconds": 20,
+          "passingSpeedLimitMetersPerSecond": null,
+          "waitForOvertakeServiceRunId": "EXPRESS-DOWN-01"
         },
         {
           "stationId": "O14",
@@ -955,7 +1132,7 @@
         "direction": "Outbound",
         "serviceTypeId": "FULL-LINE",
         "vehicleTypeId": "EMU-100",
-        "stopPatternId": "FULL-LINE-O04-HOLD",
+        "stopPatternId": "FULL-LINE-SECTION-O04-HOLD",
         "originPlatformId": "PLATFORM:O01:DOWN",
         "vehicleId": "FULL-SECTION-O04",
         "serviceRunId": "FULL-SECTION-O04-DOWN",
@@ -4158,7 +4335,7 @@
   "serviceRoutes": [
     {
       "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
-      "name": "\u5408\u6210\u9577\u8DEF\u7DDA minimal baseline \u4E0B\u884C",
+      "name": "14-\u5927\u578B-\u4E8C\u5341\u516B\u7AD9\u5B8C\u6574\u71DF\u904B\u7BC4\u4F8B \u4E0B\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:DOWN:O01:O02",
@@ -4450,7 +4627,7 @@
     },
     {
       "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
-      "name": "\u5408\u6210\u9577\u8DEF\u7DDA minimal baseline \u4E0A\u884C",
+      "name": "14-\u5927\u578B-\u4E8C\u5341\u516B\u7AD9\u5B8C\u6574\u71DF\u904B\u7BC4\u4F8B \u4E0A\u884C",
       "traversals": [
         {
           "trackEdgeId": "EDGE:UP:O26:O25",

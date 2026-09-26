@@ -26,6 +26,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
     internal const string ExpressServiceId = "EXPRESS";
     internal const string FullLinePatternId = "FULL-LINE-ALL";
     internal const string O04HoldingPatternId = "FULL-LINE-O04-HOLD";
+    internal const string SectionO04HoldingPatternId = "FULL-LINE-SECTION-O04-HOLD";
     internal const string O13HoldingPatternId = "FULL-LINE-O13-HOLD";
     internal const string SectionPatternId = "SECTION-O20";
     internal const string ExpressPatternId = "EXPRESS-O20";
@@ -186,12 +187,17 @@ internal static class SyntheticLongRouteFullScenarioBuilder
                 }).ToArray()
             }
         };
+        var projectName = stationIds.Count == StationIds.Length
+            ? "14-大型-二十八站完整營運範例"
+            : template.ProjectName;
         return document with
         {
             ProjectId = ProjectId,
-            ProjectName = stationIds.Count == StationIds.Length
-                ? "14-大型-二十八站完整營運範例"
-                : template.ProjectName
+            ProjectName = projectName,
+            ServiceRoutes = document.ServiceRoutes.Select(route => route with
+            {
+                Name = $"{projectName} {(route.ServiceRouteId == DownRouteId ? "下行" : "上行")}"
+            }).ToArray()
         };
     }
 
@@ -538,7 +544,15 @@ internal static class SyntheticLongRouteFullScenarioBuilder
             Id = O04HoldingPatternId,
             DisplayName = "全程車全停（O04 待避）",
             Instructions = fullPattern.Instructions.Select(instruction => instruction.StationId == "O04"
-                ? instruction with { DwellTimeSeconds = 600 }
+                ? instruction with { WaitForOvertakeServiceRunId = ExpressRunId }
+                : instruction).ToArray()
+        };
+        var sectionO04HoldingPattern = o04HoldingPattern with
+        {
+            Id = SectionO04HoldingPatternId,
+            DisplayName = "全程車全停（O04 待避區間車）",
+            Instructions = o04HoldingPattern.Instructions.Select(instruction => instruction.StationId == "O04"
+                ? instruction with { WaitForOvertakeServiceRunId = SectionDownRunId }
                 : instruction).ToArray()
         };
         var o13HoldingPattern = fullPattern with
@@ -547,8 +561,8 @@ internal static class SyntheticLongRouteFullScenarioBuilder
             DisplayName = "全程車全停（O13 待避）",
             Instructions = fullPattern.Instructions.Select(instruction => instruction.StationId switch
             {
-                "O04" => instruction with { DwellTimeSeconds = 0 },
-                "O13" => instruction with { DwellTimeSeconds = 600 },
+                "O04" => instruction with { DwellTimeSeconds = 20 },
+                "O13" => instruction with { WaitForOvertakeServiceRunId = ExpressRunId },
                 _ => instruction
             }).ToArray()
         };
@@ -564,7 +578,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
                 ExpressUpRunId),
             Row(30, TrainDirection.Inbound, FullLineServiceId, FullLinePatternId, "O26", "FULL-UP-01", "FULL-UP-01"),
             // Synthetic peak group: SECTION follows and overtakes a separate FULL at O04, then turns at O20.
-            Row(2600, TrainDirection.Outbound, FullLineServiceId, O04HoldingPatternId, "O01", "FULL-SECTION-O04",
+            Row(2600, TrainDirection.Outbound, FullLineServiceId, SectionO04HoldingPatternId, "O01", "FULL-SECTION-O04",
                 "FULL-SECTION-O04-DOWN"),
             Row(3000, TrainDirection.Outbound, SectionServiceId, SectionPatternId, "O01", "SECTION-VEHICLE-01",
                 SectionDownRunId, continueAfterTerminal: true, continuationServiceRunId: SectionUpRunId),
@@ -574,7 +588,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
         return document with
         {
             StopPatterns = document.StopPatterns.Where(pattern => pattern.Id != FullLinePatternId)
-                .Concat([fullPattern, o04HoldingPattern, o13HoldingPattern]).ToArray(),
+                .Concat([fullPattern, o04HoldingPattern, sectionO04HoldingPattern, o13HoldingPattern]).ToArray(),
             Dispatch = ManualDispatch(rows),
             Simulation = document.Simulation with { TrainCount = rows.Length }
         };

@@ -154,7 +154,8 @@ public static class ProjectDocumentMapper
                 pattern.Instructions.FirstOrDefault(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))?.Action
                     ?? StopPatternAction.Stop,
                 pattern.Instructions.FirstOrDefault(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))?.DwellTimeSeconds,
-                pattern.Instructions.FirstOrDefault(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))?.PassingSpeedLimitMetersPerSecond)).ToArray()
+                pattern.Instructions.FirstOrDefault(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))?.PassingSpeedLimitMetersPerSecond,
+                pattern.Instructions.FirstOrDefault(item => item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase))?.WaitForOvertakeServiceRunId)).ToArray()
         }).ToArray();
         var dispatch = template.Dispatch with
         {

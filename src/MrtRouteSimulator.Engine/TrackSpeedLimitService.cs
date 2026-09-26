@@ -68,15 +68,12 @@ public sealed class TrackSpeedLimitService
         var permitted = GetCurrentLimit(projection, traversalIndex, position, trainMaximumMetersPerSecond);
         foreach (var target in GetRestrictionBoundaries(projection, chainage, trainMaximumMetersPerSecond))
         {
-            var jerkAllowance = jerkMetersPerSecondCubed > 0
-                ? currentSpeedMetersPerSecond * brakingMetersPerSecondSquared / jerkMetersPerSecondCubed
-                    + brakingMetersPerSecondSquared * brakingMetersPerSecondSquared
-                    / (2 * jerkMetersPerSecondCubed * jerkMetersPerSecondCubed)
-                : 0;
-            var usable = Math.Max(0, target.ChainageMeters - chainage - jerkAllowance);
-            var curve = Math.Sqrt(Math.Max(0, target.TargetSpeedMetersPerSecond * target.TargetSpeedMetersPerSecond
-                + 2 * brakingMetersPerSecondSquared * usable));
-            permitted = Math.Min(permitted, curve);
+            permitted = Math.Min(permitted, SpeedLimitService.CalculateTargetPermittedSpeed(
+                target.ChainageMeters - chainage,
+                target.TargetSpeedMetersPerSecond,
+                brakingMetersPerSecondSquared,
+                jerkMetersPerSecondCubed,
+                currentSpeedMetersPerSecond));
         }
 
         return Math.Clamp(permitted, 0, trainMaximumMetersPerSecond);
@@ -113,15 +110,12 @@ public sealed class TrackSpeedLimitService
         var permitted = GetCurrentLimit(navigator, cursor, trainMaximumMetersPerSecond);
         foreach (var target in GetRestrictionBoundaries(navigator, cursor, trainMaximumMetersPerSecond))
         {
-            var jerkAllowance = jerkMetersPerSecondCubed > 0
-                ? currentSpeedMetersPerSecond * brakingMetersPerSecondSquared / jerkMetersPerSecondCubed
-                    + brakingMetersPerSecondSquared * brakingMetersPerSecondSquared
-                    / (2 * jerkMetersPerSecondCubed * jerkMetersPerSecondCubed)
-                : 0;
-            var usable = Math.Max(0, target.DistanceMeters - jerkAllowance);
-            var curve = Math.Sqrt(Math.Max(0, target.TargetSpeedMetersPerSecond * target.TargetSpeedMetersPerSecond
-                + 2 * brakingMetersPerSecondSquared * usable));
-            permitted = Math.Min(permitted, curve);
+            permitted = Math.Min(permitted, SpeedLimitService.CalculateTargetPermittedSpeed(
+                target.DistanceMeters,
+                target.TargetSpeedMetersPerSecond,
+                brakingMetersPerSecondSquared,
+                jerkMetersPerSecondCubed,
+                currentSpeedMetersPerSecond));
         }
 
         return Math.Clamp(permitted, 0, trainMaximumMetersPerSecond);

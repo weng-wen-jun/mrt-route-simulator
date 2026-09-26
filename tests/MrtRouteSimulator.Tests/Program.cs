@@ -27,6 +27,11 @@ var tests = new (string Name, Action Run)[]
     ("合成長路線 full station chain 雙向全停 smoke test", SyntheticLongRouteFullScenarioTests.FullStationChainBidirectionalAllStopCompletes),
     ("合成長路線全程車 28 站全停完成", SyntheticLongRouteFullScenarioTests.FullLineAllStopCompletes),
     ("合成長路線快速車 skip-stop", SyntheticLongRouteFullScenarioTests.ExpressSkipStopWorks),
+    ("合成長路線 FULL-O13 在 O04 實際停靠二十秒", SyntheticLongRouteFullScenarioTests.O13HoldingTrainStopsAtO04),
+    ("合成長路線指定車次越行後才解除待避", SyntheticLongRouteFullScenarioTests.SpecifiedOvertakeWaitsReplaceFixedDwell),
+    ("合成長路線零秒基本停站仍等待指定車次", SyntheticLongRouteFullScenarioTests.ZeroDwellStillWaitsForSpecifiedOvertake),
+    ("合成長路線上行快速車停靠前不提早進站限速", SyntheticLongRouteFullScenarioTests.InboundExpressApproachUsesPhysicalStopDistance),
+    ("合成長路線上行快速車跨站速限使用實體距離", SyntheticLongRouteFullScenarioTests.InboundExpressPassingLimitUsesPhysicalDistance),
     ("合成長路線 SECTION O20 topology-native 袋狀軌折返", SyntheticLongRouteFullScenarioTests.O20TurnbackCompletes),
     ("合成長路線 DIRECT O20 折返且不進入 O21-O26", SyntheticLongRouteFullScenarioTests.ExpressTurnsAtO20AndReturns),
     ("合成長路線 SECTION O04 越行後 O20 折返", SyntheticLongRouteFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
@@ -53,6 +58,12 @@ var tests = new (string Name, Action Run)[]
     ("計畫時間軸折返保留實體cursor", StationLayoutTemplateTests.PlannedTurnbackTimelinesKeepPhysicalCursors),
     ("共用站節點不允許跨股道安全距離捷徑", GraphDistanceConstraintTests.SharedStationNodesDoNotConnectParallelTracks),
     ("袋狀軌對向發車互斥與車尾淨空釋放", PocketServiceReservationTests.CentralPocketServiceRoutesReserveWaitAndReleaseSafely),
+    ("尾軌與袋狀軌停等不鎖返程進路，發車時才鎖定", PocketServiceReservationTests.TailAndPocketWaitWithoutReturnRouteLock),
+    ("側線待避時快速車直向道岔仍顯示已鎖定進路", PocketServiceReservationTests.PassingDefaultMainlineShowsReservedRouteWhileSidingWaits),
+    ("大存檔普通車進 O04 側線鎖定入口並於待避前釋放", PocketServiceReservationTests.LargeSampleLocalEntryLocksSidingAndClearsBeforeWaiting),
+    ("大存檔逐車通過道岔前取得進路且越行車提前鎖定", PocketServiceReservationTests.LargeSampleEveryTrainLocksTraversedSwitches),
+    ("大存檔 O13 通過車從首次鎖定就選正線，不閃側線", PocketServiceReservationTests.LargeSampleO13PassUsesThroughRouteFromFirstLock),
+    ("大存檔計畫物理模式的道岔進路不造成停滯", PocketServiceReservationTests.LargeSamplePlannedPhysicsCompletesWithSwitchLocks),
     ("有向轉向 physical port 規則與 Schema 8 round-trip", DirectionPortTests.CentralPocketRejectsIllegalCrossoverTurn),
     ("有向轉向加入 ServiceRoute 仍拒絕同側跨接", DirectionPortTests.CentralPocketRejectsIllegalTurnWhenRouteDeclaresIt),
     ("合法未使用備用有向轉向可保存", DirectionPortTests.UnusedLegalBackupConnectionCanBeSaved),
@@ -919,7 +930,7 @@ static void TestPlannedTimelineReportsProgress()
         VehicleTypes: vehicles);
     var session = new SimulationSession(options, options with { ProfileMode = OperationProfileMode.BasicPhysics });
     var updates = new List<SimulationTimelineProgress>();
-    var progress = new Progress<SimulationTimelineProgress>(updates.Add);
+    var progress = new InlineProgress<SimulationTimelineProgress>(updates.Add);
 
     session.PreparePlannedTimelineUntilComplete(1000, progress, TimeSpan.Zero);
 
@@ -3902,3 +3913,8 @@ static void Throws<TException>(Action action, string expectedMessage)
 }
 
 #pragma warning restore CS8321
+
+internal sealed class InlineProgress<T>(Action<T> callback) : IProgress<T>
+{
+    public void Report(T value) => callback(value);
+}

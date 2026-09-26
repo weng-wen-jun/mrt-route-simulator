@@ -57,6 +57,14 @@
             <MenuItem Header="_路網編輯" Click="OpenInfrastructureWorkspace_Click" AutomationProperties.Name="路網編輯" />
             <MenuItem Header="_營運設定" Click="OpenOperationsWorkspace_Click" AutomationProperties.Name="營運設定" />
             <MenuItem Header="_模擬設定" Click="OpenSimulationWorkspace_Click" AutomationProperties.Name="模擬設定" />
+            <MenuItem Header="_顯示設定" AutomationProperties.Name="顯示設定">
+                <MenuItem x:Name="ShowLockedRoutesMenuItem"
+                          Header="顯示列車已鎖定的前方進路"
+                          IsCheckable="True"
+                          Click="RouteLockVisibility_Changed"
+                          ToolTip="僅標示模擬中已成功預約的實體進路；未取得進路的待避列車不標示。"
+                          AutomationProperties.Name="顯示已鎖定進路" />
+            </MenuItem>
             <MenuItem Header="_分析結果" Click="OpenResults_Click" AutomationProperties.Name="分析結果" />
         </Menu>
 
@@ -635,7 +643,7 @@
                                 <CheckBox x:Name="PdfSplitPagesCheckBox" Content="PDF 分頁" IsChecked="True" Margin="0,0,10,6" VerticalAlignment="Center" />
                                 <Button Content="匯出 PNG" Style="{StaticResource SecondaryButton}" Click="ExportPng_Click" Margin="0,0,6,6" />
                                 <Button Content="匯出 PDF" Style="{StaticResource SecondaryButton}" Click="ExportPdf_Click" Margin="0,0,6,6" />
-                                <Button Content="匯出 CSV" Style="{StaticResource SecondaryButton}" Click="ExportCsv_Click" Margin="0,0,6,6" />
+                                <Button Content="匯出實際全量 CSV" ToolTip="匯出全部 V2 實際軌跡；不受運行圖方向、車輛、時間範圍及計畫／實際勾選影響。" Style="{StaticResource SecondaryButton}" Click="ExportCsv_Click" Margin="0,0,6,6" />
                             </WrapPanel>
                             <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
                                 <ScrollViewer x:Name="DiagramScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">

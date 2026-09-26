@@ -162,7 +162,8 @@ public partial class MainWindow
                         instruction.StationId,
                         instruction.Action,
                         instruction.DwellTimeSeconds,
-                        instruction.PassingSpeedLimitMetersPerSecond)))),
+                        instruction.PassingSpeedLimitMetersPerSecond,
+                        instruction.WaitForOvertakeServiceRunId)))),
                 _parameters,
                 _latestPlaybackFrame.Events);
         var rows = (cached ?? result!.Stations).Select(item => new V1V2ComparisonRow(

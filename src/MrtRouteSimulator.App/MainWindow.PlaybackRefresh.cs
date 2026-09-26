@@ -131,6 +131,14 @@ public partial class MainWindow
             }
         }
 
+        // The event grid belongs to the diagram page, so keep it synchronized
+        // independently of the safety page. Switching directly to the
+        // diagram after playback must still show events already in the frame.
+        if (frame.Events.Count != _lastRenderedEventCount || force)
+        {
+            AppendVisibleEventRows(frame);
+        }
+
         if (ReferenceEquals(selectedTab, SafetyTabItem))
         {
             if (refreshDynamicRows && RefreshDue(ref _lastSafetyRenderTimestamp, 100, force))
@@ -150,11 +158,6 @@ public partial class MainWindow
                     .ToArray();
                 ApplyRowsByKey(SafetyRows, safetyRows,
                     row => $"{row.Pair}|{row.Track}");
-            }
-
-            if (frame.Events.Count != _lastRenderedEventCount || force)
-            {
-                AppendVisibleEventRows(frame);
             }
 
             if ((_safetyHistoryDirty || force) && RefreshDue(ref _lastSafetySummaryTimestamp, 1000, force))

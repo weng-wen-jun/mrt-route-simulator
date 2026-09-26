@@ -152,7 +152,8 @@ public partial class MainWindow
             ComboColumn("車站", nameof(ServicePatternInputRow.StationId), StationRows.Select(row => row.StationId), 100),
             ComboColumn("動作", nameof(ServicePatternInputRow.Mode), StopModeOptions, 80),
             TextColumn("停站秒數", nameof(ServicePatternInputRow.DwellTimeSeconds), 90),
-            TextColumn("通過速限 km/h", nameof(ServicePatternInputRow.SpeedLimitKmh), 120));
+            TextColumn("通過速限 km/h", nameof(ServicePatternInputRow.SpeedLimitKmh), 120),
+            TextColumn("待避指定車次", nameof(ServicePatternInputRow.WaitForOvertakeServiceRunId), 150));
         grid.CellEditEnding += (_, args) =>
         {
             if (!Equals(args.Column.Header, "模式名稱")
@@ -211,7 +212,8 @@ public partial class MainWindow
                     StationId = item.StationId,
                     Mode = item.Mode,
                     DwellTimeSeconds = item.DwellTimeSeconds,
-                    SpeedLimitKmh = item.SpeedLimitKmh
+                    SpeedLimitKmh = item.SpeedLimitKmh,
+                    WaitForOvertakeServiceRunId = item.WaitForOvertakeServiceRunId
                 }).ToArray();
             foreach (var copy in copies) draft.Add(copy);
             grid.SelectedItem = copies.FirstOrDefault();
@@ -502,7 +504,8 @@ public partial class MainWindow
                         ? item.Row.DwellTimeSeconds
                         : null;
                     var passing = action == StopPatternAction.Pass ? item.Row.SpeedLimitKmh / 3.6 : null;
-                    return new StopPatternInstruction(stationId, action, dwell, passing);
+                    return new StopPatternInstruction(stationId, action, dwell, passing,
+                        EmptyToNull(item.Row.WaitForOvertakeServiceRunId));
                 }).ToArray();
                 return new StopPatternDefinition(group.Key, names[0], instructions);
             }).ToArray();
@@ -826,7 +829,8 @@ public partial class MainWindow
                         _ => "停站"
                     },
                     DwellTimeSeconds = instruction.DwellTimeSeconds,
-                    SpeedLimitKmh = instruction.PassingSpeedLimitMetersPerSecond * 3.6
+                    SpeedLimitKmh = instruction.PassingSpeedLimitMetersPerSecond * 3.6,
+                    WaitForOvertakeServiceRunId = instruction.WaitForOvertakeServiceRunId ?? string.Empty
                 });
             }
         }
@@ -1247,7 +1251,8 @@ public partial class MainWindow
         DefaultStopPatternId = x.DefaultStopPatternId, DefaultVehicleTypeId = x.DefaultVehicleTypeId, Priority = x.Priority, CanRequestOvertake = x.CanRequestOvertake,
         PreferredPlatformIds = x.PreferredPlatformIds };
     private static ServicePatternInputRow Clone(ServicePatternInputRow x) => new() { PatternId = x.PatternId, PatternName = x.PatternName,
-        StationId = x.StationId, Mode = x.Mode, DwellTimeSeconds = x.DwellTimeSeconds, SpeedLimitKmh = x.SpeedLimitKmh };
+        StationId = x.StationId, Mode = x.Mode, DwellTimeSeconds = x.DwellTimeSeconds, SpeedLimitKmh = x.SpeedLimitKmh,
+        WaitForOvertakeServiceRunId = x.WaitForOvertakeServiceRunId };
     private static HeadwayPlanInputRow Clone(HeadwayPlanInputRow x) => new() { Direction = x.Direction, FirstDeparture = x.FirstDeparture, HeadwayMinutes = x.HeadwayMinutes,
         RunCount = x.RunCount, ServiceTypeId = x.ServiceTypeId, VehicleTypeId = x.VehicleTypeId, StopPatternId = x.StopPatternId, OriginPlatformId = x.OriginPlatformId,
         VehicleId = x.VehicleId, ContinueAfterTerminal = x.ContinueAfterTerminal };

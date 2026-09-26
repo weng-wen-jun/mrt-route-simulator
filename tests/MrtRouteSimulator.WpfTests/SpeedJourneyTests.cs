@@ -137,6 +137,39 @@ internal static class SpeedJourneyTests
             "每次換向均應顯示標記。");
         Require(speed.Points.All(p => double.IsFinite(p.X) && double.IsFinite(p.Y)
             && p.Y >= 0 && p.Y <= canvas.ActualHeight), "速度點不可超出畫布。");
+
+        var expectedStops = new List<string>();
+        TrajectorySample? previousStop = null;
+        foreach (var sample in samples)
+        {
+            if (sample.Phase != OperationalPhase.Dwelling || Math.Abs(sample.SpeedMetersPerSecond) > 0.01
+                || string.IsNullOrWhiteSpace(sample.CurrentStationId))
+            {
+                previousStop = null;
+                continue;
+            }
+            if (previousStop is null || previousStop.CurrentStationId != sample.CurrentStationId
+                || previousStop.ServiceRunId != sample.ServiceRunId)
+            {
+                expectedStops.Add(sample.CurrentStationId);
+            }
+            previousStop = sample;
+        }
+        var stopLabels = canvas.Children.OfType<TextBlock>()
+            .Where(label => Equals(label.Tag, "StopStationLabel")).ToArray();
+        Require(expectedStops.Count > 0 && stopLabels.Select(label => label.Text).SequenceEqual(expectedStops),
+            "速度為零的每段停站狀態都應在時間軸下方標出站編號。");
+        Require(stopLabels.All(label => Canvas.GetTop(label) >= canvas.ActualHeight - 42
+            && Canvas.GetTop(label) + label.DesiredSize.Height <= canvas.ActualHeight),
+            "停站站編號不得超出畫布下緣。");
+
+        var limitLabels = canvas.Children.OfType<TextBlock>()
+            .Where(label => Equals(label.Tag, "SpeedLimitLabel")).ToArray();
+        var expectedLimits = samples.Where(sample => sample.TrackSpeedLimitMetersPerSecond.HasValue)
+            .Select(sample => $"{sample.TrackSpeedLimitMetersPerSecond!.Value * 3.6:0.#}")
+            .Distinct(StringComparer.Ordinal).ToArray();
+        Require(limitLabels.Length > 0 && expectedLimits.All(limit => limitLabels.Any(label => label.Text == limit)),
+            "每個軌道速限數值都應標在虛線上方。");
     }
 
     private static void Layout(Canvas canvas, double width)

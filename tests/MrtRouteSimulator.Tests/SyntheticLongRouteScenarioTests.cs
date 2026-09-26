@@ -253,6 +253,174 @@ internal static class SyntheticLongRouteFullScenarioTests
             "EXPRESS 的下行與折返上行事件都不得觸及 O21-O26。 ");
     }
 
+    public static void O13HoldingTrainStopsAtO04()
+    {
+        const string runId = "FULL-O13-DOWN";
+        var instruction = Execution.Value.Document.StopPatterns
+            .Single(pattern => pattern.Id == SyntheticLongRouteFullScenarioBuilder.O13HoldingPatternId)
+            .Instructions.Single(item => item.StationId == "O04");
+        Equal(StopPatternAction.Stop, instruction.Action, "FULL-O13 的 O04 指令應為停站。 ");
+        Close(20, instruction.DwellTimeSeconds ?? -1, 0.001, "FULL-O13 應在 O04 停留二十秒。 ");
+
+        var events = Execution.Value.World.Events.Where(item => item.ServiceRunId == runId).ToArray();
+        var arrival = events.Single(item => item.EventType == SimulationEventType.Arrival && item.StationId == "O04");
+        var dwell = events.Single(item => item.EventType == SimulationEventType.DwellStarted && item.StationId == "O04");
+        var departure = events.Single(item => item.EventType == SimulationEventType.Departure
+            && item.StationId == "O04" && item.SimulationTimeSeconds > arrival.SimulationTimeSeconds);
+        True(!events.Any(item => item.EventType == SimulationEventType.StationPassed && item.StationId == "O04"),
+            "FULL-O13 不可把 O04 當成跨站。 ");
+        True(dwell.SimulationTimeSeconds >= arrival.SimulationTimeSeconds
+            && departure.SimulationTimeSeconds - dwell.SimulationTimeSeconds >= 19.9,
+            "FULL-O13 應在 O04 實際完成二十秒停留才發車。 ");
+    }
+
+    public static void SpecifiedOvertakeWaitsReplaceFixedDwell()
+    {
+        var execution = Execution.Value;
+        foreach (var (patternId, stationId, targetRunId, localRunId, localVehicleId) in new[]
+                 {
+                     (SyntheticLongRouteFullScenarioBuilder.O04HoldingPatternId, "O04",
+                         SyntheticLongRouteFullScenarioBuilder.ExpressRunId, "FULL-O04-DOWN", "FULL-O04"),
+                     (SyntheticLongRouteFullScenarioBuilder.SectionO04HoldingPatternId, "O04",
+                         SyntheticLongRouteFullScenarioBuilder.SectionDownRunId, "FULL-SECTION-O04-DOWN", "FULL-SECTION-O04"),
+                     (SyntheticLongRouteFullScenarioBuilder.O13HoldingPatternId, "O13",
+                         SyntheticLongRouteFullScenarioBuilder.ExpressRunId, "FULL-O13-DOWN", "FULL-O13")
+                 })
+        {
+            var instruction = execution.Document.StopPatterns.Single(pattern => pattern.Id == patternId)
+                .Instructions.Single(item => item.StationId == stationId);
+            Equal(StopPatternAction.Stop, instruction.Action, $"{localRunId} 必須停靠 {stationId}。 ");
+            Close(20, instruction.DwellTimeSeconds ?? -1, 0.001,
+                $"{localRunId} 的基本停站時間必須維持二十秒。 ");
+            Equal(targetRunId, instruction.WaitForOvertakeServiceRunId,
+                $"{localRunId} 的待避目標車次。 ");
+
+            var completed = execution.World.Events.Single(item => item.EventType == SimulationEventType.OvertakeCompleted
+                && item.ServiceRunId == targetRunId && item.RelatedVehicleId == localVehicleId
+                && execution.Document.Topology.PassingFacilities.Any(facility =>
+                    facility.FacilityId == item.ResourceId && facility.StationId == stationId));
+            var departure = execution.World.Events.Single(item => item.EventType == SimulationEventType.Departure
+                && item.ServiceRunId == localRunId && item.StationId == stationId);
+            True(departure.SimulationTimeSeconds >= completed.SimulationTimeSeconds,
+                $"{localRunId} 必須等指定車次 {targetRunId} 完成 {stationId} 越行才發車。 ");
+        }
+
+        var serialized = TopologyProjectFormat.Serialize(execution.Document);
+        var reloaded = TopologyProjectFormat.Deserialize(serialized);
+        Equal(SyntheticLongRouteFullScenarioBuilder.ExpressRunId,
+            reloaded.StopPatterns.Single(pattern => pattern.Id == SyntheticLongRouteFullScenarioBuilder.O13HoldingPatternId)
+                .Instructions.Single(item => item.StationId == "O13").WaitForOvertakeServiceRunId,
+            "指定待避車次必須在 Schema 8 存檔往返後保留。 ");
+
+        var invalid = execution.Document with
+        {
+            StopPatterns = execution.Document.StopPatterns.Select(pattern =>
+                pattern.Id == SyntheticLongRouteFullScenarioBuilder.O13HoldingPatternId
+                    ? pattern with { Instructions = pattern.Instructions.Select(item => item.StationId == "O13"
+                        ? item with { WaitForOvertakeServiceRunId = "MISSING-EXPRESS" }
+                        : item).ToArray() }
+                    : pattern).ToArray()
+        };
+        try
+        {
+            TopologyProjectFormat.Validate(invalid);
+            throw new InvalidOperationException("不存在的指定待避車次應被拒絕。 ");
+        }
+        catch (SimulationValidationException exception)
+        {
+            True(exception.Message.Contains("MISSING-EXPRESS", StringComparison.Ordinal),
+                "驗證訊息應指出不存在的指定待避車次。 ");
+        }
+    }
+
+    public static void ZeroDwellStillWaitsForSpecifiedOvertake()
+    {
+        var original = Stages.Value.FullScenario;
+        var document = original with
+        {
+            StopPatterns = original.StopPatterns.Select(pattern =>
+                pattern.Id == SyntheticLongRouteFullScenarioBuilder.O04HoldingPatternId
+                    ? pattern with { Instructions = pattern.Instructions.Select(item => item.StationId == "O04"
+                        ? item with { DwellTimeSeconds = 0 }
+                        : item).ToArray() }
+                    : pattern).ToArray()
+        };
+        var world = CreateWorld(document);
+        world.AdvanceTo(1800);
+        var localEvents = world.Events.Where(item => item.ServiceRunId == "FULL-O04-DOWN"
+            && item.StationId == "O04").ToArray();
+        var arrival = localEvents.Single(item => item.EventType == SimulationEventType.Arrival);
+        var dwell = localEvents.Single(item => item.EventType == SimulationEventType.DwellStarted);
+        var departure = localEvents.Single(item => item.EventType == SimulationEventType.Departure);
+        var targetPass = world.Events.Single(item => item.ServiceRunId == SyntheticLongRouteFullScenarioBuilder.ExpressRunId
+            && item.EventType == SimulationEventType.StationPassed && item.StationId == "O04");
+        True(dwell.SimulationTimeSeconds >= arrival.SimulationTimeSeconds
+            && departure.SimulationTimeSeconds >= targetPass.SimulationTimeSeconds,
+            "基本停站零秒時也必須保持待避，直到指定車次跨站通過。 ");
+    }
+
+    public static void InboundExpressApproachUsesPhysicalStopDistance()
+    {
+        var world = Execution.Value.World;
+        const string runId = SyntheticLongRouteFullScenarioBuilder.ExpressUpRunId;
+        foreach (var (passedStation, stopStation, edgeId) in new[]
+                 {
+                     ("O12", "O11", "EDGE:UP:O12:O11"),
+                     ("O08a", "O08", "EDGE:UP:O08a:O08")
+                 })
+        {
+            var passed = world.Events.Single(item => item.ServiceRunId == runId
+                && item.EventType == SimulationEventType.StationPassed
+                && item.StationId == passedStation);
+            var arrival = world.Events.Single(item => item.ServiceRunId == runId
+                && item.EventType == SimulationEventType.Arrival
+                && item.StationId == stopStation);
+            var sample = world.Trajectory.First(item => item.ServiceRunId == runId
+                && item.SimulationTimeSeconds >= passed.SimulationTimeSeconds + 15
+                && item.SimulationTimeSeconds < arrival.SimulationTimeSeconds);
+            Equal(edgeId, sample.TrackEdgeId,
+                $"{passedStation}→{stopStation} 的回歸樣本應位於進站主線。 ");
+            True(sample.SpeedMetersPerSecond * 3.6 > 65,
+                $"{stopStation} 停車點尚遠時不得因投影里程錯位提早降到 40 km/h："
+                + $"{sample.SpeedMetersPerSecond * 3.6:0.0} km/h。 ");
+            True(sample.TrackSpeedLimitMetersPerSecond * 3.6 > 75,
+                $"{passedStation}→{stopStation} 的回歸樣本不應另有軌道速限。 ");
+        }
+    }
+
+    public static void InboundExpressPassingLimitUsesPhysicalDistance()
+    {
+        var source = Stages.Value.FullScenario;
+        var document = source with
+        {
+            StopPatterns = source.StopPatterns.Select(pattern =>
+                pattern.Id == SyntheticLongRouteFullScenarioBuilder.ExpressPatternId
+                    ? pattern with
+                    {
+                        Instructions = pattern.Instructions.Select(instruction =>
+                            instruction.StationId == "O08a"
+                                ? instruction with { PassingSpeedLimitMetersPerSecond = 40d / 3.6 }
+                                : instruction).ToArray()
+                    }
+                    : pattern).ToArray()
+        };
+        var world = CreateWorld(document);
+        world.AdvanceTo(3_600);
+
+        const string runId = SyntheticLongRouteFullScenarioBuilder.ExpressUpRunId;
+        var o09Pass = world.Events.Single(item => item.ServiceRunId == runId
+            && item.EventType == SimulationEventType.StationPassed && item.StationId == "O09");
+        var o08aPass = world.Events.Single(item => item.ServiceRunId == runId
+            && item.EventType == SimulationEventType.StationPassed && item.StationId == "O08a");
+        var early = world.Trajectory.First(item => item.ServiceRunId == runId
+            && item.SimulationTimeSeconds >= o09Pass.SimulationTimeSeconds + 15);
+        True(early.SimulationTimeSeconds < o08aPass.SimulationTimeSeconds
+            && early.SpeedMetersPerSecond * 3.6 > 65,
+            $"O08a 跨站速限應在接近車站時才生效；提早樣本為 {early.SpeedMetersPerSecond * 3.6:0.0} km/h。 ");
+        True(o08aPass.SpeedMetersPerSecond * 3.6 <= 40.6,
+            $"O08a 通過時仍須遵守 40 km/h 速限：{o08aPass.SpeedMetersPerSecond * 3.6:0.0} km/h。 ");
+    }
+
     public static void O20TurnbackCompletes()
     {
         var execution = Execution.Value;
@@ -584,8 +752,15 @@ internal static class SyntheticLongRouteFullScenarioTests
     private static ScenarioExecution RunFullScenario()
     {
         var document = Stages.Value.FullScenario;
+        var world = CreateWorld(document);
+        world.AdvanceTo(8000);
+        return new ScenarioExecution(document, world);
+    }
+
+    private static SimulationWorld CreateWorld(TopologyProjectDocument document)
+    {
         var runtime = TopologyProjectFormat.CreateRuntime(document);
-        var world = new SimulationWorldOptions(
+        return new SimulationWorldOptions(
             Route: null,
             TrainParameters: runtime.TrainParameters,
             OperationalParameters: runtime.OperationalParameters,
@@ -598,8 +773,6 @@ internal static class SyntheticLongRouteFullScenarioTests
             VehicleTypes: runtime.VehicleTypes,
             ServiceTypes: runtime.ServiceTypes,
             Topology: runtime.Topology).CreateWorld();
-        world.AdvanceTo(8000);
-        return new ScenarioExecution(document, world);
     }
 
     private static void AssertAllStopJourney(
