@@ -60,8 +60,15 @@ internal static class TopologyTurnbackRegressionTests
             reverseTerminalDeparture is not null
                 && reverseTerminalDeparture.SimulationTimeSeconds
                     >= reverseTerminalDwell!.SimulationTimeSeconds + 30 - 0.11
-                && reverseTerminalDeparture.SimulationTimeSeconds >= 1500,
-            "E 站上行月台必須完成至少 30 秒停站，且遵守 TAIL-UP 接續計畫時間後發車。");
+                && reverseTerminalDeparture.SimulationTimeSeconds
+                    < reverseTerminalDwell.SimulationTimeSeconds + 31,
+            "E 站上行月台只應完成設定的 30 秒正常停站。");
+
+        var tailDeparture = reverseEvents.Single(item => item.EventType == SimulationEventType.Departure
+            && item.TrackEdgeId == "E-TAIL" && item.PlatformId is null);
+        True(tailDeparture.SimulationTimeSeconds >= 1500
+            && reverseTerminalArrival!.SimulationTimeSeconds > tailDeparture.SimulationTimeSeconds,
+            "TAIL-UP 必須從實體尾軌依接續班表發車，再抵達 E 站月台。");
 
         var reverseDeparture = reverseTerminalDeparture;
 
@@ -142,34 +149,35 @@ internal static class TopologyTurnbackRegressionTests
         var world = CreateWorld(runtime, document, delayedPlan, zeroDwellPatterns);
 
         world.AdvanceTo(1800);
-        AssertWaitingAtReverseTerminal(world, "第一次執行");
+        AssertWaitingAtTailTrack(world, "第一次執行");
 
         world.Reset();
         world.AdvanceTo(1800);
-        AssertWaitingAtReverseTerminal(world, "Reset 後第二次執行");
+        AssertWaitingAtTailTrack(world, "Reset 後第二次執行");
 
         world.AdvanceTo(2000);
         var departures = world.Events
             .Where(item => item.VehicleId == "TAIL-01"
                 && item.ServiceRunId == "TAIL-UP"
                 && item.EventType == SimulationEventType.Departure
-                && item.PlatformId == "P-E-U")
+                && item.TrackEdgeId == "E-TAIL"
+                && item.PlatformId is null)
             .ToArray();
-        True(departures.Length == 1, "Reset 重跑後 TAIL-UP 應只產生一筆反向終點月台發車事件。");
+        True(departures.Length == 1, "Reset 重跑後 TAIL-UP 應只產生一筆尾軌發車事件。");
         True(departures[0].SimulationTimeSeconds >= 1900,
-            "0 秒停站仍須等待至 TAIL-UP 接續計畫時間 1900 秒後才能發車。");
+            "0 秒停站仍須在尾軌等待至 TAIL-UP 接續計畫時間 1900 秒後才能發車。");
     }
 
-    private static void AssertWaitingAtReverseTerminal(SimulationWorld world, string runLabel)
+    private static void AssertWaitingAtTailTrack(SimulationWorld world, string runLabel)
     {
         var state = world.GetSnapshot().Trains
             .Single(item => item.VehicleId == "TAIL-01");
-        True(state.ServiceRunId == "TAIL-UP"
+        True(state.ServiceRunId == "TAIL-DOWN"
             && state.CurrentStationId == "E"
-            && state.PlatformId == "P-E-U"
+            && state.TrackEdgeId == "E-TAIL"
             && state.Phase == OperationalPhase.Turning
             && state.SpeedMetersPerSecond <= 0.001,
-            $"{runLabel} 應在 E/P-E-U 等待接續發車且速度為 0。");
+            $"{runLabel} 應在 E-TAIL 尾軌等待接續發車且速度為 0。");
         True(!world.Events.Any(item => item.VehicleId == "TAIL-01"
                 && item.ServiceRunId == "TAIL-UP"
                 && item.EventType == SimulationEventType.Departure),

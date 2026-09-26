@@ -39,7 +39,7 @@ public static class OperationsTimetable
             plannedEvents,
             actualEvents,
             stationEventMatcher: null,
-            pocketOriginResolver: null);
+            turnbackOriginResolver: null);
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public static class OperationsTimetable
             actualEvents,
             (direction, stationId, simulationEvent) =>
                 topology.MatchesStationEvent(direction, stationId, simulationEvent),
-            topology.GetPocketOrigin);
+            topology.GetTurnbackOrigin);
     }
 
     private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
@@ -69,7 +69,7 @@ public static class OperationsTimetable
         IEnumerable<SimulationEvent>? plannedEvents,
         IEnumerable<SimulationEvent>? actualEvents,
         Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
-        Func<SimulationEvent, TopologyPocketOrigin?>? pocketOriginResolver)
+        Func<SimulationEvent, TopologyTurnbackOrigin?>? turnbackOriginResolver)
     {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
@@ -83,19 +83,19 @@ public static class OperationsTimetable
             var runActualEvents = actual.Where(item => SameRun(item, run)).ToArray();
             var scheduledOriginDeparture = RelativeSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
 
-            var plannedPocketDeparture = pocketOriginResolver is null ? null
-                : runPlannedEvents.FirstOrDefault(item => pocketOriginResolver(item) is not null);
-            var actualPocketDeparture = pocketOriginResolver is null ? null
-                : runActualEvents.FirstOrDefault(item => pocketOriginResolver(item) is not null);
-            var pocketEvent = actualPocketDeparture ?? plannedPocketDeparture;
-            var pocketOrigin = pocketEvent is null ? null : pocketOriginResolver!(pocketEvent);
+            var plannedFacilityDeparture = turnbackOriginResolver is null ? null
+                : runPlannedEvents.FirstOrDefault(item => turnbackOriginResolver(item) is not null);
+            var actualFacilityDeparture = turnbackOriginResolver is null ? null
+                : runActualEvents.FirstOrDefault(item => turnbackOriginResolver(item) is not null);
+            var facilityEvent = actualFacilityDeparture ?? plannedFacilityDeparture;
+            var facilityOrigin = facilityEvent is null ? null : turnbackOriginResolver!(facilityEvent);
             var firstStationIndex = 0;
-            if (pocketOrigin is not null)
+            if (facilityOrigin is not null)
             {
                 firstStationIndex = Array.FindIndex(stations, station =>
-                    station.StationId.Equals(pocketOrigin.StationId, StringComparison.OrdinalIgnoreCase));
+                    station.StationId.Equals(facilityOrigin.StationId, StringComparison.OrdinalIgnoreCase));
                 if (firstStationIndex < 0) firstStationIndex = 0;
-                var actualDeparture = actualPocketDeparture?.SimulationTimeSeconds;
+                var actualDeparture = actualFacilityDeparture?.SimulationTimeSeconds;
                 values.Add(new OperationsTimetableEntry(
                     run.VehicleId ?? string.Empty,
                     run.ServiceRunId,
@@ -103,9 +103,9 @@ public static class OperationsTimetable
                     run.ServiceTypeId,
                     run.StopPatternId,
                     run.VehicleTypeId,
-                    pocketOrigin.FacilityId,
-                    pocketOrigin.Name,
-                    pocketEvent!.PositionMeters,
+                    facilityOrigin.FacilityId,
+                    facilityOrigin.Name,
+                    facilityEvent!.PositionMeters,
                     null,
                     scheduledOriginDeparture,
                     null,
@@ -120,7 +120,7 @@ public static class OperationsTimetable
                 var station = stations[index];
                 var plannedArrival = Find(runPlannedEvents, station, run.Direction, stationEventMatcher,
                     SimulationEventType.Arrival, SimulationEventType.StationPassed);
-                var plannedDeparture = index == 0
+                var plannedDeparture = index == 0 && facilityOrigin is null
                     ? scheduledOriginDeparture
                     : Find(runPlannedEvents, station, run.Direction, stationEventMatcher, SimulationEventType.Departure);
                 var actualArrival = Find(runActualEvents, station, run.Direction, stationEventMatcher,

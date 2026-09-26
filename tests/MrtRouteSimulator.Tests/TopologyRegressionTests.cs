@@ -1027,6 +1027,61 @@ internal static class TopologyRegressionTests
         True(world.Events.Any(item => item.EventType == SimulationEventType.RouteReleased
                 && item.ResourceIds?.Contains("RES-TAIL") == true),
             "列車車尾淨空尾軌後必須釋放 topology conflict resource。 ");
+
+        var dispatch = new ResolvedDispatchPlan(
+            DispatchPlanningMode.ManualTimetable,
+            VehicleAssignmentMode.ExplicitOnly,
+            TimeSpan.Zero,
+            [
+                new PlannedServiceRun("TAIL-DOWN", TimeSpan.Zero, TrainDirection.Outbound,
+                    "TAIL-EMU", "DEFAULT_VEHICLE", "LOCAL", "TAIL-TURN", "P-W-D", 0,
+                    continueAfterTerminal: true, continuationServiceRunId: "TAIL-UP"),
+                new PlannedServiceRun("TAIL-UP", TimeSpan.FromSeconds(600), TrainDirection.Inbound,
+                    "TAIL-EMU", "DEFAULT_VEHICLE", "LOCAL", "NORMAL-STOP", "P-E-U", 1)
+            ]);
+        var scheduledWorld = new SimulationWorld(
+            new TopologySimulationDefinition(graph, down, up),
+            new TrainParameters(22.2222222, 1, 1, 20, 30, 30),
+            OperationalParameters.CreateDefault(),
+            1,
+            movingBlockMode: MovingBlockMode.Independent,
+            servicePatterns:
+            [
+                new ServicePattern("TAIL-TURN", "站後尾軌折返",
+                    [new StationServiceInstruction("E", StationServiceMode.Stop, DwellTimeSeconds: 0)]),
+                new ServicePattern("NORMAL-STOP", "正常上下客",
+                    [new StationServiceInstruction("E", StationServiceMode.Stop, DwellTimeSeconds: 25)])
+            ],
+            dispatchPlan: dispatch);
+        scheduledWorld.AdvanceTo(900);
+
+        var reached = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.TailTrackReached
+            && item.VehicleId == "TAIL-EMU" && item.TrackEdgeId == "TAIL-OUT");
+        var returned = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.TailTrackReturnStarted
+            && item.VehicleId == "TAIL-EMU" && item.TrackEdgeId == "TAIL-OUT");
+        True(returned.SimulationTimeSeconds - reached.SimulationTimeSeconds > 30,
+            "接續車次的班表等待必須發生在站後尾軌內。 ");
+        var tailDeparture = scheduledWorld.Events.Single(item => item.EventType == SimulationEventType.Departure
+            && item.ServiceRunId == "TAIL-UP" && item.TrackEdgeId == "TAIL-OUT");
+        True(tailDeparture.SimulationTimeSeconds >= 600 && tailDeparture.StationId is null,
+            "反向車次必須在尾軌內依班表時間發車，不可標成車站發車。 ");
+        var stationArrival = scheduledWorld.Events.First(item => item.EventType == SimulationEventType.Arrival
+            && item.ServiceRunId == "TAIL-UP" && item.TrackEdgeId == "UP-E-M");
+        var stationDeparture = scheduledWorld.Events.First(item => item.EventType == SimulationEventType.Departure
+            && item.ServiceRunId == "TAIL-UP" && item.SimulationTimeSeconds > stationArrival.SimulationTimeSeconds);
+        True(stationDeparture.SimulationTimeSeconds - stationArrival.SimulationTimeSeconds is >= 25 and < 26,
+            "尾軌返回正線月台後只能執行設定的 25 秒上下客停站。 ");
+        True(stationArrival.SimulationTimeSeconds > tailDeparture.SimulationTimeSeconds,
+            "正線車站必須是反向車次從尾軌發車後的下一次停站。 ");
+        var timetable = OperationsTimetable.Build(
+            scheduledWorld.GetTopologyResultContext(), dispatch, [], scheduledWorld.Events);
+        var stationRow = timetable.Single(item => item.ServiceRunId == "TAIL-UP" && item.StationId == "E");
+        True(stationRow.ActualDwellSeconds is >= 25 and < 26 && stationRow.PlannedDepartureTimeSeconds is null,
+            "時刻表不可把尾軌計畫發車時間誤配到正線車站。 ");
+        var tailRow = timetable.Single(item => item.ServiceRunId == "TAIL-UP"
+            && item.StationId == "FAC-TAIL-E");
+        True(tailRow.ActualDepartureTimeSeconds is >= 600 and < 601,
+            "時刻表必須以站後尾軌作為反向車次的起點。 ");
     }
 
     public static void SimulationWorldTurnsBackAtPocketTrackWithoutVirtualLocation()

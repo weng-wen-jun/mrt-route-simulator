@@ -2735,9 +2735,9 @@ public sealed class SimulationWorld
         return true;
     }
 
-    private void RecordTurnaroundDeparture(MutableTrain train, TurnbackFacilityDefinition? pocketOrigin = null)
+    private void RecordTurnaroundDeparture(MutableTrain train, TurnbackFacilityDefinition? facilityOrigin = null)
     {
-        var fromPocketTrack = pocketOrigin is not null;
+        var fromFacility = facilityOrigin is not null;
         train.TurnaroundPrepared = false;
         train.ActualDepartureTime = CurrentTimeSeconds;
         train.Phase = OperationalPhase.Accelerating;
@@ -2751,9 +2751,9 @@ public sealed class SimulationWorld
                 $"{train.ServiceRunId} 接續發車延後 {delay:0.0} 秒。",
                 train.Position,
                 0,
-                resourceId: pocketOrigin?.FacilityId,
+                resourceId: facilityOrigin?.FacilityId,
                 delaySeconds: delay,
-                omitStationIdentity: fromPocketTrack);
+                omitStationIdentity: fromFacility);
         }
         AddEvent(
             SimulationEventType.DirectionChanged,
@@ -2762,11 +2762,11 @@ public sealed class SimulationWorld
             $"車輛 {train.VehicleId} 折返，開始新車次 {train.ServiceRunId}。",
             train.Position,
             0,
-            resourceId: pocketOrigin?.FacilityId,
-            omitStationIdentity: fromPocketTrack);
+            resourceId: facilityOrigin?.FacilityId,
+            omitStationIdentity: fromFacility);
         AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0,
-            resourceId: pocketOrigin?.FacilityId,
-            omitStationIdentity: fromPocketTrack);
+            resourceId: facilityOrigin?.FacilityId,
+            omitStationIdentity: fromFacility);
     }
 
     private void PrepareTurnaround(
@@ -3266,7 +3266,7 @@ public sealed class SimulationWorld
                 return;
             }
 
-            if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack
+            if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack
                 && train.ContinuationServiceRunId is { } continuationId
                 && _dispatchRunsById.TryGetValue(continuationId, out var continuation)
                 && CurrentTimeSeconds + NumericalTolerance < RelativeScheduleSeconds(
@@ -3276,10 +3276,10 @@ public sealed class SimulationWorld
             }
 
             PrepareTurnaround(train, movement.Operation);
-            if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack)
+            if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack)
             {
-                // 反向車次從袋狀軌折返停點發車；返回正線月台是該車次的下一次停站。
-                RecordTurnaroundDeparture(train, pocketOrigin: movement.Facility);
+                // 反向車次從實體折返停點發車；返回正線月台是該車次的下一次停站。
+                RecordTurnaroundDeparture(train, facilityOrigin: movement.Facility);
             }
             if (movement.ReturnStartCursor is { } returnStartCursor)
             {
@@ -3415,18 +3415,14 @@ public sealed class SimulationWorld
             0,
             train.TrackId);
 
-        // 尾軌返回後，列車已到達反方向終點月台（例如 E/P-E-U），
-        // 必須先完成該側正常停站，再依接續車次的計畫時間發車。
-        // 折返設施 movement 仍保留到車尾淨空，故使用獨立旗標銜接
-        // CompleteTurnaround，不能把 TerminalAction 再設回 Turnaround，
-        // 否則 CompleteTerminalStationWork 會重新尋找同一個折返作業。
+        // 折返設施 movement 仍保留到車尾淨空；回到正線月台只執行正常停站。
         var departureStation = GetRuntimeStation(train, train.CurrentStationIndex);
         var departurePatternDwell = GetStationInstruction(train, departureStation).DwellTimeSeconds;
         train.DwellRemaining = GetConfiguredStationDwellSeconds(
             null,
             train.Direction,
             departurePatternDwell ?? departureStation.DwellTimeSeconds);
-        if (movement.Facility.Kind == TurnbackFacilityKind.PocketTrack)
+        if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack)
         {
             train.DwellRemaining = Math.Max(train.DwellRemaining, FixedTimeStepSeconds);
             train.Phase = OperationalPhase.Dwelling;
