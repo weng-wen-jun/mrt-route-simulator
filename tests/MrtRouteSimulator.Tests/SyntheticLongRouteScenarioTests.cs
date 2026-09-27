@@ -456,6 +456,49 @@ internal static class SyntheticLongRouteFullScenarioTests
             "EXPRESS 折返前後都不得觸及 O21-O26。 ");
     }
 
+    public static void FacilitySpeedChangesAreContinuous()
+    {
+        var execution = Execution.Value;
+        const string entryEdgeId = "EDGE:POCKET:ENTRY-001";
+        var entryLimit = execution.Document.Topology.Edges.Single(edge => edge.TrackEdgeId == entryEdgeId)
+            .DefaultSpeedLimitMetersPerSecond;
+        var expressSamples = execution.World.Trajectory
+            .Where(item => item.ServiceRunId == SyntheticLongRouteFullScenarioBuilder.ExpressRunId)
+            .OrderBy(item => item.SimulationTimeSeconds)
+            .ToArray();
+        var entryIndex = Array.FindIndex(expressSamples, item => item.TrackEdgeId == entryEdgeId
+            && item.Phase == OperationalPhase.TailTrackOutbound);
+        True(entryIndex > 0, "快速車必須留下進入 O20 袋狀軌入口的連續軌跡。 ");
+        var beforeEntry = expressSamples[entryIndex - 1];
+        var atEntry = expressSamples[entryIndex];
+        True(beforeEntry.SpeedMetersPerSecond <= entryLimit + 0.15
+            && atEntry.SpeedMetersPerSecond <= entryLimit + 0.15,
+            $"快速車須在進入 25 km/h 袋狀軌前完成煞車；入口前後為 {beforeEntry.SpeedMetersPerSecond * 3.6:0.0}／{atEntry.SpeedMetersPerSecond * 3.6:0.0} km/h。 ");
+        True(expressSamples.Take(entryIndex)
+                .Any(item => item.Phase == OperationalPhase.TailTrackOutbound
+                    && item.SpeedMetersPerSecond > entryLimit + 1),
+            "O20 入口前應有從較高速度逐步煞至設施速限的軌跡。 ");
+
+        var worstChange = execution.World.Trajectory
+            .GroupBy(item => item.VehicleId)
+            .SelectMany(group =>
+            {
+                var ordered = group.OrderBy(item => item.SimulationTimeSeconds).ToArray();
+                return ordered.Zip(ordered.Skip(1), (from, to) => new
+                {
+                    From = from,
+                    To = to,
+                    Delta = to.SpeedMetersPerSecond - from.SpeedMetersPerSecond
+                });
+            })
+            .Where(item => item.To.SimulationTimeSeconds - item.From.SimulationTimeSeconds is > 0 and <= 0.101)
+            .OrderByDescending(item => Math.Abs(item.Delta))
+            .First();
+        True(Math.Abs(worstChange.Delta) * 3.6 <= 1.1,
+            $"相鄰 0.1 秒速度不應因軌道速限邊界斷層；最大跳幅為 {Math.Abs(worstChange.Delta) * 3.6:0.0} km/h，" +
+            $"發生於 {worstChange.From.VehicleId} {worstChange.From.SimulationTimeSeconds:0.0}→{worstChange.To.SimulationTimeSeconds:0.0} 秒。 ");
+    }
+
     private static void AssertO20Turnback(
         ScenarioExecution execution,
         TurnbackFacilityDefinition facility,

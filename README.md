@@ -4,7 +4,7 @@
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前本地 Release build `0 warnings / 0 errors`、Engine runner `184/184 tests`，完整 WPF runner 亦通過。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項大型播放診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
+目前本地 Release build `0 warnings / 0 errors`、Engine runner `185/185 tests`，完整 WPF runner 亦通過。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項大型播放診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
@@ -39,6 +39,7 @@
 - 主畫面與 topology editor 的線路示意採鐵路配線圖風格：上下行維持固定間距，只有實際 `DirectedTrackConnection` 才畫轉向線；月台依 edge-local 起訖 offset 顯示為長色帶，尾軌沿抵達方向的主線股道直線延伸，並在 `BufferStop` 節點畫止衝。edge ID 改由 tooltip 查閱，不再壓在線路圖上。
 - 正常主線的 station/platform stop 會先解析成 `ResolvedStop`（edge-local stop position、traversal index 與 chainage），進站煞車與到站吸附直接使用它。
 - `TrackSpeedLimitService` 使用 `TrackSpeedLimitDefinition` 的 edge-local interval。
+- 列車進入較低速的尾軌、袋狀軌或越行進路前，會沿實體 movement plan 預視前方軌道速限，依減速度與 jerk 提前煞車；速度不會在軌道交界直接截斷。
 - `TopologySimulationDefinition` 是 V2 world 的正式輸入；world 不提供 compatibility Route 或 legacy InfrastructureGraph。
 - 時刻表、區間統計、運行圖、CSV、PNG/PDF 匯出皆消費 topology 結果 context；投影 chainage 不參與物理或 safety。
 - V4.0.3 的袋狀軌與站後尾軌折返會在實體折返停點等待接續班表並發出反向車次；返回正線月台後只執行設定的上下客停靠時間，時刻表以折返設施的發車事件作為反向車次起點。
@@ -167,7 +168,7 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 - `src/MrtRouteSimulator.Engine`：V1 解析模型、V2 topology-native `SimulationWorld`、實體設施 traversal、速限與分析服務。
 - `src/MrtRouteSimulator.App`：WPF 桌面介面、圖形與離線匯出。
 - [samples](samples)：14 份可直接執行的 Schema 8 topology 範例，依規模排序，涵蓋小型站場、中型路線、大型合成路線、折返與越行。序號僅供排序，不是版本號；案例資料界線見 [samples/README.md](samples/README.md)。
-- `tests/MrtRouteSimulator.Tests`：目前 Engine runner 為 184/184 通過，包含大型 sample 分階段 gate、指定車次待避、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
+- `tests/MrtRouteSimulator.Tests`：目前 Engine runner 為 185/185 通過，包含大型 sample 分階段 gate、指定車次待避、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
 - `Directory.Build.props`：軟體版本的單一來源。
 - `VERSIONING.md`／`CHANGELOG.md`：進版規則與版本變更紀錄。
 - [TODO.md](TODO.md)：現行改善需求、完成狀態與後續驗收界線。

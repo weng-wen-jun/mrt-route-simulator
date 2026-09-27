@@ -3877,8 +3877,10 @@ public sealed class SimulationWorld
         }
 
         var performance = GetVehiclePerformance(train);
-        var edgeLimit = navigator.GetTraversal(cursor.MovementLegIndex, cursor.TraversalIndex).Edge.DefaultSpeedLimitMetersPerSecond;
-        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, edgeLimit);
+        var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
+            navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
+            performance.ServiceBrakingMetersPerSecondSquared,
+            performance.JerkMetersPerSecondCubed, train.Speed);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         if (movement.BrakingActive
             || ShouldBeginStationBraking(
@@ -4375,9 +4377,10 @@ public sealed class SimulationWorld
         var distanceToTarget = navigator.TryGetForwardDistance(cursor, target)
             ?? throw new SimulationValidationException(["topology 越行 facility target 位於列車 cursor 後方。"]);
         var performance = GetVehiclePerformance(train);
-        var edgeLimit = navigator.GetTraversal(cursor.MovementLegIndex, cursor.TraversalIndex)
-            .Edge.DefaultSpeedLimitMetersPerSecond;
-        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, edgeLimit);
+        var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
+            navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
+            performance.ServiceBrakingMetersPerSecondSquared,
+            performance.JerkMetersPerSecondCubed, train.Speed);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         train.Acceleration = ProfileMode == OperationProfileMode.RealisticOperations
             ? BrakingEnvelopeCalculator.MoveToward(
@@ -5765,11 +5768,9 @@ public sealed class SimulationWorld
 
         if (GetMovementNavigator(train).Legs[train.RuntimeTopologyCursor!.Value.MovementLegIndex].Kind != MovementLegKind.ServiceRoute)
         {
-            return Math.Min(
-                performance.MaxSpeedMetersPerSecond,
-                GetMovementNavigator(train).GetTraversal(
-                    train.RuntimeTopologyCursor.Value.MovementLegIndex,
-                    train.RuntimeTopologyCursor.Value.TraversalIndex).Edge.DefaultSpeedLimitMetersPerSecond);
+            return _trackSpeedLimits.GetCurrentLimit(
+                GetMovementNavigator(train), train.RuntimeTopologyCursor.Value,
+                performance.MaxSpeedMetersPerSecond);
         }
 
         return _trackSpeedLimits.GetCurrentLimit(

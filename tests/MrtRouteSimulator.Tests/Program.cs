@@ -34,6 +34,7 @@ var tests = new (string Name, Action Run)[]
     ("合成長路線上行快速車跨站速限使用實體距離", SyntheticLongRouteFullScenarioTests.InboundExpressPassingLimitUsesPhysicalDistance),
     ("合成長路線 SECTION O20 topology-native 袋狀軌折返", SyntheticLongRouteFullScenarioTests.O20TurnbackCompletes),
     ("合成長路線 DIRECT O20 折返且不進入 O21-O26", SyntheticLongRouteFullScenarioTests.ExpressTurnsAtO20AndReturns),
+    ("合成長路線設施進路提前煞車且速度連續", SyntheticLongRouteFullScenarioTests.FacilitySpeedChangesAreContinuous),
     ("合成長路線 SECTION O04 越行後 O20 折返", SyntheticLongRouteFullScenarioTests.SectionOvertakesAtO04ThenTurnsAtO20),
     ("合成長路線 O04 越行與 rear-clear", SyntheticLongRouteFullScenarioTests.O04OvertakingCompletesSafely),
     ("合成長路線 O13 越行與 rear-clear", SyntheticLongRouteFullScenarioTests.O13OvertakingCompletesSafely),

@@ -121,6 +121,88 @@ public sealed class TrackSpeedLimitService
         return Math.Clamp(permitted, 0, trainMaximumMetersPerSecond);
     }
 
+    /// <summary>依實體 movement plan 預視設施進路上的降速邊界。</summary>
+    public double GetPermittedSpeedMetersPerSecond(
+        TopologyMovementNavigator navigator,
+        RuntimeTopologyCursor cursor,
+        RuntimeTopologyCursor target,
+        double trainMaximumMetersPerSecond,
+        double brakingMetersPerSecondSquared,
+        double jerkMetersPerSecondCubed,
+        double currentSpeedMetersPerSecond)
+    {
+        ArgumentNullException.ThrowIfNull(navigator);
+        var distanceToTarget = navigator.TryGetForwardDistance(cursor, target)
+            ?? throw new ArgumentException("目標必須位於目前 movement cursor 前方。", nameof(target));
+        var permitted = GetCurrentLimit(navigator, cursor, trainMaximumMetersPerSecond);
+        var distanceToTraversalStart = -navigator.GetDistanceAlongTraversal(cursor);
+
+        for (var legIndex = cursor.MovementLegIndex; legIndex <= target.MovementLegIndex; legIndex++)
+        {
+            var firstTraversal = legIndex == cursor.MovementLegIndex ? cursor.TraversalIndex : 0;
+            var lastTraversal = legIndex == target.MovementLegIndex
+                ? target.TraversalIndex
+                : navigator.Legs[legIndex].Traversals.Count - 1;
+            for (var traversalIndex = firstTraversal; traversalIndex <= lastTraversal; traversalIndex++)
+            {
+                var traversal = navigator.GetTraversal(legIndex, traversalIndex);
+                ApplyBoundary(legIndex, traversalIndex, 0, distanceToTraversalStart);
+                foreach (var limit in limits.Where(limit =>
+                             limit.TrackEdgeId.Equals(traversal.Edge.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+                             && limit.Direction == traversal.Direction))
+                {
+                    var startDistance = traversal.Direction == TraversalDirection.Forward
+                        ? limit.StartOffsetMeters
+                        : traversal.LengthMeters - limit.EndOffsetMeters;
+                    ApplyBoundary(legIndex, traversalIndex, startDistance,
+                        distanceToTraversalStart + startDistance);
+                }
+                distanceToTraversalStart += traversal.LengthMeters;
+            }
+        }
+
+        return Math.Clamp(permitted, 0, trainMaximumMetersPerSecond);
+
+        void ApplyBoundary(int legIndex, int traversalIndex, double distanceAlongTraversal,
+            double distance)
+        {
+            if (distance < -Epsilon || distance > distanceToTarget + Epsilon)
+                return;
+            if (distance <= Epsilon
+                && legIndex == cursor.MovementLegIndex
+                && traversalIndex == cursor.TraversalIndex)
+                return;
+
+            var traversalLength = navigator.GetTraversal(legIndex, traversalIndex).LengthMeters;
+            var inside = navigator.CreateCursor(legIndex, traversalIndex,
+                Math.Min(traversalLength, distanceAlongTraversal + Epsilon * 10));
+            var boundaryLimit = GetCurrentLimit(navigator, inside, trainMaximumMetersPerSecond);
+            permitted = Math.Min(permitted, SpeedLimitService.CalculateTargetPermittedSpeed(
+                Math.Max(0, distance),
+                boundaryLimit,
+                brakingMetersPerSecondSquared,
+                jerkMetersPerSecondCubed,
+                currentSpeedMetersPerSecond));
+        }
+    }
+
+    public double GetCurrentLimit(
+        TopologyMovementNavigator navigator,
+        RuntimeTopologyCursor cursor,
+        double trainMaximumMetersPerSecond)
+    {
+        ArgumentNullException.ThrowIfNull(navigator);
+        var traversal = navigator.GetTraversal(cursor.MovementLegIndex, cursor.TraversalIndex);
+        return limits.Where(limit => limit.TrackEdgeId.Equals(cursor.Position.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
+                && limit.Direction == traversal.Direction
+                && cursor.Position.OffsetMeters >= limit.StartOffsetMeters - Epsilon
+                && cursor.Position.OffsetMeters <= limit.EndOffsetMeters + Epsilon)
+            .Select(limit => limit.LimitMetersPerSecond)
+            .Append(traversal.Edge.DefaultSpeedLimitMetersPerSecond)
+            .Append(trainMaximumMetersPerSecond)
+            .Min();
+    }
+
     /// <summary>topology-native 當前 edge-local 速限。</summary>
     public double GetCurrentLimit(
         TopologyRouteNavigator navigator,
