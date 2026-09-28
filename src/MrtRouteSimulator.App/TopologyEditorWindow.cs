@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -17,10 +18,29 @@ namespace MrtRouteSimulator.App;
 /// </summary>
 internal enum ProjectWorkspacePage
 {
-    Project, QuickBuilder, Infrastructure, Operations, Dispatch, Simulation, Schematic, Results, Validation
+    // Keep these values stable: MainWindow and existing round-trip tests still use them.
+    Project,
+    QuickBuilder,
+    Infrastructure,
+    Operations,
+    Dispatch,
+    Simulation,
+    Schematic,
+    Results,
+    Validation,
+
+    // The settings-workspace pages are deliberately appended so old persisted/reflective
+    // callers never silently open another page after the navigation redesign.
+    Stations,
+    Tracks,
+    Vehicle,
+    Services,
+    StopPatterns,
+    DispatchPlanning,
+    AdvancedData
 }
 
-internal sealed class TopologyEditorWindow : Window
+internal sealed partial class TopologyEditorWindow : Window
 {
     private readonly ProjectEditorState state;
     private readonly ProjectViewModel project;
@@ -39,7 +59,17 @@ internal sealed class TopologyEditorWindow : Window
     private readonly TextBlock selectionDetails = new() { TextWrapping = TextWrapping.Wrap };
     private readonly ListBox validationList = new();
     private readonly ListBox navigation = new();
+    private readonly ObservableCollection<NavItem> navigationItems = [];
     private readonly Dictionary<ProjectValidationTargetKind, List<ValidationEditorTarget>> validationTargets = [];
+    private readonly Dictionary<string, Action> pageCommitHooks = new(StringComparer.Ordinal);
+    private string? activePageCommitHookKey;
+    private readonly ColumnDefinition rightPanelColumn = new() { Width = new GridLength(280) };
+    private Grid? rightPanel;
+    private Button? rightPanelToggle;
+    private bool? rightPanelManuallyExpanded;
+    private readonly TextBlock workspaceSummary = new();
+    private readonly TextBlock validationSummary = new();
+    private readonly TextBox workspaceSearch = new();
     private DataGrid? routeGrid;
     private DataGrid? traversalGrid;
     private DataGrid? routeStopGrid;
@@ -51,11 +81,12 @@ internal sealed class TopologyEditorWindow : Window
     private readonly ProjectWorkspacePage initialPage;
     private ProjectWorkspacePage currentPage;
     private bool changingNavigation;
+    private NavItem? lastNavigationItem;
 
     public TopologyEditorWindow(TopologyProjectDocument document, ProjectWorkspacePage initialPage = ProjectWorkspacePage.Project)
     {
         ArgumentNullException.ThrowIfNull(document);
-        this.initialPage = Enum.IsDefined(initialPage) ? initialPage : ProjectWorkspacePage.Project;
+        this.initialPage = NormalizePage(initialPage);
         state = ProjectDocumentMapper.CreateEditorState(document);
         project = new ProjectViewModel(state);
         simulation = new SimulationViewModel(state);
@@ -68,6 +99,7 @@ internal sealed class TopologyEditorWindow : Window
         MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Content = BuildShell();
+        SizeChanged += (_, _) => UpdateRightPanelForWidth();
     }
 
     public TopologyProjectDocument? Result { get; private set; }
@@ -75,46 +107,102 @@ internal sealed class TopologyEditorWindow : Window
     private UIElement BuildShell()
     {
         var root = new Grid { Background = Brushes.White };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(184) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
+        root.ColumnDefinitions.Add(rightPanelColumn);
+
+        var header = new Grid { Margin = new Thickness(14, 10, 14, 4) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        workspaceSummary.Text = "專案工作區";
+        workspaceSummary.FontSize = 16;
+        workspaceSummary.FontWeight = FontWeights.SemiBold;
+        workspaceSummary.VerticalAlignment = VerticalAlignment.Center;
+        header.Children.Add(workspaceSummary);
+        workspaceSearch.Width = 220;
+        workspaceSearch.Height = 28;
+        workspaceSearch.Margin = new Thickness(8, 0, 0, 0);
+        workspaceSearch.VerticalContentAlignment = VerticalAlignment.Center;
+        workspaceSearch.ToolTip = "搜尋工作區頁面";
+        workspaceSearch.SetValue(AutomationProperties.NameProperty, "搜尋工作區頁面");
+        workspaceSearch.TextChanged += (_, _) =>
+        {
+            var view = CollectionViewSource.GetDefaultView(navigationItems);
+            var query = workspaceSearch.Text.Trim();
+            view.Filter = string.IsNullOrWhiteSpace(query)
+                ? null
+                : item => item is NavItem nav && nav.Label.Contains(query, StringComparison.OrdinalIgnoreCase);
+            view.Refresh();
+        };
+        Grid.SetColumn(workspaceSearch, 1);
+        header.Children.Add(workspaceSearch);
+        rightPanelToggle = CreateButton("收合", (_, _) => ToggleRightPanel(), true);
+        Grid.SetColumn(rightPanelToggle, 2);
+        header.Children.Add(rightPanelToggle);
+        Grid.SetRow(header, 0);
+        Grid.SetColumnSpan(header, 3);
+        root.Children.Add(header);
 
         navigation.Margin = new Thickness(10);
         navigation.BorderThickness = new Thickness(0);
         navigation.Background = new SolidColorBrush(Color.FromRgb(247, 249, 252));
-        navigation.DisplayMemberPath = nameof(NavItem.Label);
-        navigation.ItemsSource = new[]
-        {
-            new NavItem(ProjectWorkspacePage.Project, "專案", ShowProjectHome),
-            new NavItem(ProjectWorkspacePage.QuickBuilder, "快速建立", ShowQuickBuilder),
-            new NavItem(ProjectWorkspacePage.Infrastructure, "基礎設施", ShowInfrastructure),
-            new NavItem(ProjectWorkspacePage.Operations, "營運", ShowOperations),
-            new NavItem(ProjectWorkspacePage.Dispatch, "發車計畫", ShowDispatch),
-            new NavItem(ProjectWorkspacePage.Simulation, "模擬設定", ShowSimulation),
-            new NavItem(ProjectWorkspacePage.Schematic, "線路示意圖", ShowSchematic),
-            new NavItem(ProjectWorkspacePage.Results, "結果", ShowResults),
-            new NavItem(ProjectWorkspacePage.Validation, "驗證", ShowValidation)
-        };
+        navigationItems.Reset([
+            new NavItem(ProjectWorkspacePage.Project, "總覽", ShowProjectHome),
+            new NavItem(ProjectWorkspacePage.Stations, "車站與月台", ShowStationsPage),
+            new NavItem(ProjectWorkspacePage.Tracks, "軌道與設施", ShowTracksPage),
+            new NavItem(ProjectWorkspacePage.Vehicle, "車型", ShowVehiclePage),
+            new NavItem(ProjectWorkspacePage.Services, "服務與路徑", ShowServicesPage),
+            new NavItem(ProjectWorkspacePage.StopPatterns, "停站模式", ShowStopPatternsPage),
+            new NavItem(ProjectWorkspacePage.DispatchPlanning, "班表與接續", ShowDispatchPlanningPage),
+            new NavItem(ProjectWorkspacePage.Simulation, "模擬設定", ShowSimulationPage),
+            new NavItem(ProjectWorkspacePage.AdvancedData, "進階資料", ShowAdvancedDataPage),
+            new NavItem(ProjectWorkspacePage.Validation, "驗證訊息（進階）", ShowValidation)
+        ]);
+        navigation.ItemsSource = navigationItems;
+        var navigationTemplate = new DataTemplate();
+        var navigationText = new FrameworkElementFactory(typeof(TextBlock));
+        navigationText.SetBinding(TextBlock.TextProperty, new Binding(nameof(NavItem.Label)));
+        navigationText.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(4, 5, 4, 5));
+        navigationTemplate.VisualTree = navigationText;
+        navigation.ItemTemplate = navigationTemplate;
         navigation.SelectionChanged += (_, _) => OpenSelectedNavigationItem();
-        navigation.SelectedIndex = (int)initialPage;
+        navigation.SelectedItem = navigationItems.FirstOrDefault(item => item.Page == initialPage)
+            ?? navigationItems.First();
+        lastNavigationItem = navigation.SelectedItem as NavItem;
+        Grid.SetRow(navigation, 1);
         Grid.SetColumn(navigation, 0);
         root.Children.Add(navigation);
 
         workspace.Margin = new Thickness(12, 12, 8, 12);
+        Grid.SetRow(workspace, 1);
         Grid.SetColumn(workspace, 1);
         root.Children.Add(workspace);
 
         var right = new Grid { Margin = new Thickness(8, 12, 12, 12) };
+        rightPanel = right;
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(230) });
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        right.Children.Add(new TextBlock { Text = "屬性", FontSize = 17, FontWeight = FontWeights.SemiBold });
+        var propertyHeader = new DockPanel();
+        propertyHeader.Children.Add(new TextBlock { Text = "選取項目", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        right.Children.Add(propertyHeader);
         selectionDetails.Margin = new Thickness(0, 8, 0, 12);
         selectionDetails.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
-        Grid.SetRow(selectionDetails, 1);
-        right.Children.Add(selectionDetails);
+        var selectionScroll = new ScrollViewer
+        {
+            Content = selectionDetails,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(selectionScroll, 1);
+        right.Children.Add(selectionScroll);
         var validationTitle = new TextBlock { Text = "驗證", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
         Grid.SetRow(validationTitle, 2);
         right.Children.Add(validationTitle);
@@ -125,7 +213,17 @@ internal sealed class TopologyEditorWindow : Window
         Grid.SetRow(validationList, 3);
         validationList.DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage);
         right.Children.Add(validationList);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        Grid.SetRow(right, 1);
+        Grid.SetColumn(right, 2);
+        root.Children.Add(right);
+
+        var footer = new DockPanel { Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
+        validationSummary.Text = "尚未驗證草稿";
+        validationSummary.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        validationSummary.VerticalAlignment = VerticalAlignment.Center;
+        DockPanel.SetDock(validationSummary, Dock.Left);
+        footer.Children.Add(validationSummary);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var advanced = new CheckBox { Content = "進階識別碼", IsChecked = advancedMode, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         advanced.Checked += (_, _) => advancedMode = true;
         advanced.Unchecked += (_, _) => advancedMode = false;
@@ -133,16 +231,38 @@ internal sealed class TopologyEditorWindow : Window
         actions.Children.Add(CreateButton("驗證", (_, _) => RefreshValidation(), true));
         actions.Children.Add(CreateButton("套用", (_, _) => Apply(), false));
         actions.Children.Add(CreateButton("取消", (_, _) => DialogResult = false, true));
-        Grid.SetRow(actions, 4);
-        right.Children.Add(actions);
-        Grid.SetColumn(right, 2);
-        root.Children.Add(right);
+        DockPanel.SetDock(actions, Dock.Right);
+        footer.Children.Add(actions);
+        Grid.SetRow(footer, 2);
+        Grid.SetColumnSpan(footer, 3);
+        root.Children.Add(footer);
+        UpdateWorkspaceSummary();
         return root;
     }
 
     private void Navigate(ProjectWorkspacePage page)
     {
-        var item = navigation.Items.OfType<NavItem>().First(candidate => candidate.Page == page);
+        if (page is ProjectWorkspacePage.QuickBuilder or ProjectWorkspacePage.Schematic or ProjectWorkspacePage.Results)
+        {
+            var previousHookKey = activePageCommitHookKey;
+            try
+            {
+                CommitPageDrafts();
+                activePageCommitHookKey = null;
+                if (page == ProjectWorkspacePage.QuickBuilder) ShowQuickBuilder();
+                else if (page == ProjectWorkspacePage.Schematic) ShowSchematic();
+                else ShowResults();
+                currentPage = page;
+                UpdateWorkspaceSummary();
+            }
+            catch (EditorValidationException exception) { activePageCommitHookKey = previousHookKey; SetValidationMessages(exception.Messages); }
+            catch (SimulationValidationException exception) { activePageCommitHookKey = previousHookKey; ShowErrors(exception.Errors); }
+            catch (Exception exception) { activePageCommitHookKey = previousHookKey; SetValidationMessages([ProjectEditorValidationService.CreateError(exception.Message, state.Draft)]); }
+            return;
+        }
+        page = NormalizePage(page);
+        if (!string.IsNullOrWhiteSpace(workspaceSearch.Text)) workspaceSearch.Clear();
+        var item = navigationItems.First(candidate => candidate.Page == page);
         if (ReferenceEquals(navigation.SelectedItem, item)) OpenSelectedNavigationItem();
         else navigation.SelectedItem = item;
     }
@@ -150,23 +270,39 @@ internal sealed class TopologyEditorWindow : Window
     private void OpenSelectedNavigationItem()
     {
         if (changingNavigation || navigation.SelectedItem is not NavItem item) return;
+        string? previousHookKey = activePageCommitHookKey;
         try
         {
+            CommitPageDrafts();
+            activePageCommitHookKey = null;
             item.Open();
             currentPage = item.Page;
+            if ((item.Page is ProjectWorkspacePage.Vehicle or ProjectWorkspacePage.Services
+                or ProjectWorkspacePage.StopPatterns or ProjectWorkspacePage.DispatchPlanning)
+                && activePageCommitHookKey is null)
+            {
+                RegisterPageCommitHook("operations-pages", CommitOperationsPageDrafts);
+            }
+            if (previousHookKey is not null && !string.Equals(previousHookKey, activePageCommitHookKey, StringComparison.Ordinal))
+                pageCommitHooks.Remove(previousHookKey);
+            lastNavigationItem = item;
+            UpdateWorkspaceSummary();
         }
         catch (EditorValidationException exception)
         {
+            activePageCommitHookKey = previousHookKey;
             SetValidationMessages(exception.Messages);
             RestoreNavigationSelection();
         }
         catch (SimulationValidationException exception)
         {
+            activePageCommitHookKey = previousHookKey;
             ShowErrors(exception.Errors);
             RestoreNavigationSelection();
         }
         catch (Exception exception)
         {
+            activePageCommitHookKey = previousHookKey;
             SetValidationMessages([ProjectEditorValidationService.CreateError(exception.Message, state.Draft)]);
             RestoreNavigationSelection();
         }
@@ -175,7 +311,8 @@ internal sealed class TopologyEditorWindow : Window
     private void RestoreNavigationSelection()
     {
         changingNavigation = true;
-        navigation.SelectedItem = navigation.Items.OfType<NavItem>().FirstOrDefault(candidate => candidate.Page == currentPage);
+        if (!string.IsNullOrWhiteSpace(workspaceSearch.Text)) workspaceSearch.Clear();
+        navigation.SelectedItem = lastNavigationItem ?? navigationItems.First();
         changingNavigation = false;
     }
 
@@ -196,6 +333,14 @@ internal sealed class TopologyEditorWindow : Window
             ("服務／車型數", $"{document.ServiceTypes.Length}／{document.VehicleTypes.Length}"),
             ("發車班次數", CalculateDispatchRunCount(document).ToString(CultureInfo.InvariantCulture)),
             ("拓撲驗證", validation.Any(item => item.Severity == ProjectValidationSeverity.Error) ? "有錯誤" : "通過")));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "從這裡開始編輯大型存檔。快速建立只用於一次性起稿；載入既有拓撲後，請由車站、軌道、營運與班表頁直接修改同一份 Schema 8 草稿。",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)),
+            Margin = new Thickness(0, 12, 0, 8)
+        });
+        panel.Children.Add(CreateButton("快速建立／重新起稿…", (_, _) => Navigate(ProjectWorkspacePage.QuickBuilder), true));
         panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), false));
         workspace.Content = panel;
         RefreshValidation();
@@ -652,13 +797,17 @@ internal sealed class TopologyEditorWindow : Window
 
     private static ProjectWorkspacePage PageFor(ProjectValidationTargetKind kind) => kind switch
     {
-        ProjectValidationTargetKind.Node or ProjectValidationTargetKind.Edge or ProjectValidationTargetKind.Station
-            or ProjectValidationTargetKind.Platform or ProjectValidationTargetKind.Resource or ProjectValidationTargetKind.SpeedLimit
-            or ProjectValidationTargetKind.Gradient or ProjectValidationTargetKind.TurnbackFacility
-            or ProjectValidationTargetKind.PassingFacility => ProjectWorkspacePage.Infrastructure,
-        ProjectValidationTargetKind.ServiceRoute or ProjectValidationTargetKind.StopPattern
-            or ProjectValidationTargetKind.VehicleType or ProjectValidationTargetKind.ServiceType => ProjectWorkspacePage.Operations,
-        ProjectValidationTargetKind.HeadwayPlan or ProjectValidationTargetKind.ManualTimetable => ProjectWorkspacePage.Dispatch,
+        ProjectValidationTargetKind.Station or ProjectValidationTargetKind.Platform
+            => ProjectWorkspacePage.Stations,
+        ProjectValidationTargetKind.Node or ProjectValidationTargetKind.Edge
+            or ProjectValidationTargetKind.SpeedLimit or ProjectValidationTargetKind.TurnbackFacility
+            or ProjectValidationTargetKind.PassingFacility => ProjectWorkspacePage.Tracks,
+        ProjectValidationTargetKind.VehicleType => ProjectWorkspacePage.Vehicle,
+        ProjectValidationTargetKind.ServiceRoute or ProjectValidationTargetKind.ServiceType => ProjectWorkspacePage.Services,
+        ProjectValidationTargetKind.StopPattern => ProjectWorkspacePage.StopPatterns,
+        ProjectValidationTargetKind.HeadwayPlan or ProjectValidationTargetKind.ManualTimetable => ProjectWorkspacePage.DispatchPlanning,
+        ProjectValidationTargetKind.Gradient or ProjectValidationTargetKind.Resource
+            => ProjectWorkspacePage.AdvancedData,
         ProjectValidationTargetKind.Simulation => ProjectWorkspacePage.Simulation,
         _ => ProjectWorkspacePage.Project
     };
@@ -728,6 +877,91 @@ internal sealed class TopologyEditorWindow : Window
             && bound.Binding is Binding binding
             && string.Equals(binding.Path?.Path, fieldName, StringComparison.Ordinal);
     }
+
+    private void RegisterPageCommitHook(string key, Action commit)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("表單提交 hook 必須有穩定識別碼。", nameof(key));
+        ArgumentNullException.ThrowIfNull(commit);
+        pageCommitHooks[key] = commit;
+        activePageCommitHookKey = key;
+    }
+
+    private void CommitPageDrafts()
+    {
+        // Only the visible page owns live controls. Running closures from prior pages
+        // would re-apply stale values after a successful A -> B -> A navigation.
+        if (activePageCommitHookKey is { } key && pageCommitHooks.TryGetValue(key, out var commit))
+        {
+            commit();
+        }
+        else if (currentPage is ProjectWorkspacePage.Services or ProjectWorkspacePage.StopPatterns
+            or ProjectWorkspacePage.Vehicle or ProjectWorkspacePage.DispatchPlanning)
+        {
+            if (!CommitOperationsPageEditors())
+                throw new EditorValidationException(validationMessages.Select(item => item.Source).ToArray());
+        }
+        CommitTableDrafts();
+    }
+
+    private void CommitOperationsPageDrafts()
+    {
+        if (!CommitOperationsPageEditors())
+            throw new EditorValidationException(validationMessages.Select(item => item.Source).ToArray());
+    }
+
+    private static ProjectWorkspacePage NormalizePage(ProjectWorkspacePage page) => page switch
+    {
+        ProjectWorkspacePage.Infrastructure => ProjectWorkspacePage.Tracks,
+        ProjectWorkspacePage.Operations => ProjectWorkspacePage.Services,
+        ProjectWorkspacePage.Dispatch => ProjectWorkspacePage.DispatchPlanning,
+        ProjectWorkspacePage.QuickBuilder or ProjectWorkspacePage.Schematic or ProjectWorkspacePage.Results => ProjectWorkspacePage.Project,
+        _ when Enum.IsDefined(page) => page,
+        _ => ProjectWorkspacePage.Project
+    };
+
+    private void UpdateWorkspaceSummary()
+    {
+        if (workspaceSummary is null) return;
+        var document = state.Draft;
+        workspaceSummary.Text = $"{document.ProjectName}  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
+    }
+
+    private void ToggleRightPanel()
+    {
+        rightPanelManuallyExpanded = rightPanelColumn.Width.Value == 0;
+        SetRightPanelExpanded(rightPanelManuallyExpanded.Value);
+    }
+
+    private void UpdateRightPanelForWidth()
+    {
+        if (rightPanelManuallyExpanded is null)
+            SetRightPanelExpanded(ActualWidth >= 1100);
+    }
+
+    private void SetRightPanelExpanded(bool expanded)
+    {
+        rightPanelColumn.Width = expanded ? new GridLength(280) : new GridLength(0);
+        if (rightPanel is not null) rightPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        if (rightPanelToggle is null) return;
+        rightPanelToggle.Content = expanded ? "收合" : "展開";
+        rightPanelToggle.ToolTip = expanded ? "收合右側選取與驗證摘要" : "展開右側選取與驗證摘要";
+    }
+
+    private string PageLabel(ProjectWorkspacePage page) => page switch
+    {
+        ProjectWorkspacePage.Project => "專案總覽",
+        ProjectWorkspacePage.QuickBuilder => "快速建立",
+        ProjectWorkspacePage.Stations => "車站與月台",
+        ProjectWorkspacePage.Tracks => "軌道與設施",
+        ProjectWorkspacePage.Vehicle => "車型",
+        ProjectWorkspacePage.Services => "服務與行車路徑",
+        ProjectWorkspacePage.StopPatterns => "停站模式",
+        ProjectWorkspacePage.DispatchPlanning => "班表與接續",
+        ProjectWorkspacePage.Simulation => "模擬設定",
+        ProjectWorkspacePage.AdvancedData => "進階資料",
+        ProjectWorkspacePage.Validation => "驗證訊息",
+        _ => "工作區"
+    };
 
     private TabItem EditorTab<T>(ProjectValidationTargetKind targetKind, string title, ObservableCollection<T> source, Action add, Action? delete, bool readOnly = false, Action? edit = null)
     {
@@ -967,7 +1201,7 @@ internal sealed class TopologyEditorWindow : Window
     {
         try
         {
-            CommitTableDrafts();
+            CommitPageDrafts();
             SetValidationMessages(ProjectEditorValidationService.Validate(state.Draft));
         }
         catch (EditorValidationException exception) { SetValidationMessages(exception.Messages); }
@@ -979,7 +1213,7 @@ internal sealed class TopologyEditorWindow : Window
     {
         try
         {
-            CommitTableDrafts();
+            CommitPageDrafts();
             var candidate = state.Commit();
             TopologyProjectFormat.CreateRuntime(candidate);
             Result = candidate;
@@ -2073,6 +2307,14 @@ internal sealed class TopologyEditorWindow : Window
     {
         validationMessages.Reset(messages.Select(message => new ProjectValidationMessageViewModel(message)));
         selectionDetails.Text = string.Join(Environment.NewLine, validationMessages.Select(message => UiDisplayText.ValidationMessage(message.Source.Message)));
+        if (validationSummary is not null)
+        {
+            var errors = validationMessages.Count(item => item.Source.Severity == ProjectValidationSeverity.Error);
+            var warnings = validationMessages.Count(item => item.Source.Severity == ProjectValidationSeverity.Warning);
+            validationSummary.Text = errors == 0 && warnings == 0
+                ? "驗證通過 · 草稿可套用"
+                : $"驗證摘要：{errors} 個錯誤、{warnings} 個提醒 · 點選訊息可定位";
+        }
     }
 
     private string NextId(string prefix)

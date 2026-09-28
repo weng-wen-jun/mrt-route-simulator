@@ -1,10 +1,10 @@
 ﻿# MRT 路線進出站時間模擬器 V4.0.3
 
-> V4.0.3（2026-09-26）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
+> V4.0.3（2026-09-28）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
 
 這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
 
-目前本地 Release build `0 warnings / 0 errors`、Engine runner `185/185 tests`，完整 WPF runner 亦通過。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項大型播放診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
+2026-09-28 Release build 為 `0 warnings / 0 errors`、Engine runner `185/185 tests`，完整 WPF runner 通過 14 個範例載入、大型工作區編輯往返、播放與 CSV／PNG／PDF 輸出。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
@@ -33,7 +33,8 @@
 - `LinearInfrastructureBuilder` 會把線性三站 A—B—C 建成 A→B、B→C 與 C→B、B→A 四條獨立 edge，而非兩條全線 edge；快速表單轉 Schema 8 時會補齊兩端實體尾軌與折返資源。
 - `RouteProjection` 只提供單一 ServiceRoute 的累積 chainage 給過渡相容使用。它不是 global coordinate，也不能用來回推權威 `TrackPosition`；有 loop 時必須指定 traversal index。
 - `SimulationWorld`、trajectory 與 event 以 `TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex` 作為 V2 權威 cursor；`PositionMeters` 只是 cursor 投影出的顯示快取。
-- 正常主線、tail／pocket／turnback 與 passing facility 都依 `DirectedTrackTraversal` 實際推進；resource 會在車尾 footprint 淨空後才釋放。
+- 正常主線、tail／pocket／turnback 與 passing facility 都依 `DirectedTrackTraversal` 實際推進；明確資源預約會在車尾 footprint 淨空後才釋放，衝突時列車等待。
+- 大型 Schema 8 工作區提供車站、軌道、營運、模擬與設施作業編輯入口；大型 sample 的派車、站務、有向接續及偏好月台設定可往返保存，取消草稿不會取代目前專案。
 - `DirectedTrackConnectionDefinition` 可在 switch／crossing node 明確限制「哪一個進入 traversal 可以接哪一個離開 traversal」；path finder、service route validator 與 runtime movement 共用同一限制，未宣告限制的普通節點仍依 edge 接續。
 - 折返停點使用 edge-local `TrackPosition`；若停在 edge 中段，返回 traversal 必須由相同實體位置立即反向開始，runtime 不會用 virtual position 或 teleport 補接。
 - 主畫面與 topology editor 的線路示意採鐵路配線圖風格：上下行維持固定間距，只有實際 `DirectedTrackConnection` 才畫轉向線；月台依 edge-local 起訖 offset 顯示為長色帶，尾軌沿抵達方向的主線股道直線延伸，並在 `BufferStop` 節點畫止衝。edge ID 改由 tooltip 查閱，不再壓在線路圖上。

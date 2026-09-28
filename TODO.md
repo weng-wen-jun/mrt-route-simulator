@@ -74,6 +74,20 @@
 
 ## 現行待辦
 
+### 2026-09-25 大型存檔逐頁檢核與修正
+
+> 以 `samples/14-大型-二十八站完整營運範例.mrtsim.json` 為驗收基準。builder／sample 名稱已同步；2026-09-25 Release build 0 警告／0 錯誤、Engine 173/173、完整 WPF runner 通過。大型 WPF 60× 定向播放是本輪修改前基準，尚待重跑。離屏 runner 不等於原生桌面逐頁點測。
+
+- [x] 【V4-LARGE-ARTIFACT-01】builder 與大型 sample 的上下行 ServiceRoute 名稱已同步並重生 sample；Schema 8 round-trip 通過，Engine 173/173。
+- [ ] 【V4-LARGE-INPUT-MAP-01】已建立 [大型 sample UI 覆蓋矩陣](samples/14-大型-二十八站-UI-覆蓋矩陣.md)；仍須完成「空白起稿 → 各頁設定 → 套用 → 存檔 → 重讀」的逐 path 功能等價驗收。
+- [x] 【V4-LARGE-INPUT-SETTINGS-01】已補專案識別、列車、營運與模擬設定入口，含 `tractionFadeRatio`、`brakeBuildUpTimeSeconds`、`positioningErrorMeters`、列車數摘要與可空班距；三項原缺值及列車數／班距經離屏 WPF 對話框回歸。
+- [ ] 【V4-LARGE-INPUT-DISPATCH-01】已補發車模式、車輛分配與班次方向入口；離屏 WPF 已驗證模式切換及新增上行班次，仍須由空白起稿逐筆重現八筆手動班表及續行參照。
+- [ ] 【V4-LARGE-INPUT-TOPOLOGY-01】已補設施編輯、折返／待避／車站作業、曲線、有向接續、edge 資源及月台服務限制的入口與局部回歸；仍須從空白起稿重建 O04／O13／O20 全部設施與 69 筆有向接續，確認 physical port side 與 validator 不變。
+- [x] 【V4-LARGE-INPUT-ROUNDTRIP-01】修正 `preferredPlatformIds: null` 變成 `[]`；大型 sample 離屏 WPF 已驗證取消、套用、序列化、重讀與 runtime 建立。原生檔案對話框仍列入 QA。
+- [x] 【V4-LARGE-OUTPUT-REFRESH-01】暫停安全篩選、運行圖事件表、區間統計篩選與圖上事件方向／車輛篩選已修正；WPF output-only 與完整 runner 通過。
+- [ ] 【V4-LARGE-OUTPUT-EXPORT-01】明訂 CSV 是全量或依目前圖表篩選，讓 UI 文案與匯出內容一致；以大型 sample 驗證時刻表、區間物理、比較、資源、安全、區間統計、運行圖及 CSV／PNG／PDF。
+- [ ] 【V4-LARGE-QA-01】每階段依 Structural → Operational → Regression gate 驗證；最後跑 Release build、完整 Engine／WPF、14 範例載入、8,000 秒完成與關鍵事件，再補原生桌面不同 DPI、檔案對話框和 O04／O13／O20 連續播放點測。離屏結果與真人桌面驗收須分開回報。
+
 - [x] PDF 分頁匯出改為各頁重繪標題、座標軸與頁內列車標籤，避免點陣切片切開長標題及跨頁列車標籤；2026-09-19 已完成 A4 兩頁渲染檢查、Release build、Engine 與 WPF 輸出驗證。
 
 - [x] 【V4-ROUTE-CONSTRUCTION-GUARDS】已實作明確有向轉向產生器、實體接軌側別共用檢核、編輯器保存與讀檔交易保護；快速建線、分割及設施精靈接入，12份現行範例遷移且主圖／編輯器零配線警告。詳見 [路線圖常見問題清單](ROUTE_LAYOUT_ISSUES.md)。

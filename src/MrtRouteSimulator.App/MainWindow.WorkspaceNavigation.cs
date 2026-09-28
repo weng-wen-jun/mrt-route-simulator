@@ -8,10 +8,10 @@ public partial class MainWindow
     private const double QuickBuilderExpandedWidth = 450;
 
     private void OpenInfrastructureWorkspace_Click(object sender, RoutedEventArgs e) =>
-        OpenTopologyWorkspace(ProjectWorkspacePage.Infrastructure);
+        OpenTopologyWorkspace(ProjectWorkspacePage.Tracks);
 
     private void OpenOperationsWorkspace_Click(object sender, RoutedEventArgs e) =>
-        OpenTopologyWorkspace(ProjectWorkspacePage.Operations);
+        OpenTopologyWorkspace(ProjectWorkspacePage.Services);
 
     private void OpenSimulationWorkspace_Click(object sender, RoutedEventArgs e) =>
         OpenTopologyWorkspace(ProjectWorkspacePage.Simulation);

@@ -54,8 +54,8 @@
                 <MenuItem x:Name="ExportFixedTimetableArchiveMenuItem" Header="匯出完成後固定時刻表…" Click="ExportFixedTimetableArchive_Click" AutomationProperties.Name="匯出完成後固定時刻表" />
             </MenuItem>
             <MenuItem Header="_快速起稿" Click="FocusRouteInput_Click" AutomationProperties.Name="快速起稿" />
-            <MenuItem Header="_路網編輯" Click="OpenInfrastructureWorkspace_Click" AutomationProperties.Name="路網編輯" />
-            <MenuItem Header="_營運設定" Click="OpenOperationsWorkspace_Click" AutomationProperties.Name="營運設定" />
+            <MenuItem Header="_軌道與設施" Click="OpenInfrastructureWorkspace_Click" AutomationProperties.Name="軌道與設施工作區" />
+            <MenuItem Header="_服務與路徑" Click="OpenOperationsWorkspace_Click" AutomationProperties.Name="服務與路徑工作區" />
             <MenuItem Header="_模擬設定" Click="OpenSimulationWorkspace_Click" AutomationProperties.Name="模擬設定" />
             <MenuItem Header="_顯示設定" AutomationProperties.Name="顯示設定">
                 <MenuItem x:Name="ShowLockedRoutesMenuItem"

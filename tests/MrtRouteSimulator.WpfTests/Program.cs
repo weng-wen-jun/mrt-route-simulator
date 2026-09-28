@@ -2,6 +2,22 @@ using MrtRouteSimulator.App;
 
 internal static class Program
 {
+    private static string GetRoot(string[] args)
+    {
+        var root = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal));
+        return System.IO.Path.GetFullPath(root ?? ".");
+    }
+
+    private static void RunInputPageTests(string root)
+    {
+        Console.WriteLine("開始 WPF 工作區與模擬設定跨頁測試");
+        ShellInputTests.Run(root);
+        Console.WriteLine("開始 WPF 車站／軌道輸入頁測試");
+        StationInputPageTests.Run(root);
+        Console.WriteLine("開始 WPF 營運輸入頁測試");
+        OperationInputPageTests.Run(root);
+    }
+
     [STAThread]
     private static int Main(string[] args)
     {
@@ -18,9 +34,36 @@ internal static class Program
             }
             if (args.Contains("--workspace-only"))
             {
-                var root = args.FirstOrDefault(argument => !argument.StartsWith("--", StringComparison.Ordinal)) ?? ".";
-                TopologyWorkspaceRoundTripTests.Run(System.IO.Path.GetFullPath(root));
-                Console.WriteLine("PASS WPF topology workspace");
+                var root = GetRoot(args);
+                TopologyWorkspaceRoundTripTests.Run(root);
+                RunInputPageTests(root);
+                Console.WriteLine("PASS WPF topology workspace and input pages");
+                return 0;
+            }
+            if (args.Contains("--input-pages-only"))
+            {
+                RunInputPageTests(GetRoot(args));
+                Console.WriteLine("PASS WPF input pages");
+                return 0;
+            }
+            if (args.Contains("--operations-input-only"))
+            {
+                OperationInputPageTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF operations input page");
+                return 0;
+            }
+            if (args.Contains("--stations-input-only"))
+            {
+                StationInputPageTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF stations input page");
+                return 0;
+            }
+            if (args.Contains("--input-snapshots"))
+            {
+                var outputIndex = Array.IndexOf(args, "--input-snapshots") + 1;
+                if (outputIndex >= args.Length) throw new ArgumentException("請在 --input-snapshots 後指定輸出目錄。");
+                InputWorkspaceSnapshots.Run(GetRoot(args), System.IO.Path.GetFullPath(args[outputIndex]));
+                Console.WriteLine("PASS WPF input snapshots");
                 return 0;
             }
             if (args.Contains("--large-playback-only"))
@@ -54,16 +97,18 @@ internal static class Program
             }
             Console.WriteLine("開始 WPF 視覺規則測試");
             VisualRulesTests.Run();
+            var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
-            ProjectLoadTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            ProjectLoadTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 大型拓撲工作區往返測試");
-            TopologyWorkspaceRoundTripTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            TopologyWorkspaceRoundTripTests.Run(projectRoot);
+            RunInputPageTests(projectRoot);
             Console.WriteLine("開始 WPF 播放 worker 測試");
-            PlaybackWorkerTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            PlaybackWorkerTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 長行程／結果測試");
-            SpeedJourneyTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            SpeedJourneyTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 輸出測試");
-            OutputTests.Run(System.IO.Path.GetFullPath(args.Length > 0 ? args[0] : "."));
+            OutputTests.Run(projectRoot);
             Console.WriteLine("PASS WPF visual rules");
             return 0;
         }
