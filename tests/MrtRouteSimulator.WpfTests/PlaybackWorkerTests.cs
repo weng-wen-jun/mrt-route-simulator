@@ -2,6 +2,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using MrtRouteSimulator.App;
 using MrtRouteSimulator.Engine;
@@ -44,6 +45,20 @@ internal static class PlaybackWorkerTests
             WpfTestWait.Invoke(window, "DrawV2Route");
             Require(!ReferenceEquals(staticRail, routeCanvas.Children[0]),
                 "路線圖尺寸改變後應重新計算固定配線。");
+            var trainMarker = routeCanvas.Children.OfType<Border>().FirstOrDefault(item => item.Tag is string)
+                ?? throw new InvalidOperationException("路線圖應顯示可開啟右鍵選單的列車標記。");
+            var followItem = trainMarker.ContextMenu?.Items.OfType<MenuItem>().SingleOrDefault();
+            Require(followItem is not null,
+                "列車標記右鍵選單應提供視角跟隨切換。");
+            followItem!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Require(WpfTestWait.Field(window, "_followedRouteVehicleId") is string followedVehicleId
+                    && followedVehicleId.Equals((string)trainMarker.Tag, StringComparison.OrdinalIgnoreCase),
+                "右鍵選單應啟用該列車的視角跟隨。");
+            Require(((Button)window.FindName("StopRouteFollowButton")).IsEnabled,
+                "啟用視角跟隨後，上方停止跟隨按鈕應可用。");
+            ((Button)window.FindName("StopRouteFollowButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(WpfTestWait.Field(window, "_followedRouteVehicleId") is null,
+                "上方停止跟隨按鈕應解除路線圖視角跟隨。");
             var tabs = (TabControl)window.FindName("WorkspaceTabControl");
             Require(window.TimetableRows.Count == 0,
                 "隱藏的時刻表分頁在播放初始化時不可預先刷新。");

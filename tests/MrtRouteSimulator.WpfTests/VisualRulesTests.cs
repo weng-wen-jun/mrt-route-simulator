@@ -356,7 +356,8 @@ internal static class VisualRulesTests
 
     private static void VerifyRouteCanvasWidth()
     {
-        var calculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var calculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static,
+            null, [typeof(double), typeof(int)], null)!;
         var fullLineAtNarrowViewport = (double)calculate.Invoke(null, [720d, 26])!;
         Require(Math.Abs(fullLineAtNarrowViewport - 2512d) < .001,
             "大型路線不得壓縮到窄視窗；應保留每站最小間距並由水平捲軸檢視。");
@@ -364,6 +365,12 @@ internal static class VisualRulesTests
         var wideViewport = (double)calculate.Invoke(null, [3000d, 26])!;
         Require(Math.Abs(wideViewport - 3000d) < .001,
             "可視範圍較寬時，路線圖應填滿 viewport 而不產生不必要的水平捲動。");
+
+        var zoomedCalculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static,
+            null, [typeof(double), typeof(int), typeof(double)], null)!;
+        var zoomed = (double)zoomedCalculate.Invoke(null, [720d, 26, 1.5d])!;
+        Require(Math.Abs(zoomed - 3768d) < .001,
+            "路線圖左右縮放應放大完整水平配置，且不改變垂直比例。");
     }
 
     private static void VerifyLayoutWarningButton()

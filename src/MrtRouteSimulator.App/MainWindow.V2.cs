@@ -638,6 +638,8 @@ public partial class MainWindow
 
     private void DrawV2Route(SimulationSnapshot? snapshot = null)
     {
+        if (_routeTrainContextMenuOpen) return;
+
         var width = PrepareRouteCanvasWidth();
         var height = PrepareRouteCanvasHeight();
         if (width < 100 || height < 100)
@@ -778,6 +780,7 @@ public partial class MainWindow
             Canvas.SetLeft(train, Math.Clamp(x - 21.5, 0, width - 43));
             Canvas.SetTop(train, y - 11.5);
             RouteCanvas.Children.Add(train);
+            KeepFollowedRouteVehicleInView(state.VehicleId, x, y);
         }
 
         void DrawTrackLine(double y, string label)
@@ -1375,6 +1378,7 @@ public partial class MainWindow
             Canvas.SetLeft(marker, Math.Clamp(point.X - 12, 0, width - 24));
             Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
             RouteCanvas.Children.Add(marker);
+            KeepFollowedRouteVehicleInView(state.VehicleId, point.X, point.Y);
         }
     }
 
@@ -1382,6 +1386,7 @@ public partial class MainWindow
     {
         marker.Tag = vehicleId;
         marker.Cursor = Cursors.Hand;
+        AttachRouteTrainFollowContext(marker, vehicleId);
         marker.MouseLeftButtonUp += (_, args) =>
         {
             SimulationViewTabControl.SelectedItem = SpeedProfileTabItem;
@@ -1393,6 +1398,39 @@ public partial class MainWindow
             SpeedProfileRunComboBox.SelectedItem = vehicleId;
             Dispatcher.BeginInvoke(DrawV2SpeedProfile, DispatcherPriority.Loaded);
             args.Handled = true;
+        };
+    }
+
+    private void AttachRouteTrainFollowContext(Border marker, string vehicleId)
+    {
+        marker.Tag = vehicleId;
+        var followItem = new MenuItem
+        {
+            Header = string.Equals(_followedRouteVehicleId, vehicleId, StringComparison.OrdinalIgnoreCase)
+                ? "停止跟隨此車輛"
+                : "視角跟隨此車輛",
+            IsCheckable = true,
+            IsChecked = string.Equals(_followedRouteVehicleId, vehicleId, StringComparison.OrdinalIgnoreCase)
+        };
+        followItem.Click += (_, args) =>
+        {
+            if (string.Equals(_followedRouteVehicleId, vehicleId, StringComparison.OrdinalIgnoreCase))
+            {
+                StopFollowingRouteVehicle();
+            }
+            else
+            {
+                FollowRouteVehicle(vehicleId);
+            }
+            args.Handled = true;
+        };
+        marker.ContextMenu = new ContextMenu();
+        marker.ContextMenu.Items.Add(followItem);
+        marker.ContextMenu.Opened += (_, _) => _routeTrainContextMenuOpen = true;
+        marker.ContextMenu.Closed += (_, _) =>
+        {
+            _routeTrainContextMenuOpen = false;
+            DrawRoute();
         };
     }
 

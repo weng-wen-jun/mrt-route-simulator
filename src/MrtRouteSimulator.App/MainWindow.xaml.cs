@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -38,10 +39,18 @@ public partial class MainWindow : Window
     private bool _suppressEngineModeSelectionChanged;
     private bool _isV2PlaybackPlaying;
     private bool _closeAfterPlaybackShutdown;
+    private bool _initializingRouteDisplayPreferences = true;
+    private bool _routeTrainContextMenuOpen;
+    private double _routeMapHorizontalZoom = 1;
+    private string? _followedRouteVehicleId;
     public MainWindow()
     {
         InitializeComponent();
         ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
+        _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
+        SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
+        _initializingRouteDisplayPreferences = false;
+        UpdateRouteFollowUi();
         SourceInitialized += (_, _) => FitInitialWindowToWorkArea();
         Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
         VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";
@@ -654,6 +663,8 @@ public partial class MainWindow : Window
 
     private void DrawRoute(IReadOnlyList<TrainState>? states = null)
     {
+        if (_routeTrainContextMenuOpen) return;
+
         if (_v2Enabled)
         {
             DrawV2Route();
@@ -763,9 +774,11 @@ public partial class MainWindow : Window
                 },
                 ToolTip = $"{state.TrainId}\n{StateToChinese(state.State)}\n位置 {state.PositionMeters / 1000:0.###} km\n速度 {state.SpeedMetersPerSecond * 3.6:0.#} km/h"
             };
+            AttachRouteTrainFollowContext(train, state.TrainId);
             Canvas.SetLeft(train, Math.Clamp(x - 21, 0, width - 42));
             Canvas.SetTop(train, Math.Clamp(y - 11, 4, height - 26));
             RouteCanvas.Children.Add(train);
+            KeepFollowedRouteVehicleInView(state.TrainId, x, y);
         }
     }
 
@@ -873,7 +886,7 @@ public partial class MainWindow : Window
 
         var stationCount = _latestPlaybackFrame?.TopologyInfrastructure?.Stations.Count
             ?? _route?.Stations.Count ?? 0;
-        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount);
+        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount, _routeMapHorizontalZoom);
         if (!double.IsFinite(RouteCanvas.Width) || Math.Abs(RouteCanvas.Width - width) > .5)
         {
             RouteCanvas.Width = width;
@@ -906,13 +919,104 @@ public partial class MainWindow : Window
         return RouteCanvas.Height;
     }
 
-    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount) =>
+        CalculateRouteCanvasWidth(viewportWidth, stationCount, 1);
+
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount, double horizontalZoom)
     {
         var usableViewport = double.IsFinite(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
         var desiredWidth = stationCount <= 0
             ? usableViewport
             : RouteCanvasHorizontalPadding + stationCount * RouteCanvasMinimumStationPitch;
-        return Math.Max(100, Math.Max(usableViewport, desiredWidth));
+        var normalizedZoom = double.IsFinite(horizontalZoom) ? Math.Clamp(horizontalZoom, 1, 2) : 1;
+        return Math.Max(100, Math.Max(usableViewport, desiredWidth) * normalizedZoom);
+    }
+
+    private void SelectRouteHorizontalZoom(double zoom)
+    {
+        foreach (var item in RouteHorizontalZoomComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out var itemZoom)
+                && Math.Abs(itemZoom - zoom) < .001)
+            {
+                RouteHorizontalZoomComboBox.SelectedItem = item;
+                return;
+            }
+        }
+
+        RouteHorizontalZoomComboBox.SelectedIndex = 0;
+        _routeMapHorizontalZoom = 1;
+    }
+
+    private void RouteHorizontalZoom_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializingRouteDisplayPreferences
+            || RouteHorizontalZoomComboBox.SelectedItem is not ComboBoxItem item
+            || !double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out var zoom))
+        {
+            return;
+        }
+
+        var oldWidth = RouteCanvas.Width;
+        var oldCenterRatio = double.IsFinite(oldWidth) && oldWidth > 0
+            ? (RouteScrollViewer.HorizontalOffset + RouteScrollViewer.ViewportWidth / 2) / oldWidth
+            : 0;
+        _routeMapHorizontalZoom = Math.Clamp(zoom, 1, 2);
+        _topologyRouteVisualCache = null;
+        DrawRoute();
+
+        if (_followedRouteVehicleId is null && oldCenterRatio > 0)
+        {
+            RouteScrollViewer.ScrollToHorizontalOffset(
+                Math.Max(0, oldCenterRatio * RouteCanvas.Width - RouteScrollViewer.ViewportWidth / 2));
+        }
+
+        try
+        {
+            AppDisplayPreferences.SaveRouteMapHorizontalZoom(_routeMapHorizontalZoom);
+        }
+        catch (IOException)
+        {
+            StatusTextBlock.Text = "已調整路線圖左右縮放，但無法保存本機畫面設定。";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = "已調整路線圖左右縮放，但無法保存本機畫面設定。";
+        }
+    }
+
+    private void StopRouteFollow_Click(object sender, RoutedEventArgs e) => StopFollowingRouteVehicle();
+
+    private void FollowRouteVehicle(string vehicleId)
+    {
+        _followedRouteVehicleId = vehicleId;
+        UpdateRouteFollowUi();
+        DrawRoute();
+    }
+
+    private void StopFollowingRouteVehicle()
+    {
+        _followedRouteVehicleId = null;
+        UpdateRouteFollowUi();
+    }
+
+    private void UpdateRouteFollowUi()
+    {
+        if (RouteFollowStatusText is null || StopRouteFollowButton is null) return;
+        RouteFollowStatusText.Text = _followedRouteVehicleId is null
+            ? "未跟隨車輛"
+            : $"跟隨 {ShortVehicle(_followedRouteVehicleId)}";
+        StopRouteFollowButton.IsEnabled = _followedRouteVehicleId is not null;
+    }
+
+    private void KeepFollowedRouteVehicleInView(string vehicleId, double centerX, double centerY)
+    {
+        if (!string.Equals(_followedRouteVehicleId, vehicleId, StringComparison.OrdinalIgnoreCase)) return;
+
+        RouteScrollViewer.ScrollToHorizontalOffset(
+            Math.Max(0, centerX - RouteScrollViewer.ViewportWidth / 2));
+        RouteScrollViewer.ScrollToVerticalOffset(
+            Math.Max(0, centerY - RouteScrollViewer.ViewportHeight / 2));
     }
 
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
@@ -924,6 +1028,7 @@ public partial class MainWindow : Window
 
     private void ClearResults()
     {
+        StopFollowingRouteVehicle();
         _route = null;
         _parameters = null;
         _cycle = null;

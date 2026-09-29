@@ -299,15 +299,41 @@
                                         AutomationProperties.Name="模擬即時檢視">
                                 <TabItem Header="軌道配線與列車位置">
                                     <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
-                                        <ScrollViewer x:Name="RouteScrollViewer"
-                                                      HorizontalScrollBarVisibility="Auto"
-                                                      VerticalScrollBarVisibility="Auto"
-                                                      PanningMode="Both"
-                                                      SizeChanged="RouteScrollViewer_SizeChanged"
-                                                      AutomationProperties.Name="列車路線圖水平捲動區">
-                                            <Canvas x:Name="RouteCanvas" Height="300" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
-                                                    AutomationProperties.Name="列車路線動畫" />
-                                        </ScrollViewer>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <WrapPanel Margin="2,0,2,7" VerticalAlignment="Center">
+                                                <TextBlock Text="視角" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <TextBlock x:Name="RouteFollowStatusText" Text="未跟隨車輛" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center" Margin="0,0,8,0"
+                                                           AutomationProperties.Name="路線圖視角跟隨狀態" />
+                                                <Button x:Name="StopRouteFollowButton" Content="停止跟隨" IsEnabled="False"
+                                                        Style="{StaticResource SecondaryButton}" Padding="9,3" Margin="0,0,16,0"
+                                                        Click="StopRouteFollow_Click" AutomationProperties.Name="停止路線圖視角跟隨" />
+                                                <TextBlock Text="左右縮放" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                                <ComboBox x:Name="RouteHorizontalZoomComboBox" Width="82"
+                                                          SelectionChanged="RouteHorizontalZoom_SelectionChanged"
+                                                          AutomationProperties.Name="路線圖左右縮放比例">
+                                                    <ComboBoxItem Content="100%" Tag="1" />
+                                                    <ComboBoxItem Content="125%" Tag="1.25" />
+                                                    <ComboBoxItem Content="150%" Tag="1.5" />
+                                                    <ComboBoxItem Content="200%" Tag="2" />
+                                                </ComboBox>
+                                                <TextBlock Text="在列車上按右鍵可切換視角跟隨。" Foreground="{StaticResource MutedBrush}"
+                                                           FontSize="11" VerticalAlignment="Center" Margin="10,0,0,0" />
+                                            </WrapPanel>
+                                            <ScrollViewer x:Name="RouteScrollViewer" Grid.Row="1"
+                                                          HorizontalScrollBarVisibility="Auto"
+                                                          VerticalScrollBarVisibility="Auto"
+                                                          PanningMode="Both"
+                                                          SizeChanged="RouteScrollViewer_SizeChanged"
+                                                          AutomationProperties.Name="列車路線圖水平捲動區">
+                                                <Canvas x:Name="RouteCanvas" Height="300" ClipToBounds="True" SizeChanged="RouteCanvas_SizeChanged"
+                                                        AutomationProperties.Name="列車路線動畫" />
+                                            </ScrollViewer>
+                                        </Grid>
                                     </Border>
                                 </TabItem>
                                 <TabItem Header="即時列車狀態">
