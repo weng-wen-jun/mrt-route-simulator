@@ -1,6 +1,30 @@
 # Contributing to MRT Route Simulator
 
-感謝參與本專案。這份文件說明 V4.0.2 的開發流程、架構邊界、驗證要求與 PR 準備方式。開始修改前請先讀 `AGENTS.md`；若涉及模擬模型、topology、物理、安全或 schema，再讀 `MODEL_SPEC.md`。
+感謝參與本專案。這份文件說明目前尚未發布的 V4.1.0 開發流程、架構邊界、驗證要求與 PR 準備方式。版本以 `Directory.Build.props` 為單一權威來源；文件或 commit 訊息中的 V4.0.2 等版本號可能是歷史例子，不代表目前發布狀態。開始修改前請先讀 `AGENTS.md`；若涉及模擬模型、topology、物理、安全或 schema，再讀 `MODEL_SPEC.md`，並注意其歷史版本與現行來源的界線。
+
+## Quick start for contributors
+
+This short workflow is the English onboarding path; the sections below retain the project-specific architecture and verification rules.
+
+1. Read [`AGENTS.md`](AGENTS.md), check the current version in [`Directory.Build.props`](Directory.Build.props), and confirm the checkout is clean or that unrelated changes are understood.
+2. Create a focused branch and keep one problem per pull request. Use synthetic, minimal examples when reproducing issues.
+3. For a full-solution restore, use `src/MrtRouteSimulator.Mcp/NuGet.Config`. The root `NuGet.Config` intentionally clears package sources for the offline core.
+4. Run the Release build and the relevant Engine/WPF runners with `--no-restore` after restore. Record the exact commands and results; do not claim a check passed unless it was run.
+5. Open an issue for a reproducible bug or a scoped proposal. Open a pull request only after the required checks, security review, and maintainer review expectations are clear.
+
+Do not commit secrets, personal data, real confidential railway-operational data, unauthorized third-party material, or local `外部檔案參考/` files. Public onboarding must not depend on local absolute paths, `file://` URLs, or private mounts. This project is an operations/signalling concept simulator, not a certified or deployable railway safety system. AI-assisted changes follow the same build, test, and maintainer-review requirements as any other change; AI output never bypasses verification.
+
+### Issue workflow
+
+- Search existing issues first and state whether the report is a bug, documentation problem, or scoped proposal.
+- Include the checkout version, a minimal synthetic reproduction, expected versus actual behavior, and the smallest relevant command or log excerpt.
+- Remove secrets, personal data, confidential railway-operational information, unauthorized third-party content, and local/external file references before posting. Use the maintainer's private reporting channel for security-sensitive details when available.
+
+### Pull request workflow
+
+- Keep the branch and diff focused; describe the responsibility layer and the files changed.
+- Report the exact restore/build/test commands that were run, plus checks that were not run and why.
+- Explain any change to topology, schema, physics, safety, data sources, or public behavior. A maintainer must review the change before merge.
 
 ## 1. 開發分支
 
@@ -22,12 +46,12 @@ git switch -c <type>/<short-topic>
 依任務性質閱讀：
 
 - `AGENTS.md`：責任模組、主要檔案、禁止事項、驗證矩陣。
-- `MODEL_SPEC.md`：V4.0.2 Track-first topology 契約、物理模型與 API 邊界。
+- `MODEL_SPEC.md`：本專案恢復的 V4.0.2 模型基準、物理與 API 說明；現行新增行為須另核對 source/tests、`CHANGELOG.md` 與 `docs/MCP.md`。若檔案不在 checkout，請回報缺失，不以第三方文件替代。
 - `TODO.md`：目前真正尚未完成的工作；只以「現行待辦」未勾選項目為準。
 - `QA_REPORT.md`：最新測試基準、人工驗收範圍與已知限制。
 - `HANDOFF.md`：新接手者的快速交接摘要。
 
-產品版本以 `Directory.Build.props` 為單一權威來源。目前為 **V4.0.2**。
+產品版本以 `Directory.Build.props` 為單一權威來源。目前 checkout 為 **V4.1.0（尚未發布）**。
 
 ## 3. 架構邊界
 
@@ -109,15 +133,16 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy / frozen timetable c
 ### Release build
 
 ```powershell
-dotnet build MrtRouteSimulator.slnx -c Release
+dotnet restore .\MrtRouteSimulator.slnx --configfile .\src\MrtRouteSimulator.Mcp\NuGet.Config
+dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 ```
 
-Release build 應維持 **0 warnings / 0 errors**。
+完整 solution 還原必須使用 `src/MrtRouteSimulator.Mcp/NuGet.Config`；root `NuGet.Config` 會清除 package sources，保留給離線核心。Release build 應維持 **0 warnings / 0 errors**。
 
 ### Engine regression runner
 
 ```powershell
-dotnet run --project tests/MrtRouteSimulator.Tests/MrtRouteSimulator.Tests.csproj -c Release
+dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 ```
 
 不要把文件中的舊測試數當成固定門檻；以當下 runner 全數通過及最新 `QA_REPORT.md` 為準。
@@ -125,7 +150,7 @@ dotnet run --project tests/MrtRouteSimulator.Tests/MrtRouteSimulator.Tests.cspro
 ### WPF runner
 
 ```powershell
-dotnet run --project tests/MrtRouteSimulator.WpfTests/MrtRouteSimulator.WpfTests.csproj -c Release
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .
 ```
 
 ### 站場建立規則

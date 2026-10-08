@@ -1,5 +1,13 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## OSS 申請前整理（2026-10-08）
+
+> 以下待提交敘述保留初次整理時的快照。後續使用者已授權本地提交、正常推送至 origin/main 並保留 Git 歷史，不含 tag／Release；GitHub 私人漏洞回報已啟用且 API 讀回 true，另補 SECURITY.md。公開結果以遠端 commit 核對為準。
+
+- 本輪僅授權／文件／Git 公開範圍整理，不改來源版本 4.1.0、production、tests、Schema 或 UI 行為。實際標準 restore 與 Release build exit 0、0 warnings／0 errors；Engine 198/198、完整 default WPF PASS。
+- 本機參考檔 17 份另行 ZIP 備份、逐檔 SHA256 一致；16 份原 tracked 檔已 git rm --cached，本機仍完整、git ls-files 0 份，.gitignore 及 export-ignore 已設定。此為待提交狀態，GitHub HEAD／歷史尚未移除；不 commit、push 或重寫歷史。
+- 新增標準 MIT License（2026 weng-wen-jun）、README 英文起步／安全界線、貢獻流程，從本專案既有 Git 恢復 MODEL_SPEC，保留歷史版本警示。GitHub About／10 Topics 已設定並讀回。維護者後續確認大型機場線為抽象規劃、非實際線路里程，已同步公開文件，移除現行 sample 的實際里程來源權限阻擋項；未來取得政府公開可信資料後再記錄來源與日期更新。歷史文件標示差異保留，限定內容檢查不是完整安全／授權保證。此澄清只改 Markdown，未重跑 build／tests。詳見 [OSS 整理報告](docs/OSS_READINESS_20261008.md)。
+
 ## 指定資料夾整合（2026-10-08）
 
 - 現行來源遷至 `D:/AI/codex/mrt-route-simulator`，版本 4.1.0；外部參考檔 16/16 與遷移前備份 SHA256 一致，全部納入本地提交。

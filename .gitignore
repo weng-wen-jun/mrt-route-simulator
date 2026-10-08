@@ -16,7 +16,10 @@ artifacts/
 .codex-remote-attachments/
 tmp/
 
-# Local generated build and acceptance evidence (reference documents are tracked)
+# Local external references: retain locally, exclude from public source
+/外部檔案參考/
+
+# Local generated build and acceptance evidence
 /output/
 **/__pycache__/
 *.pyc

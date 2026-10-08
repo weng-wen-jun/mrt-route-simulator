@@ -3,3 +3,6 @@
 *.cs text eol=lf
 *.xaml text eol=lf
 *.md text eol=lf
+
+# Defense in depth for future source archives; references are also untracked.
+外部檔案參考 export-ignore
