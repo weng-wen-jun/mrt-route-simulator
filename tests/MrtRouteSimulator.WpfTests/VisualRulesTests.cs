@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -46,13 +46,15 @@ internal static class VisualRulesTests
         var paths = Directory.GetFiles(System.IO.Path.Combine(root, "samples"), "*.mrtsim.json", SearchOption.AllDirectories);
         Require(paths.Length >= 12, "完整範例矩陣不可缺少檔案。");
         var main = new MainWindow();
+        var showLockedRoutes = (MenuItem)main.FindName("ShowLockedRoutesMenuItem");
+        showLockedRoutes.IsChecked = false;
         try
         {
             foreach (var path in paths)
-            foreach (var width in System.IO.Path.GetFileName(path).Equals("大型機場線-完整營運示範範例.mrtsim.json", StringComparison.Ordinal)
+            foreach (var width in System.IO.Path.GetFileName(path).Equals("14-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal)
                 ? new[] { 720, 1200, 1370, 2512 }
                 : new[] { 720, 1200 })
-            foreach (var stopTime in System.IO.Path.GetFileName(path).StartsWith("V4.0.0-完整", StringComparison.Ordinal)
+            foreach (var stopTime in System.IO.Path.GetFileName(path).StartsWith("11-小型-三站完整拓樸", StringComparison.Ordinal)
                 ? new[] { 0d, 120d, 311.5d } : new[] { 0d })
             {
                 var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
@@ -87,7 +89,8 @@ internal static class VisualRulesTests
                         .Where(item => item.Center is not null)
                         .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
                     typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
-                        .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, (double)width, 400d, trainCenterPositions]);
+                        .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, (double)width, 400d,
+                            trainCenterPositions, world.GetActiveRouteLocks()]);
                     var capture = new Canvas { Width = width, Height = routeCanvas.Height, Background = Brushes.White };
                     foreach (var child in routeCanvas.Children.Cast<UIElement>().ToArray()) { routeCanvas.Children.Remove(child); capture.Children.Add(child); }
                     CheckAndSave(capture, sample, System.IO.Path.Combine(output, System.IO.Path.GetFileName(path) + $"-main-{width}-t{stopTime}.png"),
@@ -96,6 +99,9 @@ internal static class VisualRulesTests
                 }
                 finally { sampleEditor.Close(); }
             }
+            VerifyLockedRouteOverlay(main, showLockedRoutes);
+            VerifyPassingDefaultRouteOverlay(main, showLockedRoutes);
+            VerifyLargeSampleSidingEntryOverlay(main, showLockedRoutes, root);
         }
         finally { main.Close(); }
         var draft = StationLayoutTemplateService.Build(StationLayoutTemplateKind.RearTurnback);
@@ -113,6 +119,223 @@ internal static class VisualRulesTests
                 Require(Canvas.GetTop(item) + 22 <= canvas.Height, "設施图例不可超出圖面。");
         }
         finally { editor.Close(); }
+    }
+
+    private static void VerifyLockedRouteOverlay(MainWindow main, MenuItem showLockedRoutes)
+    {
+        var sample = StationLayoutTemplateService.Build(StationLayoutTemplateKind.CentralPocket);
+        sample = sample with { Dispatch = sample.Dispatch with
+        {
+            ManualTimetableRows = sample.Dispatch.ManualTimetableRows!
+                .Select(row => row with { PlannedDepartureTimeSeconds = 0 }).ToArray()
+        } };
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            2, 1, MovingBlockMode: MovingBlockMode.Control,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes, ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+        world.Tick();
+        var locked = world.GetActiveRouteLocks();
+        Require(locked.Count > 0, "共用袋狀軌應提供已預約的進路顯示區段。");
+        var waitingVehicleId = world.Events.Single(item => item.EventType == SimulationEventType.WaitingForResource
+            && item.ResourceId == "POCKET").VehicleId;
+        var snapshot = world.GetSnapshot();
+        var centers = snapshot.Trains
+            .Select(train => (train.VehicleId, Center: world.GetTrainCenterPosition(train.VehicleId)))
+            .Where(item => item.Center is not null)
+            .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+        var routeCanvas = (Canvas)main.FindName("RouteCanvas");
+        routeCanvas.Children.Clear();
+        routeCanvas.Width = 1200;
+        routeCanvas.Height = 400;
+        var draw = typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        object[] arguments = [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, locked];
+
+        showLockedRoutes.IsChecked = true;
+        draw.Invoke(main, arguments);
+        var overlays = routeCanvas.Children.OfType<Polyline>()
+            .Where(line => line.ToolTip?.ToString()?.Contains("已鎖定進路\n軌道", StringComparison.Ordinal) == true)
+            .ToArray();
+        Require(overlays.Length == locked.Count, "開啟設定後，每段已預約進路應沿既有軌道上色。");
+        Require(overlays.All(line => line.Stroke is SolidColorBrush brush
+            && brush.Color.R > brush.Color.B && brush.Color.G < 170),
+            "鎖定進路需使用和藍色軌道明顯區分的暖色。");
+        Require(locked.Any(item => item.PreviousTraversal is not null || item.NextTraversal is not null),
+            "已鎖定進路應保留分岔與匯合的實體接軌方向。");
+        Require(overlays.All(line => !line.ToolTip!.ToString()!.Contains(waitingVehicleId, StringComparison.Ordinal)),
+            "等待資源的列車不得顯示鎖定線。");
+        var capture = new Canvas { Width = 1200, Height = 400, Background = Brushes.White };
+        foreach (var child in routeCanvas.Children.Cast<UIElement>().ToArray())
+        {
+            routeCanvas.Children.Remove(child);
+            capture.Children.Add(child);
+        }
+        capture.Measure(new Size(1200, 400));
+        capture.Arrange(new Rect(0, 0, 1200, 400));
+        capture.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(1200, 400, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(capture);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var stream = File.Create(System.IO.Path.Combine("artifacts", "station-rules-visual", "locked-route-pocket-main-1200.png")))
+            encoder.Save(stream);
+
+        showLockedRoutes.IsChecked = false;
+        draw.Invoke(main, arguments);
+        Require(!routeCanvas.Children.OfType<Polyline>().Any(line =>
+                line.ToolTip?.ToString()?.Contains("已鎖定進路", StringComparison.Ordinal) == true),
+            "關閉設定後不應顯示鎖定線。");
+        Console.WriteLine("[通過] 已鎖定進路顯示開關與待避列車不標示");
+    }
+
+    private static void VerifyPassingDefaultRouteOverlay(MainWindow main, MenuItem showLockedRoutes)
+    {
+        var sample = StationLayoutTemplateService.Build(StationLayoutTemplateKind.DoubleIslandFourTracks);
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            runtime.DispatchPlan.Runs.Count, null, MovingBlockMode: MovingBlockMode.Control,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes, ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+        IReadOnlyList<LockedRouteSegment> locked = [];
+        while (world.CurrentTimeSeconds < 300)
+        {
+            world.Tick();
+            locked = world.GetActiveRouteLocks();
+            if (locked.Any(item => item.TrackEdgeId == "U1" && item.ServiceRunId == "EXP-UP")) break;
+        }
+        Require(locked.Any(item => item.TrackEdgeId == "U1" && item.ServiceRunId == "EXP-UP"),
+            "快速車直向通過側線待避站時，需取得並顯示正線進路。");
+        var snapshot = world.GetSnapshot();
+        var centers = snapshot.Trains
+            .Select(train => (train.VehicleId, Center: world.GetTrainCenterPosition(train.VehicleId)))
+            .Where(item => item.Center is not null)
+            .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+        var canvas = (Canvas)main.FindName("RouteCanvas");
+        canvas.Children.Clear();
+        canvas.Width = 1200;
+        canvas.Height = 400;
+        showLockedRoutes.IsChecked = true;
+        typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, locked]);
+        var overlays = canvas.Children.OfType<Polyline>()
+            .Where(line => line.ToolTip?.ToString()?.Contains("已鎖定進路\n軌道", StringComparison.Ordinal) == true)
+            .ToArray();
+        Require(overlays.Any(line => line.ToolTip!.ToString()!.Contains("軌道 U1 ·", StringComparison.Ordinal)
+            && line.ToolTip.ToString()!.Contains("EXP-UP", StringComparison.Ordinal)),
+            "道岔未轉向時，正線 edge 仍應顯示暖色鎖定進路。");
+        Require(overlays.All(line => !line.ToolTip!.ToString()!.Contains("UP-1", StringComparison.Ordinal)),
+            "側線待避且沒有前方進路的普通車不得顯示鎖定線。");
+        var capture = new Canvas { Width = 1200, Height = 400, Background = Brushes.White };
+        foreach (var child in canvas.Children.Cast<UIElement>().ToArray())
+        {
+            canvas.Children.Remove(child);
+            capture.Children.Add(child);
+        }
+        capture.Measure(new Size(1200, 400));
+        capture.Arrange(new Rect(0, 0, 1200, 400));
+        capture.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(1200, 400, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(capture);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using (var stream = File.Create(System.IO.Path.Combine("artifacts", "station-rules-visual", "locked-route-passing-default-main-1200.png")))
+            encoder.Save(stream);
+        showLockedRoutes.IsChecked = false;
+        Console.WriteLine("[通過] 側線待避站直向正線鎖定進路仍標色");
+    }
+
+    private static void VerifyLargeSampleSidingEntryOverlay(
+        MainWindow main, MenuItem showLockedRoutes, string root)
+    {
+        var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(System.IO.Path.Combine(
+            root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            runtime.DispatchPlan.Runs.Count, null, MovingBlockMode: sample.Simulation.MovingBlockMode,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes, ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+        IReadOnlyList<LockedRouteSegment> locked = [];
+        while (world.CurrentTimeSeconds < 1800)
+        {
+            world.Tick();
+            locked = world.GetActiveRouteLocks();
+            if (locked.Any(item => item.VehicleId == "FULL-O04"
+                    && item.TrackEdgeId == "EDGE:PASS-001"
+                    && item.ResourceIds.Contains("TOPOLOGY:SWITCH:NODE:SPLIT-001", StringComparer.OrdinalIgnoreCase)))
+                break;
+        }
+        Require(locked.Any(item => item.VehicleId == "FULL-O04"
+                && item.TrackEdgeId == "EDGE:PASS-001"
+                && item.ResourceIds.Contains("TOPOLOGY:SWITCH:NODE:SPLIT-001", StringComparer.OrdinalIgnoreCase)),
+            "大存檔 FULL-O04 進 O04 側線前應提供入口鎖定區段。");
+        var snapshot = world.GetSnapshot();
+        var centers = snapshot.Trains
+            .Select(train => (train.VehicleId, Center: world.GetTrainCenterPosition(train.VehicleId)))
+            .Where(item => item.Center is not null)
+            .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+        var canvas = (Canvas)main.FindName("RouteCanvas");
+        showLockedRoutes.IsChecked = true;
+        foreach (var width in new[] { 1200, 2512 })
+        {
+            canvas.Children.Clear();
+            canvas.Width = width;
+            canvas.Height = 400;
+            typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, (double)width, 400d, centers, locked]);
+            Require(canvas.Children.OfType<Polyline>().Any(line =>
+                    line.ToolTip?.ToString()?.Contains("FULL-O04-DOWN 已鎖定進路\n軌道 EDGE:PASS-001 ·", StringComparison.Ordinal) == true),
+                $"大存檔 FULL-O04 的 O04 側線入口應在 {width}px 主路線圖的既有側線軌道上標色。");
+            var capture = new Canvas { Width = width, Height = 400, Background = Brushes.White };
+            foreach (var child in canvas.Children.Cast<UIElement>().ToArray())
+            {
+                canvas.Children.Remove(child);
+                capture.Children.Add(child);
+            }
+            capture.Measure(new Size(width, 400));
+            capture.Arrange(new Rect(0, 0, width, 400));
+            capture.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(width, 400, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(capture);
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream = File.Create(System.IO.Path.Combine("artifacts", "station-rules-visual",
+                $"locked-route-large-siding-entry-main-{width}.png"));
+            encoder.Save(stream);
+        }
+        while (world.CurrentTimeSeconds < 3000 && !locked.Any(item =>
+                   item.VehicleId == "EXPRESS-01"
+                   && item.TrackEdgeId == "EDGE:DOWN:O12:O13:B-001"))
+        {
+            world.Tick();
+            locked = world.GetActiveRouteLocks();
+        }
+        Require(locked.Any(item => item.VehicleId == "EXPRESS-01"
+                && item.TrackEdgeId == "EDGE:DOWN:O12:O13:B-001"),
+            "大存檔 O13 通過車應在入口前鎖定正線進路。");
+        snapshot = world.GetSnapshot();
+        centers = snapshot.Trains
+            .Select(train => (train.VehicleId, Center: world.GetTrainCenterPosition(train.VehicleId)))
+            .Where(item => item.Center is not null)
+            .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+        canvas.Children.Clear();
+        canvas.Width = 1200;
+        canvas.Height = 400;
+        typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, locked]);
+        var expressLines = canvas.Children.OfType<Polyline>()
+            .Where(line => line.ToolTip?.ToString()?.Contains("EXPRESS-01｜EXPRESS-DOWN-01 已鎖定進路",
+                StringComparison.Ordinal) == true).ToArray();
+        Require(expressLines.Any(line => line.ToolTip!.ToString()!.Contains(
+                "軌道 EDGE:DOWN:O12:O13:B-001 ·", StringComparison.Ordinal))
+                && expressLines.All(line => !line.ToolTip!.ToString()!.Contains(
+                    "軌道 EDGE:PASS-003 ·", StringComparison.Ordinal)),
+            "大存檔 O13 主路線圖應直接標示快速車正線通過進路，不閃側線。");
+        showLockedRoutes.IsChecked = false;
+        Console.WriteLine("[通過] 大存檔 O04 普通車進側線入口於主圖標色");
+        Console.WriteLine("[通過] 大存檔 O13 快速車直接於主圖標示正線進路");
     }
 
     private static void VerifyMainWindowFitsAvailableWorkArea()
@@ -133,7 +356,8 @@ internal static class VisualRulesTests
 
     private static void VerifyRouteCanvasWidth()
     {
-        var calculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var calculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static,
+            null, [typeof(double), typeof(int)], null)!;
         var fullLineAtNarrowViewport = (double)calculate.Invoke(null, [720d, 26])!;
         Require(Math.Abs(fullLineAtNarrowViewport - 2512d) < .001,
             "大型路線不得壓縮到窄視窗；應保留每站最小間距並由水平捲軸檢視。");
@@ -141,6 +365,19 @@ internal static class VisualRulesTests
         var wideViewport = (double)calculate.Invoke(null, [3000d, 26])!;
         Require(Math.Abs(wideViewport - 3000d) < .001,
             "可視範圍較寬時，路線圖應填滿 viewport 而不產生不必要的水平捲動。");
+
+        var zoomedCalculate = typeof(MainWindow).GetMethod("CalculateRouteCanvasWidth", BindingFlags.NonPublic | BindingFlags.Static,
+            null, [typeof(double), typeof(int), typeof(double)], null)!;
+        var zoomed = (double)zoomedCalculate.Invoke(null, [720d, 26, 1.5d])!;
+        Require(Math.Abs(zoomed - 3768d) < .001,
+            "路線圖左右縮放應放大完整水平配置，且不改變垂直比例。");
+
+        foreach (var unboundedViewport in new[] { double.NaN, double.PositiveInfinity, 2.9907629905160607E+38 })
+        {
+            var bounded = (double)zoomedCalculate.Invoke(null, [unboundedViewport, 26, 2d])!;
+            Require(double.IsFinite(bounded) && Math.Abs(bounded - 5024d) < .001,
+                "未配置 viewport 的 Infinity／超大 finite sentinel 不可擴張 Route canvas；仍須保留站距與正常水平縮放。");
+        }
     }
 
     private static void VerifyLayoutWarningButton()
@@ -244,9 +481,9 @@ internal static class VisualRulesTests
         var labels = canvas.Children.OfType<FrameworkElement>().Where(e => e.Tag?.GetType().Name == "StationLabelAnchor").ToArray();
         var bodies = canvas.Children.OfType<Rectangle>().Where(e => e.Tag?.GetType().Name == "PlatformBodyAnchor").ToArray();
         Require(bodies.Length > 0, "實際月臺圖形不可為空。");
-        if (sample.ProjectId is "V4-TOPOLOGY-COMPREHENSIVE-RUNTIME" or "LARGE-AIRPORT-LINE-FULL-DEMO")
+        if (sample.ProjectId is "V4-TOPOLOGY-COMPREHENSIVE-RUNTIME" or "SYNTHETIC-LONG-ROUTE-FULL-DEMO")
         {
-            if (sample.ProjectId == "LARGE-AIRPORT-LINE-FULL-DEMO")
+            if (sample.ProjectId == "SYNTHETIC-LONG-ROUTE-FULL-DEMO")
             {
                 foreach (var facility in sample.Topology.PassingFacilities)
                 {

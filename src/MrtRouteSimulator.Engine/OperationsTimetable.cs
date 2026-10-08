@@ -38,7 +38,8 @@ public static class OperationsTimetable
             dispatchPlan,
             plannedEvents,
             actualEvents,
-            stationEventMatcher: null);
+            stationEventMatcher: null,
+            turnbackOriginResolver: null);
     }
 
     /// <summary>
@@ -58,7 +59,8 @@ public static class OperationsTimetable
             plannedEvents,
             actualEvents,
             (direction, stationId, simulationEvent) =>
-                topology.MatchesStationEvent(direction, stationId, simulationEvent));
+                topology.MatchesStationEvent(direction, stationId, simulationEvent),
+            topology.GetTurnbackOrigin);
     }
 
     private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
@@ -66,7 +68,8 @@ public static class OperationsTimetable
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
         IEnumerable<SimulationEvent>? actualEvents,
-        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
+        Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
+        Func<SimulationEvent, TopologyTurnbackOrigin?>? turnbackOriginResolver)
     {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
@@ -80,12 +83,44 @@ public static class OperationsTimetable
             var runActualEvents = actual.Where(item => SameRun(item, run)).ToArray();
             var scheduledOriginDeparture = RelativeSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
 
-            for (var index = 0; index < stations.Length; index++)
+            var plannedFacilityDeparture = turnbackOriginResolver is null ? null
+                : runPlannedEvents.FirstOrDefault(item => turnbackOriginResolver(item) is not null);
+            var actualFacilityDeparture = turnbackOriginResolver is null ? null
+                : runActualEvents.FirstOrDefault(item => turnbackOriginResolver(item) is not null);
+            var facilityEvent = actualFacilityDeparture ?? plannedFacilityDeparture;
+            var facilityOrigin = facilityEvent is null ? null : turnbackOriginResolver!(facilityEvent);
+            var firstStationIndex = 0;
+            if (facilityOrigin is not null)
+            {
+                firstStationIndex = Array.FindIndex(stations, station =>
+                    station.StationId.Equals(facilityOrigin.StationId, StringComparison.OrdinalIgnoreCase));
+                if (firstStationIndex < 0) firstStationIndex = 0;
+                var actualDeparture = actualFacilityDeparture?.SimulationTimeSeconds;
+                values.Add(new OperationsTimetableEntry(
+                    run.VehicleId ?? string.Empty,
+                    run.ServiceRunId,
+                    run.Direction,
+                    run.ServiceTypeId,
+                    run.StopPatternId,
+                    run.VehicleTypeId,
+                    facilityOrigin.FacilityId,
+                    facilityOrigin.Name,
+                    facilityEvent!.PositionMeters,
+                    null,
+                    scheduledOriginDeparture,
+                    null,
+                    actualDeparture,
+                    null,
+                    actualDeparture is { } departure ? Math.Max(0, departure - scheduledOriginDeparture) : null,
+                    actualDeparture is null ? "待發" : "已發車"));
+            }
+
+            for (var index = firstStationIndex; index < stations.Length; index++)
             {
                 var station = stations[index];
                 var plannedArrival = Find(runPlannedEvents, station, run.Direction, stationEventMatcher,
                     SimulationEventType.Arrival, SimulationEventType.StationPassed);
-                var plannedDeparture = index == 0
+                var plannedDeparture = index == 0 && facilityOrigin is null
                     ? scheduledOriginDeparture
                     : Find(runPlannedEvents, station, run.Direction, stationEventMatcher, SimulationEventType.Departure);
                 var actualArrival = Find(runActualEvents, station, run.Direction, stationEventMatcher,

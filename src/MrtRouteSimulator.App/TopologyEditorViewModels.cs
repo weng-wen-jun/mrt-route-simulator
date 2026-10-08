@@ -76,6 +76,7 @@ internal sealed class TrackEdgeEditorViewModel(TrackEdgeDefinition source)
     public TrackEdgeKind Kind { get; set; } = source.Kind;
     public TrackDirectionality Directionality { get; set; } = source.Directionality;
     public double DefaultSpeedKmh { get; set; } = source.DefaultSpeedLimitMetersPerSecond * 3.6;
+    public string ConflictResourceIds { get; set; } = string.Join(", ", source.ConflictResourceIds);
     public TrackEdgeDefinition ToDomain() => new()
     {
         TrackEdgeId = Id.Trim(),
@@ -88,8 +89,12 @@ internal sealed class TrackEdgeEditorViewModel(TrackEdgeDefinition source)
         Kind = Kind,
         Directionality = Directionality,
         DefaultSpeedLimitMetersPerSecond = DefaultSpeedKmh / 3.6,
-        ConflictResourceIds = new HashSet<string>(source.ConflictResourceIds, StringComparer.OrdinalIgnoreCase)
+        ConflictResourceIds = ParseIds(ConflictResourceIds)
     };
+
+    private static HashSet<string> ParseIds(string value) =>
+        value.Split([',', '，', ';', '；'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class FacilityEditorViewModel(string id, string name, string kind, string detail, FacilityEditorKind backingKind)
@@ -132,6 +137,8 @@ internal sealed class PlatformEditorViewModel(PlatformDefinitionV4 source)
     public double EffectiveLengthMeters { get; set; } = source.EffectiveLengthMeters;
     public TrackDirection Direction { get; set; } = source.AllowedDirection;
     public bool PassengerService { get; set; } = source.AllowsPassengerService;
+    public string AllowedVehicleTypeIds { get; set; } = string.Join(", ", source.AllowedVehicleTypeIds);
+    public string AllowedServiceTypeIds { get; set; } = string.Join(", ", source.AllowedServiceTypeIds);
     public PlatformDefinitionV4 ToDomain() => new()
     {
         PlatformId = Id.Trim(), Name = Name.Trim(), StationId = Station.Trim(), TrackEdgeId = TrackEdge.Trim(),
@@ -140,9 +147,13 @@ internal sealed class PlatformEditorViewModel(PlatformDefinitionV4 source)
         PlatformStartOffsetMeters = StartOffsetMeters, StopPositionOffsetMeters = StopOffsetMeters,
         PlatformEndOffsetMeters = EndOffsetMeters, EffectiveLengthMeters = EffectiveLengthMeters,
         AllowedDirection = Direction, AllowsPassengerService = PassengerService,
-        AllowedVehicleTypeIds = new HashSet<string>(source.AllowedVehicleTypeIds, StringComparer.OrdinalIgnoreCase),
-        AllowedServiceTypeIds = new HashSet<string>(source.AllowedServiceTypeIds, StringComparer.OrdinalIgnoreCase)
+        AllowedVehicleTypeIds = ParseIds(AllowedVehicleTypeIds),
+        AllowedServiceTypeIds = ParseIds(AllowedServiceTypeIds)
     };
+
+    private static HashSet<string> ParseIds(string value) =>
+        value.Split([',', '，', ';', '；'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class TrackSpeedLimitEditorViewModel(TrackSpeedLimitDefinition source)
@@ -224,8 +235,10 @@ internal sealed class StopPatternInstructionEditorViewModel(ProjectStopPatternIn
     public StopPatternAction Action { get; set; } = source.Action;
     public double? DwellSeconds { get; set; } = source.DwellTimeSeconds;
     public double? PassingSpeedKmh { get; set; } = source.PassingSpeedLimitMetersPerSecond * 3.6;
+    public string WaitForOvertakeServiceRunId { get; set; } = source.WaitForOvertakeServiceRunId ?? "";
     public ProjectStopPatternInstruction ToDomain() => new(Station.Trim(), Action, DwellSeconds,
-        PassingSpeedKmh is null ? null : PassingSpeedKmh / 3.6);
+        PassingSpeedKmh is null ? null : PassingSpeedKmh / 3.6,
+        EditorValue.EmptyToNull(WaitForOvertakeServiceRunId));
 }
 
 internal sealed class VehicleTypeEditorViewModel(ProjectVehicleType source)
@@ -248,6 +261,8 @@ internal sealed class VehicleTypeEditorViewModel(ProjectVehicleType source)
 
 internal sealed class ServiceTypeEditorViewModel(ProjectServiceType source)
 {
+    private readonly bool _preferredPlatformsWasNull = source.PreferredPlatformIds is null;
+
     public string Id { get; set; } = source.Id;
     public string Name { get; set; } = source.DisplayName;
     public string ColorHex { get; set; } = source.ColorHex;
@@ -260,7 +275,15 @@ internal sealed class ServiceTypeEditorViewModel(ProjectServiceType source)
     public string ServiceRoutes { get; internal set; } = "";
     public ProjectServiceType ToDomain() => new(Id.Trim(), Name.Trim(), ColorHex.Trim(), RunPrefix.Trim(),
         EditorValue.EmptyToNull(DefaultStopPattern), EditorValue.EmptyToNull(DefaultVehicleType), Priority, CanRequestOvertake,
-        PreferredPlatforms.Split([',', '，', ';', '；'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+        ParsePreferredPlatforms());
+
+    private string[]? ParsePreferredPlatforms()
+    {
+        var platformIds = PreferredPlatforms.Split(
+            [',', '，', ';', '；'],
+            StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return platformIds.Length == 0 && _preferredPlatformsWasNull ? null : platformIds;
+    }
 }
 
 internal sealed class DispatchRunEditorViewModel(string run, string time, string service, string route, string origin, string vehicle)

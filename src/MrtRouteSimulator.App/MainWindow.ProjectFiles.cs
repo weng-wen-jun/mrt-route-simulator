@@ -424,7 +424,8 @@ public partial class MainWindow
             pattern.DisplayName,
             pattern.Instructions.Select(instruction => new ProjectStopPatternInstruction(
                 instruction.StationId, instruction.Action, instruction.DwellTimeSeconds,
-                instruction.PassingSpeedLimitMetersPerSecond)).ToArray())).ToArray();
+                instruction.PassingSpeedLimitMetersPerSecond,
+                instruction.WaitForOvertakeServiceRunId)).ToArray())).ToArray();
         var dispatch = new ProjectDispatchPlan(
             _dispatchPlanningMode == "手動班表" ? DispatchPlanningMode.ManualTimetable : DispatchPlanningMode.SimpleHeadway,
             _vehicleAssignmentMode == "全部指定" ? VehicleAssignmentMode.ExplicitOnly : VehicleAssignmentMode.Automatic,

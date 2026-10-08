@@ -2,18 +2,43 @@
 
 本檔依軟體版本由新到舊記錄。Git 標籤使用小寫 `v`，軟體畫面使用大寫 `V`。
 
+## V4.1.0 - 2026-10-07（本地更新，尚未發布）
+
+### 2026-10-08 統一工作版本
+
+- 後續依使用者指定將唯一現行來源遷回 `D:/AI/codex/mrt-route-simulator`，外部參考檔全部納入本地提交；新位置重跑回歸後移除已完整備份的舊整合工作樹，Git 歷史及既有備份保留。詳見[遷移紀錄](docs/V410_CANONICAL_MIGRATION_20261008.md)。以下保留先前整合階段紀錄。
+
+- 核對兩個本地工作樹，以4.0.3基底加既有播放／nearest-leader診斷、介面縮放及小視窗配置、運行圖控制、PNG／PDF修正與MCP合為單一現行4.1.0；不是只有MCP差異。唯一來源與執行入口見[工作樹核對紀錄](docs/V410_UNIFIED_WORKTREE_AUDIT_20261008.md)，舊工作樹與歷史驗收保留，不刪除。
+- 同一份來源建置App與MCP至`output/v4.1.0-unified`；Release零警告／錯誤、Engine198/198、完整WPF及MCP stdio／並行回歸通過。原生未完成項目不因此改列PASS，未提交或發布。
+
+### MCP新增功能
+
+- 新增官方 MCP C# SDK 2.2.0 stdio Host，提供專案讀取／完整 JSON 修改／驗證／原子儲存、固定 0.1 秒步進、快照、分頁事件與實際時刻表、CSV 匯出，共15個工具。
+- 新增 opt-in Windows 同使用者 named pipe 桌面橋接；指定 PID 操作現有 WPF 播放 worker、切換結果页、縮放與 PNG／PDF／CSV 匯出，人工按鈕與 MCP 共用可等待的播放／暫停／重設入口。
+- 失敗載入不替換專案；輸出預設禁止覆寫，限制工作目錄，訊息大小與事件分頁有界。headless session 共用互斥鎖，橋接可在超大回應或損壞 framing 後繼續服務。
+- Schema 8、V1 解析 API、topology 物理與安全計算保留；新增 MCP 的建置需要官方 NuGet 套件，正常操作不需要外部網路。詳細限制與重現方法見 [MCP 文件](docs/MCP.md)。
+
+## V4.0.3 - 2026-09-28
+
+- 袋狀軌與站後尾軌折返的反向車次，改由實體折返停點發車；接續班表的等待時間在設施內完成，返回正線車站後僅執行設定的上下客停靠時間。時刻表以折返設施的實際發車事件作為反向車次起點。
+- 大型 Schema 8 工作區補齊車站、軌道、營運、模擬與設施作業的編輯入口，並涵蓋派車模式、車輛分配、指定接續、有向轉向及月台限制；取消不套用草稿，套用前建立 topology runtime 驗證。
+- topology 進路與袋狀軌共用資源加入明確預約及衝突等待，列車車尾離開受保護範圍後才釋放。這是按資源 ID 仲裁的保守控制，不代表完整聯鎖。
+- 特殊設施移動計畫會預視前方 edge-local 速限，依煞車能力與 jerk 提前減速，避免在設施速限邊界出現速度跳降。
+- 更新尾軌折返、指定待避、資源預約、設施速限連續性及大型工作區回歸案例；Schema 8 專案格式未變。
+- Release build 0 warnings／0 errors；Engine runner 185/185；完整 WPF runner 通過 14 個範例載入、大型工作區往返、輸入頁、播放、結果及 CSV／PNG／PDF 輸出。原生桌面 DPI 與人工操作驗收尚未執行；大型 60× 定向播放診斷仍沿用 V4.0.2 紀錄，V4.0.3 未重跑。
+
 ## V4.0.2 - 2026-09-20
 
 ### 三個工作樹整合與播放穩定性（2026-09-25）
 
-- 整合大型機場線／O04 路線圖修正、播放效能 Phase 1 與 parallel playback worker 三個工作樹；保留 Schema 8 topology、固定 0.1 秒 Engine tick 與 topology-native `SimulationWorld` 作為唯一物理資料流。
+- 整合合成長路線／O04 路線圖修正、播放效能 Phase 1 與 parallel playback worker 三個工作樹；保留 Schema 8 topology、固定 0.1 秒 Engine tick 與 topology-native `SimulationWorld` 作為唯一物理資料流。
 - 播放改由 single-writer worker 管理實際 world，使用 immutable latest-frame snapshot、可靠命令、背景計畫時間軸、增量結果累積與分級 UI 刷新；路線圖可獨立以 33 ms 更新，列車點選會導向對應的完整速度曲線。
 - O04／O13 越行顯示採實體 edge-local 投影，上下行採鏡射幾何；站中心、月台中心、岔出／匯入節點與相鄰 edge 接點納入 WPF 畫面規則檢核。進站控制器保留 65 m 設定，並忽略 3 km/h 以下停站觸點違規。
 
 ### 去識別化大型路線範例
 
-- 新增可重建的大型機場線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
-- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`AIRPORT-DIRECT` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
+- 新增可重建的合成長路線 Schema 8 `full` 範例，以七階段 builder 依序完成 minimal topology、28 站鏈、服務／停站模式、O20 站後袋式儲車軌、O04／O13 雙向越行與代表性派車驗證。
+- 同時保留六站 `minimal` 基線；`FULL-LINE`、`SECTION`、`EXPRESS` 的 synthetic scenario 邊界與測試值分開記錄，不把範例宣稱為任何正式工程、號誌或營運模型。
 - 新增去識別化 Scenario Manifest，明確記錄 29.9 km／23.8 km synthetic aggregate target、O20 折返、O04／O13 passing、驗證時間點及尚未工程化的欄位。
 
 ### 穩定性、輸出與介面
@@ -49,7 +74,7 @@
 - 路線圖採起始站月台中心0K，尾軌允許負里程，終點外側延伸；即時車輛標記與位置欄位使用實際車體中心。
 - 新增明確停點基準，七PDF模板採車體中心；換端改由原車尾成為新車頭，保持完整footprint，涵蓋車尾恰落節點的邊界。舊專案預設車頭基準。
 - 逐檔修正13範例月台容量、起點停車標、越行月台位置及尾軌／袋狀軌容車長度；新增月台有效長度／整車停靠與完整反向返回進路驗證。修正精確抵達越行入口漏接旁線，以及中心停點導致速度預覽找不到終點。
-- 站名對準每個實際月台本體，錯列月台分別標示；完整127/127測試、52圖WPF檢核及13範例載入通過。詳見 `QA_REPORT.md` 與 `samples/AUDIT-2026-09-11.md`。
+- 站名對準每個實際月台本體，錯列月台分別標示；完整127/127測試、52圖WPF檢核及13範例載入通過。詳見 `QA_REPORT.md` 與 `samples/範例檢查表.md`。
 
 ### 工作區新增（2026-09-09，尚未發布）
 
@@ -74,7 +99,7 @@
 - 修整範例班次與進站參數，排除碰撞、停站違規、未具名無限續行及未實際發生的越行；V3.4 快速車現會在普通車待避期間實際完成通過線超越。
 - 主路線圖與 topology editor 共用平行 edge 幾何，並明確繪出有向轉向連接器；設施精靈會保存既有自然轉向，validator 會拒絕未接上服務路線或中段停點跳接其他 edge 的折返。
 - 六個範例均推進 3,600 秒並完整退出，無碰撞或停站違規；Release build 0 warnings／0 errors，自動化 107/107 通過。Windows WPF 已實機載入並播放完整 topology 範例；本輪未重做匯出，也未 commit、tag、push 或發布。
-- 新增 `V4.0.0-完整拓撲執行驗證範例.mrtsim.json`：以實際手動派車依序執行有向道岔、快速越行、中央袋狀軌、東西端 crossover 尾軌、指定接續與 edge-local 折返停點。
+- 新增 `11-小型-三站完整拓樸運行範例.mrtsim.json`：以實際手動派車依序執行有向道岔、快速越行、中央袋狀軌、東西端 crossover 尾軌、指定接續與 edge-local 折返停點。
 - 修正快速車剛由 passing edge 匯入正線時，普通車仍在平行 local edge 卻被 safety 誤算為負間距、進而可能碰撞的問題；普通車現在保持待避至快速車車尾 rear-clear，平行 edge 不再錯作共線。
 - 補完整情境 regression，並把既有 physical passing regression 延長到合流後，確認無碰撞、資源釋放、時刻表、區間統計及 CSV 都使用 topology 結果。
 - Release build 0 warnings／0 errors；自動化 100/100 通過。本輪未重做 Windows UI 手動操作；未 commit、tag、push 或發布。

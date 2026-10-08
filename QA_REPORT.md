@@ -1,5 +1,385 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 指定資料夾整合（2026-10-08）
+
+- 現行來源遷至 `D:/AI/codex/mrt-route-simulator`，版本 4.1.0；外部參考檔 16/16 與遷移前備份 SHA256 一致，全部納入本地提交。
+- 新位置 Release 0 警告／0 錯誤、MCP 預設選址黑箱測試通過，完整 Engine／WPF 結果見 [遷移紀錄](docs/V410_CANONICAL_MIGRATION_20261008.md)。歷史原生驗收未完成界線保留，不以建置回歸取代。
+- 舊工作樹完整備份與 Git bundle 已驗證；依使用者授權於新位置提交後移除舊資料夾。不推送、不 tag、不發布。
+
+## 單一 V4.1.0 工作版本（2026-10-08）
+
+> 本節是遷移前歷史紀錄；現行位置及提交／移除狀態以以上遷移紀錄為準。
+
+- 全部Git工作樹僅兩個；現行來源統一`mrt-v403-integration`，App與MCP共用`output/v4.1.0-unified`，版本實測4.1.0.0／V4.1.0。保留已累積的非MCP修改，不以舊4.0.2覆蓋新版；舊source差異最終核對與來源證據見[整合紀錄](docs/V410_UNIFIED_WORKTREE_AUDIT_20261008.md)。
+- 本輪Release0警告／0錯誤、Engine198/198、完整default WPF exit0、MCP stdio15tools／三輪並行advance-reset exit0。全域及專案MRT設定指向統一DLL，其他全域設定指紋不變；現有連線需重新連線才載入新建置，未聲稱熱更新。
+- 這是本地來源／建置整合，不是全部原生gate完成；連續拉邊框即時重繪、延遲／stall／memory限制保留。未commit、push、tag、發布或刪除工作樹。
+
+## 部分完成項目續驗（2026-10-08）
+
+- 依指示只續「已部分完成」項目，125%／150%最新完整排版矩陣略過，不展開cold latency／Reset／stall／memory根因。隔離4.1.0 `diagram-draw-phases-20261007`，原4.0.3不覆寫、不合併。
+- sample14正常60×完成7172.9s；限定功能組合補驗PASS：雙收折、圖表兩軸獨立縮放、水平／垂直thumb拖曳且固定時間軸可見；最大化／還原刷新正常，但純寬／純高大幅resize與連續視窗拖曳未列PASS。
+- 9個PDF組合逐頁render補驗：A4／A3單頁與分頁endtime off、A4／A3單頁及A3分頁110.2分短尾、A3 H1/V4 aspect-fit single短尾／endtime off。未見窄尾頁／文字截斷／標籤互蓋，限定配置PASS；單頁縮字纸本閱讀限制保留。高解析PNG下行H2/V2發現FULL-O13／FULL-O04標籤互蓋，**FAIL，尚未修正／回歸**。
+- 原生session07aaffd6於播放中才arm，08:54:27+08正常Stop、activefalse／completedRuns0；raw非覆寫封存、report SHA256 `6ED0845D8ED17750B608A863A85CE9411B848EC1FA3EE294C72A0120E90B24E1`。起始viewport120DPI／interface1／1162.4×643.2DIP，非完整DPI矩陣；不作完整run parity／memory／compositor結論。逐項證據見[本輪紀錄](docs/NATIVE_PARTIAL_MATRIX_20261008.md)。
+- 同資料first/warm局部profiler已實作且相同frame／cache／viewport／filters檢查通過，冷51.8112ms、3暖9.4007／12.6660／8.4238ms，只限test-only，不當原生50ms gate。隔離Release0警告／錯誤、Engine198/198、完整default WPF exit0／PASS。此前收折314→314失敗在舊binary也重現，compact三scale PASS；固定sticky測試邏輯高度1100後保留原assert通過，未改production排版。失敗log保留，原生匯出與profiler binary證據分開。
+- PNG標籤互蓋已做最小匯出層修正，重用PDF單頁annotation overlay；1x／2x像素與source不變gate通過，隔離Release0警告／錯誤、Engine198/198／完整WPF PASS。僅WPF修正版回歸，sample14原生重匯出待驗，尚不撤銷原生FAIL。
+- 額度99%接續點：PNG修正版原生正常60×完成01:59:32.9／37,172軌跡／9,147安全觀測；視窗保留在Diagram、H2V2／manual10／僅下行／events與endtime off／highres on，未開始新匯出。下一輪沿用現存隔離視窗重匯出並檢視，不重啟或覆寫舊FAIL圖；大幅resize／連續視窗拖曳仍未完整。詳見本輪紀錄末段。
+- 額度重置接續已完成PNG原生重匯出：4948×1520新檔、SHA256 `24F62B4B44B593C925C141705057AA11C5B30E008E7E49CCEF9B15CB4F2D67DF`，全圖與原尺寸局部确认FULL-O13／FULL-O04分列、兩份planned/actual標籤與leader保留，限定此組合修復PASS。舊FAIL與較窄viewport證據保留，不宣稱全部PNG矩陣或互動文字排版完成。
+- 後續原生純寬1382.4→996 DIP、純高820.8→569.6 DIP，raw確認各次另一尺寸／位置／120DPI不變，外層捲動可達固定時間軸及事件列表底端，限定完成後配置PASS。標題列真實滑鼠拖曳位移+120／+40 DIP、尺寸996×569.6不變，clock7172.9s凍結，限定移動功能PASS。四session正常Stop activefalse／completedRuns0、raw與空events非覆寫封存。連續拉邊框的即時內容重繪仍未完整：邊框嘗試未命中有效resize，正常系統大小模式僅outline，不作逐幀／compositor PASS；需實際可見拉邊框觀察，不擴大Windows全域設定或重跑已跳過DPI矩陣。詳見本輪紀錄末段。
+
+## 待驗項目逐項處理（2026-10-07）
+
+- 繪圖內部細分續驗：隔離`diagram-draw-phases-20261007` Release0警告／錯誤、Engine198/198／完整default WPF PASS。native36d6f3fe首次owner48.1223ms僅此單筆<50（非效能修正／整個cold gate PASS）；selectedChart42.2457ms含series25.2274、固定圖形13.1030ms，未證明JIT／逐點Add／GC根因。正常Stop completedRuns0／activefalse，raw非覆寫封存且雜湊一致；保留前輪51.3548ms FAIL。詳見[運行圖互動續驗](docs/NATIVE_DIAGRAM_INTERACTION_20261007.md)，下一步局部benchmark定位最大series段。
+
+- 首次Diagram分段續驗：隔離`tab-input-phases-20261007` Release0警告／錯誤、Engine198/198、完整default WPF PASS（補dirty／clean summary與可見Diagram Reset測試情境，production刷新條件不變）。原生session2a7b2568首次owner51.3548ms仍FAIL50ms，handler46.9418ms中selectedChart44.8912ms，frameRead／accumulator／trainRows／eventRows各<1ms。只定位到繪圖段，未證明內部根因；正常Stop completedRuns0、activefalse，未作全程播放或memory結論。raw JSONL已非覆寫封存，source／archive SHA256均`DF744CDC6B4A9F57DE584B7185A8A5FF9EB51B8234FAD8113A5B806C47D8DB48`。詳見[運行圖互動續驗](docs/NATIVE_DIAGRAM_INTERACTION_20261007.md)；接續細分繪圖量測，原4.0.3未覆寫／合併。
+
+- 後續去Reset提前empty draw最小WPF修正：reset-render-once隔離Release0警告／錯誤、Engine198/198／完整default WPF PASS；新增正常owner Reset的actual清空／planned保留、Safety已選取及Diagram隱藏後切回回歸。原生83c4baf6三輪事件全欄位0差異／正常Idle、Reset、Stop3；Play26.8280～33.3631ms，Reset36.8651／43.2529／首筆51.9069ms，仍未全達50。完整資料warm Diagram五次0.8387～1.0844ms限定PASS，first-tab55.5355ms仍待；單次11DIP keyboard resize只證明刷新／時間凍結，不列完整矩陣。raw stall2筆max427.9311ms根因未知，長期memory仍UNRESOLVED。詳見[運行圖互動續驗](docs/NATIVE_DIAGRAM_INTERACTION_20261007.md)及單項紀錄；未合併原4.0.3。
+
+- 快速本程序診斷取樣隔離4.1.0 session c392e6d2五輪：正常完成，各1025events／37172trajectory／9147safety／active0，與原4.0.3全欄位ordered JSON逐筆0差異；五次合法10sIdle／Reset actual四項0、planned8／visual8/40/114，afterReset後Stop completedRuns5。Play總26.4282～38.8407ms；Reset37.1375～50.2658ms，第四筆略超50，嚴格互動gate仍未全過。完整Engine198/198、default WPF PASS；修正只降低同步診斷取樣成本，不改Engine步進／Schema／計時邊界。dispatcherStall累計7筆max518.7174ms，根因未知；private後段非單調仍不足判定bounded，memory仍UNRESOLVED。詳見[單項紀錄](docs/PLAY_RESET_LATENCY_20261007.md)，原4.0.3未覆寫／未合併。
+
+- 新修正版原生session8692905d：Diagram60×／96DPI正常單輪7173.2s、1025events／37172trajectory／9147safety／active0，與原4.0.3 d70a3e60逐筆全欄位事件0差異。合法10sIdle後正常Reset actual四項0／planned8／visual8/40/114；Stop completedRuns1/activefalse，raw gap0限本輪。Play78.7588ms、Reset67.1094ms仍>50，互動gate未過；續查opt-in診斷取樣成本，不挪邊界洗PASS。兩檔已hash一致非覆寫封存，詳見單項紀錄；不是memory五輪或原Route gap已修復。
+
+- 使用者允許調查及修正未完成項目，隨後指定逐項處理、節省額度。目前只處理 Play／Reset 互動延遲；Route gap、長期 memory 及匯出矩陣保留待辦，未開始新一輪驗收。最新125%／150%排版矩陣仍略過。
+- 原五輪 raw 拆解：Play handler38.4399～46.9114ms、Reset handler26.0330～36.5567ms；總延遲另包含 mouse-down preview 至 handler 的約26～30ms，不把全部時間歸因於 worker／重繪，也不修改原計時邊界來宣稱PASS。隔離4.1.0調查進行中，原4.0.3不覆寫、不合併或發布。詳見[單項紀錄](docs/PLAY_RESET_LATENCY_20261007.md)。
+- 本段最小修正：正常V2 Reset不再先Pause發布中間frame；Play不再強制發布重複world snapshot，下一週期仍正常發布，其他snapshot-changing command保留立即frame。不改Engine／Schema／collector邊界。隔離output/play-reset-latency-20261007 Release0警告／錯誤、Engine198/198、完整default WPF exit0／PASS，含新增Reset單frame與command邊界回歸。原生總延遲仍待重測，不列50ms gate通過；本段依逐項／節省額度停在修正與完整回歸，下一段先續本項。
+
+## Collector修正隔離版五輪原生驗收（2026-10-07，新增授權）
+
+- 使用者允許以已修正collector的隔離整合版續驗五輪。版本明確4.1.0，output/collector-ack-fix-20261007既有Release輸出，不覆寫原4.0.3、不合併Git；僅此五輪範圍擴大，125%／150%仍略過。
+- 同一程序／sample14／96DPI／Diagram60×，五輪正常完成，各1025events／37172trajectory／9147safety／active0，與原版d70a3e60 run1全欄位orderedJSON皆0差異；5次合法10sIdle後正常Reset，actual四項皆0、planned8、visual8/40/114一致。第五afterReset後自動Stop completedRuns5/activefalse；runAborted0，collector ack阻擋本輪未重現。
+- acknowledged-active-wall倍率59.99963165～60.00313113，publication邊界非精確tick。上述限定生命週期／事件一致／快取重設PASS，不能當成原4.0.3binary已修復。
+- afterReset private MiB238.602→248.156→252.066→261.504→261.469，末兩輪持平不足宣稱bounded，memory仍UNRESOLVED。owner Play67.4921／66.5899／74.2828／68.8187／66.9733ms，Reset57.1289／56.9085／56.8061／64.2635／54.0882ms皆>50ms，互動延遲未達建議門檻；session一次dispatcher gap101.7264ms、未見重複，原因未知，不另要求零gap，也不沖銷原Route既有FAIL。
+- 原始兩檔SHA256一致且非覆寫封存，原exe／DLLhash不變；詳見[五輪紀錄](docs/NATIVE_ISOLATED_ACKFIX_FIVE_RUN_20261007.md)。整體NOT COMPLETED，不把MCP功能或offscreen回歸冒充原生效能證據。
+
+## V4.0.3 跨頁互動與完整事件續驗（2026-10-07）
+
+- 原binary／sample14／96DPI，a4b4d3f3正常30→60×、Pause及Route／Speed／Diagram切頁，暫停後點FULL-O04／FULL-O13能選對曲線且時間不變；完成7172.9s、1025events、37172trajectory、9147safety、active0。
+- 與d70a3e60 run1逐筆全欄位JSON對照0差異。完成10sIdle後正常Reset，actual cache/processed皆0、WPF polyline0/text1/canvas1；正常Stop completedRuns1/activefalse，原始檔SHA256一致封存、原exe/DLL不變。
+- 限定功能／事件一致PASS；Play64.9641ms、首次trainClick91.2105ms、Diagram切頁57.1064ms、Reset62.793ms仍超50ms，互動效能未過。單輪memory仍UNRESOLVED、未改五輪阻擋結論，不混4.1.0原生效能、未重驗125%／150%。詳細原始證據見[續驗紀錄](docs/NATIVE_V403_20261007_CONTINUOUS_ACCEPTANCE.md)。
+
+## 原生collector acknowledgement時序最小修正（2026-10-07）
+
+- 已授權修正：worker identity／generation檢查只在正常Play acknowledgement後開始；未改Engine／Schema／MCP命令，不做Git合併或發布。
+- 新增決定性回歸，ack前Probe不得abort，真實PlayAsync確認後建立新worker，仍必須偵測replacement。移除guard時專項準確FAIL，恢復後PASS。
+- 全新output/collector-ack-fix-20261007隔離Release build 0 warnings／0 errors、Engine198/198、專項及完整WPF exit0／PASS。來源樹仍4.1.0，僅修正所需回歸，不作4.0.3原生五輪驗收證據。
+- 原4.0.3 exe／DLL SHA256不變，未覆寫；完整範圍與red/green結果見[修正紀錄](docs/COLLECTOR_ACK_RACE_FIX_20261007.md)。
+
+## V4.0.3 後續量測阻擋（2026-10-07）
+
+- 原V4.0.3 binary／sample14／100% DPI／固定運行圖60×：session6ed4abc9第1輪完成7172.9s、1025events，完成後10sIdle及正常Reset已取樣；actual cache清空。單輪不構成五輪memory gate通過。
+- 第2輪正常Play派送後20.1877ms、acknowledgement尚為0，collector即記錄`playback-worker-replaced`中止量測，UI仍推進。正常Pause及Stop後completedRuns1／activefalse；五輪未完成。疑似armed到ack期間的量測競爭條件，未修改程式或以V4.1替代。
+- 原始metrics／events已封存，完整條件及SHA256見[本輪紀錄](docs/NATIVE_V403_20261007_CONTINUOUS_ACCEPTANCE.md)。125%／150%仍依使用者指定不重驗；此結果不得沖銷既有route gap／memory未解項。
+
+## 驗收範圍調整（2026-10-07，最新）
+
+- 使用者指定：最新排版125%／150%矩陣先不重驗；V4.1.0目前只驗MCP正常，不驗其他排版／效能／記憶體項目。原V4.0.3驗收保持獨立，日後合併另行指示；沒有當下合併或發布授權。
+- V4.1.0既有MCP正常load／play／pause／切頁／zoom／reset及完整事件parity結果保留。新增PID31024亦正常load、Diagram、play60、完成後reset成功；第2輪依範圍調整正常pause於1197.9s，隔次status時間相同。這些是MCP功能證據，不列V4.1.0效能正式通過。
+- 原生量測7ca80edb於09:25:00+08正常停止、completedRuns1／activefalse；五輪計畫取消，第2輪未完成。原始資料保存，不與V4.0.3五輪結果合併。
+
+## 原生小視窗與專用MCP接續（2026-10-07）
+
+- V4.0.3新排版原生視窗已由App量測確認96DPI／800×520 DIP／interfaceScale1。操作區及事件表四種收折組合、外層底端可達、圖內兩滑桿、固定時間軸、右端終點時間、重新展開設定保留均完成有限畫面檢查；非125／150%完整矩陣。
+- 已實際使用連接的V4.1.0專用MCP，獨立PID35932正常load／play60／pause／切頁／兩軸zoom／reset成功；pause後狀態穩定。正常完整播放7172.9s、1025events，與既有V4.0.3 d70a3e60第1輪事件全欄位比較0不一致（只正規化JSON欄位大小寫及列舉表示）。未使用advance替代正常播放。
+- MCP測試視窗僅啟動一次並已正常關閉；保留使用者縮好的原視窗。橋接status會更新view，RPC不代表原生輸入或compositor延遲；此輪雙視窗操作不當作無干擾效能／記憶體證據。
+- 原生短session dc3fae1f正常停止completedRuns0／activefalse、metrics已非覆寫歸檔且SHA256一致。完整證據與未解項見[接續紀錄](docs/NATIVE_ACCEPTANCE_20261007_MCP.md)。
+
+## V4.1.0 MCP 實作與連線驗證（2026-10-07）
+
+- 在最新 `mrt-v403-integration` 整合樹實作，產品版本依 VERSIONING.md 升為 V4.1.0；尚未發布。採官方 ModelContextProtocol 2.2.0，新增獨立 Automation／Mcp 模組與 15 個 stdio 工具。Engine 仍不依賴 WPF，沿用 Schema 8、TopologyProjectFormat 與 SimulationWorld；未建立另一套物理或營運資料源。
+- headless 專案驗證／載入／取代／儲存、固定 0.1 秒推進、快照、事件、時刻表及 CSV 可直接呼叫。桌面橋接由明確啟動參數開啟，使用同一使用者 named pipe，支援載入／儲存、播放／暫停／重設／推進、分頁／縮放及 CSV／PNG／PDF；沿用既有 Dispatcher 與單一播放 worker。
+- 最終 V4.1.0 Release build：0 警告／0 錯誤；Engine 198/198、0 失敗；完整 default WPF runner exit 0，包含 MCP bridge、全部現行 sample、長行程與輸出回歸。記錄：`output/mcp-engine-final.log`、`output/mcp-wpf-final.log`。
+- stdio 黑箱 initialize／tools/list／tools/call、15 個工具、失敗載入保留、越界路徑與覆寫拒絕、三輪並行 advance/reset 通過；橋接專項包含超大回應及破損請求後恢復、明確 tick／狀態確認及輸出驗證。
+- 已註冊 MCP 的桌面黑箱建立獨立新版 WPF 視窗，完成載入、推進 10 秒、切頁、縮放、三種匯出、播放／暫停、事件／時刻表、重設，正常關閉該測試視窗。`output/mcp-desktop-smoke.json` 回報 passed=true、closedNormally=true。
+- 本次 Codex 對話曾直接呼叫 MCP，確認 server_info 版本 4.1.0.0／Schema 8，實際載入、推進及快照到達 10 秒；無須在此對話使用 computer use 才能完成這些操作。最後修正版建置時已停止被鎖檔的本次 MCP 連線；新開對話或重新連線即載入最終版本。使用方法見 [MCP 說明](docs/MCP.md)。
+- 最後審查補強：快照為可重複狀態讀取，事件以獨立分頁取得；播放確認完成狀態、無效推進競態恢復原本播放。新增初始事件保留／重複快照、播放中拒絕無效推進、600 秒內完成及正常重播回歸。重新建置首次因本次 MCP 連線鎖檔失敗，停止精確匹配的 MCP 子程序後重建 0 警告／0 錯誤；未停止其他桌面程序。完成後 Play 的測試先誤設為拒絕，已按既有正常按鈕自動重設再播放的契約修正，專項 PASS。
+- 本次程式及協定驗證不代表原生 DPI、滑鼠操作延遲或 compositor 驗收；先前尚未完成的互動效能／記憶體驗收維持原有結論。未 commit、push 或發布 Release。
+
+## 運行圖最小圖高／操作區收折修正（2026-10-06 晚間）
+
+- 新增預設展開的「運行圖篩選、縮放與匯出（可收合）」；图框最小344 DIP、內層圖區最小300 DIP，事件表仍可獨立收折。僅Presentation，不改Engine／Schema／模擬／版本。
+- 小視窗額外內容納入外層scroll extent，折疊／寬窄／切頁重新計算，不沿用stretch desired高度累加；其他分頁保留720 DIP政策。
+- Release0警告／0錯誤、Engine198/198、完整default WPF exit0；新增compact專項scale1／0.8／1.25及控制／事件四種fold、底端可達、縮放保留、寬高／復原／切頁皆PASS。首次build兩個新增tests nullable警告已修正，未掩蓋。
+- 正式exe已單次重開／sample14已正常讀取，新版原生800×520仍待手動縮窗確認，不用automated scale代理全DPI驗收。詳見[修正紀錄](docs/DIAGRAM_COMPACT_LAYOUT_PROGRESS.md)。
+
+## 新版 100% 運行圖五輪／窄矮視窗（2026-10-06 晚間）
+
+- 同Release process／sample14／Diagram／實測96DPI，d70a3e60五輪60×無Pause完整完成，各1025事件逐欄與基準相同、37172軌跡／9147安全觀測／active0；active倍率59.99693298～60.00276976，非精確final tick timestamp。五輪throughput／事件一致子項PASS。
+- 五次合法10sIdle後正常Reset，非空actual cache清為0；第五次afterReset後才Stop completedRuns5。raw gap0只適用本session。afterReset private240.70→263.21→266.02→266.38→270.53 MiB，memory仍UNRESOLVED；direct play/reset小樣本p95/max80.1657／64.6809ms，互動效能未通過。
+- 手動800×520 DIP／96DPI獨立短session71a5f935，固定時間軸／終點水平同步、事件收折增加圖高、Route下緣proxy拖曳等限定子項已觀察；但事件列表展開時图區過小、滑桿難操作，使用者要求加大最小圖高及上方控制可收折，修正進行中。尚非完整resize／DPI矩陣。
+- 原始兩session皆正常停止、非覆寫SHA256一致歸檔，詳見[續驗紀錄](docs/NATIVE_V403_20261006_CONTINUOUS_ACCEPTANCE.md)。整体NOT COMPLETED，未改Engine／Schema。
+
+## 新版 100% 營運事件目視續驗（2026-10-06 下午）
+
+- 正式sticky Route新版、sample14、實測96DPI/interfaceScale1；6a5d與8baf兩獨立多倍率／多暫停完整輪次，各1025事件與既有基準全欄位相同，trajectory37172／safety9147／active0。
+- O04／O13待避前、快車正線通過、普通車沿側線出口回主線及車尾淨空；O20入袋／袋內等待／同SECTION-VEHICLE-01轉上行／出袋及資源釋放，已完成限定案例分段event+visual子項。O20由兩輪互補，不假稱單輪連續錄影或全DPI矩陣。
+- 互動效能未通過：6a5d raw dispatcherStall45筆最大1050.7862ms；小樣本direct play／pause／trainClick p95/max395.0506／76.1686／306.0606ms，未達50ms門檻。不混surrogate／OS／compositor，不下GC因果。新版不暫停60×sanity、完整DPI／resize矩陣、五輪private memory及gap根因仍待，整體NOT COMPLETED。
+- 原始metrics／events正常Stop後非覆寫SHA256一致歸檔；詳見[續驗紀錄](docs/NATIVE_V403_20261006_CONTINUOUS_ACCEPTANCE.md)。本段僅驗收／文件，不另改Engine或Schema。
+- 新版獨立47790043 Route 100%單輪60×無Pause完整完成7172.9s，active倍率60.00095151、1025事件逐欄Equal=true，限定throughput／事件一致子項PASS；raw gap15次max1751.6236ms，流暢度仍FAIL。合法10sIdle後正常Reset／Stop已保存，不將未開Diagram的零快取當非空快取清理證據；不是五輪bounded memory驗收。
+- 額度恢復後同binary新process／sample14／實測96DPI，31283537短互動正常Stop completedRuns0：Route／Speed／Diagram各正常續播再暫停、等待>2s及切頁time不變，限定穩定性子項PASS。raw gap0不外推效能PASS，direct Diagram tab56.996ms、Pause63.5195ms仍超50ms；不是完整輪次。原始檔SHA256一致歸檔。
+
+## 路線圖下緣頂層水平滑桿（2026-10-06）
+
+- 使用者要求滑桿貼路線圖下緣、維持頂層，路線整張離開視窗才隱藏。僅改Presentation：Grid頂層Canvas proxy、route下緣預留及viewport交集定位；不改Engine／Schema／sample。
+- Release0警告／錯誤；Engine198/198、完整default WPF exit0；主代理強化非零host offscreen斷言後再build／focused exit0。覆蓋App縮放1／0.8／1.25、compact outer-top/bottom、部分可見／完全離開／復原、內層捲動、雙向offset、切頁與overlay層級。首次測試helper编譯FAIL及1.25 sliver位置FAIL均保留，後者已修正。
+- 正式新版sample14原生位置／拖曳／速度子頁隱藏／回Route恢復子項PASS，clock保持0；未重新完成OS DPI全矩陣、throughput或五輪記憶體驗收。詳見[本次修改紀錄](docs/ROUTE_STICKY_SCROLLBAR_PROGRESS.md)。整體原生長程驗收仍NOT COMPLETED。
+
+## 125% 原生五輪與重設收尾續驗（2026-10-06）
+
+- 原整合V4.0.3 Release、同process／sample14／Diagram頁、實测120DPI／interfaceScale1、正常60×五輪各7172.9s完整完成、無Pause；完整1025筆事件彼此及10月4日c3a6基準全部欄位相同。
+- 每輪均在10sIdle後正常Reset，五次actual display cache歸零；第五輪idle後session仍保活，afterReset寫入後才sessionStopped，最後reset漏記修正原生子項PASS。不是無洩漏PASS，afterReset privateMiB236.46→272.05仍上升。
+- 主代理核對active倍率59.99988754～60.00110921、raw dispatcherStall共0；只屬本條件dispatcher surrogate證據，不外推OS input／compositor或所有DPI流暢度。
+- 新版獨立85312aec三輪完整播放事件1025筆皆與基準全欄位一致；第三輪完成後4.564秒正常reset，actual cache歸零，直到45秒後session Stop都未偽寫10sIdle，原生早reset子項PASS。前兩次因操作延遲超過10秒，保留但不列早reset；不混為五輪記憶體驗收。
+- 追加A3對話框Title最小修正：同一paper enum用於Title及實際匯出，舊Title scaffold在A3斷言RED、新Release及無Show同步匯出GREEN；完整WPF最終再次exit0。test-only sample14弱引用檢查在停止collector而保留視窗／worker／planned graph時，舊completed frame／非空history與actual series/samples皆可回收，專用exit0；不是原生private memory無洩漏PASS。委派誤落舊樹已轉移並撤回僅代理新增檔案／入口，舊樹結果不採用。最終Engine198/198；正式新版原生A3/A4對話框Title皆與選取紙張相符，兩次皆取消，不當成重新匯出PDF內容驗收。
+- 首次完整WPF在early Reset量測順序邊界FAIL；collector新增reset lifecycle開始旗標，fixture確定性觸發reset中timer，舊DLL RED／新Release0警告錯誤及專用回歸GREEN。修正後完整default WPF重跑exit0（含原生量測入口、全部sample／長行程及輸出），Engine198/198、0失敗及diff --check通過；原生早reset已通過上述限定子項，其他DPI／記憶體與gap根因仍待，整體NOT COMPLETED。原始metrics/events SHA256一致歸檔，詳見[本輪紀錄](docs/NATIVE_V403_20261006_CONTINUOUS_ACCEPTANCE.md)。
+
+## 125%新版五輪續驗與原生匯出（2026-10-04）
+
+- 同一Release process、sample14、Diagram頁、120DPI／1382.4×820.8DIP五輪60×完成，倍率59.99939～60.00074；五輪均1025events／37172trajectory／9147safety／active0，事件與既有完整基準逐筆一致。
+- 流暢度未通過：第3／4／5輪分別2／6／1次>100ms dispatcher gap，最大1087.94ms；原因未證實，不冒稱GC因果或OS input／compositor量測。completion private241.79→265.39MiB；前四輪reset cache清零，第五輪未reset，不列strict bounded／無洩漏PASS。
+- **原生匯出內容與新分頁問題**：舊PNG／PDF空白已修正；原生PNG終點on/off及12秒短尾標籤PASS。原生PDF逐頁確認有內容，但發現4頁窄尾與頁界裁切，FAIL；使用者允許最小匯出層修正，已red/green回歸、Release0警告／錯誤及output-only通過，正在以新正式視窗原生重驗，不列PDF整体PASS。
+- 使用者新增「關閉警告」：最小Presentation實作已Release建置0警告／錯誤、專用不Show視窗回歸PASS（收合／清空／新警告重顯）；修正版原生按鈕亦已兩次觸發／關閉通過，專案路徑不變。Engine198/198、同步匯出及既有output-only通過；完整WPF未重跑，本輪不連續彈出測試視窗。
+- 整體仍NOT COMPLETED；原始metrics／events已SHA256歸檔。詳見[本輪續驗紀錄](docs/NATIVE_V403_20261004_CONTINUOUS_ACCEPTANCE.md)。
+- 空白修正版125%單輪60×、無pause，1025完整事件與五輪基準全相同；11次>100ms gap最大1116.9064ms，不列無卡頓／五輪bounded PASS。PDF分頁修正版另建session，條件不同不得合併。
+- PDF第一修正版原生3頁／下方站名已恢復，但首刻度重複仍FAIL；第二修正以文字中心識別左軸，新增測試先RED後GREEN，Release及三項專用回歸通過，原生第二次重驗中。另9d6b Route單輪事件與50913053全相同，20次gap最大639.7635ms，不能列流暢度或五輪bounded PASS。
+- PDF第四修正已原生逐頁確認3頁、下方站名、首刻度不重複、正常字形比例與防擠壓分列；終點on/off及12秒短尾三份PDF子項PASS。VisualBrush字形拉伸另以像素測試RED/GREEN證實；Release0警告／錯誤、PDF專用及同步／警告／output-only通過。原有車次起點名稱相互／圖例重疊仍待，不列整體PDF零重疊PASS；完整WPF仍未重跑。
+
+- PDF第五修正：站名引導線漏線RED→GREEN，Release0警告／錯誤、Engine198/198及三項專用WPF通過。新版原生PDF3頁全部render／檢視，引導線映射子項PASS；既有車次名稱重疊仍存，整體PDF仍未通過。
+- 第五修正版新同頁五輪：無pause，倍率59.999714～60.000184、每輪1025事件整份與基準一致；raw gap22／18／20／28／39，最大1820.6542ms，流暢度未通過。前四reset actual快取清零，第五auto-stop缺reset，不列strict無洩漏PASS。原始metrics/events已SHA256核對歸檔。
+- 第六PDF文字修正僅匯出層：車次名依原折線首點歸屬單一頁、避讓圖例／其他車次文字並補引導線。舊DLL像素測試RED，新Release0警告／錯誤、PDF專用及Engine198/198／三項專用WPF通過；原生逐頁重驗中，非分頁模式尚不宣稱已防重疊。
+- 第六版原生A4分頁終點on3頁全部檢視，文字配置子項PASS（車次文字／圖例不再互相重疊，引導線與時間軸正常）；個別標籤保留／dense fallback回歸已強化並GREEN。非分頁、終點off／短尾最新版本及完整WPF仍待，不列全矩陣完成。
+- 第六版最新補驗：A4終點off與110.2分鐘短尾各3頁全render檢視，文字子項PASS；A3實際1191×842pt、3頁，紙張／時間／車次避讓子項正常，長標題頁右端仍疑似裁切待複核。未分頁A3修正前對照確認車次／圖例及終點caption重疊，正在做匯出層單頁窄修正，整體仍NOT COMPLETED；儲存對話框標題寫死A4另記不一致。
+- 複核更正：第六版A3長標題／圖例末尾完整，render右侧至少37px留白，無裁切證據。第七版單頁車次overlay先RED後GREEN、Release0警告／錯誤、Engine198/198及三項專用WPF通過；原生A4單頁train避讓子項PASS，終點caption擠壓另以第八匯出層窄修正處理中，不列單頁全排版或完整WPF PASS。
+
+- 第八版PDF追加驗證（2026-10-04）：單頁caption避讓窄修正Release0警告／錯誤，PDF專用GREEN、Engine198/198及同步匯出／警告／output-only各exit0。原生sample14單頁A4、A3及上下400%／勾選分頁但aspect適合單頁A3，各已render全頁檢視，車次避讓／終點時間與caption分列子項PASS；最新A3三頁亦逐頁檢視通過此案例文字子項。完整WPF未重跑、dispatcher gap根因及第五reset仍待，整體NOT COMPLETED。各PDF與SHA256見本輪續驗紀錄。
+
+- 第五輪量測collector生命週期窄修正：idle後保活到正常afterReset再Stop，早Reset不偽造idle，最多5 measured runs；舊DLL合成fixture RED、新Release0警告／錯誤、native-acceptance-only最終兩次GREEN、Engine198/198、PDF專用及diff --check通過。首次focused在既有Resume紀錄時序案例失敗，原命令重跑通過，保留非決定性風險。未重跑新原生五輪／完整WPF，strict memory protocol仍待；正式App已正常關閉，收尾不啟動新長輪。output-only／native-acceptance-only含共用Show回歸前置，先前no-show措辭已在續驗紀錄更正。
+
+## 運行圖終點時間開關（2026-10-03）
+
+- 固定間隔之外可用「顯示終點時間」選擇補上圖表右端時間，預設開啟；已落在固定刻度時不重複，短尾間隔錯開文字避免重疊。篩選結束分鐘時是篩選終點，不能當作未完成模擬的實際完成時刻。
+- 畫面與full PNG／PDF共用刻度／標籤邏輯；Engine／raw事件／CSV不變。Release0警告／錯誤、Engine198/198、完整WPF（開關、端點邊界、去重、非零clock、full一致、paused source、標籤邊界及既有输出）與diff --check通過。
+- 原生續驗僅一個正式App視窗、sample14：終點on/off/on、短尾間隔12秒分行、整刻度去重、左右200%捲動對齊、上下200%固定軸與事件收折子項PASS；保留手動10分鐘與終點開啟畫面。未取得本輪DPI量測，不冒充全矩陣／效能／原生PNG-PDF輸出PASS。詳見[進度紀錄](docs/DIAGRAM_VIEWPORT_CONTROLS_PROGRESS.md)。
+
+## 運行圖固定橫軸、事件收折與獨立縮放（2026-10-03）
+
+- 時間軸固定於圖表底部，隨水平捲動對齊但不隨圖內垂直捲動消失；新增獨立上下縮放，左右／上下各預設100%、上限400%；下方事件列表可收折。
+- 僅Presentation修改，Engine／Schema／原始事件／CSV不變；full PNG／PDF仍保留完整內嵌時間軸。Release0警告／錯誤、Engine198/198、完整WPF（包含新增固定軸、雙軸獨立、事件收折、paused source及既有輸出）通過；diff --check通過。
+- 追加「時間刻度（分）」可選／自訂1～1440分鐘及套用按鈕；預設仍自動六等分，手動對齊顯示時鐘整倍數，畫面／grid／full匯出共用。追加版Release0警告／錯誤、完整WPF（合法／非法值、非零clock與full／interactive一致）再次通過。
+- 追加版Engine再次198/198；原生sample14輸入10並按套用後，時間軸／grid呈每10分鐘刻度，功能子項通過。固定軸、事件收折、雙軸放大與水平對齊亦已原生觀察；本轮沒有新DPI session證據，不列指定DPI全矩陣或效能PASS。整體仍NOT COMPLETED，詳見[本輪進度](docs/DIAGRAM_VIEWPORT_CONTROLS_PROGRESS.md)。
+
+## 事件觸發點開關與125%持續驗收（2026-10-03，最新）
+
+- Diagram新增「顯示事件觸發點」，預設顯示；取消只隱藏圓點／圖例，事件表、軌跡與全量CSV不改。Release0 warnings/errors、Engine198/198、完整WPF、diff --check PASS；新版原生on/off/on及暫停clock不變PASS。
+- 125%寬矮1319.2×520 DIP子項PASS；新程序90%啟動留白、首次Diagram56.95ms、Route/Diagram/Speed正常Pause/Resume通過；兩輪1025 events整筆一致、timestamp delta0。另1輪固定Diagram正常60×完成，不冒充新版5輪同頁memory repeat。
+- 上行跨站孤立圓點已修正為既有共同車站顯示座標（不改 Engine／raw events／CSV），既有方向篩選明確標示為「上下行皆顯示／僅下行／僅上行」。最終 Release0 warnings/errors、Engine198/198、完整WPF（新增座標／方向回歸、CSV/PNG/PDF）與diff --check PASS。修正版96DPI／interfaceScale1原生上行60～65分鐘綠點對齊、下行／雙向篩選及事件off/on PASS；不冒充125%或全矩陣。重複Dispatcher gap及純resize owner時間仍待，整體仍NOT COMPLETED。詳見[事件點開關與診斷](docs/DIAGRAM_EVENT_MARKERS_PROGRESS.md)及[125%持續驗收](docs/NATIVE_V403_125_CONTINUOUS_ACCEPTANCE.md)。
+
+## 125% 新版畫面續驗（2026-10-03，最新）
+
+- 三份原生session均120DPI／interfaceScale1、sample14，全程1171.2s暫停。最大化／還原、精確800×520小窗外層與圖內捲動、28站分段標籤、Route常駐水平滑桿、FULL-O04暫停左右鍵／同車速度曲線通過。
+- 窄高800×863.2 DIP、摘要展開文字換行及內層捲動、Speed底部、Diagram O26/O01兩端與時間軸可達。本輪窄高未重複列車hit-test，不擴大為完整全尺寸矩陣PASS。
+- 三份正常停止flush、六份原始／歸檔SHA256一致；無新Play，completedRuns0。未改code，未commit／push。整體仍NOT COMPLETED；新版寬矮／其他尺寸交叉組合、其他DPI與完整input／resize gate待續。詳見[125%本輪畫面紀錄](docs/NATIVE_V403_125_DPI_FOLLOWUP.md)。
+
+## 首次運行圖加速與續驗（2026-10-03，最新）
+
+- 計畫軌跡 display cache 改為背景預熱、Dispatcher完成交換；source／generation／task取消隔離，完整計畫及原始匯出資料不變。未改Engine、Schema、版本。
+- Release 0 warnings/errors、Engine198/198、修正後完整WPF runner PASS。首次完整WPF發現診斷等待入口跨UI thread，已修正並完整重跑通過；新增背景／取消競態／換檔／reset回歸。
+- 原生整合版V4.0.3、sample14、96DPI／interfaceScale1、正常30×播放暫停1171.2s：首次開圖application57.96ms（原208.31ms），暖切0.88～0.93ms，計畫虛線及實際軌跡已顯示。planned178,992筆開圖前已背景處理。本輪單次冷切子項PASS，不冒充完整p95／所有DPI矩陣；條件與原766.3s不完全配對。
+- session `f1895fbb4f0a4f02a9ca7bb7a9ff69d7` 正常停止flush，原檔保留、兩份SHA256歸檔相符。App暫停於1171.2s、運行圖頁。整體原生驗收仍 **NOT COMPLETED**；其他DPI／精確尺寸、完整互動p95／resize延遲待續，詳見[首次開圖修正與量測](docs/TIME_DISTANCE_COLD_OPEN_PROGRESS.md)。
+
+## 無人值守原生續驗（2026-10-03，最新）
+
+- 整合版V4.0.3、sample14，session實測96DPI／interfaceScale1。O04慢速越行、待避解除與合流，以及O20袋狀軌進入、等待、反向返回上行、停站後離站／資源釋放的原生目視子項PASS；事件紀錄獨立核對同VehicleId與車次切換。
+- 806×520小窗的28站運行圖分段標籤、時間軸、水平滑桿實際拖動；Route固定滑桿上段／底部與暫停列車左右鍵命中／實際速度曲線通過。806×784窄高補驗Route與運行圖兩端可達，不冒充精確800×520矩陣。
+- 首次運行圖application208.31ms，暖切0.92～1.01ms；冷切仍超過100ms目標，不能列PASS，完整互動p95與純resize延遲仍待。無production code變更；未新增完整60×輪次。
+- 兩份量測正常停止flush、原檔保留及SHA256歸檔。App暫停5693.4s、窄高運行圖；overall **NOT COMPLETED**。其他DPI切換待使用者在場，詳見[無人值守續驗紀錄](docs/NATIVE_V403_UNATTENDED_PROGRESS.md)。
+
+## 未讀檔預設頁排版修正（2026-10-03，最新）
+
+- 左欄改依實際內容寬度自適應（38%、280～450 DIP），小窗約300；標題可換行，車站表站名最低80並可自行水平捲動。
+- 空白 Route 不套用路線縮放，settled viewport 同步；未建立路線不顯示固定 Route 滑桿。已建立路線有水平溢位時仍常駐，原有 proxy regression PASS。
+- Release 0 warnings/0 errors，Engine 198/198，完整 WPF PASS。原生未讀檔200%路線縮放、大窗→小窗、車站表水平拖到停站欄均通過；程式維持未讀檔頁首。
+- 本輪純 WPF 修正，不改 Engine/Schema/版本。原載入 sample 的100%DPI續驗中斷，整體驗收仍 NOT COMPLETED；不以本輪取代所有DPI矩陣／事件目視／效能gate。詳見[預設頁修正紀錄](docs/STARTUP_LAYOUT_PROGRESS.md)。
+
+## 125% 精確最小／窄高原生續驗（2026-10-02，最新）
+
+- 兩份session起始viewport實測120 DPI、interfaceScale1，分別800×520與800×863.2 DIP；同sample14、245.5s全程暫停。
+- 精確最小：摘要展開時整頁底部、運行圖O01／時間軸、速度圖底部可達，固定Route水平滑桿仍常駐。最小及窄高尺寸的FULL-O04左右鍵命中、同車跟隨與實際速度曲線正常，時鐘不變。窄高摘要收合／展開、換行文字內層捲動，以及運行圖O26/O01端點通過。
+- 本輪無程式變更、無新Play；armed-only記錄已正常停止flush與hash歸檔，不算完整播放／事件或效能gate。App保留窄高視窗、運行圖、暫停，量測停止。下一段100%DPI需使用者手動切換；O04/O20目視、互動冷暖／純resize延遲仍待，overall NOT COMPLETED。詳見[續驗紀錄](docs/NATIVE_V403_125_DPI_PROGRESS.md)。
+
+## 125% sample14 原生 UI 續驗（2026-10-02，最新）
+
+- 實際 120 DPI／軟體比例1；一般90%視窗、最大化/還原、寬矮與800×539.2 DIP窄小視窗已檢查。暫停FULL-O04左右鍵命中、速度圖底部、28站運行圖分段標籤與固定Route水平捲軸通過；水平滑桿在外層頁首即可操作，外層底部仍常駐。未宣稱精確800×520或窄高矩陣完成。
+- 首次運行圖切頁application194.71ms；play63.69ms、marker92.38ms，小樣本互動gate仍待重複。dispatcherStall count0不取代action延遲。本輪在245.5s暫停後manual-stop，不算完整播放輪次。
+- 不改程式；raw已停止flush與SHA256歸檔核對。overall NOT COMPLETED；125%剩餘矩陣、100%DPI、O04/O20目視及互動重複仍待。詳見[本輪紀錄](docs/NATIVE_V403_125_DPI_PROGRESS.md)。App目前800×539.2、sample14運行圖、暫停且量測停止；下節啟動留白/建置結果繼續有效。
+
+## 125% 最大化上下白邊／預設留白修正（2026-10-02，最新）
+
+- WPF外層viewport更新時序修正，最大化內容填滿、不留上下居中白邊；一般啟動維持所在monitor工作區90%置中，修正125%跨monitor自動尺寸誤判。只改Presentation與回歸測試，Engine/Schema不變。
+- 最終Release0 warnings/errors、Engine198/198、完整WPF、新large-window fill及800×520回歸均PASS。125%原生確認120 DPI、90%尺寸1382.4×820.8 DIP，四邊留白且不超出工作區；最大化/還原目視PASS。
+- App保留一般90%視窗，目前預設示範資料；sample14完整125%矩陣、100%DPI與前節未完成項目仍待，overall NOT COMPLETED。詳見[修正紀錄](docs/SHELL_VIEWPORT_FILL_PROGRESS.md)。
+
+## 150% 最小視窗／列車點選／O13慢速目視續驗（2026-10-02，最新補充）
+
+- native144 DPI、800×520（系統尺寸键微調後807.333×520）、sample14確認；最小視窗外層/Route捲動、摘要展開、最大化/還原、停止及播放後暫停的列車左右鍵命中通過。左鍵切FULL-O13實際速度曲線，時鐘不變。
+- 150%小視窗時間里程28站標籤已逐段由O26掃到O01、O08a/O15a可達且未見互蓋；其他DPI矩陣尚待。O13 native1×越行/普通車側線離站匯回主線目視PASS；O04窗口本輪錯過，O20未驗，不擴大PASS。
+- 互動小樣本仍未達全面gate：首次運行圖切頁application191.9254ms，play70.8813ms、marker66.0837ms；需暖/冷重複及resize純處理延遲，不以dispatcher timer無>100ms記錄取代實際action結果。
+- 本輪不修改程式、不重跑既有build/tests、不commit/push。App保留最大化、1×、1383.4s正常暫停；量測已停止且raw已hash核對歸檔。overall NOT COMPLETED。詳見[本輪紀錄](docs/NATIVE_V403_COMPACT_MATRIX_PROGRESS.md)。下節150%五輪與先前build/tests結果繼續有效，未完成清單以本節更新為準。
+
+## 外層捲動／預設比例視窗與150%五輪驗收（2026-10-02，最新）
+
+- 預設視窗改為所在monitor工作區90%，取消固定1440×900；標題可隨整頁上捲，Route水平捲軸固定視窗底部，不需將垂直捲軸捲到底。最終Release0 warnings/errors、Engine198/198、完整WPF PASS；保留啟動時序與新增測試首跑失敗／修復歷程。
+- 真實150%原生預設1152×676.667 DIP，四邊在所在非主螢幕工作區內；outer offset0→48→96標題捲出，Route水平拖曳0→2199.154及垂直0→48可操作，Speed底部時間軸／站名可達。只代表本次尺寸，不是全resize矩陣。
+- 同Release process／sample14／TimeDistance五輪完整60×播放均約60.0×，每輪1025事件序列全欄位hash一致，無>100ms dispatcher stall。memory分類LIKELY BOUNDED WITH FRAMEWORK RESERVE；第五輪Reset由同程序補錄session取得，明確記錄限制。
+- overall仍NOT COMPLETED：100/125 DPI、全尺寸resize/hit-test、28站標籤掃描、O04/O13/O20慢速目視及完整input p95待驗。詳見[布局紀錄](docs/OUTER_SHELL_WINDOW_PROGRESS.md)與[五輪原生紀錄](docs/NATIVE_V403_FIVE_RUNS_PROGRESS.md)。下方舊階段狀態保留作歷史，不能覆蓋本節最新結果。
+
+## 主視窗最低尺寸800 × 520（2026-10-02）
+
+- 正式XAML最低尺寸由1180 × 720降到800 × 520 DIP；原開啟尺寸不變。兩個WPF regression直接驗證production minimum，不再覆寫假下限。
+- 初次建置因App檔鎖失敗；使用者授權Alt+F4正常關閉後重建成功。小視窗展開摘要造成Route零高度的回歸FAIL已修正：進入短視窗自動收合摘要，手動展開可捲動、不刪資料。
+- Release0warnings/errors、Engine198/198 PASS、完整WPF PASS；再加強摘要自動收合斷言後重建／native-final專項PASS。新版執行檔已更新，native DPI／resize仍未完成，不以自動化代替。見[執行紀錄](docs/MINIMUM_WINDOW_PROGRESS.md)。
+
+## 軟體介面縮放與Speed小視窗捲動（2026-10-02）
+
+- 上方「顯示設定」新增80/90/100/110/125%介面縮放，跟隨本機軟體偏好而非路線存檔；程式工作區視窗沿用。Speed最小圖高不再裁掉不可達底部，改為可捲動。
+- 最終Release build 0warnings/errors、完整Engine198/198 PASS、最新binary完整WPF PASS（含設定保存／telemetry vectors）、diff check PASS，詳見[執行紀錄](docs/INTERFACE_SCALE_PROGRESS.md)。原生驗收仍暫停，不能以離屏捲動／hit-test proxy清除native FAIL或宣稱DPI矩陣PASS。
+
+## 4.0.3 基底整合中（2026-10-01）
+
+- 本檔以下原生／播放紀錄來自原4.0.2工作樹，保留作歷史證據，**不能代表4.0.3整合版驗收**。目前正依使用者指示先整合、驗證，再恢復原生驗收。
+- 隔離整合位置 `D:/AI/codex/mrt-v403-integration`，基底 `68084cb`，包含4.0.3正式提交與其後Route跟隨／水平縮放；不是只修改版本號。
+- 最終完整 Release build **PASS，0 warnings/errors**；完整 Engine **198/198 PASS**；完整 WPF runner **PASS，exit0**。初輪舊車次ID、Route超大finite sentinel、既有固定80ms測試等待失敗與修正原因保留在[整合紀錄](docs/V403_INTEGRATION_PROGRESS.md)，不隱藏重跑歷程。本地來源整合gate已完成。
+- 原工作樹及83個檔案備份保全；未commit／push／tag／release。原生整體仍NOT COMPLETED，舊Speed小視窗裁切FAIL不得清除。
+
+## 小視窗摘要／Route 捲軸修正（2026-10-01）
+
+- 上方五張摘要卡改為預設展開、可手動收合；移除摘要／Simulation 區域過大的最低列高，Route ScrollViewer 依可見空間配置。只改 App XAML 與 WPF regression，不改 Engine、sample、schema 或播放資料。
+- Release build 0 警告／0 錯誤；Engine 186/186、0 失敗。完整 WPF 首跑在既有 NativeAcceptanceInput 固定 80ms 等待後的 playing-state assertion 失敗；專項及完整 runner 重跑 PASS，首次失敗保留，不宣稱零偶發失敗。Compact regression 檢查摘要保值、收合增加 viewport、兩軸溢位時水平捲軸可見。
+- 原生窄／短視窗：摘要展開／收合、Route 垂直 offset 0／48、水平拖曳 offset 0→1265.810238 可操作，水平捲軸一直位於可見圖面底部；clock 保持 0.0s。PNG 與詳情見 [執行紀錄](docs/NATIVE_PLAYBACK_FINAL_PROGRESS.md)。這項原生檢查通過，不代表全套 DPI／resize 或整體 final acceptance 通過；先前 Speed clipping、五輪 memory 等未完成門檻不因此清除。
+
+## Final acceptance 修正階段（2026-10-01；使用者要求先結束，原生操作延後）
+
+- 本輪授權僅 presentation station-label layout、App-only opt-in input/memory diagnostics、WPF regression。保留下節歷史三輪結果，不以自動化 layout proxy 升級原生 PASS。
+- 修正原理：原先標籤固定放在真實 station Y 附近，未依 TextBlock 實測邊界避碰。新增通用字型／雙向 packing／leader line；保留 station grid、trajectory X/Y 與 topology truth，無站名特例。增量畫面及完整圖／匯出路徑共用標籤 helper。
+- 輸入紀錄只在明確開始 session 後掛載；normal Play/Resume/Pause/Reset/tab/marker owner hooks、WPF routed receipt、HwndSource move/resize 及 scroll proxies。時間界線不是 OS injection 或 compositor present，無 ETW 時不把 GC 宣稱為原因。
+- Session 上限改為五次完成 run，第五輪保留至 10 秒 idle checkpoint；加入 beforePlay/afterReset/nextPlay、Private Bytes、managed heap、配置／GC、history、display cache 與 WPF visual counts。無 GC.Collect、無自動播放／重設。
+- 本輪新原生完整 run 數為 0；native input p50/p95/max、>100ms stall 數、同頁五輪 memory 趨勢、O04/O13/O20 screenshots、100/125/150% DPI/resize/hit-test 及修正後 60× sanity 均待使用者回來。
+- TIME-DISTANCE LABELS 原生決策：NOT COMPLETED（歷史 FAIL 待新 native 複驗）；NATIVE INPUT：NOT COMPLETED；MEMORY：UNRESOLVED；O04/O13/O20：NOT COMPLETED；DPI/RESIZE：NOT COMPLETED；NATIVE PLAYBACK OVERALL：NOT COMPLETED。Nearest-leader NEEDS MORE DATA／production default oracle 不變。
+- 最終 Release solution build：0警告／0錯誤；Engine：186/186、0失敗；label/input/memory 專項 PASS；重建後完整 WPF：PASS WPF visual rules、exit0（含 scroll token、樣本載入／圖表、worker／重設、CSV／PNG／PDF）。Engine source／sample SHA256 與修正前一致；結果與 synthetic raw JSONL 見 [執行紀錄](docs/NATIVE_PLAYBACK_FINAL_PROGRESS.md)。未 commit/push/merge/tag/release；保留既有 dirty worktree。
+
+## 已授權原生量測入口與三輪補測（2026-10-01）
+
+- App-only、預設關閉的「原生驗收量測」入口已加入；正常播放才採集，每 10 個 active wall seconds 記錄，三輪完成後自動停止並 flush。背景 bounded queue 寫檔；未改 Engine／physics／sample／oracle default／站名版面。新增預設關閉、pause/resume、generation、I/O failure、完成報告及正常關閉回歸。
+- 真正 Windows Release 視窗／大型機場線再次完成三輪連續 60×，分別可見 Speed、TimeDistance（起始 Speed）、Route。以 Play dispatch 到完成 frame publication 的保守界線量得 **59.99899／59.99814／59.99708×**，三輪 full-run >=58× 子門檻 PASS；此界線不是精確最後 Engine tick 時刻，也不是同頁重複 benchmark。
+- 三輪均 41,693 軌跡／11,170 安全觀測／620 事件／零營運列車。事件身分序列一致，對應事件時間 max delta=0 s；不代表所有 event field byte parity 或原生實體動態目視通過。
+- early/mid/late 與 raw JSONL 詳見 `docs/NATIVE_DESKTOP_ACCEPTANCE.md`。Apply p95 6.05／3.26／2.80 ms；Input-priority timer gap max56.65／344.43／54.67 ms，非實際 click latency；未記錄 >100 ms 次數，不能宣稱 repeated-stall absent。p95 為 latest4096 滾動統計。
+- 三輪 final WS312.58／332.52／342.41 MiB；max observed WS342.41 MiB，sampled heap max91.45 MiB。累積配置11797／7119／12294 MiB、GC totals1961/355/6；配置不等於 heap、Ui/Worker runtime 不可相加。無 late-run throughput collapse，但跨輪記憶體有界尚未證明。
+- App 回報 WPF96 DPI／scale1，所屬非主 monitor bounds 為1536x960 reported pixels；OS Settings 縮放與100/125/150%矩陣未獨立確認。運行圖站名重疊再次重現。**NATIVE visual FAIL／overall NOT COMPLETED；LONG-RUN overall NOT COMPLETED；DPI/RESIZE NOT COMPLETED**。O04/O13/O20連續動態、實際互動、長期 memory gates 仍待補。
+- 本次 code changes 非0（僅量測入口／hooks／tests）；前節 code=0 僅描述初始驗收。完整 scoped manifest 與 raw hashes 在驗收報告；既有 dirty files／TODO 保留，未發布。fresh Release0警告0錯誤、Engine186/186、入口專項PASS、完整WPF PASS WPF visual rules；diff check 最後核對於文件更新後。
+
+## 原生桌面長時間驗收（2026-10-01；部分完成，未核發全面 PASS）
+
+- 詳見 `docs/NATIVE_DESKTOP_ACCEPTANCE.md`。同一 Release／大型 28 站 sample 的真正 Windows 視窗完成三輪 60× 播放；完成時鐘 7,368.6／7,368.4／7,368.7 s，三輪皆 41,693 筆軌跡、11,170 筆安全觀測。
+- 第三輪不中斷播放的中／後／接近完成牆鐘區間約 59.49／59.77／59.86×；完整停止牆鐘只取得上界，前兩輪亦缺完整實效倍率，不能宣稱三輪 full-run >=58× 已驗收。
+- Route／Speed／Safety／TimeDistance／Timetable／Segment／Resource／Comparison 切換可顯示資料，Speed 暫停／恢復、最大化／還原功能通過；未量得原生輸入延遲分布、render p95、GC、allocation、hidden render 或完整事件 parity。
+- **原生視覺問題**：運行圖相鄰站名垂直重疊，在多個時段及第二／第三輪重現。未修改 production code；修正仍需另行同意。
+- sampled working-set peak 約 376.9 MiB；第三輪後段／完成約 376 MiB，但跨重設仍從約 308 -> 366 -> 377 MiB 上升。未證明 leak，也未證明有界；private bytes 不等於 managed heap。
+- NATIVE PLAYBACK：視覺 gate **FAIL**、整體 **NOT COMPLETED**；LONG-RUN 60×：三輪 completion 成功，但全面驗收 **NOT COMPLETED**；DPI/RESIZE：**NOT COMPLETED**（Settings 啟動等候 App 核准逾時，未改縮放；manual resize 與完整 DPI 矩陣未完成）。O04／O13／O20 physical event motion gate 仍待補。
+- 此輪 code changes = 0，只更新驗收文件；保留原有工作樹與使用者另行同意保留的 TODO 修改。索引 **NEEDS MORE DATA**／production default **oracle** 不變。最後 Release build：0 warnings／0 errors；Engine：186/186 PASS；完整 WPF：PASS WPF visual rules；diff check 通過。Offscreen 僅為 regression。
+
+## Playback pacing／nested lazy／incremental 運行圖（2026-09-30～2026-10-01）
+
+- 使用既有未提交工作樹 `codex/nearest-leader-index-prototype`，HEAD/base
+  `558e06b534f97c997f450379f747e7709528ac17`；保留前輪變更，未 commit／push／tag／merge／Release。
+  本輪只調整 App coordinator、presentation 與測試；正式 leader lookup 仍為 oracle，索引仍 **NEEDS MORE DATA**。
+- Worker 以完整 0.1 s tick deadline＋可靠 semaphore command wakeup 等待，保留全部 physics ticks、命令順序與
+  latest-frame-wins。八分頁各約 10 s 的 no-progress AdvanceTo **47～61 million → 0（觀測減少 100%）**。
+  TimeDistance no-progress inner elapsed **1,143.32 → 0 ms**；這不是 ETW thread CPU 百分比。
+- 同一大型 28 站樣本、Release／60×／同一 profiler 方法：八分頁有效倍率 **59.59～59.68×**。
+  TimeDistance render p50/p95/max **50.765/58.923/79.999 → 0.644/1.1245/12.877 ms**；p95 減少 **98.09%**。
+  unique UI apply FPS **17.79 → 21.23**；圖形維持約 4 Hz，採替代 responsiveness gate：最大輸入間隔
+  **108.44 → 41.68 ms（<50 ms）**；skipped presentation frames **126 → 85**。
+- TimeDistance allocation **127.49 → 54.70 MiB/s**；GC **60/23/13 → 35/7/0**；working set **308.66 → 261.20 MiB**。
+  新增 process CPU 總時間為 2,890.625 ms／10.175 s，無同方法 before CPU，不能宣稱 CPU% 改善。
+  productive advance inner elapsed **1,096.92 → 1,403.73 ms**，不以沒有證據的 scheduler／GC 原因解釋。
+- Route visible 的 Route/Speed render count **214/36 → 214/0**；Speed visible **214/36 → 0/37**。
+  暫停時切 nested tab 立即更新；子控制項冒泡事件不觸發全刷新。低成本 TrainRows 保持原更新方式。
+- 運行圖只處理 immutable history 新尾段；planned artifact 一次處理，重用 static grid、polylines／labels／markers。
+  每組 ordinary points 上限 600，分層 stride 保留全時段 coverage；critical transitions／extrema／first-last 不丟棄，
+  因此**不是嚴格 600 total points 上限**（本次 planned 最多 1,673 點／1,218 critical）。大量 critical points 仍可能增長。
+  actual-only 自動時間軸採 600 s forward bucket；PNG／PDF 保留原完整 history renderer，CSV／Engine truth 不變。
+- 新增 rate 1/10/30/60×、pause/resume/rate-change/reset/stop、完整同目標輸出 JSON parity、nested hidden-count、
+  cache batch/incremental／critical／長來源 coverage、resize/filter/reset/new-generation invalidation 與 full-reference
+  端點／station grid／event marker 測試。聚焦測試 PASS；Pause/Reset/Stop 觀測 <1 ms，不是最壞 latency 保證。
+- Slow-UI **680 → 740.5 s／31 skipped frames**，與同目標 deterministic reference 的 events／trajectory／safety／
+  final trains／非空 resource occupancy JSON 相等；continuous-consume 另觀測 740.9 s。UI 丟幀不丟 physics tick。
+- Release solution build（2026-10-01 續跑確認）：**0 warnings／0 errors**。完整 Engine runner（2026-09-30）：
+  **186/186 passed，0 failed**。完整離屏 WPF runner（2026-10-01 重新執行，exit 0）：**PASS**，
+  包含新增回歸、所有 sample、讀檔失敗交易、worker cleanup、長行程與 CSV／PNG／PDF。
+  `git diff --check`：PASS。上次中斷的 WPF session 無法取回，未用部分輸出宣稱完成。
+- 原生 Windows desktop／resize/drag/DPI／60× 畫面驗收：**NOT COMPLETED**。
+  Speed 是目前 selected-render p95 最慢項（11.224 ms）；Route 首個測段仍有 64.16 ms input-gap tail，
+  不能宣稱全分頁 input gap <50 ms。後續建議先做 native／late-run／repeatability，再評估 Speed 或 UI consume cadence。
+- 完整前後表、限制、變更清單與重現命令見 [PLAYBACK_END_TO_END_PROFILE.md](docs/PLAYBACK_END_TO_END_PROFILE.md)；
+  原始量測見 [PLAYBACK_PACING_PROFILE_RAW.json](docs/PLAYBACK_PACING_PROFILE_RAW.json)；
+  分階段紀錄見 [PLAYBACK_PACING_PROGRESS.md](docs/PLAYBACK_PACING_PROGRESS.md)。
+
+## Indexed-only 與 end-to-end profiler（2026-09-30，本輪）
+
+- 沿用使用者允許的未提交 prototype 工作樹；HEAD/base `558e06b534f97c997f450379f747e7709528ac17`。
+  未 commit、push、merge、tag 或發布。正式 App 仍預設 oracle，profiler 預設關閉。
+- 三模式各一次丟棄暖身＋五次 fresh-process Release／8,000 s／80,000 ticks，全部開相同 diagnostics。
+  Oracle-only median **9.417129 s**（9.347780～9.507597）；indexed-only **9.077802 s**（8.872212～9.495322）；
+  shadow **23.266440 s**（22.771982～23.392308）。本輪數字取代先前推估，但保留下節歷史紀錄。
+- Indexed-only 整體改善 **3.60%**，lookup 改善 **27.79%**；graph calls **1,783,438 → 984,253**。
+  初始化＋run allocation median **4,752,636,824 → 4,614,363,608 bytes**（-2.91%）。
+  冷 index-mode 初始化 **10.5989 ms／505,128 bytes**；first graph call **10.0354 ms**，不等於完整快取初始化。
+- 每輪 602,454 lookup；602,381 indexed success，73 fallback（5 missing follower＋68 stale generation），比例 0.0121%。
+  候選平均 2.340 → 1.008，p95/max 3/5；18 輪事件 hash 均一致，shadow 0 mismatch。
+- 完整／大型 sample indexed-only full-retention events、trajectory、safety、final-state 與 oracle 比對已通過。
+  O04／O13／O20 gate、密集混合車長與 Reset 同步驗證；密集 fixture 仍僅證明有界 parity，不宣稱完成。
+- 決策：**NEAREST LEADER INDEX: NEEDS MORE DATA**，實測介於 3%～5%，未達 GO 門檻且範圍重疊。
+  不切 production。完整數據、counter 邊界及 raw JSON 見 [prototype report](docs/NEAREST_LEADER_INDEX_PROTOTYPE.md)。
+- 本輪 Release solution build 已通過，0 warnings／0 errors；完整 Engine **186/186、0 failed**；完整離屏 WPF **PASS**。
+  含 profiler default-off/reset/percentile、workspace 子事件邊界，以及既有視覺、載入、播放、長行程與輸出 gate。
+- 60× 八個分頁均完成約 10 秒／600 秒以上量測，effective **59.57～59.69×**；publish 約 30.2～30.3 FPS。
+  運行圖最慢，UI apply 約 **17.8 FPS**、126 skipped frames、max input gap **108.4 ms**；運行圖準備約占該頁
+  synchronous UI apply **98.95%**。其他頁 UI 約 21.2～21.3 FPS。原生 composition／GPU 時間未量測。
+- 主要瓶頸判斷：**MIXED（CHARTS／WPF refresh preparation ＋ FRAME PIPELINE coordinator polling）**。
+  每 10 秒約 4,700～6,100 萬 no-progress AdvanceTo calls，diagnostics 現在每 frame 彙總，沒有修改協調排程。
+  此窗口沒有觀察到 Engine 無法維持 60×；不能把 UI 略過幀當成物理 tick 遺失。
+- 慢 UI／frame-drop parity 在 **740.1 s、32 skipped frames** 通過：events、retained trajectory／safety、current safety、
+  trains 與非空 resource occupancy 與同 target 正常 replay 完全一致；正常持續取用另外觀察到 743.4 s。
+  使用者另外授權的最小 Safety UI 修正：workspace SelectionChanged 忽略子控制項冒泡事件，回歸已通過。
+  60× 分頁 profile 與歷史差異追查見 [end-to-end report](docs/PLAYBACK_END_TO_END_PROFILE.md)。
+  原生桌面不同 DPI、拖曳／resize、8,000 秒桌面操作及 O04/O13/O20 人工畫面驗收尚未完成。
+
+## Nearest-leader shadow prototype（2026-09-30）
+
+- 分支：`codex/nearest-leader-index-prototype`；base／目前 HEAD：`558e06b534f97c997f450379f747e7709528ac17`。
+  本輪變更尚未 commit／push。完整過程與五次數據見 [prototype report](docs/NEAREST_LEADER_INDEX_PROTOTYPE.md)。
+- Production leader lookup 仍回傳既有 full-scan oracle；候選索引僅用於 shadow 比對。
+  固定 0.1 s、physical cursor／footprint、graph-distance narrow phase、rear-clear 與資源仲裁均保留。
+- Release build：0 warnings／0 errors；完整 Engine runner：**184/184 passed，0 failed**。
+  新增 11 項 diagnostics／candidate／shadow tests；涵蓋真正跨 edge 車尾、branch／merge／passing、對向、
+  重複 traversal、tie-break、保守 fallback、三次 deterministic replay、Reset、執行中切換與密集混合車長。
+- 完整離屏 WPF runner：PASS（視覺規則、載入／失敗交易、播放 worker、長行程、CSV／PNG／PDF）。
+  原生桌面 DPI、人工操作及 8,000 秒連續桌面播放尚未驗收。
+- 大型 28 站 sample，8,000 s／80,000 ticks；各模式一次預熱後五次量測，同 Release／sample／0.2 s retention。
+  baseline 中位數 **8.58 s／0.10725 ms per tick**（8.51～8.82 s）；shadow 中位數
+  **21.56 s／0.26950 ms per tick**（20.94～21.77 s）。shadow 同時計算 oracle 與 safety/control 比對。
+- 每次大型 shadow：602,454 lookup、602,381 indexed success、73 fallback（0.0121%）、**0 mismatch**；
+  平均候選 2.340 → 1.008（減少約 56.9%），p95／max 為 3／5。O04／O13 越行與 O20 pocket 換端已實際觀測，
+  全車完成，無 Collision／StationStopViolation。
+- 所有五次 baseline／shadow 的 620 筆事件雜湊相同：
+  `7746B7DDB5FBA1449971A956BD56D8DFD5178205556DC94BDBD7E5EE6B8F1D2D`。
+  完整 topology sample 三次 3,000 s shadow 與 oracle-only 的事件、安全、軌跡與最終狀態雜湊亦一致。
+- Full-scan lookup 中位數 1,667.529 ms；indexed query（含現有 narrow phase 與排序、排除額外 safety/control 比對）
+  中位數 873.334 ms；世代重建 16.261 ms。相減估算整體 7.802 s（約省 9.1%），尚非獨立 indexed world 實測；
+  indexed-only 冷快取成本、graph-call／allocation totals 未量測。baseline／shadow allocation 中位數約 4.783／7.361 GB。
+- 密集三站壓力 fixture 的 oracle-only 與 shadow 在 1,200 s 輸出一致且無碰撞，八車均已發車；但兩者仍有三車停留於 S02 前，
+  此 fixture 僅證明有界 parity，不能宣稱密集運行完成。
+- `git diff --check`：PASS。結論：**NEEDS MORE DATA／本輪不建議 productionize**。
+
+
 > **4.0.2 整合狀態：自動化驗證完成**：三個來源工作樹的程式與測試內容已合併至 `codex/integrate-v4.0.2-worktrees`，整合分支 Release build、Engine runner、完整 WPF runner 與大型 full sample 定向 WPF playback 診斷均已通過。原生桌面不同 DPI、長時間桌面播放與人工畫面驗收尚未完成。下方標示「來源工作樹」的數字保留歷史證據，不能冒充整合分支結果。
 
 ## 4.0.2 整合分支目前驗證（2026-09-25）
@@ -401,3 +781,13 @@ dotnet run --project .\tests\MrtRouteSimulator.Performance\MrtRouteSimulator.Per
 - ATP／ATO／ATS、安全完整性等級或現場設備認證。
 
 歷史需求已整理於 `CHANGELOG.md`。
+
+## 2026-10-01 native100% partial acceptance
+
+Fresh WPF telemetry confirms96x96/1x after user100% confirmation. Paused FULL-O13 marker selection and TimeDistance28-label visual subchecks collected; narrow/short scrollbar endpoints verified. Paused maximize plot-width freshness remains open, as does cold Diagram tab209.49ms latency. Full DPI/resize,125/150%, event visual, five-run memory and post-fix60x sanity remain NOT COMPLETED. Details/evidence in `docs/NATIVE_PLAYBACK_FINAL_PROGRESS.md`; no Engine/sample changes or publication.
+
+After user125% handoff, fresh20:46:43/20:46:53 Taipei checkpoints still report96x96/1x.125% NOT COMPLETED pending App DPI configuration diagnosis; no125% visual/hit-test PASS claimed. Simulation paused; proposed App-only follow-up requires user scope approval.
+
+Subsequent explicit user approval: App DPI manifest/paused viewport fix completed; final Release0warnings/0errors, Engine186/186, fullWPF and diff-check PASS. New native sessione03f7a93 independently confirms120x120 DPI/1.25x; paused FULL-O13 hit-test and Diagram max/restore redraw positive. Full per-page125% resize, refreshed100%,150%, memory/event/sanity gates remain NOT COMPLETED. See `docs/NATIVE_PLAYBACK_FINAL_PROGRESS.md` for scoped files and evidence.
+
+Later150% native observation independently confirms144x144/1.5x; paused FULL-O13 hit-test and Diagram dense-label/scroll/narrow-short checks positive. New **Speed small-window lower chart/time-axis clipping FAIL**, no scroll access. Overall NOT COMPLETED; permission requested for minimal presentation-only repair. No source changes in observation turn; remaining per-page DPI/memory/event/sanity gates retain pending status.

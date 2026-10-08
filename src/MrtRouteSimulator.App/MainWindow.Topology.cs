@@ -224,10 +224,14 @@ public partial class MainWindow
                 pattern.Id, pattern.DisplayName,
                 pattern.Instructions.Select(instruction => new StopPatternInstruction(
                     instruction.StationId, instruction.Action, instruction.DwellTimeSeconds,
-                    instruction.PassingSpeedLimitMetersPerSecond)))),
+                    instruction.PassingSpeedLimitMetersPerSecond,
+                    instruction.WaitForOvertakeServiceRunId)))),
             runtime.TrainParameters, []);
         _playbackDurationSeconds = prepared.DurationSeconds;
         _plannedTimelineArtifact = prepared.PlannedTimeline;
+        StartPlannedTimeDistanceCacheWarmup(
+            _plannedTimelineArtifact,
+            initialFrame.GenerationId);
         _plannedTimetableEvents = prepared.PlannedTimeline.Events;
         _resultAccumulator.SetPlannedTimetableEvents(_plannedTimetableEvents, initialFrame.Events);
         _v2PlannedMinimumIntervalSeconds = document.Simulation.HeadwaySeconds;
@@ -304,7 +308,8 @@ public partial class MainWindow
                         _ => "停站"
                     },
                     DwellTimeSeconds = instruction.DwellTimeSeconds,
-                    SpeedLimitKmh = instruction.PassingSpeedLimitMetersPerSecond * 3.6
+                    SpeedLimitKmh = instruction.PassingSpeedLimitMetersPerSecond * 3.6,
+                    WaitForOvertakeServiceRunId = instruction.WaitForOvertakeServiceRunId ?? string.Empty
                 });
             }
         }

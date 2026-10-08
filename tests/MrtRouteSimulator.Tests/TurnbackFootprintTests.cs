@@ -1,4 +1,4 @@
-using MrtRouteSimulator.Engine;
+﻿using MrtRouteSimulator.Engine;
 
 internal static class TurnbackFootprintTests
 {
@@ -35,7 +35,7 @@ internal static class TurnbackFootprintTests
         while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "MrtRouteSimulator.slnx"))) directory = directory.Parent;
         if (directory is null) throw new InvalidOperationException("找不到範例專案根目錄。");
         var source = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(directory.FullName,
-            "samples", "V4.0.0-完整拓撲執行驗證範例.mrtsim.json")));
+            "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
         foreach (var length in new[] { 80d, 120d, 140d })
         {
             var document = source with { VehicleTypes = source.VehicleTypes.Select(v => v with { LengthMeters = length }).ToArray() };

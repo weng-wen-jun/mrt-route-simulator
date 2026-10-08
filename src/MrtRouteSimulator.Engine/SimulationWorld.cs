@@ -18,6 +18,7 @@ public sealed class SimulationWorld
     private readonly List<SafetyObservation> _safetyHistory = [];
     private readonly Dictionary<SafetyObservationKey, double> _lastSafetyHistorySamples = [];
     private readonly List<SimulationEvent> _events = [];
+    private readonly HashSet<string> _passedStationKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<SimulationEvent> _newEvents = [];
     private readonly List<ScheduledObstacle> _scheduledObstacles = [];
     private readonly Dictionary<string, SafetyStatus> _lastSafetyStatuses = new(StringComparer.Ordinal);
@@ -31,9 +32,13 @@ public sealed class SimulationWorld
     private readonly Dictionary<string, int> _destinationPlatformAllocationCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, double> _platformLastReleasedAtSeconds = new(StringComparer.OrdinalIgnoreCase);
     private readonly TopologyMovementOccupancyIndex _topologyOccupancy = new();
+    private TopologyNearestLeaderCandidateIndex? _nearestLeaderCandidateIndex;
     private readonly ResolvedDispatchPlan? _dispatchPlan;
     private readonly RouteResourceReservationManager _resourceReservations = new();
     private readonly Dictionary<string, PocketServiceReservation> _pocketServiceReservations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, SidingSwitchReservation> _sidingSwitchReservations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, PendingTopologyPassingReservation> _pendingTopologyPassingReservations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, FacilitySwitchReservation> _facilitySwitchReservations = new(StringComparer.Ordinal);
     private readonly LinearInfrastructureBuildResult _linearTopology;
     private readonly RouteProjection _outboundRouteProjection;
     private readonly RouteProjection _inboundRouteProjection;
@@ -54,6 +59,12 @@ public sealed class SimulationWorld
     private IReadOnlyList<SafetyObservation> _currentSafety = [];
     private int _nextEventIndex;
     private readonly HashSet<SafetyObservationKey> _safetyKeysWithStatusChange = [];
+    private readonly SimulationWorldPerformanceDiagnosticsAccumulator _performanceDiagnostics = new();
+    private bool _nearestLeaderShadowModeEnabled;
+    private bool _benchmarkIndexedLeaderLookupEnabled;
+    private long _physicalStateGeneration;
+    private readonly List<TopologyNearestLeaderShadowMismatch> _nearestLeaderShadowMismatches = [];
+    private readonly Dictionary<string, long> _nearestLeaderShadowFallbackReasons = new(StringComparer.Ordinal);
 
     private VehiclePerformance GetVehiclePerformance(MutableTrain train)
     {
@@ -390,6 +401,74 @@ public sealed class SimulationWorld
     public SafetyObservationRetentionPolicy SafetyObservationRetentionPolicy =>
         _safetyObservationRetentionPolicy;
 
+    /// <summary>Performance counters are opt-in and disabled for normal production worlds.</summary>
+    public bool PerformanceDiagnosticsEnabled
+    {
+        get => _performanceDiagnostics.Enabled;
+        set => _performanceDiagnostics.Enabled = value;
+    }
+
+    public SimulationWorldPerformanceDiagnostics GetPerformanceDiagnostics() =>
+        _performanceDiagnostics.Snapshot();
+
+    public void ResetPerformanceDiagnostics()
+    {
+        _performanceDiagnostics.Reset();
+        _nearestLeaderShadowMismatches.Clear();
+        _nearestLeaderShadowFallbackReasons.Clear();
+    }
+
+    /// <summary>
+    /// Enables the prototype candidate lookup only for shadow comparison. The production lookup
+    /// remains the full-scan oracle regardless of this value.
+    /// </summary>
+    public bool NearestLeaderShadowModeEnabled
+    {
+        get => _nearestLeaderShadowModeEnabled;
+        set
+        {
+            if (value && _benchmarkIndexedLeaderLookupEnabled)
+                throw new InvalidOperationException("Indexed-only benchmark 與 shadow 不可同時啟用。");
+            if (_nearestLeaderShadowModeEnabled == value) return;
+            _nearestLeaderShadowModeEnabled = value;
+            _physicalStateGeneration = 0;
+            if (value)
+            {
+                _nearestLeaderShadowMismatches.Clear();
+                _nearestLeaderShadowFallbackReasons.Clear();
+                _nearestLeaderCandidateIndex ??= new TopologyNearestLeaderCandidateIndex(TopologyInfrastructure);
+                _nearestLeaderCandidateIndex.Rebuild(
+                    _physicalStateGeneration,
+                    _topologyOccupancy.FootprintsByOwner);
+            }
+        }
+    }
+
+    /// <summary>Explicit isolated benchmark/test opt-in; the application never enables this mode.</summary>
+    public bool BenchmarkIndexedLeaderLookupEnabled
+    {
+        get => _benchmarkIndexedLeaderLookupEnabled;
+        set
+        {
+            if (value && _nearestLeaderShadowModeEnabled)
+                throw new InvalidOperationException("Indexed-only benchmark 與 shadow 不可同時啟用。");
+            if (_benchmarkIndexedLeaderLookupEnabled == value) return;
+            _benchmarkIndexedLeaderLookupEnabled = value;
+            _physicalStateGeneration = 0;
+            if (value)
+            {
+                _nearestLeaderCandidateIndex ??= new TopologyNearestLeaderCandidateIndex(TopologyInfrastructure);
+                _nearestLeaderCandidateIndex.Rebuild(_physicalStateGeneration, _topologyOccupancy.FootprintsByOwner);
+            }
+        }
+    }
+
+    public IReadOnlyList<TopologyNearestLeaderShadowMismatch> NearestLeaderShadowMismatches =>
+        _nearestLeaderShadowMismatches;
+
+    public IReadOnlyDictionary<string, long> NearestLeaderShadowFallbackReasons =>
+        _nearestLeaderShadowFallbackReasons;
+
     /// <summary>所有已排入世界的車輛均已完成最後一個車次並退出營運。</summary>
     public bool IsComplete => _trains.Count > 0 && _trains.All(train => train.Completed);
 
@@ -421,6 +500,154 @@ public sealed class SimulationWorld
         }
 
         return TopologyPlatformOccupancy.GetOverlappingPlatforms(TopologyInfrastructure, footprint);
+    }
+
+    /// <summary>只回報已取得資源預約且位於列車車頭前方的實體進路。</summary>
+    public IReadOnlyList<LockedRouteSegment> GetActiveRouteLocks()
+    {
+        if (!_topologyNativeRuntime) return [];
+
+        var result = new List<LockedRouteSegment>();
+        foreach (var train in _trains.Where(item => item.Active && !item.Completed
+                     && item.RuntimeTopologyCursor is not null))
+        {
+            var cursor = train.RuntimeTopologyCursor!.Value;
+            if (_pocketServiceReservations.TryGetValue(train.VehicleId, out var pocket)
+                && GetServiceRouteId(train.Direction).Equals(pocket.RouteId, StringComparison.OrdinalIgnoreCase)
+                && cursor.MovementPlanId.Equals(pocket.RouteId, StringComparison.OrdinalIgnoreCase))
+            {
+                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train.Direction),
+                    cursor, 0, pocket.FirstTraversalIndex, pocket.LastTraversalIndex,
+                    _resourceReservations.GetResources(pocket.OwnerId), requireEdgeResource: true);
+            }
+
+            foreach (var siding in _sidingSwitchReservations.Values.Where(item =>
+                         item.VehicleId == train.VehicleId
+                         && item.RouteId.Equals(cursor.MovementPlanId, StringComparison.OrdinalIgnoreCase)))
+            {
+                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train.Direction),
+                    cursor, 0, siding.SidingTraversalIndex, siding.SidingTraversalIndex,
+                    _resourceReservations.GetResources(siding.OwnerId), requireEdgeResource: false,
+                    terminalPosition: siding.EntryStopPosition);
+            }
+
+            if (_pendingTopologyPassingReservations.TryGetValue(train.VehicleId, out var pendingPassing))
+            {
+                var traversals = pendingPassing.FacilityLeg.Traversals;
+                for (var index = 0; index < traversals.Count; index++)
+                {
+                    var traversal = traversals[index];
+                    var previous = index == 0 ? pendingPassing.ArrivalTraversal
+                        : new DirectedTrackTraversal(traversals[index - 1].Edge.TrackEdgeId,
+                            traversals[index - 1].Direction);
+                    var next = index + 1 < traversals.Count
+                        ? new DirectedTrackTraversal(traversals[index + 1].Edge.TrackEdgeId,
+                            traversals[index + 1].Direction)
+                        : pendingPassing.DepartureTraversal;
+                    result.Add(new LockedRouteSegment(train.VehicleId, train.ServiceRunId,
+                        traversal.Edge.TrackEdgeId, 0, traversal.LengthMeters,
+                        pendingPassing.Resources)
+                    {
+                        PreviousTraversal = previous,
+                        Traversal = new DirectedTrackTraversal(traversal.Edge.TrackEdgeId, traversal.Direction),
+                        NextTraversal = next
+                    });
+                }
+            }
+
+            foreach (var facilitySwitch in _facilitySwitchReservations.Values.Where(item =>
+                         item.VehicleId == train.VehicleId
+                         && item.Navigator.MovementPlanId.Equals(cursor.MovementPlanId, StringComparison.OrdinalIgnoreCase)))
+                AppendForwardLockedTraversals(result, train, facilitySwitch.Navigator, cursor,
+                    facilitySwitch.LegIndex, facilitySwitch.TraversalIndex, facilitySwitch.TraversalIndex,
+                    [facilitySwitch.ResourceId], requireEdgeResource: false);
+
+            if (train.TopologyTurnbackMovement is { ReservationId: not null, IsFacilityRouteLocked: true } turnback)
+            {
+                var enteringFacility = turnback.Stage == TopologyTurnbackStage.RunningToTurnback;
+                AppendForwardLockedTraversals(result, train, turnback.Navigator, cursor,
+                    turnback.FacilityLegIndex, 0,
+                    enteringFacility ? turnback.TurnbackStopCursor.TraversalIndex
+                        : turnback.Navigator.Legs[turnback.FacilityLegIndex].Traversals.Count - 1,
+                    _resourceReservations.GetResources(turnback.ReservationId), requireEdgeResource: false,
+                    terminalPosition: enteringFacility ? turnback.TurnbackStopCursor.Position : null);
+            }
+
+            if (train.TopologyPassingMovement is { ReservationId: not null } passing)
+            {
+                AppendForwardLockedTraversals(result, train, passing.Navigator, cursor,
+                    passing.FacilityLegIndex, 0, passing.Navigator.Legs[passing.FacilityLegIndex].Traversals.Count - 1,
+                    _resourceReservations.GetResources(passing.ReservationId), requireEdgeResource: false);
+            }
+        }
+
+        return result;
+    }
+
+    private static void AppendForwardLockedTraversals(
+        List<LockedRouteSegment> result,
+        MutableTrain train,
+        TopologyMovementNavigator navigator,
+        RuntimeTopologyCursor cursor,
+        int legIndex,
+        int firstTraversalIndex,
+        int lastTraversalIndex,
+        IReadOnlyList<string> reservedResources,
+        bool requireEdgeResource,
+        TrackPosition? terminalPosition = null)
+    {
+        if (reservedResources.Count == 0 || cursor.MovementLegIndex > legIndex) return;
+
+        var reserved = reservedResources.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var traversals = navigator.Legs[legIndex].Traversals;
+        var firstIndex = cursor.MovementLegIndex == legIndex
+            ? Math.Max(cursor.TraversalIndex, firstTraversalIndex)
+            : firstTraversalIndex;
+        for (var index = firstIndex; index <= Math.Min(lastTraversalIndex, traversals.Count - 1); index++)
+        {
+            var traversal = traversals[index];
+            if (requireEdgeResource && !traversal.Edge.ConflictResourceIds.Any(reserved.Contains)) continue;
+            var start = 0d;
+            var end = traversal.LengthMeters;
+            if (cursor.MovementLegIndex == legIndex && cursor.TraversalIndex == index)
+            {
+                if (traversal.Direction == TraversalDirection.Forward)
+                    start = cursor.Position.OffsetMeters;
+                else
+                    end = cursor.Position.OffsetMeters;
+            }
+            if (index == lastTraversalIndex && terminalPosition is { } terminal
+                && terminal.TrackEdgeId.Equals(traversal.Edge.TrackEdgeId, StringComparison.OrdinalIgnoreCase))
+            {
+                if (traversal.Direction == TraversalDirection.Forward)
+                    end = Math.Min(end, terminal.OffsetMeters);
+                else
+                    start = Math.Max(start, terminal.OffsetMeters);
+            }
+
+            if (end - start <= TrackPosition.DefaultToleranceMeters) continue;
+            DirectedTrackTraversal? previous = null;
+            var precedingEdgeDisplayed = index > firstIndex && (!requireEdgeResource
+                || traversals[index - 1].Edge.ConflictResourceIds.Any(reserved.Contains));
+            if (!precedingEdgeDisplayed && (cursor.MovementLegIndex < legIndex || cursor.TraversalIndex < index))
+            {
+                var prior = index > 0 ? traversals[index - 1]
+                    : legIndex > 0 ? navigator.Legs[legIndex - 1].Traversals[^1] : null;
+                if (prior is not null)
+                    previous = new DirectedTrackTraversal(prior.Edge.TrackEdgeId, prior.Direction);
+            }
+            var next = terminalPosition is not null && index == lastTraversalIndex ? null
+                : index + 1 < traversals.Count ? traversals[index + 1]
+                : legIndex + 1 < navigator.Legs.Count ? navigator.Legs[legIndex + 1].Traversals[0] : null;
+            result.Add(new LockedRouteSegment(train.VehicleId, train.ServiceRunId,
+                traversal.Edge.TrackEdgeId, start, end,
+                reservedResources.ToArray())
+            {
+                PreviousTraversal = previous,
+                Traversal = new DirectedTrackTraversal(traversal.Edge.TrackEdgeId, traversal.Direction),
+                NextTraversal = next is null ? null : new DirectedTrackTraversal(next.Edge.TrackEdgeId, next.Direction)
+            });
+        }
     }
 
     public IReadOnlyCollection<ServicePattern> ServicePatterns => _servicePatterns.Values;
@@ -541,45 +768,68 @@ public sealed class SimulationWorld
 
     private void TickCore()
     {
-        _newEvents.Clear();
-        CurrentTimeSeconds = Math.Round(CurrentTimeSeconds + FixedTimeStepSeconds, 10);
-        TriggerScheduledObstacles();
-        ActivateDueTrains();
-        RefreshTopologyOccupancy();
-
-        var observationsBeforeMove = MovingBlockMode == MovingBlockMode.Independent
-            ? []
-            : ComputeSafetyObservations(recordStatusEvents: false);
-        var controlLimits = MovingBlockMode == MovingBlockMode.Control
-            ? CalculateMovingBlockSpeedLimits(observationsBeforeMove)
-            : new Dictionary<string, double>(StringComparer.Ordinal);
-        var protectionLeaders = MovingBlockMode == MovingBlockMode.Control
-            ? observationsBeforeMove.ToDictionary(
-                observation => observation.FollowerVehicleId,
-                observation => observation.LeaderVehicleId,
-                StringComparer.Ordinal)
-            : new Dictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var train in _trains)
+        var diagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+        try
         {
-            UpdateTrain(train, controlLimits, protectionLeaders);
-        }
+            _newEvents.Clear();
+            CurrentTimeSeconds = Math.Round(CurrentTimeSeconds + FixedTimeStepSeconds, 10);
+            TriggerScheduledObstacles();
+            ActivateDueTrains();
+            if (_performanceDiagnostics.Enabled)
+            {
+                _performanceDiagnostics.RecordTick(_trains.Count(train => train.Active
+                    && train.Phase != OperationalPhase.OutOfService
+                    && UsesTopologyRuntimeSafety(train)));
+            }
+            RefreshTopologyOccupancy();
 
-        RefreshTopologyOccupancy();
-        ApplyCollisionProtection();
-        RefreshTopologyOccupancy();
-        ReleaseClearedPocketServiceReservations();
-        _currentSafety = MovingBlockMode == MovingBlockMode.Independent
-            ? []
-            : ComputeSafetyObservations(recordStatusEvents: true);
-        RecordSafetyHistory(_currentSafety);
-        RecordTrajectory();
+            var observationsBeforeMove = MovingBlockMode == MovingBlockMode.Independent
+                ? []
+                : ComputeSafetyObservations(recordStatusEvents: false);
+            var controlLimits = MovingBlockMode == MovingBlockMode.Control
+                ? CalculateMovingBlockSpeedLimits(observationsBeforeMove)
+                : new Dictionary<string, double>(StringComparer.Ordinal);
+            var protectionLeaders = MovingBlockMode == MovingBlockMode.Control
+                ? observationsBeforeMove.ToDictionary(
+                    observation => observation.FollowerVehicleId,
+                    observation => observation.LeaderVehicleId,
+                    StringComparer.Ordinal)
+                : new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (var train in _trains)
+            {
+                UpdateTrain(train, controlLimits, protectionLeaders);
+            }
+
+            RefreshTopologyOccupancy();
+            ApplyCollisionProtection();
+            RefreshTopologyOccupancy();
+            ReleaseClearedPocketServiceReservations();
+            ReleaseClearedSidingSwitchReservations();
+            ReleaseClearedFacilitySwitchReservations();
+            ReleaseAbandonedTopologyPassingReservations();
+            _currentSafety = MovingBlockMode == MovingBlockMode.Independent
+                ? []
+                : ComputeSafetyObservations(recordStatusEvents: true);
+            RecordSafetyHistory(_currentSafety);
+            RecordTrajectory();
+        }
+        finally
+        {
+            _performanceDiagnostics.RecordTickCoreElapsed(diagnosticsStartedAt);
+        }
     }
 
     public void Reset()
     {
         foreach (var reservation in _pocketServiceReservations.Values) _resourceReservations.Release(reservation.OwnerId);
         _pocketServiceReservations.Clear();
+        foreach (var reservation in _sidingSwitchReservations.Values) _resourceReservations.Release(reservation.OwnerId);
+        _sidingSwitchReservations.Clear();
+        foreach (var reservation in _pendingTopologyPassingReservations.Values) _resourceReservations.Release(reservation.OwnerId);
+        _pendingTopologyPassingReservations.Clear();
+        foreach (var reservation in _facilitySwitchReservations.Values) _resourceReservations.Release(reservation.OwnerId);
+        _facilitySwitchReservations.Clear();
         var trainCount = _trains.Count;
         foreach (var train in _trains)
         {
@@ -590,8 +840,11 @@ public sealed class SimulationWorld
         _safetyHistory.Clear();
         _lastSafetyHistorySamples.Clear();
         _events.Clear();
+        _passedStationKeys.Clear();
         _newEvents.Clear();
         _currentSafety = [];
+        _nearestLeaderShadowMismatches.Clear();
+        _nearestLeaderShadowFallbackReasons.Clear();
         _lastSafetyStatuses.Clear();
         _safetyKeysWithStatusChange.Clear();
         _controlBrakingActive.Clear();
@@ -1174,6 +1427,7 @@ public sealed class SimulationWorld
             }
 
             train.Active = true;
+            MarkPhysicalStateChanged();
             train.ActualDepartureTime = CurrentTimeSeconds;
             train.Phase = OperationalPhase.Accelerating;
             var delay = Math.Max(0, CurrentTimeSeconds - train.PlannedDepartureTime);
@@ -1241,7 +1495,16 @@ public sealed class SimulationWorld
     {
         if (_topologyNativeRuntime)
         {
-            return TryReservePocketServiceRoute(train);
+            if (!TryReservePocketServiceRoute(train) || !TryReserveSidingSwitchRoute(train)) return false;
+            if (train.RuntimeTopologyCursor is not null && HasStationIndex(train, train.NextStationIndex))
+            {
+                var station = GetRuntimeStation(train, train.NextStationIndex);
+                var instruction = GetStationInstruction(train, station);
+                TryReserveTopologyPassingApproach(train, station, instruction);
+                return TryReserveServiceSwitchAhead(train, station, instruction) is null;
+            }
+
+            return true;
         }
         if (!_enforceRouteResources)
         {
@@ -1487,7 +1750,8 @@ public sealed class SimulationWorld
         var owner = $"SERVICE-POCKET:{train.VehicleId}";
         if (!_resourceReservations.Reserve(owner, required))
             return MarkWaitingForResource(train, $"{train.ServiceRunId} 等待共用袋狀軌進路淨空後發車。", required.Order().First());
-        _pocketServiceReservations[train.VehicleId] = new(owner, route.ServiceRouteId, protectedTraversals.Max(t => t.Index), required);
+        _pocketServiceReservations[train.VehicleId] = new(owner, route.ServiceRouteId,
+            protectedTraversals.Min(t => t.Index), protectedTraversals.Max(t => t.Index), required);
         train.WaitingResourceEventEmitted = false;
         AddEvent(SimulationEventType.RouteReserved, train, null, $"{train.ServiceRunId} 已預約共用袋狀軌進路。",
             train.Position, train.Speed, resourceIds: required.Order().ToArray());
@@ -1510,7 +1774,280 @@ public sealed class SimulationWorld
         }
     }
 
-    private sealed record PocketServiceReservation(string OwnerId, string RouteId, int LastTraversalIndex, IReadOnlySet<string> Resources);
+    private sealed record PocketServiceReservation(
+        string OwnerId, string RouteId, int FirstTraversalIndex, int LastTraversalIndex, IReadOnlySet<string> Resources);
+
+    private bool TryReserveSidingSwitchRoute(MutableTrain train)
+    {
+        if (train.RuntimeTopologyCursor is not { MovementLegIndex: 0 } cursor
+            || train.TopologyTurnbackMovement is not null
+            || train.TopologyPassingMovement is not null
+            || !HasStationIndex(train, train.NextStationIndex))
+            return true;
+
+        var route = GetServiceRouteDefinition(train.Direction);
+        var currentIndex = train.ServiceRouteTraversalIndex ?? cursor.TraversalIndex;
+        var currentTraversal = route.Traversals[currentIndex];
+        var currentEdge = TopologyInfrastructure.GetRequiredEdge(currentTraversal.TrackEdgeId);
+        var entry = currentEdge.Kind != TrackEdgeKind.Siding;
+        int sidingIndex;
+        TrackPosition? entryStop = null;
+        string switchNodeId;
+        if (entry)
+        {
+            var nextStation = GetRuntimeStation(train, train.NextStationIndex);
+            // A passing service switches to the facility's through leg at the
+            // station throat; its default service-route stop may name the local
+            // siding, but that siding is not the train's selected movement.
+            if (GetStationInstruction(train, nextStation).Mode == StationServiceMode.Pass)
+                return true;
+            var stop = GetResolvedStop(train, nextStation);
+            sidingIndex = stop.TraversalIndex;
+            if (sidingIndex <= currentIndex || sidingIndex >= route.Traversals.Count) return true;
+            var sidingTraversal = route.Traversals[sidingIndex];
+            var sidingEdge = TopologyInfrastructure.GetRequiredEdge(sidingTraversal.TrackEdgeId);
+            if (sidingEdge.Kind != TrackEdgeKind.Siding) return true;
+            switchNodeId = InfrastructureValidator.GetStartNode(sidingEdge, sidingTraversal.Direction);
+            if (stop.Position.TrackEdgeId.Equals(sidingEdge.TrackEdgeId, StringComparison.OrdinalIgnoreCase))
+                entryStop = stop.Position;
+        }
+        else
+        {
+            sidingIndex = currentIndex;
+            if (sidingIndex + 1 >= route.Traversals.Count) return true;
+            switchNodeId = InfrastructureValidator.GetEndNode(currentEdge, currentTraversal.Direction);
+        }
+
+        // A siding reservation protects its turnout, not the occupied siding edge.
+        // The parked local train must release the entrance turnout before an express
+        // can take the parallel through track.
+        if (!IsBranchingNode(switchNodeId))
+            return true;
+
+        var resourceId = SidingSwitchResourceId(switchNodeId);
+        var ownerId = $"SERVICE-SIDING:{train.VehicleId}:{switchNodeId}";
+        if (_sidingSwitchReservations.ContainsKey(ownerId)) return true;
+        if (!_resourceReservations.Reserve(ownerId, [resourceId]))
+            return MarkWaitingForResource(train,
+                $"{train.ServiceRunId} 等待側線道岔 {switchNodeId} 進路淨空。", resourceId);
+
+        _sidingSwitchReservations.Add(ownerId, new(ownerId, train.VehicleId, route.ServiceRouteId,
+            resourceId,
+            sidingIndex, entry, entryStop));
+        train.WaitingResourceEventEmitted = false;
+        AddEvent(SimulationEventType.RouteReserved, train, null,
+            $"{train.ServiceRunId} 已鎖定側線{(entry ? "入口" : "出口")}道岔 {switchNodeId}。",
+            train.Position, train.Speed, resourceId, resourceIds: [resourceId]);
+        return true;
+    }
+
+    private void ReleaseClearedSidingSwitchReservations()
+    {
+        foreach (var reservation in _sidingSwitchReservations.Values.ToArray())
+        {
+            var train = _trains.First(item => item.VehicleId == reservation.VehicleId);
+            var clear = train.Completed;
+            if (!clear && train.RuntimeTopologyCursor is { } cursor
+                && cursor.MovementPlanId.Equals(reservation.RouteId, StringComparison.OrdinalIgnoreCase)
+                && _topologyOccupancy.FootprintsByOwner.TryGetValue(train.VehicleId, out var footprint))
+            {
+                var rear = footprint.Rear;
+                var rearDistance = GetMainlineMovementNavigator(train.Direction).GetDistanceAlongTraversal(rear);
+                clear = reservation.Entry
+                    ? rear.TraversalIndex > reservation.SidingTraversalIndex
+                      || rear.TraversalIndex == reservation.SidingTraversalIndex
+                      && rearDistance > TrackPosition.DefaultToleranceMeters
+                    : rear.TraversalIndex > reservation.SidingTraversalIndex
+                      && rearDistance > TrackPosition.DefaultToleranceMeters;
+            }
+            if (!clear) continue;
+            _resourceReservations.Release(reservation.OwnerId);
+            _sidingSwitchReservations.Remove(reservation.OwnerId);
+            AddEvent(SimulationEventType.RouteReleased, train, null,
+                $"{train.ServiceRunId} 車尾已淨空側線道岔進路。",
+                train.Position, train.Speed,
+                resourceIds: [reservation.ResourceId]);
+        }
+    }
+
+    private static string SidingSwitchResourceId(string nodeId) => $"TOPOLOGY:SWITCH:{nodeId}";
+
+    private bool IsBranchingNode(string nodeId) => TopologyInfrastructure.Edges.Values.Count(edge =>
+        edge.FromNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase)
+        || edge.ToNodeId.Equals(nodeId, StringComparison.OrdinalIgnoreCase)) >= 3;
+
+    private sealed record SidingSwitchReservation(
+        string OwnerId, string VehicleId, string RouteId, string ResourceId, int SidingTraversalIndex,
+        bool Entry, TrackPosition? EntryStopPosition);
+
+    private BlockedSwitchRoute? TryReserveServiceSwitchAhead(
+        MutableTrain train, Station nextStation, StationServiceInstruction instruction)
+    {
+        if (train.RuntimeTopologyCursor is not { MovementLegIndex: 0 } cursor
+            || train.TopologyPassingMovement is not null
+            || train.TopologyTurnbackMovement is not null
+            || _pendingTopologyPassingReservations.ContainsKey(train.VehicleId)
+            || FindEligibleTopologyPassing(train, nextStation, instruction) is not null)
+            return null;
+
+        var navigator = GetMainlineMovementNavigator(train.Direction);
+        if (!cursor.MovementPlanId.Equals(navigator.MovementPlanId, StringComparison.OrdinalIgnoreCase))
+            return null;
+        var traversals = navigator.Legs[0].Traversals;
+        for (var index = cursor.TraversalIndex; index + 1 < traversals.Count; index++)
+        {
+            var traversal = traversals[index];
+            var switchNodeId = InfrastructureValidator.GetEndNode(traversal.Edge, traversal.Direction);
+            if (!IsBranchingNode(switchNodeId)) continue;
+
+            var ownerId = $"SERVICE-SIDING:{train.VehicleId}:{switchNodeId}";
+            if (_sidingSwitchReservations.ContainsKey(ownerId)) continue;
+            var target = navigator.CreateCursor(0, index, traversal.LengthMeters);
+            var distance = navigator.TryGetForwardDistance(cursor, target);
+            if (distance is null || distance < -NumericalTolerance) continue;
+            // A switch beyond the next station may belong to a different
+            // movement (for example the through leg of a passing operation).
+            // Select that route after the next-station context advances.
+            if (distance >= GetDistanceToResolvedStop(train, nextStation, GetResolvedStop(train, nextStation))
+                    - TrackPosition.DefaultToleranceMeters)
+                return null;
+            if (distance > GetSwitchRouteRequestDistance(train) + NumericalTolerance) return null;
+
+            var resourceId = SidingSwitchResourceId(switchNodeId);
+            if (!_resourceReservations.Reserve(ownerId, [resourceId]))
+            {
+                MarkWaitingForResource(train,
+                    $"{train.ServiceRunId} 等待道岔 {switchNodeId} 進路淨空。", resourceId);
+                return new BlockedSwitchRoute(target, Math.Max(0, distance.Value));
+            }
+
+            TrackPosition? terminal = null;
+            if (instruction.Mode is StationServiceMode.Stop or StationServiceMode.Turnback)
+            {
+                var stop = GetResolvedStop(train, nextStation);
+                if (stop.Position.TrackEdgeId.Equals(traversals[index + 1].Edge.TrackEdgeId,
+                        StringComparison.OrdinalIgnoreCase))
+                    terminal = stop.Position;
+            }
+            _sidingSwitchReservations.Add(ownerId, new SidingSwitchReservation(
+                ownerId, train.VehicleId, navigator.MovementPlanId,
+                resourceId, index + 1, true, terminal));
+            train.WaitingResourceEventEmitted = false;
+            AddEvent(SimulationEventType.RouteReserved, train, null,
+                $"{train.ServiceRunId} 已鎖定道岔 {switchNodeId}。", train.Position,
+                train.Speed, resourceId, resourceIds: [resourceId]);
+        }
+
+        return null;
+    }
+
+    private double GetSwitchRouteRequestDistance(MutableTrain train)
+    {
+        var performance = GetVehiclePerformance(train);
+        var stoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
+            train.Speed, train.Acceleration, performance.ServiceBrakingMetersPerSecondSquared,
+            performance.JerkMetersPerSecondCubed, FixedTimeStepSeconds,
+            ProfileMode == OperationProfileMode.RealisticOperations).DistanceMeters;
+        return Math.Max(OperationalParameters.ApproachDistanceMeters,
+            stoppingDistance + train.Speed * 2 + OperationalParameters.SafetyMarginMeters);
+    }
+
+    private sealed record BlockedSwitchRoute(RuntimeTopologyCursor Cursor, double DistanceMeters);
+
+    private bool TryReserveFacilitySwitch(
+        MutableTrain train, TopologyMovementNavigator navigator,
+        string nodeId, int releaseLegIndex, int releaseTraversalIndex)
+    {
+        if (!IsBranchingNode(nodeId)) return true;
+        var resourceId = SidingSwitchResourceId(nodeId);
+        var ownerId = $"FACILITY-SWITCH:{train.VehicleId}:{nodeId}";
+        if (_facilitySwitchReservations.TryGetValue(ownerId, out var existing))
+        {
+            if (releaseLegIndex > existing.LegIndex)
+                _facilitySwitchReservations[ownerId] = existing with
+                {
+                    LegIndex = releaseLegIndex,
+                    TraversalIndex = releaseTraversalIndex
+                };
+            return true;
+        }
+        if (!_resourceReservations.Reserve(ownerId, [resourceId]))
+            return MarkWaitingForResource(train,
+                $"{train.ServiceRunId} 等待折返道岔 {nodeId} 進路淨空。", resourceId);
+
+        _facilitySwitchReservations.Add(ownerId, new FacilitySwitchReservation(
+            ownerId, train.VehicleId, navigator, resourceId,
+            releaseLegIndex, releaseTraversalIndex));
+        train.WaitingResourceEventEmitted = false;
+        AddEvent(SimulationEventType.RouteReserved, train, null,
+            $"{train.ServiceRunId} 已鎖定折返道岔 {nodeId}。", train.Position,
+            train.Speed, resourceId, resourceIds: [resourceId]);
+        return true;
+    }
+
+    private bool TryReserveFacilitySwitchPath(
+        MutableTrain train, TopologyMovementNavigator navigator,
+        IEnumerable<(string NodeId, int LegIndex, int TraversalIndex)> switches)
+    {
+        var acquired = new List<string>();
+        foreach (var (nodeId, legIndex, traversalIndex) in switches)
+        {
+            if (!IsBranchingNode(nodeId)) continue;
+            var ownerId = $"FACILITY-SWITCH:{train.VehicleId}:{nodeId}";
+            var alreadyOwned = _facilitySwitchReservations.ContainsKey(ownerId);
+            if (TryReserveFacilitySwitch(train, navigator, nodeId, legIndex, traversalIndex))
+            {
+                if (!alreadyOwned) acquired.Add(ownerId);
+                continue;
+            }
+
+            foreach (var acquiredOwner in acquired) ReleaseFacilitySwitch(acquiredOwner);
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ReleaseFacilitySwitch(string ownerId)
+    {
+        if (!_facilitySwitchReservations.Remove(ownerId, out var reservation)) return;
+        _resourceReservations.Release(ownerId);
+        var train = _trains.First(item => item.VehicleId == reservation.VehicleId);
+        AddEvent(SimulationEventType.RouteReleased, train, null,
+            $"{train.ServiceRunId} 車尾已淨空折返道岔進路。", train.Position,
+            train.Speed, resourceIds: [reservation.ResourceId]);
+    }
+
+    private void ReleaseClearedFacilitySwitchReservations()
+    {
+        foreach (var reservation in _facilitySwitchReservations.Values.ToArray())
+        {
+            var train = _trains.First(item => item.VehicleId == reservation.VehicleId);
+            if (train.Completed || train.RuntimeTopologyCursor is not { } cursor)
+            {
+                ReleaseFacilitySwitch(reservation.OwnerId);
+                continue;
+            }
+            if (!cursor.MovementPlanId.Equals(reservation.Navigator.MovementPlanId, StringComparison.OrdinalIgnoreCase))
+            {
+                ReleaseFacilitySwitch(reservation.OwnerId);
+                continue;
+            }
+            if (!_topologyOccupancy.FootprintsByOwner.TryGetValue(train.VehicleId, out var footprint))
+                continue;
+            var rear = footprint.Rear;
+            var clear = rear.MovementLegIndex > reservation.LegIndex
+                || rear.MovementLegIndex == reservation.LegIndex
+                && (rear.TraversalIndex > reservation.TraversalIndex
+                    || rear.TraversalIndex == reservation.TraversalIndex
+                    && reservation.Navigator.GetDistanceAlongTraversal(rear) > TrackPosition.DefaultToleranceMeters);
+            if (clear) ReleaseFacilitySwitch(reservation.OwnerId);
+        }
+    }
+
+    private sealed record FacilitySwitchReservation(
+        string OwnerId, string VehicleId, TopologyMovementNavigator Navigator,
+        string ResourceId, int LegIndex, int TraversalIndex);
 
     private bool MarkWaitingForResource(MutableTrain train, string message, string resourceId)
     {
@@ -1906,6 +2443,21 @@ public sealed class SimulationWorld
                 return true;
             }
 
+            if (_pendingTopologyPassingReservations.TryGetValue(expressTrain.VehicleId, out var pendingPassing)
+                && pendingPassing.Facility.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase)
+                && pendingPassing.Facility.LocalPlatformId.Equals(localTrain.PlatformId, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!localTrain.WaitingForOvertakeEventEmitted)
+                {
+                    AddEvent(SimulationEventType.WaitingForResource, localTrain, expressTrain.VehicleId,
+                        $"{localTrain.ServiceRunId} 在 {station.StationId} 待避，等待已鎖定的 {expressTrain.ServiceRunId} 越行進路淨空。",
+                        localTrain.Position, 0, pendingPassing.Facility.FacilityId);
+                    localTrain.WaitingForOvertakeEventEmitted = true;
+                }
+
+                return true;
+            }
+
             if (!HasStationIndex(expressTrain, expressTrain.NextStationIndex))
             {
                 continue;
@@ -1948,6 +2500,30 @@ public sealed class SimulationWorld
 
         return false;
     }
+
+    private bool ShouldWaitForSpecifiedOvertake(MutableTrain localTrain)
+    {
+        if (!_topologyNativeRuntime || localTrain.PlatformId is null
+            || !HasStationIndex(localTrain, localTrain.CurrentStationIndex)) return false;
+
+        var station = GetRuntimeStation(localTrain, localTrain.CurrentStationIndex);
+        var targetRunId = GetStationInstruction(localTrain, station).WaitForOvertakeServiceRunId;
+        if (targetRunId is null) return false;
+
+        if (_passedStationKeys.Contains(StationPassKey(targetRunId, station.StationId))) return false;
+
+        if (!localTrain.WaitingForOvertakeEventEmitted)
+        {
+            AddEvent(SimulationEventType.WaitingForResource, localTrain, null,
+                $"{localTrain.ServiceRunId} 在 {station.StationId} 待避，等待指定車次 {targetRunId} 通過。",
+                localTrain.Position, 0);
+            localTrain.WaitingForOvertakeEventEmitted = true;
+        }
+
+        return true;
+    }
+
+    private static string StationPassKey(string runId, string stationId) => $"{runId}\u001f{stationId}";
 
     private void UpdateTrain(
         MutableTrain train,
@@ -2009,7 +2585,8 @@ public sealed class SimulationWorld
                     return;
                 }
 
-                if (ShouldHoldForTopologyPassing(train) || ShouldHoldForStationOvertake(train))
+                if (ShouldWaitForSpecifiedOvertake(train) || ShouldHoldForTopologyPassing(train)
+                    || ShouldHoldForStationOvertake(train))
                 {
                     train.DwellRemaining = FixedTimeStepSeconds;
                     return;
@@ -2018,6 +2595,7 @@ public sealed class SimulationWorld
                 if (!TryReserveDepartureRoute(train))
                 {
                     train.Constraints |= OperationalConstraint.RouteResource | OperationalConstraint.Platform;
+                    train.DwellRemaining = FixedTimeStepSeconds;
                     return;
                 }
 
@@ -2101,11 +2679,14 @@ public sealed class SimulationWorld
         var nextStation = GetRuntimeStation(train, train.NextStationIndex);
         var resolvedStop = GetResolvedStop(train, nextStation);
         var stationInstruction = GetStationInstruction(train, nextStation);
+        TryReserveTopologyPassingApproach(train, nextStation, stationInstruction);
         if (TryEnterTopologyPassingMovement(train, nextStation, stationInstruction))
         {
             return;
         }
+        var blockedSwitch = TryReserveServiceSwitchAhead(train, nextStation, stationInstruction);
         var topologyPassingEntryDistance = GetTopologyPassingEntryDistance(train, nextStation, stationInstruction);
+        var hasPassingReservation = _pendingTopologyPassingReservations.ContainsKey(train.VehicleId);
         var enteredStationOvertake = TryEnterStationOvertake(train);
         var isScheduledStop = stationInstruction.Mode is StationServiceMode.Stop or StationServiceMode.Turnback;
         var distanceToStation = GetDistanceToResolvedStop(train, nextStation, resolvedStop);
@@ -2129,22 +2710,19 @@ public sealed class SimulationWorld
                     : null);
             if (approachLimit is { } stopApproachLimit)
             {
-                var approachBoundary = nextStation.PositionMeters
-                    - (int)train.Direction * OperationalParameters.ApproachDistanceMeters;
-                var distanceToBoundary = ForwardDistance(train.Direction, train.Position, approachBoundary);
+                // The resolved topology stop and projected station chainage can differ after a
+                // facility traversal or turnback. Keep this target in physical forward distance.
+                var distanceToBoundary = distanceToStation - OperationalParameters.ApproachDistanceMeters;
                 if (distanceToBoundary >= -NumericalTolerance)
                 {
                     permitted = Math.Min(
                         permitted,
-                        SpeedLimits.GetPermittedSpeedMetersPerSecond(
-                            train.Position,
-                            train.Direction,
-                            performance.MaxSpeedMetersPerSecond,
+                        SpeedLimitService.CalculateTargetPermittedSpeed(
+                            Math.Max(0, distanceToBoundary),
+                            stopApproachLimit,
                             effectiveServiceBraking,
                             performance.JerkMetersPerSecondCubed,
-                            train.Speed,
-                            approachBoundary,
-                            stopApproachLimit));
+                            train.Speed));
                 }
                 else
                 {
@@ -2156,15 +2734,12 @@ public sealed class SimulationWorld
         {
             permitted = Math.Min(
                 permitted,
-                SpeedLimits.GetPermittedSpeedMetersPerSecond(
-                    train.Position,
-                    train.Direction,
-                    performance.MaxSpeedMetersPerSecond,
+                SpeedLimitService.CalculateTargetPermittedSpeed(
+                    Math.Max(0, distanceToStation),
+                    passingLimit,
                     effectiveServiceBraking,
                     performance.JerkMetersPerSecondCubed,
-                    train.Speed,
-                nextStation.PositionMeters,
-                passingLimit));
+                    train.Speed));
         }
 
         StationStopControlOutput? stationStopControl = null;
@@ -2188,6 +2763,18 @@ public sealed class SimulationWorld
         if (obstacleDistance is not null)
         {
             permitted = Math.Min(permitted, CalculateStopCurveSpeed(train, obstacleDistance.Value));
+        }
+
+        if (!hasPassingReservation && topologyPassingEntryDistance is { } blockedPassingEntry)
+        {
+            permitted = Math.Min(permitted, CalculateStopCurveSpeed(train, blockedPassingEntry));
+            train.Constraints |= OperationalConstraint.RouteResource;
+        }
+
+        if (blockedSwitch is { } switchBlock)
+        {
+            permitted = Math.Min(permitted, CalculateStopCurveSpeed(train, switchBlock.DistanceMeters));
+            train.Constraints |= OperationalConstraint.RouteResource;
         }
 
         var overtakeEntryDistance = GetStationOvertakeEntryDistance(train);
@@ -2293,10 +2880,22 @@ public sealed class SimulationWorld
             return;
         }
 
+        if (blockedSwitch is { } blockedNode
+            && traveled >= blockedNode.DistanceMeters - NumericalTolerance)
+        {
+            SetTrainRuntimeTopologyCursor(train, GetMovementNavigator(train), blockedNode.Cursor);
+            train.Speed = 0;
+            train.Acceleration = 0;
+            train.Phase = OperationalPhase.Braking;
+            return;
+        }
+
         var pendingFacilityEntryDistance = topologyPassingEntryDistance ?? overtakeEntryDistance;
         if (!enteredStationOvertake
             && pendingFacilityEntryDistance is { } pendingFacilityEntry
-            && traveled > pendingFacilityEntry + NumericalTolerance)
+            && (topologyPassingEntryDistance.HasValue
+                ? traveled >= pendingFacilityEntry - NumericalTolerance
+                : traveled > pendingFacilityEntry + NumericalTolerance))
         {
             // Advance 在精確端點會正規化成下一条主線 edge；那會令設施入口
             // 被視為已通過。保留同一實體端點的到達 traversal，下一步才能切進路。
@@ -2305,9 +2904,17 @@ public sealed class SimulationWorld
                 SetTrainRuntimeTopologyCursor(train, GetMovementNavigator(train), entryCursor);
             else
                 AdvanceTrainAlongTraversal(train, Math.Max(0, pendingFacilityEntry));
-            train.Speed = 0;
-            train.Acceleration = 0;
-            train.Phase = OperationalPhase.Braking;
+            if (topologyPassingEntryDistance.HasValue && hasPassingReservation)
+            {
+                train.Speed = newSpeed;
+                train.Phase = OperationalPhase.Cruising;
+            }
+            else
+            {
+                train.Speed = 0;
+                train.Acceleration = 0;
+                train.Phase = OperationalPhase.Braking;
+            }
             return;
         }
 
@@ -2628,6 +3235,8 @@ public sealed class SimulationWorld
             intermediateReference,
             train.Direction,
             instructionDwellSeconds ?? station.DwellTimeSeconds);
+        if (GetStationInstruction(train, station).WaitForOvertakeServiceRunId is not null)
+            train.DwellRemaining = Math.Max(train.DwellRemaining, FixedTimeStepSeconds);
         train.NextStationIndex += GetStationIndexStep(train);
         if (train.DwellRemaining > NumericalTolerance)
         {
@@ -2731,6 +3340,13 @@ public sealed class SimulationWorld
             return false;
         }
 
+        RecordTurnaroundDeparture(train);
+        return true;
+    }
+
+    private void RecordTurnaroundDeparture(MutableTrain train, TurnbackFacilityDefinition? facilityOrigin = null)
+    {
+        var fromFacility = facilityOrigin is not null;
         train.TurnaroundPrepared = false;
         train.ActualDepartureTime = CurrentTimeSeconds;
         train.Phase = OperationalPhase.Accelerating;
@@ -2744,7 +3360,9 @@ public sealed class SimulationWorld
                 $"{train.ServiceRunId} 接續發車延後 {delay:0.0} 秒。",
                 train.Position,
                 0,
-                delaySeconds: delay);
+                resourceId: facilityOrigin?.FacilityId,
+                delaySeconds: delay,
+                omitStationIdentity: fromFacility);
         }
         AddEvent(
             SimulationEventType.DirectionChanged,
@@ -2752,9 +3370,12 @@ public sealed class SimulationWorld
             null,
             $"車輛 {train.VehicleId} 折返，開始新車次 {train.ServiceRunId}。",
             train.Position,
-            0);
-        AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0);
-        return true;
+            0,
+            resourceId: facilityOrigin?.FacilityId,
+            omitStationIdentity: fromFacility);
+        AddEvent(SimulationEventType.Departure, train, null, $"{train.ServiceRunId} 發車。", train.Position, 0,
+            resourceId: facilityOrigin?.FacilityId,
+            omitStationIdentity: fromFacility);
     }
 
     private void PrepareTurnaround(
@@ -2847,6 +3468,7 @@ public sealed class SimulationWorld
             train.Acceleration = 0;
             train.Phase = OperationalPhase.OutOfService;
             train.Active = false;
+            MarkPhysicalStateChanged();
             train.Completed = true;
             AddEvent(
                 SimulationEventType.ServiceEnded,
@@ -3103,24 +3725,42 @@ public sealed class SimulationWorld
                 MovementPlanId = $"{train.VehicleId}:{operation.OperationId}:{train.ServiceRunId}",
                 Legs = [arrivalLeg, facilityLeg, departureLeg]
             });
+        var stationary = PlatformTurnback.IsStationary(facility);
+        var arrivalDistance = arrivalNavigator.GetDistanceAlongTraversal(arrivalCursor);
+        var transitionCursor = navigator.CreateCursor(0, arrivalCursor.TraversalIndex, arrivalDistance);
+        var turnbackStopCursor = stationary ? transitionCursor : CreateTopologyTurnbackStopCursor(navigator, facilityLegIndex: 1, facility);
+        var returnStartCursor = CreateTopologyTurnbackReturnStartCursor(navigator, stationary ? 2 : 1,
+            turnbackStopCursor, GetVehiclePerformance(train).LengthMeters, stationary);
+        if (!stationary)
+        {
+            var entrySwitchNode = InfrastructureValidator.GetStartNode(
+                facilityLeg.Traversals[0].Edge, facilityLeg.Traversals[0].Direction);
+            var outboundSwitches = new[] { (entrySwitchNode, LegIndex: 1, TraversalIndex: 0) }
+                .Concat(Enumerable.Range(0, turnbackStopCursor.TraversalIndex)
+                    .Select(index => (
+                        InfrastructureValidator.GetEndNode(facilityLeg.Traversals[index].Edge,
+                            facilityLeg.Traversals[index].Direction),
+                        LegIndex: 1, TraversalIndex: index + 1)));
+            if (!TryReserveFacilitySwitchPath(train, navigator, outboundSwitches)) return false;
+        }
         var resources = TraversalResourceResolver.GetRequiredResources(facilityLeg).ToArray();
         var reservationId = resources.Length == 0
             ? null
             : $"TOPOLOGY:{train.VehicleId}|{operation.OperationId}|{train.ServiceRunId}";
         if (reservationId is not null && !_resourceReservations.Reserve(reservationId, resources))
         {
+            foreach (var switchOwner in _facilitySwitchReservations.Values
+                         .Where(item => item.VehicleId == train.VehicleId
+                             && item.Navigator.MovementPlanId.Equals(navigator.MovementPlanId,
+                                 StringComparison.OrdinalIgnoreCase))
+                         .Select(item => item.OwnerId).ToArray())
+                ReleaseFacilitySwitch(switchOwner);
             return MarkWaitingForResource(
                 train,
                 $"{facility.Name} 的 topology 衝突資源正由其他列車使用。",
                 facility.FacilityId);
         }
 
-        var arrivalDistance = arrivalNavigator.GetDistanceAlongTraversal(arrivalCursor);
-        var transitionCursor = navigator.CreateCursor(0, arrivalCursor.TraversalIndex, arrivalDistance);
-        var stationary = PlatformTurnback.IsStationary(facility);
-        var turnbackStopCursor = stationary ? transitionCursor : CreateTopologyTurnbackStopCursor(navigator, facilityLegIndex: 1, facility);
-        var returnStartCursor = CreateTopologyTurnbackReturnStartCursor(navigator, stationary ? 2 : 1,
-            turnbackStopCursor, GetVehiclePerformance(train).LengthMeters, stationary);
         train.TopologyTurnbackMovement = new TopologyTurnbackMovement(
             operation,
             facility,
@@ -3254,7 +3894,43 @@ public sealed class SimulationWorld
                 return;
             }
 
+            if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack
+                && train.ContinuationServiceRunId is { } continuationId
+                && _dispatchRunsById.TryGetValue(continuationId, out var continuation)
+                && CurrentTimeSeconds + NumericalTolerance < RelativeScheduleSeconds(
+                    continuation.PlannedDepartureTime, _dispatchPlan!.ScheduleAnchorTime))
+            {
+                return;
+            }
+
+            if (!PlatformTurnback.IsStationary(movement.Facility))
+            {
+                var facilityTraversals = navigator.Legs[movement.FacilityLegIndex].Traversals;
+                var returnFirstIndex = movement.ReturnStartCursor?.MovementLegIndex == movement.FacilityLegIndex
+                    ? movement.ReturnStartCursor.Value.TraversalIndex : facilityTraversals.Count - 1;
+                var returnSwitches = Enumerable.Range(returnFirstIndex,
+                        facilityTraversals.Count - returnFirstIndex - 1)
+                    .Select(index => (
+                        InfrastructureValidator.GetEndNode(facilityTraversals[index].Edge,
+                            facilityTraversals[index].Direction),
+                        LegIndex: movement.FacilityLegIndex, TraversalIndex: index + 1))
+                    .Append((InfrastructureValidator.GetEndNode(facilityTraversals[^1].Edge,
+                        facilityTraversals[^1].Direction),
+                        LegIndex: movement.DepartureLegIndex, TraversalIndex: 0));
+                if (!TryReserveFacilitySwitchPath(train, navigator, returnSwitches))
+                    return;
+            }
+
+            // The facility's conflict resource protects the occupied track while
+            // parked. The return route itself is set only when departure begins.
+            movement.IsFacilityRouteLocked = true;
+
             PrepareTurnaround(train, movement.Operation);
+            if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack)
+            {
+                // 反向車次從實體折返停點發車；返回正線月台是該車次的下一次停站。
+                RecordTurnaroundDeparture(train, facilityOrigin: movement.Facility);
+            }
             if (movement.ReturnStartCursor is { } returnStartCursor)
             {
                 SetTrainRuntimeTopologyCursor(train, navigator, returnStartCursor);
@@ -3294,8 +3970,10 @@ public sealed class SimulationWorld
         }
 
         var performance = GetVehiclePerformance(train);
-        var edgeLimit = navigator.GetTraversal(cursor.MovementLegIndex, cursor.TraversalIndex).Edge.DefaultSpeedLimitMetersPerSecond;
-        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, edgeLimit);
+        var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
+            navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
+            performance.ServiceBrakingMetersPerSecondSquared,
+            performance.JerkMetersPerSecondCubed, train.Speed);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         if (movement.BrakingActive
             || ShouldBeginStationBraking(
@@ -3361,6 +4039,7 @@ public sealed class SimulationWorld
         if (movement.Stage == TopologyTurnbackStage.RunningToTurnback)
         {
             movement.Stage = TopologyTurnbackStage.WaitingAtTurnback;
+            movement.IsFacilityRouteLocked = false;
             train.Phase = OperationalPhase.Turning;
             AddEvent(
                 SimulationEventType.TailTrackReached,
@@ -3389,17 +4068,21 @@ public sealed class SimulationWorld
             0,
             train.TrackId);
 
-        // 尾軌返回後，列車已到達反方向終點月台（例如 E/P-E-U），
-        // 必須先完成該側正常停站，再依接續車次的計畫時間發車。
-        // 折返設施 movement 仍保留到車尾淨空，故使用獨立旗標銜接
-        // CompleteTurnaround，不能把 TerminalAction 再設回 Turnaround，
-        // 否則 CompleteTerminalStationWork 會重新尋找同一個折返作業。
+        // 折返設施 movement 仍保留到車尾淨空；回到正線月台只執行正常停站。
         var departureStation = GetRuntimeStation(train, train.CurrentStationIndex);
         var departurePatternDwell = GetStationInstruction(train, departureStation).DwellTimeSeconds;
         train.DwellRemaining = GetConfiguredStationDwellSeconds(
             null,
             train.Direction,
             departurePatternDwell ?? departureStation.DwellTimeSeconds);
+        if (movement.Facility.Kind is TurnbackFacilityKind.PocketTrack or TurnbackFacilityKind.TailTrack)
+        {
+            train.DwellRemaining = Math.Max(train.DwellRemaining, FixedTimeStepSeconds);
+            train.Phase = OperationalPhase.Dwelling;
+            AddEvent(SimulationEventType.DwellStarted, train, null,
+                $"{train.ServiceRunId} 在 {departureStation.StationId} 正常上下客停站。", train.Position, 0);
+            return;
+        }
         train.AwaitingTopologyTurnbackDeparture = true;
         if (train.DwellRemaining > NumericalTolerance)
         {
@@ -3489,14 +4172,107 @@ public sealed class SimulationWorld
                     && GetStationInstruction(candidate, nextStation).Mode != StationServiceMode.Pass)
                 .OrderBy(candidate => candidate.VehicleId, StringComparer.OrdinalIgnoreCase)
                 .FirstOrDefault();
-            if (localTrain is not null)
-            {
-                return new TopologyPassingCandidate(operation, facility, localTrain);
-            }
+            // A pass service uses the through leg even before a local train has
+            // reached its platform. Waiting for that train would briefly lock
+            // the service route's siding instead of the selected through route.
+            return new TopologyPassingCandidate(operation, facility, localTrain);
         }
 
         return null;
     }
+
+    private void TryReserveTopologyPassingApproach(
+        MutableTrain train,
+        Station nextStation,
+        StationServiceInstruction instruction)
+    {
+        var candidate = FindEligibleTopologyPassing(train, nextStation, instruction);
+        if (_pendingTopologyPassingReservations.TryGetValue(train.VehicleId, out var existing))
+        {
+            if (candidate is not null
+                && existing.OperationId.Equals(candidate.Operation.OperationId, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            ReleasePendingTopologyPassingReservation(train);
+        }
+
+        if (candidate is null) return;
+        var entryDistance = GetTopologyPassingEntryDistance(train, nextStation, instruction);
+        if (entryDistance is null) return;
+
+        if (entryDistance > GetSwitchRouteRequestDistance(train) + NumericalTolerance) return;
+
+        var facilityLeg = TopologyMovementPlanResolver.ResolvePassingLeg(
+            TopologyInfrastructure, candidate.Facility);
+        var switchNodes = new[]
+        {
+            InfrastructureValidator.GetStartNode(facilityLeg.Traversals[0].Edge,
+                facilityLeg.Traversals[0].Direction),
+            InfrastructureValidator.GetEndNode(facilityLeg.Traversals[^1].Edge,
+                facilityLeg.Traversals[^1].Direction)
+        };
+        var resources = TraversalResourceResolver.GetRequiredResources(facilityLeg)
+            .Concat(switchNodes.Where(IsBranchingNode).Select(SidingSwitchResourceId))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (resources.Length == 0) return;
+
+        foreach (var switchNode in switchNodes.Where(IsBranchingNode))
+        {
+            var serviceOwner = $"SERVICE-SIDING:{train.VehicleId}:{switchNode}";
+            if (!_sidingSwitchReservations.Remove(serviceOwner, out var serviceReservation)) continue;
+            _resourceReservations.Release(serviceOwner);
+            AddEvent(SimulationEventType.RouteReleased, train, null,
+                $"{train.ServiceRunId} 已切換為越行進路。", train.Position, train.Speed,
+                resourceIds: [serviceReservation.ResourceId]);
+        }
+
+        var ownerId = $"TOPOLOGY:{train.VehicleId}|{candidate.Operation.OperationId}|{train.ServiceRunId}";
+        if (!_resourceReservations.Reserve(ownerId, resources))
+        {
+            MarkWaitingForResource(train,
+                $"{train.ServiceRunId} 等待 {candidate.Facility.Name} 越行進路淨空。",
+                resources[0]);
+            return;
+        }
+
+        var route = GetServiceRouteDefinition(train.Direction);
+        var arrival = route.Traversals.Single(item => item.TrackEdgeId.Equals(
+            candidate.Facility.ArrivalTrackEdgeId, StringComparison.OrdinalIgnoreCase));
+        var departure = route.Traversals.Single(item => item.TrackEdgeId.Equals(
+            candidate.Facility.DepartureTrackEdgeId, StringComparison.OrdinalIgnoreCase));
+        _pendingTopologyPassingReservations.Add(train.VehicleId,
+            new PendingTopologyPassingReservation(ownerId, candidate.Operation.OperationId,
+                candidate.Facility, facilityLeg, resources,
+                arrival, departure));
+        train.WaitingResourceEventEmitted = false;
+        AddEvent(SimulationEventType.RouteReserved, train, candidate.LocalTrain?.VehicleId,
+            $"{train.ServiceRunId} 已提前鎖定 {candidate.Facility.Name} 正線通過進路。",
+            train.Position, train.Speed, candidate.Facility.FacilityId, resourceIds: resources);
+    }
+
+    private void ReleasePendingTopologyPassingReservation(MutableTrain train)
+    {
+        if (!_pendingTopologyPassingReservations.Remove(train.VehicleId, out var reservation)) return;
+        _resourceReservations.Release(reservation.OwnerId);
+        AddEvent(SimulationEventType.RouteReleased, train, null,
+            $"{train.ServiceRunId} 已取消未使用的越行進路。", train.Position, train.Speed,
+            reservation.Facility.FacilityId, resourceIds: reservation.Resources);
+    }
+
+    private void ReleaseAbandonedTopologyPassingReservations()
+    {
+        foreach (var vehicleId in _pendingTopologyPassingReservations.Keys.ToArray())
+        {
+            var train = _trains.First(item => item.VehicleId == vehicleId);
+            if (train.Completed) ReleasePendingTopologyPassingReservation(train);
+        }
+    }
+
+    private sealed record PendingTopologyPassingReservation(
+        string OwnerId, string OperationId,
+        PassingFacilityDefinition Facility, ResolvedMovementLeg FacilityLeg,
+        IReadOnlyList<string> Resources,
+        DirectedTrackTraversal ArrivalTraversal, DirectedTrackTraversal DepartureTraversal);
 
     private double? GetTopologyPassingEntryDistance(
         MutableTrain train,
@@ -3616,14 +4392,28 @@ public sealed class SimulationWorld
                 MovementPlanId = $"{train.VehicleId}:{candidate.Operation.OperationId}:{train.ServiceRunId}",
                 Legs = [arrivalLeg, facilityLeg, departureLeg]
             });
-        var resources = TraversalResourceResolver.GetRequiredResources(facilityLeg).ToArray();
+        var switchNodes = new[]
+        {
+            InfrastructureValidator.GetStartNode(facilityLeg.Traversals[0].Edge, facilityLeg.Traversals[0].Direction),
+            InfrastructureValidator.GetEndNode(facilityLeg.Traversals[^1].Edge, facilityLeg.Traversals[^1].Direction)
+        };
+        var resources = TraversalResourceResolver.GetRequiredResources(facilityLeg)
+            .Concat(switchNodes.Where(IsBranchingNode).Select(SidingSwitchResourceId))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var reservationId = resources.Length == 0
             ? null
             : $"TOPOLOGY:{train.VehicleId}|{candidate.Operation.OperationId}|{train.ServiceRunId}";
-        if (reservationId is not null && !_resourceReservations.Reserve(reservationId, resources))
+        var alreadyReserved = reservationId is not null
+            && _pendingTopologyPassingReservations.TryGetValue(train.VehicleId, out var pending)
+            && pending.OwnerId.Equals(reservationId, StringComparison.Ordinal)
+            && pending.Resources.SequenceEqual(resources, StringComparer.OrdinalIgnoreCase);
+        if (reservationId is not null && !alreadyReserved
+            && !_resourceReservations.Reserve(reservationId, resources))
         {
             return false;
         }
+
+        if (alreadyReserved) _pendingTopologyPassingReservations.Remove(train.VehicleId);
 
         var transitionCursor = navigator.CreateCursor(
             0,
@@ -3637,6 +4427,7 @@ public sealed class SimulationWorld
             departureLegIndex: 2,
             departureStartTraversalIndex,
             train.NextStationIndex,
+            candidate.LocalTrain?.VehicleId,
             reservationId,
             resources,
             train.Position,
@@ -3648,23 +4439,19 @@ public sealed class SimulationWorld
         train.HasStationReservation = reservationId is not null;
         train.TrackId = $"TOPOLOGY:{facility.FacilityId}";
         SetTrainRuntimeTopologyCursor(train, navigator, transitionCursor);
-        AddEvent(
-            SimulationEventType.RouteReserved,
-            train,
-            candidate.LocalTrain.VehicleId,
-            $"{train.ServiceRunId} 已鎖定 topology 越行設施 {facility.FacilityId}。",
-            train.Position,
-            train.Speed,
-            facility.FacilityId,
-            resourceIds: resources);
-        AddEvent(
-            SimulationEventType.OvertakeRequested,
-            train,
-            candidate.LocalTrain.VehicleId,
-            $"{train.ServiceRunId} 經 {facility.Name} 實體 passing traversal 跨越停靠列車 {candidate.LocalTrain.ServiceRunId}。",
-            train.Position,
-            train.Speed,
-            facility.FacilityId);
+        if (!alreadyReserved)
+            AddEvent(SimulationEventType.RouteReserved, train, candidate.LocalTrain?.VehicleId,
+                $"{train.ServiceRunId} 已鎖定 topology 越行設施 {facility.FacilityId}。",
+                train.Position, train.Speed, facility.FacilityId, resourceIds: resources);
+        if (candidate.LocalTrain is { } localTrain)
+            AddEvent(
+                SimulationEventType.OvertakeRequested,
+                train,
+                localTrain.VehicleId,
+                $"{train.ServiceRunId} 經 {facility.Name} 實體 passing traversal 跨越停靠列車 {localTrain.ServiceRunId}。",
+                train.Position,
+                train.Speed,
+                facility.FacilityId);
         return true;
     }
 
@@ -3683,9 +4470,10 @@ public sealed class SimulationWorld
         var distanceToTarget = navigator.TryGetForwardDistance(cursor, target)
             ?? throw new SimulationValidationException(["topology 越行 facility target 位於列車 cursor 後方。"]);
         var performance = GetVehiclePerformance(train);
-        var edgeLimit = navigator.GetTraversal(cursor.MovementLegIndex, cursor.TraversalIndex)
-            .Edge.DefaultSpeedLimitMetersPerSecond;
-        var permitted = Math.Min(performance.MaxSpeedMetersPerSecond, edgeLimit);
+        var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
+            navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
+            performance.ServiceBrakingMetersPerSecondSquared,
+            performance.JerkMetersPerSecondCubed, train.Speed);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         train.Acceleration = ProfileMode == OperationProfileMode.RealisticOperations
             ? BrakingEnvelopeCalculator.MoveToward(
@@ -3730,14 +4518,15 @@ public sealed class SimulationWorld
             train.Position,
             train.Speed,
             movement.Facility.FacilityId);
-        AddEvent(
-            SimulationEventType.OvertakeCompleted,
-            train,
-            null,
-            $"{train.ServiceRunId} 已在 topology passing edge 完成越行並匯入主線。",
-            train.Position,
-            train.Speed,
-            movement.Facility.FacilityId);
+        if (movement.OvertakenVehicleId is not null)
+            AddEvent(
+                SimulationEventType.OvertakeCompleted,
+                train,
+                movement.OvertakenVehicleId,
+                $"{train.ServiceRunId} 已在 topology passing edge 完成越行並匯入主線。",
+                train.Position,
+                train.Speed,
+                movement.Facility.FacilityId);
     }
 
     private void TryReleaseCompletedTopologyPassingResources(MutableTrain train)
@@ -4216,65 +5005,73 @@ public sealed class SimulationWorld
 
     private IReadOnlyList<SafetyObservation> ComputeSafetyObservations(bool recordStatusEvents)
     {
-        var result = new List<SafetyObservation>();
-        var topologyTrains = _trains
-            .Where(train => train.Active
-                && train.Phase != OperationalPhase.OutOfService
-                && UsesTopologyRuntimeSafety(train))
-            .ToArray();
-        foreach (var follower in topologyTrains)
+        var diagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+        try
         {
-            if (follower.Collided)
-            {
-                continue;
-            }
-
-            var leader = FindNearestTopologyLeader(follower);
-            if (leader is null)
-            {
-                continue;
-            }
-
-            var observation = CalculateSafetyObservation(follower, leader);
-            result.Add(observation);
-            if (recordStatusEvents)
-            {
-                RecordSafetyTransition(follower, leader, observation);
-            }
-        }
-
-        var groups = _trains
-            .Where(train => train.Active
-                && train.Phase != OperationalPhase.OutOfService
-                && !UsesTopologyRuntimeSafety(train)
-                && !string.IsNullOrWhiteSpace(train.TrackId))
-            .GroupBy(train => (train.Direction, train.TrackId));
-
-        foreach (var group in groups)
-        {
-            var ordered = group
-                .OrderByDescending(train => Progress(train.Direction, train.Position))
+            var result = new List<SafetyObservation>();
+            var topologyTrains = _trains
+                .Where(train => train.Active
+                    && train.Phase != OperationalPhase.OutOfService
+                    && UsesTopologyRuntimeSafety(train))
                 .ToArray();
-            for (var index = 0; index < ordered.Length - 1; index++)
+            foreach (var follower in topologyTrains)
             {
-                var leader = ordered[index];
-                var follower = ordered[index + 1];
                 if (follower.Collided)
+                {
+                    continue;
+                }
+
+                var leader = FindNearestTopologyLeader(follower);
+                if (leader is null)
                 {
                     continue;
                 }
 
                 var observation = CalculateSafetyObservation(follower, leader);
                 result.Add(observation);
-
                 if (recordStatusEvents)
                 {
                     RecordSafetyTransition(follower, leader, observation);
                 }
             }
-        }
 
-        return result;
+            var groups = _trains
+                .Where(train => train.Active
+                    && train.Phase != OperationalPhase.OutOfService
+                    && !UsesTopologyRuntimeSafety(train)
+                    && !string.IsNullOrWhiteSpace(train.TrackId))
+                .GroupBy(train => (train.Direction, train.TrackId));
+
+            foreach (var group in groups)
+            {
+                var ordered = group
+                    .OrderByDescending(train => Progress(train.Direction, train.Position))
+                    .ToArray();
+                for (var index = 0; index < ordered.Length - 1; index++)
+                {
+                    var leader = ordered[index];
+                    var follower = ordered[index + 1];
+                    if (follower.Collided)
+                    {
+                        continue;
+                    }
+
+                    var observation = CalculateSafetyObservation(follower, leader);
+                    result.Add(observation);
+
+                    if (recordStatusEvents)
+                    {
+                        RecordSafetyTransition(follower, leader, observation);
+                    }
+                }
+            }
+
+            return result;
+        }
+        finally
+        {
+            _performanceDiagnostics.RecordComputeSafetyObservationsElapsed(diagnosticsStartedAt);
+        }
     }
 
     /// <summary>
@@ -4284,15 +5081,25 @@ public sealed class SimulationWorld
     private bool TryGetTopologySafetyMetrics(
         MutableTrain follower,
         MutableTrain leader,
-        out TopologySafetyMetrics metrics)
+        out TopologySafetyMetrics metrics,
+        bool recordPerformanceDiagnostics = true)
     {
-        metrics = default;
-        if (ReferenceEquals(follower, leader)
-            || !UsesTopologyRuntimeSafety(follower)
-            || !UsesTopologyRuntimeSafety(leader))
+        if (recordPerformanceDiagnostics)
         {
-            return false;
+            _performanceDiagnostics.RecordTopologySafetyMetricCall();
         }
+        var diagnosticsStartedAt = recordPerformanceDiagnostics
+            ? _performanceDiagnostics.StartTiming()
+            : 0;
+        try
+        {
+            metrics = default;
+            if (ReferenceEquals(follower, leader)
+                || !UsesTopologyRuntimeSafety(follower)
+                || !UsesTopologyRuntimeSafety(leader))
+            {
+                return false;
+            }
 
         // 快速車的車頭已匯入主線、車尾仍在 passing edge 時，停靠普通車的車頭會位於
         // 另一條平行月台 edge 的 merge endpoint。兩個 footprint 尚未共用同一條 edge，
@@ -4319,12 +5126,30 @@ public sealed class SimulationWorld
         var leaderFootprint = leaderNavigator.CreateFootprint(
             leader.RuntimeTopologyCursor!.Value,
             GetVehiclePerformance(leader).LengthMeters);
-        var headDistance = TopologyGraphDistance.TryGetForwardDistance(
-            TopologyInfrastructure,
-            followerNavigator,
-            followerFootprint.Front,
-            leaderNavigator,
-            leaderFootprint.Front);
+        double? headDistance;
+        if (recordPerformanceDiagnostics)
+        {
+            _performanceDiagnostics.RecordGraphDistanceCall();
+        }
+        var graphDiagnosticsStartedAt = recordPerformanceDiagnostics
+            ? _performanceDiagnostics.StartTiming()
+            : 0;
+        try
+        {
+            headDistance = TopologyGraphDistance.TryGetForwardDistance(
+                TopologyInfrastructure,
+                followerNavigator,
+                followerFootprint.Front,
+                leaderNavigator,
+                leaderFootprint.Front);
+        }
+        finally
+        {
+            if (recordPerformanceDiagnostics)
+            {
+                _performanceDiagnostics.RecordGraphDistanceElapsed(graphDiagnosticsStartedAt);
+            }
+        }
         if (headDistance is null)
         {
             return false;
@@ -4339,61 +5164,242 @@ public sealed class SimulationWorld
             return false;
         }
 
-        metrics = new TopologySafetyMetrics(
-            headDistance.Value,
-            headDistance.Value - leaderLength.Value,
-            leaderFootprint);
-        return true;
+            metrics = new TopologySafetyMetrics(
+                headDistance.Value,
+                headDistance.Value - leaderLength.Value,
+                leaderFootprint);
+            return true;
+        }
+        finally
+        {
+            if (recordPerformanceDiagnostics)
+            {
+                _performanceDiagnostics.RecordTopologySafetyMetricsElapsed(diagnosticsStartedAt);
+            }
+        }
     }
 
 
-    private MutableTrain? FindNearestTopologyLeader(MutableTrain follower) =>
-        _trains
-            .Where(other => other.Active
-                && other.Phase != OperationalPhase.OutOfService
-                && UsesTopologyRuntimeSafety(other)
-                && !ReferenceEquals(other, follower))
-            .Select(other => new
+    private MutableTrain? FindNearestTopologyLeader(MutableTrain follower)
+    {
+        _performanceDiagnostics.RecordLeaderLookup();
+        var diagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+        TopologyLeaderLookupResult? oracle;
+        try
+        {
+            if (_benchmarkIndexedLeaderLookupEnabled)
             {
-                Train = other,
-                Metrics = TryGetTopologySafetyMetrics(follower, other, out var metrics)
-                    ? metrics
-                    : (TopologySafetyMetrics?)null
-            })
-            .Where(item => item.Metrics is not null)
-            .OrderBy(item => item.Metrics!.Value.HeadDistanceMeters)
-            .ThenBy(item => item.Train.VehicleId, StringComparer.OrdinalIgnoreCase)
-            .Select(item => item.Train)
-            .FirstOrDefault();
+                _performanceDiagnostics.RecordShadowLookup(_trains.Count(other => other.Active
+                    && other.Phase != OperationalPhase.OutOfService && UsesTopologyRuntimeSafety(other)
+                    && !ReferenceEquals(other, follower)));
+                if (TryFindIndexedTopologyLeader(follower, true, out var indexedResult))
+                    return indexedResult?.Train;
+            }
+            oracle = _trains
+                .Where(other => other.Active
+                    && other.Phase != OperationalPhase.OutOfService
+                    && UsesTopologyRuntimeSafety(other)
+                    && !ReferenceEquals(other, follower))
+                .Select(other => EvaluateFullScanCandidate(follower, other))
+                .Where(item => item.Metrics is not null)
+                .OrderBy(item => item.Metrics!.Value.HeadDistanceMeters)
+                .ThenBy(item => item.Train.VehicleId, StringComparer.OrdinalIgnoreCase)
+                .Select(item => (TopologyLeaderLookupResult?)new TopologyLeaderLookupResult(
+                    item.Train,
+                    item.Metrics!.Value))
+                .FirstOrDefault();
+        }
+        finally
+        {
+            _performanceDiagnostics.RecordFindNearestTopologyLeaderElapsed(diagnosticsStartedAt);
+        }
+
+        if (_nearestLeaderShadowModeEnabled)
+        {
+            CompareNearestLeaderShadow(follower, oracle);
+        }
+
+        return oracle?.Train;
+    }
+
+    private (MutableTrain Train, TopologySafetyMetrics? Metrics) EvaluateFullScanCandidate(
+        MutableTrain follower,
+        MutableTrain candidate)
+    {
+        _performanceDiagnostics.RecordCandidatePair();
+        return (candidate, TryGetTopologySafetyMetrics(follower, candidate, out var metrics)
+            ? metrics
+            : null);
+    }
+
+    private void CompareNearestLeaderShadow(
+        MutableTrain follower,
+        TopologyLeaderLookupResult? oracle)
+    {
+        var oracleCandidateCount = _trains.Count(other => other.Active
+            && other.Phase != OperationalPhase.OutOfService
+            && UsesTopologyRuntimeSafety(other)
+            && !ReferenceEquals(other, follower));
+        _performanceDiagnostics.RecordShadowLookup(oracleCandidateCount);
+        if (!TryFindIndexedTopologyLeader(follower, false, out var indexed, out var candidateVehicleIds)) return;
+        {
+            var oracleObservation = oracle is { } oracleResult
+                ? CalculateSafetyObservation(follower, oracleResult.Train, oracleResult.Metrics)
+                : null;
+            var indexedObservation = indexed is { } indexedResult
+                ? CalculateSafetyObservation(follower, indexedResult.Train, indexedResult.Metrics)
+                : null;
+            double? oracleControlLimit = oracleObservation is not null && MovingBlockMode == MovingBlockMode.Control
+                ? CalculateMovingBlockSpeedLimit(oracleObservation)
+                : null;
+            double? indexedControlLimit = indexedObservation is not null && MovingBlockMode == MovingBlockMode.Control
+                ? CalculateMovingBlockSpeedLimit(indexedObservation)
+                : null;
+            var matches = string.Equals(
+                    oracle?.Train.VehicleId,
+                    indexed?.Train.VehicleId,
+                    StringComparison.OrdinalIgnoreCase)
+                && NearlyEqual(oracle?.Metrics.HeadDistanceMeters, indexed?.Metrics.HeadDistanceMeters)
+                && NearlyEqual(oracle?.Metrics.ActualGapMeters, indexed?.Metrics.ActualGapMeters)
+                && oracleObservation?.Status == indexedObservation?.Status
+                && NearlyEqual(oracleControlLimit, indexedControlLimit);
+            if (matches)
+            {
+                return;
+            }
+
+            _performanceDiagnostics.RecordShadowMismatch();
+            if (_nearestLeaderShadowMismatches.Count < 100)
+            {
+                _nearestLeaderShadowMismatches.Add(new TopologyNearestLeaderShadowMismatch(
+                    CurrentTimeSeconds,
+                    follower.VehicleId,
+                    oracle?.Train.VehicleId,
+                    indexed?.Train.VehicleId,
+                    follower.RuntimeTopologyCursor!.Value,
+                    oracle?.Metrics.HeadDistanceMeters,
+                    indexed?.Metrics.HeadDistanceMeters,
+                    oracle?.Metrics.ActualGapMeters,
+                    indexed?.Metrics.ActualGapMeters,
+                    oracleObservation?.Status,
+                    indexedObservation?.Status,
+                    oracleControlLimit,
+                    indexedControlLimit,
+                    candidateVehicleIds,
+                    _physicalStateGeneration));
+            }
+        }
+    }
+
+    private bool TryFindIndexedTopologyLeader(MutableTrain follower, bool recordMetrics,
+        out TopologyLeaderLookupResult? result) =>
+        TryFindIndexedTopologyLeader(follower, recordMetrics, out result, out _);
+
+    private bool TryFindIndexedTopologyLeader(MutableTrain follower, bool recordMetrics,
+        out TopologyLeaderLookupResult? result, out IReadOnlyList<string> candidateVehicleIds)
+    {
+        result = null;
+        candidateVehicleIds = [];
+        var started = _performanceDiagnostics.StartTiming();
+        try
+        {
+            if (_nearestLeaderCandidateIndex is null)
+            {
+                RecordNearestLeaderShadowFallback("candidate-index-not-initialized");
+                return false;
+            }
+            if (!_nearestLeaderCandidateIndex.TryGetPotentialCandidates(follower.VehicleId,
+                _physicalStateGeneration, out candidateVehicleIds, out var reason))
+            {
+                RecordNearestLeaderShadowFallback(reason ?? "candidate-query-failed");
+                return false;
+            }
+            var candidates = new List<MutableTrain>(candidateVehicleIds.Count);
+            foreach (var id in candidateVehicleIds)
+            {
+                var candidate = _trains.FirstOrDefault(train => train.VehicleId.Equals(id, StringComparison.OrdinalIgnoreCase));
+                if (candidate is null)
+                {
+                    RecordNearestLeaderShadowFallback("candidate-owner-not-found");
+                    return false;
+                }
+                if (candidate.Active && candidate.Phase != OperationalPhase.OutOfService
+                    && UsesTopologyRuntimeSafety(candidate) && !ReferenceEquals(candidate, follower))
+                    candidates.Add(candidate);
+            }
+            _performanceDiagnostics.RecordIndexedSuccess(candidates.Count);
+            result = candidates.Select(candidate => (Train: candidate,
+                    Metrics: TryGetTopologySafetyMetrics(follower, candidate, out var metrics, recordMetrics)
+                        ? metrics : (TopologySafetyMetrics?)null))
+                .Where(item => item.Metrics is not null)
+                .OrderBy(item => item.Metrics!.Value.HeadDistanceMeters)
+                .ThenBy(item => item.Train.VehicleId, StringComparer.OrdinalIgnoreCase)
+                .Select(item => (TopologyLeaderLookupResult?)new TopologyLeaderLookupResult(item.Train, item.Metrics!.Value))
+                .FirstOrDefault();
+            return true;
+        }
+        finally { _performanceDiagnostics.RecordIndexQueryElapsed(started); }
+    }
+
+    private void RecordNearestLeaderShadowFallback(string reason)
+    {
+        _performanceDiagnostics.RecordFullScanFallback();
+        _nearestLeaderShadowFallbackReasons[reason] =
+            _nearestLeaderShadowFallbackReasons.GetValueOrDefault(reason) + 1;
+    }
+
+    private static bool NearlyEqual(double? left, double? right)
+    {
+        if (left is null || right is null) return left is null && right is null;
+        return Math.Abs(left.Value - right.Value) <= NumericalTolerance;
+    }
 
     private readonly record struct TopologySafetyMetrics(
         double HeadDistanceMeters,
         double ActualGapMeters,
         TopologyMovementFootprint LeaderFootprint);
 
+    private readonly record struct TopologyLeaderLookupResult(
+        MutableTrain Train,
+        TopologySafetyMetrics Metrics);
+
     private SafetyObservation CalculateSafetyObservation(MutableTrain follower, MutableTrain leader)
     {
-        var followerPerformance = GetVehiclePerformance(follower);
         var leaderPerformance = GetVehiclePerformance(leader);
-        double leaderRear;
-        double actualGap;
-        double headDistance;
         if (TryGetTopologySafetyMetrics(follower, leader, out var topologyMetrics))
         {
-            leaderRear = leader.Position;
-            actualGap = topologyMetrics.ActualGapMeters;
-            headDistance = topologyMetrics.HeadDistanceMeters;
+            return CalculateSafetyObservation(follower, leader, topologyMetrics);
         }
-        else
-        {
-            leaderRear = leader.Direction == TrainDirection.Outbound
-                ? leader.Position - leaderPerformance.LengthMeters
-                : leader.Position + leaderPerformance.LengthMeters;
-            actualGap = leader.Direction == TrainDirection.Outbound
-                ? leaderRear - follower.Position
-                : follower.Position - leaderRear;
-            headDistance = Math.Abs(leader.Position - follower.Position);
-        }
+
+        var leaderRear = leader.Direction == TrainDirection.Outbound
+            ? leader.Position - leaderPerformance.LengthMeters
+            : leader.Position + leaderPerformance.LengthMeters;
+        var actualGap = leader.Direction == TrainDirection.Outbound
+            ? leaderRear - follower.Position
+            : follower.Position - leaderRear;
+        var headDistance = Math.Abs(leader.Position - follower.Position);
+        return CalculateSafetyObservation(follower, leader, leaderRear, actualGap, headDistance);
+    }
+
+    private SafetyObservation CalculateSafetyObservation(
+        MutableTrain follower,
+        MutableTrain leader,
+        TopologySafetyMetrics topologyMetrics) =>
+        CalculateSafetyObservation(
+            follower,
+            leader,
+            leader.Position,
+            topologyMetrics.ActualGapMeters,
+            topologyMetrics.HeadDistanceMeters);
+
+    private SafetyObservation CalculateSafetyObservation(
+        MutableTrain follower,
+        MutableTrain leader,
+        double leaderRear,
+        double actualGap,
+        double headDistance)
+    {
+        var followerPerformance = GetVehiclePerformance(follower);
         var timeGap = follower.Speed > 1e-6 ? Math.Max(0, headDistance / follower.Speed) : double.PositiveInfinity;
 
         var reactionDistance = follower.Speed * OperationalParameters.ControlReactionTimeSeconds;
@@ -4484,34 +5490,36 @@ public sealed class SimulationWorld
         var result = new Dictionary<string, double>(StringComparer.Ordinal);
         foreach (var observation in observations)
         {
-            var leader = _trains.First(train => train.VehicleId == observation.LeaderVehicleId);
-            var follower = _trains.First(train => train.VehicleId == observation.FollowerVehicleId);
-            var leaderPerformance = GetVehiclePerformance(leader);
-            var followerPerformance = GetVehiclePerformance(follower);
-            var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
-                + OperationalParameters.SafetyMarginMeters;
-            var leaderStopDistance = leader.Speed * leader.Speed
-                / (2 * leaderPerformance.EmergencyBrakingMetersPerSecondSquared);
-            var controlReserve = Math.Max(
-                1,
-                follower.Speed * MovingBlockControlLookAheadSeconds);
-            var available = observation.ActualGapMeters - fixedAllowance + leaderStopDistance - controlReserve;
-            var reaction = OperationalParameters.ControlReactionTimeSeconds
-                + OperationalParameters.BrakeBuildUpTimeSeconds;
-            var braking = followerPerformance.ServiceBrakingMetersPerSecondSquared;
-            var allowed = CalculateMovingBlockPermittedSpeed(
-                follower,
-                Math.Max(0, available),
-                reaction,
-                follower.Acceleration,
-                braking);
-            result[observation.FollowerVehicleId] = Math.Clamp(
-                allowed,
-                0,
-                followerPerformance.MaxSpeedMetersPerSecond);
+            result[observation.FollowerVehicleId] = CalculateMovingBlockSpeedLimit(observation);
         }
 
         return result;
+    }
+
+    private double CalculateMovingBlockSpeedLimit(SafetyObservation observation)
+    {
+        var leader = _trains.First(train => train.VehicleId == observation.LeaderVehicleId);
+        var follower = _trains.First(train => train.VehicleId == observation.FollowerVehicleId);
+        var leaderPerformance = GetVehiclePerformance(leader);
+        var followerPerformance = GetVehiclePerformance(follower);
+        var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
+            + OperationalParameters.SafetyMarginMeters;
+        var leaderStopDistance = leader.Speed * leader.Speed
+            / (2 * leaderPerformance.EmergencyBrakingMetersPerSecondSquared);
+        var controlReserve = Math.Max(
+            1,
+            follower.Speed * MovingBlockControlLookAheadSeconds);
+        var available = observation.ActualGapMeters - fixedAllowance + leaderStopDistance - controlReserve;
+        var reaction = OperationalParameters.ControlReactionTimeSeconds
+            + OperationalParameters.BrakeBuildUpTimeSeconds;
+        var braking = followerPerformance.ServiceBrakingMetersPerSecondSquared;
+        var allowed = CalculateMovingBlockPermittedSpeed(
+            follower,
+            Math.Max(0, available),
+            reaction,
+            follower.Acceleration,
+            braking);
+        return Math.Clamp(allowed, 0, followerPerformance.MaxSpeedMetersPerSecond);
     }
 
     private double CalculateMovingBlockPermittedSpeed(
@@ -4625,6 +5633,9 @@ public sealed class SimulationWorld
 
     private void ApplyCollisionProtection()
     {
+        var diagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+        try
+        {
         foreach (var follower in _trains.Where(train => train.Active
                      && train.Phase != OperationalPhase.OutOfService
                      && UsesTopologyRuntimeSafety(train)))
@@ -4700,6 +5711,11 @@ public sealed class SimulationWorld
                     impactSpeed);
             }
         }
+        }
+        finally
+        {
+            _performanceDiagnostics.RecordApplyCollisionProtectionElapsed(diagnosticsStartedAt);
+        }
     }
 
     private double? GetObstacleDistanceAhead(MutableTrain train)
@@ -4770,15 +5786,42 @@ public sealed class SimulationWorld
 
     private void RefreshTopologyOccupancy()
     {
-        _topologyOccupancy.Clear();
-        foreach (var train in _trains.Where(train => train.Active
-                     && train.Phase != OperationalPhase.OutOfService
-                     && HasTopologyTraversalPosition(train)))
+        _performanceDiagnostics.RecordOccupancyRefresh();
+        var diagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+        try
         {
-            var footprint = GetMovementNavigator(train).CreateFootprint(
-                train.RuntimeTopologyCursor!.Value,
-                GetVehiclePerformance(train).LengthMeters);
-            _topologyOccupancy.Set(train.VehicleId, footprint);
+            _topologyOccupancy.Clear();
+            foreach (var train in _trains.Where(train => train.Active
+                         && train.Phase != OperationalPhase.OutOfService
+                         && HasTopologyTraversalPosition(train)))
+            {
+                var footprint = GetMovementNavigator(train).CreateFootprint(
+                    train.RuntimeTopologyCursor!.Value,
+                    GetVehiclePerformance(train).LengthMeters);
+                _performanceDiagnostics.RecordOccupancySet();
+                _topologyOccupancy.Set(train.VehicleId, footprint);
+            }
+            if ((_nearestLeaderShadowModeEnabled || _benchmarkIndexedLeaderLookupEnabled)
+                && (_nearestLeaderCandidateIndex?.Generation ?? -1) != _physicalStateGeneration)
+            {
+                _nearestLeaderCandidateIndex ??= new TopologyNearestLeaderCandidateIndex(TopologyInfrastructure);
+                _performanceDiagnostics.RecordIndexBuild();
+                var indexDiagnosticsStartedAt = _performanceDiagnostics.StartTiming();
+                try
+                {
+                    _nearestLeaderCandidateIndex.Rebuild(
+                        _physicalStateGeneration,
+                        _topologyOccupancy.FootprintsByOwner);
+                }
+                finally
+                {
+                    _performanceDiagnostics.RecordIndexBuildElapsed(indexDiagnosticsStartedAt);
+                }
+            }
+        }
+        finally
+        {
+            _performanceDiagnostics.RecordOccupancyRefreshElapsed(diagnosticsStartedAt);
         }
     }
 
@@ -4857,7 +5900,8 @@ public sealed class SimulationWorld
         double speed,
         string? resourceId = null,
         double? delaySeconds = null,
-        IReadOnlyList<string>? resourceIds = null)
+        IReadOnlyList<string>? resourceIds = null,
+        bool omitStationIdentity = false)
     {
         if (train is not null)
         {
@@ -4877,7 +5921,7 @@ public sealed class SimulationWorld
             train?.ServiceClassId ?? string.Empty,
             train?.PatternId ?? string.Empty,
             train?.VehicleTypeId ?? "DEFAULT_VEHICLE",
-            train?.PlatformId,
+            omitStationIdentity ? null : train?.PlatformId,
             resourceId,
             train?.PlannedDepartureTime,
             delaySeconds,
@@ -4886,10 +5930,12 @@ public sealed class SimulationWorld
             train?.OffsetMeters,
             train?.ServiceRouteTraversalIndex,
             train?.ProjectedChainageMeters,
-            StationId: train is not null && eventType is (SimulationEventType.Arrival
+            StationId: !omitStationIdentity && train is not null && eventType is (SimulationEventType.Arrival
                 or SimulationEventType.Departure or SimulationEventType.DwellStarted or SimulationEventType.StationPassed)
                     ? GetCurrentStationId(train) : null);
         _events.Add(item);
+        if (eventType == SimulationEventType.StationPassed && item.StationId is not null)
+            _passedStationKeys.Add(StationPassKey(item.ServiceRunId, item.StationId));
         _newEvents.Add(item);
         if (train is not null)
         {
@@ -5011,6 +6057,9 @@ public sealed class SimulationWorld
     {
         if (!HasTopologyTraversalPosition(train))
         {
+            if (_topologyNativeRuntime)
+                throw new InvalidOperationException(
+                    $"列車 {train.ServiceRunId} 缺少前往 {legacyStation.StationId} 的實體進路位置。");
             return ForwardDistance(train.Direction, train.Position, legacyStation.PositionMeters);
         }
 
@@ -5022,7 +6071,8 @@ public sealed class SimulationWorld
                     resolvedStop.TraversalIndex,
                     resolvedStop.Position)));
         return navigator.TryGetForwardDistance(train.RuntimeTopologyCursor!.Value, target)
-            ?? ForwardDistance(train.Direction, train.Position, legacyStation.PositionMeters);
+            ?? throw new InvalidOperationException(
+                $"列車 {train.ServiceRunId} 無法沿實體進路抵達 {legacyStation.StationId} 停車點。");
     }
 
     private double GetTrackPermittedSpeed(
@@ -5065,11 +6115,9 @@ public sealed class SimulationWorld
 
         if (GetMovementNavigator(train).Legs[train.RuntimeTopologyCursor!.Value.MovementLegIndex].Kind != MovementLegKind.ServiceRoute)
         {
-            return Math.Min(
-                performance.MaxSpeedMetersPerSecond,
-                GetMovementNavigator(train).GetTraversal(
-                    train.RuntimeTopologyCursor.Value.MovementLegIndex,
-                    train.RuntimeTopologyCursor.Value.TraversalIndex).Edge.DefaultSpeedLimitMetersPerSecond);
+            return _trackSpeedLimits.GetCurrentLimit(
+                GetMovementNavigator(train), train.RuntimeTopologyCursor.Value,
+                performance.MaxSpeedMetersPerSecond);
         }
 
         return _trackSpeedLimits.GetCurrentLimit(
@@ -5189,6 +6237,7 @@ public sealed class SimulationWorld
     {
         train.UsesLegacyVirtualTrack = true;
         train.RuntimeTopologyCursor = null;
+        MarkPhysicalStateChanged();
         SetLegacyVirtualTrackPosition(train, projectedPositionMeters);
     }
 
@@ -5296,8 +6345,15 @@ public sealed class SimulationWorld
         TopologyMovementNavigator navigator,
         RuntimeTopologyCursor cursor)
     {
+        var physicalStateChanged = train.UsesLegacyVirtualTrack
+            || train.RuntimeTopologyCursor is not { } previousCursor
+            || previousCursor != cursor;
         train.UsesLegacyVirtualTrack = false;
         train.RuntimeTopologyCursor = cursor;
+        if (physicalStateChanged)
+        {
+            MarkPhysicalStateChanged();
+        }
         train.CurrentTrackEdgeId = cursor.Position.TrackEdgeId;
         train.OffsetMeters = cursor.Position.OffsetMeters;
         var movementLeg = navigator.Legs[cursor.MovementLegIndex];
@@ -5327,6 +6383,14 @@ public sealed class SimulationWorld
             var distance = navigator.GetDistanceFromStart(cursor) - passing.PlanStartDistanceMeters;
             train.Position = passing.PresentationStartPositionMeters
                 + passing.PresentationDirection * distance;
+        }
+    }
+
+    private void MarkPhysicalStateChanged()
+    {
+        if (_nearestLeaderShadowModeEnabled || _benchmarkIndexedLeaderLookupEnabled)
+        {
+            _physicalStateGeneration++;
         }
     }
 
@@ -5514,6 +6578,7 @@ public sealed class SimulationWorld
         public double PlanStartDistanceMeters { get; } = planStartDistanceMeters;
         public int DepartureServiceRouteTraversalOffset { get; } = departureServiceRouteTraversalOffset;
         public TopologyTurnbackStage Stage { get; set; } = TopologyTurnbackStage.RunningToTurnback;
+        public bool IsFacilityRouteLocked { get; set; } = true;
         public bool BrakingActive { get; set; }
         public bool IsOperating { get; set; } = true;
     }
@@ -5526,6 +6591,7 @@ public sealed class SimulationWorld
         int departureLegIndex,
         int departureServiceRouteTraversalOffset,
         int passedStationIndex,
+        string? overtakenVehicleId,
         string? reservationId,
         IReadOnlyList<string> resourceIds,
         double presentationStartPositionMeters,
@@ -5539,6 +6605,7 @@ public sealed class SimulationWorld
         public int DepartureLegIndex { get; } = departureLegIndex;
         public int DepartureServiceRouteTraversalOffset { get; } = departureServiceRouteTraversalOffset;
         public int PassedStationIndex { get; } = passedStationIndex;
+        public string? OvertakenVehicleId { get; } = overtakenVehicleId;
         public string? ReservationId { get; } = reservationId;
         public IReadOnlyList<string> ResourceIds { get; } = resourceIds;
         public double PresentationStartPositionMeters { get; } = presentationStartPositionMeters;
@@ -5550,7 +6617,7 @@ public sealed class SimulationWorld
     private sealed record TopologyPassingCandidate(
         PassingOperationDefinition Operation,
         PassingFacilityDefinition Facility,
-        MutableTrain LocalTrain);
+        MutableTrain? LocalTrain);
 
     private enum TailTrackMovementStage
     {

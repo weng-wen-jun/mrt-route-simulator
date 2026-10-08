@@ -39,6 +39,18 @@ internal static class WpfTestWait
         }
 
         Invoke(window, "ApplyCompletedPlannedTimeline");
+
+        // Planned trajectory preparation and the interactive display-cache
+        // warmup are separate background stages. Tests may explicitly await
+        // the private diagnostic seam so assertions can inspect a published
+        // cache without forcing production code to synchronously prepare it.
+        var cacheWarmup = typeof(MainWindow).GetMethod(
+            "WaitForPlannedTimeDistanceCacheWarmupAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        if (cacheWarmup?.Invoke(window, null) is Task cacheTask)
+        {
+            Wait(cacheTask);
+        }
     }
 
     public static Task InvokeOnUiAsync(MainWindow window, string method, params object[] args)
@@ -80,7 +92,7 @@ internal static class WpfTestWait
         window.Close();
     }
 
-    public static object? Invoke(MainWindow window, string method, params object[] args)
+    public static object? Invoke(MainWindow window, string method, params object?[] args)
     {
         var target = typeof(MainWindow).GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic)
             ?? throw new InvalidOperationException($"找不到方法 {method}。");

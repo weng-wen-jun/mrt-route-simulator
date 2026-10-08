@@ -1,0 +1,1204 @@
+{
+  "protocol": "2026-09-30 Release/default oracle/same 28-station sample/eight sequential tabs/reset per tab/>=10s wall or >=600s sim; full-render subphase separate 600s five calls; no concurrent benchmarks",
+  "parity": "PASS 680->740.5s, 31 skipped presentation frames; normal continuous consumption observed 740.9s; deterministic same-target output events/trajectory/safety/trains/nonempty resource analysis equal",
+  "profiles": [
+    {
+      "Name": "Route",
+      "RequestedRate": 60,
+      "SimulationSeconds": 602.2,
+      "EffectiveRate": 59.6198912153803,
+      "WallSeconds": 10.1006558,
+      "PublishFps": 29.602038315175534,
+      "ApplyFps": 21.1867431419651,
+      "DroppedFrames": 85,
+      "MaxInputTickGapMilliseconds": 64.1558,
+      "MaxInputStallMilliseconds": 44.1558,
+      "InputTicks": 320,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 214,
+            "TotalMilliseconds": 3653.2055999999993,
+            "P50Milliseconds": 16.90665,
+            "P95Milliseconds": 31.90374,
+            "MaxMilliseconds": 33.6705,
+            "AverageMilliseconds": 17.071054205607474
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 214,
+            "TotalMilliseconds": 32.4206,
+            "P50Milliseconds": 0.06720000000000001,
+            "P95Milliseconds": 0.2601749999999997,
+            "MaxMilliseconds": 6.5969,
+            "AverageMilliseconds": 0.1514981308411215
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 116,
+            "TotalMilliseconds": 12.477400000000003,
+            "P50Milliseconds": 0.10214999999999999,
+            "P95Milliseconds": 0.1925,
+            "MaxMilliseconds": 0.3259,
+            "AverageMilliseconds": 0.1075637931034483
+          },
+          "RouteMarkerRender": {
+            "Name": "RouteMarkerRender",
+            "Count": 214,
+            "TotalMilliseconds": 120.87340000000009,
+            "P50Milliseconds": 0.45945,
+            "P95Milliseconds": 1.068155,
+            "MaxMilliseconds": 1.4777,
+            "AverageMilliseconds": 0.5648289719626173
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 214,
+            "TotalMilliseconds": 179.41980000000004,
+            "P50Milliseconds": 0.68275,
+            "P95Milliseconds": 1.5953699999999997,
+            "MaxMilliseconds": 7.3601,
+            "AverageMilliseconds": 0.8384102803738319
+          },
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 320,
+            "TotalMilliseconds": 10037.894099999998,
+            "P50Milliseconds": 31.6696,
+            "P95Milliseconds": 37.63394500000001,
+            "MaxMilliseconds": 64.1558,
+            "AverageMilliseconds": 31.368419062499992
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 320,
+            "TotalMilliseconds": 3642.0216999999993,
+            "P50Milliseconds": 11.6696,
+            "P95Milliseconds": 17.63394500000001,
+            "MaxMilliseconds": 44.1558,
+            "AverageMilliseconds": 11.381317812499997
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 5281.25,
+            "P50Milliseconds": 5281.25,
+            "P95Milliseconds": 5281.25,
+            "MaxMilliseconds": 5281.25,
+            "AverageMilliseconds": 5281.25
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 299,
+            "TotalMilliseconds": 11.934399999999998,
+            "P50Milliseconds": 0.037,
+            "P95Milliseconds": 0.07004999999999999,
+            "MaxMilliseconds": 0.2994,
+            "AverageMilliseconds": 0.03991438127090301
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 299,
+            "TotalMilliseconds": 0.4229000000000001,
+            "P50Milliseconds": 0.0012,
+            "P95Milliseconds": 0.0026,
+            "MaxMilliseconds": 0.0104,
+            "AverageMilliseconds": 0.0014143812709030105
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5707,
+            "TotalMilliseconds": 1580.6355999999992,
+            "P50Milliseconds": 0.2495,
+            "P95Milliseconds": 0.5446,
+            "MaxMilliseconds": 6.1454,
+            "AverageMilliseconds": 0.27696435955843685
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 214,
+          "UiFrameConsumedCount": 214,
+          "WorkerFramePublishedCount": 299,
+          "DroppedFrameCount": 85,
+          "WorkerFrameConsumedCount": 214
+        },
+        "Runtime": {
+          "AllocatedBytes": 577951104,
+          "ManagedBytes": 63637568,
+          "WorkingSetBytes": 246169600,
+          "Gen0Collections": 35,
+          "Gen1Collections": 1,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "551.2",
+          "ManagedMiB": "60.7",
+          "WorkingSetMiB": "234.8"
+        }
+      }
+    },
+    {
+      "Name": "Speed",
+      "RequestedRate": 60,
+      "SimulationSeconds": 606.7,
+      "EffectiveRate": 59.65261393192059,
+      "WallSeconds": 10.1705518,
+      "PublishFps": 29.49692464080464,
+      "ApplyFps": 21.139462659243325,
+      "DroppedFrames": 85,
+      "MaxInputTickGapMilliseconds": 42.9789,
+      "MaxInputStallMilliseconds": 22.9789,
+      "InputTicks": 322,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 322,
+            "TotalMilliseconds": 10091.8742,
+            "P50Milliseconds": 31.57905,
+            "P95Milliseconds": 37.498705,
+            "MaxMilliseconds": 42.9789,
+            "AverageMilliseconds": 31.341224223602484
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 322,
+            "TotalMilliseconds": 3651.874200000001,
+            "P50Milliseconds": 11.579049999999999,
+            "P95Milliseconds": 17.498704999999998,
+            "MaxMilliseconds": 22.9789,
+            "AverageMilliseconds": 11.341224223602488
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 215,
+            "TotalMilliseconds": 3594.2585999999997,
+            "P50Milliseconds": 16.9273,
+            "P95Milliseconds": 31.906,
+            "MaxMilliseconds": 34.582,
+            "AverageMilliseconds": 16.717481860465114
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 215,
+            "TotalMilliseconds": 8.513000000000002,
+            "P50Milliseconds": 0.0287,
+            "P95Milliseconds": 0.10947999999999986,
+            "MaxMilliseconds": 0.3085,
+            "AverageMilliseconds": 0.03959534883720931
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 120,
+            "TotalMilliseconds": 7.566600000000003,
+            "P50Milliseconds": 0.0587,
+            "P95Milliseconds": 0.0962,
+            "MaxMilliseconds": 0.1157,
+            "AverageMilliseconds": 0.06305500000000003
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 215,
+            "TotalMilliseconds": 283.2919999999999,
+            "P50Milliseconds": 0.0919,
+            "P95Milliseconds": 8.247589999999997,
+            "MaxMilliseconds": 20.2681,
+            "AverageMilliseconds": 1.3176372093023252
+          },
+          "SpeedChartRender": {
+            "Name": "SpeedChartRender",
+            "Count": 37,
+            "TotalMilliseconds": 260.2721000000001,
+            "P50Milliseconds": 7.7825,
+            "P95Milliseconds": 11.224399999999997,
+            "MaxMilliseconds": 20.2323,
+            "AverageMilliseconds": 7.034381081081083
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 3250,
+            "P50Milliseconds": 3250,
+            "P95Milliseconds": 3250,
+            "MaxMilliseconds": 3250,
+            "AverageMilliseconds": 3250
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 300,
+            "TotalMilliseconds": 5.822199999999996,
+            "P50Milliseconds": 0.0188,
+            "P95Milliseconds": 0.030305000000000002,
+            "MaxMilliseconds": 0.0467,
+            "AverageMilliseconds": 0.01940733333333332
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 300,
+            "TotalMilliseconds": 0.23810000000000026,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0013,
+            "MaxMilliseconds": 0.0018,
+            "AverageMilliseconds": 0.0007936666666666676
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5772,
+            "TotalMilliseconds": 1450.1822000000018,
+            "P50Milliseconds": 0.23120000000000002,
+            "P95Milliseconds": 0.529325,
+            "MaxMilliseconds": 3.5776,
+            "AverageMilliseconds": 0.2512443173943177
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 215,
+          "UiFrameConsumedCount": 215,
+          "WorkerFramePublishedCount": 300,
+          "DroppedFrameCount": 85,
+          "WorkerFrameConsumedCount": 215
+        },
+        "Runtime": {
+          "AllocatedBytes": 652033216,
+          "ManagedBytes": 71520272,
+          "WorkingSetBytes": 263131136,
+          "Gen0Collections": 38,
+          "Gen1Collections": 2,
+          "Gen2Collections": 2,
+          "AllocatedMiB": "621.8",
+          "ManagedMiB": "68.2",
+          "WorkingSetMiB": "250.9"
+        }
+      }
+    },
+    {
+      "Name": "Safety",
+      "RequestedRate": 60,
+      "SimulationSeconds": 600.2,
+      "EffectiveRate": 59.68483622111019,
+      "WallSeconds": 10.0561556,
+      "PublishFps": 29.633590792887095,
+      "ApplyFps": 21.280498086167242,
+      "DroppedFrames": 84,
+      "MaxInputTickGapMilliseconds": 41.1421,
+      "MaxInputStallMilliseconds": 21.1421,
+      "InputTicks": 320,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 320,
+            "TotalMilliseconds": 10005.011399999998,
+            "P50Milliseconds": 31.412399999999998,
+            "P95Milliseconds": 33.406315,
+            "MaxMilliseconds": 41.1421,
+            "AverageMilliseconds": 31.26566062499999
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 320,
+            "TotalMilliseconds": 3605.0114,
+            "P50Milliseconds": 11.4124,
+            "P95Milliseconds": 13.406315000000001,
+            "MaxMilliseconds": 21.1421,
+            "AverageMilliseconds": 11.265660624999999
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 214,
+            "TotalMilliseconds": 3530.930699999999,
+            "P50Milliseconds": 16.7473,
+            "P95Milliseconds": 32.077675,
+            "MaxMilliseconds": 33.9543,
+            "AverageMilliseconds": 16.499676168224294
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 214,
+            "TotalMilliseconds": 7.380000000000002,
+            "P50Milliseconds": 0.0286,
+            "P95Milliseconds": 0.08264999999999997,
+            "MaxMilliseconds": 0.1392,
+            "AverageMilliseconds": 0.034485981308411226
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 113,
+            "TotalMilliseconds": 6.283999999999996,
+            "P50Milliseconds": 0.0535,
+            "P95Milliseconds": 0.07724,
+            "MaxMilliseconds": 0.0974,
+            "AverageMilliseconds": 0.05561061946902651
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 214,
+            "TotalMilliseconds": 61.18790000000001,
+            "P50Milliseconds": 0.24135,
+            "P95Milliseconds": 0.71758,
+            "MaxMilliseconds": 2.1626,
+            "AverageMilliseconds": 0.28592476635514025
+          },
+          "SafetyRowUpdate": {
+            "Name": "SafetyRowUpdate",
+            "Count": 72,
+            "TotalMilliseconds": 24.150599999999994,
+            "P50Milliseconds": 0.31115000000000004,
+            "P95Milliseconds": 0.6237250000000001,
+            "MaxMilliseconds": 0.7733,
+            "AverageMilliseconds": 0.3354249999999999
+          },
+          "SafetyChartRender": {
+            "Name": "SafetyChartRender",
+            "Count": 36,
+            "TotalMilliseconds": 9.914800000000001,
+            "P50Milliseconds": 0.2873,
+            "P95Milliseconds": 0.43062500000000004,
+            "MaxMilliseconds": 0.541,
+            "AverageMilliseconds": 0.27541111111111116
+          },
+          "EventRowUpdate": {
+            "Name": "EventRowUpdate",
+            "Count": 29,
+            "TotalMilliseconds": 0.8964000000000001,
+            "P50Milliseconds": 0.0275,
+            "P95Milliseconds": 0.05741999999999999,
+            "MaxMilliseconds": 0.0622,
+            "AverageMilliseconds": 0.03091034482758621
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 3750,
+            "P50Milliseconds": 3750,
+            "P95Milliseconds": 3750,
+            "MaxMilliseconds": 3750,
+            "AverageMilliseconds": 3750
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 298,
+            "TotalMilliseconds": 6.012299999999998,
+            "P50Milliseconds": 0.0192,
+            "P95Milliseconds": 0.029444999999999992,
+            "MaxMilliseconds": 0.0683,
+            "AverageMilliseconds": 0.020175503355704692
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 298,
+            "TotalMilliseconds": 0.2649000000000002,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0013,
+            "MaxMilliseconds": 0.0221,
+            "AverageMilliseconds": 0.000888926174496645
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5766,
+            "TotalMilliseconds": 1426.5307,
+            "P50Milliseconds": 0.2195,
+            "P95Milliseconds": 0.538025,
+            "MaxMilliseconds": 3.7647,
+            "AverageMilliseconds": 0.24740386749913285
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 214,
+          "UiFrameConsumedCount": 214,
+          "WorkerFramePublishedCount": 298,
+          "DroppedFrameCount": 84,
+          "WorkerFrameConsumedCount": 214
+        },
+        "Runtime": {
+          "AllocatedBytes": 573168688,
+          "ManagedBytes": 65875008,
+          "WorkingSetBytes": 266551296,
+          "Gen0Collections": 35,
+          "Gen1Collections": 2,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "546.6",
+          "ManagedMiB": "62.8",
+          "WorkingSetMiB": "254.2"
+        }
+      }
+    },
+    {
+      "Name": "TimeDistance",
+      "RequestedRate": 60,
+      "SimulationSeconds": 606.5,
+      "EffectiveRate": 59.60681106636958,
+      "WallSeconds": 10.1750117,
+      "PublishFps": 29.582275566326864,
+      "ApplyFps": 21.228476818360807,
+      "DroppedFrames": 85,
+      "MaxInputTickGapMilliseconds": 41.6834,
+      "MaxInputStallMilliseconds": 21.6834,
+      "InputTicks": 323,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 323,
+            "TotalMilliseconds": 10088.290399999993,
+            "P50Milliseconds": 31.4658,
+            "P95Milliseconds": 33.04423,
+            "MaxMilliseconds": 41.6834,
+            "AverageMilliseconds": 31.23309721362227
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 323,
+            "TotalMilliseconds": 3628.2903999999985,
+            "P50Milliseconds": 11.4658,
+            "P95Milliseconds": 13.044229999999997,
+            "MaxMilliseconds": 21.6834,
+            "AverageMilliseconds": 11.233097213622287
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 216,
+            "TotalMilliseconds": 3730.8126000000016,
+            "P50Milliseconds": 17.62105,
+            "P95Milliseconds": 31.668325,
+            "MaxMilliseconds": 34.6111,
+            "AverageMilliseconds": 17.272280555555565
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 216,
+            "TotalMilliseconds": 7.362799999999999,
+            "P50Milliseconds": 0.02695,
+            "P95Milliseconds": 0.08375,
+            "MaxMilliseconds": 0.1694,
+            "AverageMilliseconds": 0.034087037037037034
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 120,
+            "TotalMilliseconds": 6.632900000000001,
+            "P50Milliseconds": 0.05445,
+            "P95Milliseconds": 0.07501,
+            "MaxMilliseconds": 0.0911,
+            "AverageMilliseconds": 0.05527416666666667
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 216,
+            "TotalMilliseconds": 55.81829999999999,
+            "P50Milliseconds": 0.0764,
+            "P95Milliseconds": 0.83165,
+            "MaxMilliseconds": 12.9702,
+            "AverageMilliseconds": 0.25841805555555547
+          },
+          "TimeDistance.IncrementalData": {
+            "Name": "TimeDistance.IncrementalData",
+            "Count": 37,
+            "TotalMilliseconds": 12.7378,
+            "P50Milliseconds": 0.3178,
+            "P95Milliseconds": 0.53126,
+            "MaxMilliseconds": 1.1011,
+            "AverageMilliseconds": 0.34426486486486485
+          },
+          "TimeDistance.SeriesVisuals": {
+            "Name": "TimeDistance.SeriesVisuals",
+            "Count": 37,
+            "TotalMilliseconds": 19.27030000000001,
+            "P50Milliseconds": 0.1805,
+            "P95Milliseconds": 0.3969199999999992,
+            "MaxMilliseconds": 12.2952,
+            "AverageMilliseconds": 0.5208189189189192
+          },
+          "TimeDistanceRender": {
+            "Name": "TimeDistanceRender",
+            "Count": 37,
+            "TotalMilliseconds": 36.5033,
+            "P50Milliseconds": 0.6441,
+            "P95Milliseconds": 1.1244999999999987,
+            "MaxMilliseconds": 12.8768,
+            "AverageMilliseconds": 0.9865756756756757
+          },
+          "TimeDistance.EventVisuals": {
+            "Name": "TimeDistance.EventVisuals",
+            "Count": 24,
+            "TotalMilliseconds": 2.4149999999999996,
+            "P50Milliseconds": 0.09735,
+            "P95Milliseconds": 0.16258999999999993,
+            "MaxMilliseconds": 0.1737,
+            "AverageMilliseconds": 0.10062499999999998
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 2890.625,
+            "P50Milliseconds": 2890.625,
+            "P95Milliseconds": 2890.625,
+            "MaxMilliseconds": 2890.625,
+            "AverageMilliseconds": 2890.625
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 301,
+            "TotalMilliseconds": 5.4994000000000005,
+            "P50Milliseconds": 0.0178,
+            "P95Milliseconds": 0.0262,
+            "MaxMilliseconds": 0.0372,
+            "AverageMilliseconds": 0.01827043189368771
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 301,
+            "TotalMilliseconds": 0.23090000000000038,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0011,
+            "MaxMilliseconds": 0.0019,
+            "AverageMilliseconds": 0.0007671096345514963
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5814,
+            "TotalMilliseconds": 1403.7253000000076,
+            "P50Milliseconds": 0.22115,
+            "P95Milliseconds": 0.5053,
+            "MaxMilliseconds": 4.9763,
+            "AverageMilliseconds": 0.2414388200894406
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 216,
+          "UiFrameConsumedCount": 216,
+          "TimeDistance.VisualUpdateCount": 37,
+          "WorkerFramePublishedCount": 301,
+          "DroppedFrameCount": 85,
+          "WorkerFrameConsumedCount": 216
+        },
+        "Runtime": {
+          "AllocatedBytes": 583610736,
+          "ManagedBytes": 66490216,
+          "WorkingSetBytes": 273891328,
+          "Gen0Collections": 35,
+          "Gen1Collections": 7,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "556.6",
+          "ManagedMiB": "63.4",
+          "WorkingSetMiB": "261.2"
+        }
+      }
+    },
+    {
+      "Name": "Timetable",
+      "RequestedRate": 60,
+      "SimulationSeconds": 604.9,
+      "EffectiveRate": 59.622462171721125,
+      "WallSeconds": 10.1455052,
+      "PublishFps": 29.569744836363594,
+      "ApplyFps": 21.290216282181788,
+      "DroppedFrames": 84,
+      "MaxInputTickGapMilliseconds": 42.1311,
+      "MaxInputStallMilliseconds": 22.1311,
+      "InputTicks": 322,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 322,
+            "TotalMilliseconds": 10060.644899999992,
+            "P50Milliseconds": 31.476950000000002,
+            "P95Milliseconds": 33.04842,
+            "MaxMilliseconds": 42.1311,
+            "AverageMilliseconds": 31.24423881987575
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 322,
+            "TotalMilliseconds": 3620.6449000000007,
+            "P50Milliseconds": 11.47695,
+            "P95Milliseconds": 13.048419999999998,
+            "MaxMilliseconds": 22.1311,
+            "AverageMilliseconds": 11.244238819875779
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 216,
+            "TotalMilliseconds": 3776.324200000001,
+            "P50Milliseconds": 17.72585,
+            "P95Milliseconds": 32.5437,
+            "MaxMilliseconds": 34.5563,
+            "AverageMilliseconds": 17.482982407407412
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 216,
+            "TotalMilliseconds": 7.306100000000003,
+            "P50Milliseconds": 0.028999999999999998,
+            "P95Milliseconds": 0.07525,
+            "MaxMilliseconds": 0.133,
+            "AverageMilliseconds": 0.033824537037037056
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 115,
+            "TotalMilliseconds": 6.645299999999997,
+            "P50Milliseconds": 0.0574,
+            "P95Milliseconds": 0.0793,
+            "MaxMilliseconds": 0.0842,
+            "AverageMilliseconds": 0.05778521739130432
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 216,
+            "TotalMilliseconds": 31.5246,
+            "P50Milliseconds": 0.07355,
+            "P95Milliseconds": 0.7641,
+            "MaxMilliseconds": 1.1887,
+            "AverageMilliseconds": 0.14594722222222223
+          },
+          "TimetableUpdate": {
+            "Name": "TimetableUpdate",
+            "Count": 29,
+            "TotalMilliseconds": 12.816500000000001,
+            "P50Milliseconds": 0.3955,
+            "P95Milliseconds": 0.8302999999999997,
+            "MaxMilliseconds": 0.8789,
+            "AverageMilliseconds": 0.44194827586206903
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 3000,
+            "P50Milliseconds": 3000,
+            "P95Milliseconds": 3000,
+            "MaxMilliseconds": 3000,
+            "AverageMilliseconds": 3000
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 300,
+            "TotalMilliseconds": 6.077699999999994,
+            "P50Milliseconds": 0.019950000000000002,
+            "P95Milliseconds": 0.032135000000000004,
+            "MaxMilliseconds": 0.0545,
+            "AverageMilliseconds": 0.02025899999999998
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 300,
+            "TotalMilliseconds": 0.24560000000000012,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0013,
+            "MaxMilliseconds": 0.0022,
+            "AverageMilliseconds": 0.0008186666666666671
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5773,
+            "TotalMilliseconds": 1434.2054000000023,
+            "P50Milliseconds": 0.2203,
+            "P95Milliseconds": 0.53065,
+            "MaxMilliseconds": 12.9958,
+            "AverageMilliseconds": 0.24843329291529576
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 216,
+          "UiFrameConsumedCount": 216,
+          "WorkerFramePublishedCount": 300,
+          "DroppedFrameCount": 84,
+          "WorkerFrameConsumedCount": 216
+        },
+        "Runtime": {
+          "AllocatedBytes": 568981128,
+          "ManagedBytes": 80621096,
+          "WorkingSetBytes": 278614016,
+          "Gen0Collections": 34,
+          "Gen1Collections": 7,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "542.6",
+          "ManagedMiB": "76.9",
+          "WorkingSetMiB": "265.7"
+        }
+      }
+    },
+    {
+      "Name": "Segment",
+      "RequestedRate": 60,
+      "SimulationSeconds": 604,
+      "EffectiveRate": 59.630229197177584,
+      "WallSeconds": 10.1290907,
+      "PublishFps": 29.518937963503475,
+      "ApplyFps": 21.22599218111454,
+      "DroppedFrames": 84,
+      "MaxInputTickGapMilliseconds": 41.1865,
+      "MaxInputStallMilliseconds": 21.1865,
+      "InputTicks": 322,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 322,
+            "TotalMilliseconds": 10068.176800000001,
+            "P50Milliseconds": 31.57325,
+            "P95Milliseconds": 36.86325,
+            "MaxMilliseconds": 41.1865,
+            "AverageMilliseconds": 31.2676298136646
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 322,
+            "TotalMilliseconds": 3628.176799999999,
+            "P50Milliseconds": 11.57325,
+            "P95Milliseconds": 16.863249999999997,
+            "MaxMilliseconds": 21.1865,
+            "AverageMilliseconds": 11.267629813664593
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 215,
+            "TotalMilliseconds": 3644.8110999999994,
+            "P50Milliseconds": 16.6443,
+            "P95Milliseconds": 32.35957,
+            "MaxMilliseconds": 34.3437,
+            "AverageMilliseconds": 16.952609767441857
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 215,
+            "TotalMilliseconds": 7.187599999999998,
+            "P50Milliseconds": 0.0276,
+            "P95Milliseconds": 0.07699999999999999,
+            "MaxMilliseconds": 0.1831,
+            "AverageMilliseconds": 0.03343069767441859
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 115,
+            "TotalMilliseconds": 6.522199999999998,
+            "P50Milliseconds": 0.054,
+            "P95Milliseconds": 0.07773,
+            "MaxMilliseconds": 0.0849,
+            "AverageMilliseconds": 0.056714782608695634
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 215,
+            "TotalMilliseconds": 29.18380000000001,
+            "P50Milliseconds": 0.074,
+            "P95Milliseconds": 0.4885799999999987,
+            "MaxMilliseconds": 1.5726,
+            "AverageMilliseconds": 0.13573860465116283
+          },
+          "SegmentStatistics": {
+            "Name": "SegmentStatistics",
+            "Count": 10,
+            "TotalMilliseconds": 10.2211,
+            "P50Milliseconds": 1.0481,
+            "P95Milliseconds": 1.40949,
+            "MaxMilliseconds": 1.4751,
+            "AverageMilliseconds": 1.02211
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 2640.625,
+            "P50Milliseconds": 2640.625,
+            "P95Milliseconds": 2640.625,
+            "MaxMilliseconds": 2640.625,
+            "AverageMilliseconds": 2640.625
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 299,
+            "TotalMilliseconds": 5.680399999999999,
+            "P50Milliseconds": 0.0182,
+            "P95Milliseconds": 0.03045999999999998,
+            "MaxMilliseconds": 0.0491,
+            "AverageMilliseconds": 0.018997993311036784
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 299,
+            "TotalMilliseconds": 0.23340000000000002,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0011099999999999966,
+            "MaxMilliseconds": 0.0019,
+            "AverageMilliseconds": 0.0007806020066889633
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5611,
+            "TotalMilliseconds": 1434.199000000004,
+            "P50Milliseconds": 0.2312,
+            "P95Milliseconds": 0.5412,
+            "MaxMilliseconds": 4.3667,
+            "AverageMilliseconds": 0.25560488326501585
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 215,
+          "UiFrameConsumedCount": 215,
+          "WorkerFramePublishedCount": 299,
+          "DroppedFrameCount": 84,
+          "WorkerFrameConsumedCount": 215
+        },
+        "Runtime": {
+          "AllocatedBytes": 577793624,
+          "ManagedBytes": 97024168,
+          "WorkingSetBytes": 298065920,
+          "Gen0Collections": 34,
+          "Gen1Collections": 8,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "551.0",
+          "ManagedMiB": "92.5",
+          "WorkingSetMiB": "284.3"
+        }
+      }
+    },
+    {
+      "Name": "Resource",
+      "RequestedRate": 60,
+      "SimulationSeconds": 605.4,
+      "EffectiveRate": 59.587007705533175,
+      "WallSeconds": 10.1599329,
+      "PublishFps": 29.626179913058287,
+      "ApplyFps": 21.259982927643154,
+      "DroppedFrames": 85,
+      "MaxInputTickGapMilliseconds": 42.3821,
+      "MaxInputStallMilliseconds": 22.3821,
+      "InputTicks": 323,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 323,
+            "TotalMilliseconds": 10091.496400000004,
+            "P50Milliseconds": 31.5712,
+            "P95Milliseconds": 36.643010000000004,
+            "MaxMilliseconds": 42.3821,
+            "AverageMilliseconds": 31.24302291021673
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 323,
+            "TotalMilliseconds": 3631.4964000000023,
+            "P50Milliseconds": 11.5712,
+            "P95Milliseconds": 16.64301,
+            "MaxMilliseconds": 22.3821,
+            "AverageMilliseconds": 11.243022910216725
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 216,
+            "TotalMilliseconds": 3660.4592000000016,
+            "P50Milliseconds": 17.19335,
+            "P95Milliseconds": 31.79235,
+            "MaxMilliseconds": 35.2287,
+            "AverageMilliseconds": 16.946570370370377
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 216,
+            "TotalMilliseconds": 7.149399999999999,
+            "P50Milliseconds": 0.027749999999999997,
+            "P95Milliseconds": 0.07567499999999999,
+            "MaxMilliseconds": 0.1361,
+            "AverageMilliseconds": 0.03309907407407407
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 115,
+            "TotalMilliseconds": 7.074800000000002,
+            "P50Milliseconds": 0.0553,
+            "P95Milliseconds": 0.07918,
+            "MaxMilliseconds": 0.6541,
+            "AverageMilliseconds": 0.06152000000000002
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 216,
+            "TotalMilliseconds": 19.851699999999987,
+            "P50Milliseconds": 0.0762,
+            "P95Milliseconds": 0.304775,
+            "MaxMilliseconds": 0.702,
+            "AverageMilliseconds": 0.09190601851851846
+          },
+          "ResourceOccupancy": {
+            "Name": "ResourceOccupancy",
+            "Count": 10,
+            "TotalMilliseconds": 0.3856,
+            "P50Milliseconds": 0.02475,
+            "P95Milliseconds": 0.09188999999999999,
+            "MaxMilliseconds": 0.0972,
+            "AverageMilliseconds": 0.03856
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 2234.375,
+            "P50Milliseconds": 2234.375,
+            "P95Milliseconds": 2234.375,
+            "MaxMilliseconds": 2234.375,
+            "AverageMilliseconds": 2234.375
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 301,
+            "TotalMilliseconds": 5.5768999999999975,
+            "P50Milliseconds": 0.0181,
+            "P95Milliseconds": 0.0293,
+            "MaxMilliseconds": 0.0501,
+            "AverageMilliseconds": 0.01852790697674418
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 301,
+            "TotalMilliseconds": 0.23590000000000003,
+            "P50Milliseconds": 0.0007,
+            "P95Milliseconds": 0.0012,
+            "MaxMilliseconds": 0.0068,
+            "AverageMilliseconds": 0.0007837209302325582
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5775,
+            "TotalMilliseconds": 1403.975400000003,
+            "P50Milliseconds": 0.2162,
+            "P95Milliseconds": 0.5383249999999999,
+            "MaxMilliseconds": 2.6636,
+            "AverageMilliseconds": 0.2431126233766239
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 216,
+          "UiFrameConsumedCount": 216,
+          "WorkerFramePublishedCount": 301,
+          "DroppedFrameCount": 85,
+          "WorkerFrameConsumedCount": 216
+        },
+        "Runtime": {
+          "AllocatedBytes": 563045216,
+          "ManagedBytes": 96452600,
+          "WorkingSetBytes": 288612352,
+          "Gen0Collections": 33,
+          "Gen1Collections": 6,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "537.0",
+          "ManagedMiB": "92.0",
+          "WorkingSetMiB": "275.2"
+        }
+      }
+    },
+    {
+      "Name": "Comparison",
+      "RequestedRate": 60,
+      "SimulationSeconds": 600.5,
+      "EffectiveRate": 59.67354941352478,
+      "WallSeconds": 10.063085,
+      "PublishFps": 29.613185221033117,
+      "ApplyFps": 21.265844420473446,
+      "DroppedFrames": 84,
+      "MaxInputTickGapMilliseconds": 42.1009,
+      "MaxInputStallMilliseconds": 22.1009,
+      "InputTicks": 320,
+      "Diagnostics": {
+        "Enabled": true,
+        "Timings": {
+          "InputStall": {
+            "Name": "InputStall",
+            "Count": 320,
+            "TotalMilliseconds": 9998.498699999996,
+            "P50Milliseconds": 31.5579,
+            "P95Milliseconds": 36.857940000000006,
+            "MaxMilliseconds": 42.1009,
+            "AverageMilliseconds": 31.24530843749999
+          },
+          "InputStallExcess": {
+            "Name": "InputStallExcess",
+            "Count": 320,
+            "TotalMilliseconds": 3598.4986999999974,
+            "P50Milliseconds": 11.5579,
+            "P95Milliseconds": 16.85794,
+            "MaxMilliseconds": 22.1009,
+            "AverageMilliseconds": 11.245308437499991
+          },
+          "DispatcherApplyAge": {
+            "Name": "DispatcherApplyAge",
+            "Count": 214,
+            "TotalMilliseconds": 3611.355299999998,
+            "P50Milliseconds": 17.3398,
+            "P95Milliseconds": 32.010275,
+            "MaxMilliseconds": 34.1602,
+            "AverageMilliseconds": 16.875492056074755
+          },
+          "ResultAccumulator": {
+            "Name": "ResultAccumulator",
+            "Count": 214,
+            "TotalMilliseconds": 7.300899999999999,
+            "P50Milliseconds": 0.0285,
+            "P95Milliseconds": 0.07554,
+            "MaxMilliseconds": 0.1169,
+            "AverageMilliseconds": 0.03411635514018691
+          },
+          "TrainRowUpdate": {
+            "Name": "TrainRowUpdate",
+            "Count": 115,
+            "TotalMilliseconds": 8.273099999999996,
+            "P50Milliseconds": 0.0563,
+            "P95Milliseconds": 0.08285999999999999,
+            "MaxMilliseconds": 1.6246,
+            "AverageMilliseconds": 0.07193999999999996
+          },
+          "ApplyPlaybackFrame": {
+            "Name": "ApplyPlaybackFrame",
+            "Count": 214,
+            "TotalMilliseconds": 25.0793,
+            "P50Milliseconds": 0.07469999999999999,
+            "P95Milliseconds": 0.41908,
+            "MaxMilliseconds": 1.6617,
+            "AverageMilliseconds": 0.1171929906542056
+          },
+          "V1V2Comparison": {
+            "Name": "V1V2Comparison",
+            "Count": 10,
+            "TotalMilliseconds": 4.565,
+            "P50Milliseconds": 0.4753,
+            "P95Milliseconds": 0.710765,
+            "MaxMilliseconds": 0.7271,
+            "AverageMilliseconds": 0.4565
+          },
+          "ProcessCpuTotal": {
+            "Name": "ProcessCpuTotal",
+            "Count": 1,
+            "TotalMilliseconds": 2781.25,
+            "P50Milliseconds": 2781.25,
+            "P95Milliseconds": 2781.25,
+            "MaxMilliseconds": 2781.25,
+            "AverageMilliseconds": 2781.25
+          },
+          "WorkerFrameBuild": {
+            "Name": "WorkerFrameBuild",
+            "Count": 298,
+            "TotalMilliseconds": 5.668700000000001,
+            "P50Milliseconds": 0.018349999999999998,
+            "P95Milliseconds": 0.029104999999999985,
+            "MaxMilliseconds": 0.0382,
+            "AverageMilliseconds": 0.019022483221476514
+          },
+          "WorkerFramePublish": {
+            "Name": "WorkerFramePublish",
+            "Count": 298,
+            "TotalMilliseconds": 0.2375000000000003,
+            "P50Milliseconds": 0.0008,
+            "P95Milliseconds": 0.0012,
+            "MaxMilliseconds": 0.0061,
+            "AverageMilliseconds": 0.000796979865771813
+          },
+          "WorkerAdvance": {
+            "Name": "WorkerAdvance",
+            "Count": 5737,
+            "TotalMilliseconds": 1422.731000000002,
+            "P50Milliseconds": 0.22125,
+            "P95Milliseconds": 0.5312749999999999,
+            "MaxMilliseconds": 12.6843,
+            "AverageMilliseconds": 0.24799215617918807
+          }
+        },
+        "Counters": {
+          "UiFrameAppliedCount": 214,
+          "UiFrameConsumedCount": 214,
+          "WorkerFramePublishedCount": 298,
+          "DroppedFrameCount": 84,
+          "WorkerFrameConsumedCount": 214
+        },
+        "Runtime": {
+          "AllocatedBytes": 559972056,
+          "ManagedBytes": 102445736,
+          "WorkingSetBytes": 298749952,
+          "Gen0Collections": 33,
+          "Gen1Collections": 8,
+          "Gen2Collections": 0,
+          "AllocatedMiB": "534.0",
+          "ManagedMiB": "97.7",
+          "WorkingSetMiB": "284.9"
+        }
+      }
+    }
+  ],
+  "diagramCache": {
+    "ActualProcessed": 3811,
+    "PlannedProcessed": 197454,
+    "ActualGroups": 4,
+    "PlannedGroups": 8,
+    "MaxActualDisplay": 730,
+    "MaxPlannedDisplay": 1673,
+    "MaxActualCritical": 179,
+    "MaxPlannedCritical": 1218,
+    "MaxOrdinary": 550
+  },
+  "fullRendererSubphase": {
+    "Enabled": true,
+    "Timings": {
+      "TimeDistanceFull.DataBounds": {
+        "Name": "TimeDistanceFull.DataBounds",
+        "Count": 5,
+        "TotalMilliseconds": 45.477,
+        "P50Milliseconds": 7.4519,
+        "P95Milliseconds": 15.4604,
+        "MaxMilliseconds": 17.2605,
+        "AverageMilliseconds": 9.0954
+      },
+      "TimeDistanceFull.StaticVisuals": {
+        "Name": "TimeDistanceFull.StaticVisuals",
+        "Count": 5,
+        "TotalMilliseconds": 9.165099999999999,
+        "P50Milliseconds": 1.1892,
+        "P95Milliseconds": 3.8459399999999997,
+        "MaxMilliseconds": 4.5052,
+        "AverageMilliseconds": 1.8330199999999999
+      },
+      "TimeDistanceFull.FilterGroup": {
+        "Name": "TimeDistanceFull.FilterGroup",
+        "Count": 10,
+        "TotalMilliseconds": 109.5879,
+        "P50Milliseconds": 9.38295,
+        "P95Milliseconds": 24.675624999999997,
+        "MaxMilliseconds": 27.1657,
+        "AverageMilliseconds": 10.95879
+      },
+      "TimeDistanceFull.Decimate": {
+        "Name": "TimeDistanceFull.Decimate",
+        "Count": 60,
+        "TotalMilliseconds": 281.3957999999999,
+        "P50Milliseconds": 4.64345,
+        "P95Milliseconds": 8.763444999999999,
+        "MaxMilliseconds": 25.4881,
+        "AverageMilliseconds": 4.689929999999999
+      },
+      "TimeDistanceFull.SeriesVisuals": {
+        "Name": "TimeDistanceFull.SeriesVisuals",
+        "Count": 60,
+        "TotalMilliseconds": 48.50769999999999,
+        "P50Milliseconds": 0.42165,
+        "P95Milliseconds": 0.7332199999999999,
+        "MaxMilliseconds": 21.5314,
+        "AverageMilliseconds": 0.8084616666666665
+      },
+      "TimeDistanceFull.EventVisuals": {
+        "Name": "TimeDistanceFull.EventVisuals",
+        "Count": 5,
+        "TotalMilliseconds": 4.2321,
+        "P50Milliseconds": 0.7388,
+        "P95Milliseconds": 1.22868,
+        "MaxMilliseconds": 1.3163,
+        "AverageMilliseconds": 0.84642
+      }
+    },
+    "Counters": {},
+    "Runtime": null
+  }
+}

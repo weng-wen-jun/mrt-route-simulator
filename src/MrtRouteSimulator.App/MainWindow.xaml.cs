@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -38,10 +39,31 @@ public partial class MainWindow : Window
     private bool _suppressEngineModeSelectionChanged;
     private bool _isV2PlaybackPlaying;
     private bool _closeAfterPlaybackShutdown;
+    private bool _initializingRouteDisplayPreferences = true;
+    private bool _routeTrainContextMenuOpen;
+    private double _routeMapHorizontalZoom = 1;
+    private bool _useProportionalInitialWindowSize;
+    private bool _trackInitialWindowSize;
+    private bool _hasExplicitInitialWindowSize;
+    private object? _initialWindowFitDiagnostic;
+    private string? _followedRouteVehicleId;
     public MainWindow()
     {
         InitializeComponent();
-        SourceInitialized += (_, _) => FitInitialWindowToWorkArea();
+        InterfaceScaleService.ApplyToWindow(this);
+        UpdateInterfaceScaleMenu();
+        ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
+        _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
+        SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
+        _initializingRouteDisplayPreferences = false;
+        UpdateRouteFollowUi();
+        // No fixed startup Width/Height in XAML. Preserve callers' explicit sizing;
+        // apply the proportional default after per-monitor HWND initialization.
+        // WPF can write auto-derived dimensions before SourceInitialized,
+        // especially with mixed monitor DPI. Remember caller sizing before an
+        // HWND exists instead of mistaking those native dimensions for intent.
+        SourceInitialized += (_, _) => _useProportionalInitialWindowSize = !_hasExplicitInitialWindowSize;
+        ContentRendered += FitInitialWindowAfterFirstRender;
         Title = $"MRT 路線進出站時間模擬器 {ProductVersion.Current}";
         VersionSummaryText.Text = $"{ProductVersion.Current} · 平順營運軌跡 · 里程速限 · 移動閉塞 · 時間－里程運行圖";
         DataContext = this;
@@ -57,17 +79,65 @@ public partial class MainWindow : Window
         {
             DrawRoute();
             DrawSpeedProfile();
+            InitializeMcpBridgeFromArguments();
         };
+        _trackInitialWindowSize = true;
+    }
+
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        if (_trackInitialWindowSize
+            && (e.Property == WidthProperty || e.Property == HeightProperty)
+            && new System.Windows.Interop.WindowInteropHelper(this).Handle == IntPtr.Zero)
+            _hasExplicitInitialWindowSize = true;
+        base.OnPropertyChanged(e);
+    }
+
+    private void FitInitialWindowAfterFirstRender(object? sender, EventArgs e)
+    {
+        ContentRendered -= FitInitialWindowAfterFirstRender;
+        FitInitialWindowToWorkArea();
     }
 
     /// <summary>
-    /// 預設 1440 x 900 是舒適工作尺寸，不得讓它在較小的可用工作區開啟時超出螢幕。
-    /// 視窗建立後才可取得 WPF 以 DIP 表示的工作區；同時下調本次視窗的最小值，
-    /// 讓 Windows 不會再以 XAML 的固定最小尺寸把視窗推出可視範圍。
+    /// 預設以所在螢幕工作區的90%開啟；明確指定尺寸的測試／呼叫者僅做邊界限制。
     /// </summary>
     private void FitInitialWindowToWorkArea()
     {
         var workArea = SystemParameters.WorkArea;
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        var monitor = MonitorFromWindow(handle, MonitorDefaultToNearest);
+        var info = new MonitorInfo { CbSize = System.Runtime.InteropServices.Marshal.SizeOf<MonitorInfo>() };
+        if (monitor != 0 && GetMonitorInfo(monitor, ref info))
+        {
+            var dpi = VisualTreeHelper.GetDpi(this);
+            workArea = new Rect(info.Work.Left / dpi.DpiScaleX, info.Work.Top / dpi.DpiScaleY,
+                (info.Work.Right - info.Work.Left) / dpi.DpiScaleX,
+                (info.Work.Bottom - info.Work.Top) / dpi.DpiScaleY);
+        }
+        // With auto startup dimensions WPF can replace NaN with the full native
+        // work area before SourceInitialized. That is still the default window,
+        // not a caller's deliberately smaller initial size.
+        var proportional = _useProportionalInitialWindowSize
+            || (Width >= workArea.Width - 1 && Height >= workArea.Height - 1);
+        _initialWindowFitDiagnostic = new
+        {
+            proportional, preferredWidth = Width, preferredHeight = Height,
+            workArea = new { workArea.Left, workArea.Top, workArea.Width, workArea.Height },
+            dpiScale = VisualTreeHelper.GetDpi(this).DpiScaleX
+        };
+        if (proportional)
+        {
+            var bounds = CalculateInitialWindowBounds(workArea, MinWidth, MinHeight);
+            MinWidth = Math.Min(MinWidth, workArea.Width);
+            MinHeight = Math.Min(MinHeight, workArea.Height);
+            Width = bounds.Width;
+            Height = bounds.Height;
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Left = bounds.Left;
+            Top = bounds.Top;
+            return;
+        }
         var (width, minimumWidth) = FitWindowDimension(Width, MinWidth, workArea.Width);
         var (height, minimumHeight) = FitWindowDimension(Height, MinHeight, workArea.Height);
 
@@ -75,6 +145,14 @@ public partial class MainWindow : Window
         MinHeight = minimumHeight;
         Width = width;
         Height = height;
+    }
+
+    private static Rect CalculateInitialWindowBounds(Rect workArea, double minimumWidth, double minimumHeight)
+    {
+        var width = Math.Clamp(workArea.Width * .9, Math.Min(minimumWidth, workArea.Width), workArea.Width);
+        var height = Math.Clamp(workArea.Height * .9, Math.Min(minimumHeight, workArea.Height), workArea.Height);
+        return new Rect(workArea.Left + (workArea.Width - width) / 2,
+            workArea.Top + (workArea.Height - height) / 2, width, height);
     }
 
     private static (double Size, double Minimum) FitWindowDimension(
@@ -101,6 +179,7 @@ public partial class MainWindow : Window
 
     private async void LoadSample_Click(object sender, RoutedEventArgs e)
     {
+        NativeAcceptanceAbortForLifecycle("sample-loaded");
         await StopCurrentPlaybackResourcesAsync();
         LoadSampleData();
     }
@@ -121,6 +200,7 @@ public partial class MainWindow : Window
     private async void EngineMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (!IsLoaded || _suppressEngineModeSelectionChanged) return;
+        NativeAcceptanceAbortForLifecycle("engine-mode-changed");
         PausePlayback();
         await StopCurrentPlaybackResourcesAsync();
         ClearResults();
@@ -263,6 +343,7 @@ public partial class MainWindow : Window
 
     private async void RunSimulation_Click(object sender, RoutedEventArgs e)
     {
+        NativeAcceptanceAbortForLifecycle("simulation-rebuilt");
         PausePlayback();
         HideValidation();
         // 已有 Schema 8 document 時，重新建立／播放必須直接使用同一份 topology；不可
@@ -437,56 +518,116 @@ public partial class MainWindow : Window
         PopulateV2Results();
     }
 
-    private async void Play_Click(object sender, RoutedEventArgs e)
+    private async void Play_Click(object sender, RoutedEventArgs e) => await PlayPlaybackAsync();
+
+    private async Task PlayPlaybackAsync()
     {
-        if (_simulationEngine is null && _playbackWorker is null)
+        var inputToken = NativeAcceptanceBeginInputAction(
+            _nativeAcceptanceSession?.Run is { HasPause: true, Completed: false, IsPlaying: false } ? "resume" : "play");
+        NativeAcceptanceInputHandlerStarted(inputToken);
+        try
         {
-            return;
-        }
-
-        if (_playbackTimeSeconds >= _playbackDurationSeconds)
-        {
-            if (!_v2Enabled)
+            if (_simulationEngine is null && _playbackWorker is null)
             {
-                _playbackTimeSeconds = 0;
+                return;
             }
-        }
 
-        if (_v2Enabled && _playbackWorker is not null)
-        {
-            try
+            if (_playbackTimeSeconds >= _playbackDurationSeconds)
             {
-                if (_latestPlaybackFrame?.IsComplete == true)
+                if (!_v2Enabled)
                 {
-                    await _playbackWorker.ResetAsync();
-                    UpdateV2PlaybackView();
+                    _playbackTimeSeconds = 0;
+                }
+            }
+
+            if (_v2Enabled && _playbackWorker is not null)
+            {
+                try
+                {
+                    if (_latestPlaybackFrame?.IsComplete == true)
+                    {
+                        await _playbackWorker.ResetAsync();
+                        UpdateV2PlaybackView();
+                        NativeAcceptanceAfterResetApplied();
+                    }
+
+                    NativeAcceptancePhaseStart(inputToken, "play.beforeDispatch");
+                    try
+                    {
+                        NativeAcceptanceBeforePlayDispatch(inputToken);
+                    }
+                    finally
+                    {
+                        NativeAcceptancePhaseEnd(inputToken, "play.beforeDispatch");
+                    }
+
+                    NativeAcceptancePhaseStart(inputToken, "play.workerAwait");
+                    try
+                    {
+                        await _playbackWorker.PlayAsync(GetPlaybackSpeed());
+                    }
+                    finally
+                    {
+                        NativeAcceptancePhaseEnd(inputToken, "play.workerAwait");
+                    }
+
+                    _isV2PlaybackPlaying = true;
+                    NativeAcceptancePhaseStart(inputToken, "play.afterAcknowledged");
+                    try
+                    {
+                        NativeAcceptanceAfterPlayAcknowledged(inputToken);
+                    }
+                    finally
+                    {
+                        NativeAcceptancePhaseEnd(inputToken, "play.afterAcknowledged");
+                    }
+                    NativeAcceptancePhaseStart(inputToken, "play.statusUpdate");
+                    try
+                    {
+                        _playbackTimer.Start();
+                        PlaybackStatusText.Text = $"播放中；要求 {GetPlaybackSpeed():0.#}×，正在量測有效模擬倍率。";
+                        StatusTextBlock.Text = "正在播放模擬。";
+                    }
+                    finally
+                    {
+                        NativeAcceptancePhaseEnd(inputToken, "play.statusUpdate");
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    NativeAcceptancePlayFailed(new ObjectDisposedException(nameof(SimulationPlaybackWorker)));
                 }
 
-                await _playbackWorker.PlayAsync(GetPlaybackSpeed());
-                _isV2PlaybackPlaying = true;
-                _playbackTimer.Start();
-                PlaybackStatusText.Text = $"播放中；要求 {GetPlaybackSpeed():0.#}×，正在量測有效模擬倍率。";
-                StatusTextBlock.Text = "正在播放模擬。";
-            }
-            catch (ObjectDisposedException)
-            {
+                return;
             }
 
-            return;
+            _playbackTimer.Start();
+            PlaybackStatusText.Text = "播放中；倍率只影響畫面，不改變物理結果。";
+            StatusTextBlock.Text = "正在播放模擬。";
         }
-
-        _playbackTimer.Start();
-        PlaybackStatusText.Text = "播放中；倍率只影響畫面，不改變物理結果。";
-        StatusTextBlock.Text = "正在播放模擬。";
+        finally
+        {
+            NativeAcceptanceInputHandlerEnded(inputToken, "normal Play/Resume handler completed");
+            NativeAcceptanceApplicationVisualUpdate(inputToken, "normal Play/Resume status update applied; not compositor present");
+        }
     }
 
-    private void Pause_Click(object sender, RoutedEventArgs e)
+    private async void Pause_Click(object sender, RoutedEventArgs e) => await PausePlaybackCommandAsync();
+
+    private async Task PausePlaybackCommandAsync()
     {
-        PausePlayback();
+        var inputToken = NativeAcceptanceBeginInputAction("pause");
+        NativeAcceptanceInputHandlerStarted(inputToken);
+        await PausePlaybackAsync(inputToken);
         if (_simulationEngine is not null || _playbackWorker is not null)
         {
             PlaybackStatusText.Text = "已暫停；可繼續播放或重設。";
             StatusTextBlock.Text = "模擬已暫停。";
+        }
+        if (!_v2Enabled || _playbackWorker is null)
+        {
+            NativeAcceptanceInputHandlerEnded(inputToken, "normal synchronous Pause handler completed");
+            NativeAcceptanceApplicationVisualUpdate(inputToken, "normal Pause status update; not compositor present");
         }
     }
 
@@ -506,30 +647,83 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void ResetPlayback_Click(object sender, RoutedEventArgs e)
+    private async void ResetPlayback_Click(object sender, RoutedEventArgs e) => await ResetPlaybackAsync();
+
+    private async Task ResetPlaybackAsync()
     {
-        PausePlayback();
-        if (_simulationEngine is not null || _playbackWorker is not null)
+        var inputToken = NativeAcceptanceBeginInputAction("reset");
+        NativeAcceptanceInputHandlerStarted(inputToken);
+        try
         {
-            if (_v2Enabled)
+            NativeAcceptancePhaseStart(inputToken, "reset.lifecycleBoundary");
+            try
             {
-                if (!await ResetV2PlaybackAsync())
+                NativeAcceptanceAbortForLifecycle("playback-reset");
+            }
+            finally
+            {
+                NativeAcceptancePhaseEnd(inputToken, "reset.lifecycleBoundary");
+            }
+            if (_simulationEngine is not null || _playbackWorker is not null)
+            {
+                if (_v2Enabled)
                 {
-                    PlaybackStatusText.Text = _playbackWorker?.Completion.Exception?.GetBaseException() is { } failure
-                        ? $"模擬工作者已停止：{failure.Message}"
-                        : "模擬工作者已停止或專案正在切換；請重新建立模擬。";
-                    return;
+                    // Reset is ordered by the worker and already transitions it to paused
+                    // before rebuilding the initial frame.  A preceding Pause would only add
+                    // an intermediate frame and a full UI refresh that is immediately discarded
+                    // by ResetV2PlaybackAsync.
+                    NativeAcceptancePhaseStart(inputToken, "reset.workerAwait");
+                    bool resetSucceeded;
+                    try
+                    {
+                        resetSucceeded = await ResetV2PlaybackAsync();
+                    }
+                    finally
+                    {
+                        NativeAcceptancePhaseEnd(inputToken, "reset.workerAwait");
+                    }
+
+                    if (!resetSucceeded)
+                    {
+                        PlaybackStatusText.Text = _playbackWorker?.Completion.Exception?.GetBaseException() is { } failure
+                            ? $"模擬工作者已停止：{failure.Message}"
+                            : "模擬工作者已停止或專案正在切換；請重新建立模擬。";
+                        return;
+                    }
+                }
+                else
+                {
+                    await PausePlaybackAsync();
+                    _simulationEngine?.Reset();
+                }
+
+                NativeAcceptancePhaseStart(inputToken, "reset.uiApply");
+                try
+                {
+                    _playbackTimeSeconds = 0;
+                    UpdatePlaybackView();
+                    NativeAcceptanceAfterResetApplied();
+                }
+                finally
+                {
+                    NativeAcceptancePhaseEnd(inputToken, "reset.uiApply");
+                }
+                NativeAcceptancePhaseStart(inputToken, "reset.statusUpdate");
+                try
+                {
+                    PlaybackStatusText.Text = "已回到首班列車發車時刻。";
+                    StatusTextBlock.Text = "播放進度已重設。";
+                }
+                finally
+                {
+                    NativeAcceptancePhaseEnd(inputToken, "reset.statusUpdate");
                 }
             }
-            else
-            {
-                _simulationEngine?.Reset();
-            }
-
-            _playbackTimeSeconds = 0;
-            UpdatePlaybackView();
-            PlaybackStatusText.Text = "已回到首班列車發車時刻。";
-            StatusTextBlock.Text = "播放進度已重設。";
+        }
+        finally
+        {
+            NativeAcceptanceInputHandlerEnded(inputToken, "normal Reset handler completed");
+            NativeAcceptanceApplicationVisualUpdate(inputToken, "normal Reset UI update; not compositor present");
         }
     }
 
@@ -541,6 +735,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
+            NativeAcceptanceAbortForLifecycle("ui-update-failed");
             PausePlayback();
             Trace.WriteLine($"Playback stopped after an unexpected UI update failure: {exception}");
             PlaybackStatusText.Text = $"播放已停止：{exception.Message}";
@@ -556,6 +751,7 @@ public partial class MainWindow : Window
             {
                 _isV2PlaybackPlaying = false;
                 _playbackTimer.Stop();
+                NativeAcceptanceAbortForLifecycle("playback-worker-fault");
                 PlaybackStatusText.Text = $"實際模擬已停止：{_playbackWorker.Completion.Exception?.GetBaseException().Message}";
                 StatusTextBlock.Text = "模擬工作者發生錯誤。";
                 return;
@@ -563,10 +759,11 @@ public partial class MainWindow : Window
 
             UpdateV2PlaybackView(force: false);
             ApplyCompletedPlannedTimeline();
-            if (_latestPlaybackFrame?.IsComplete == true)
+            if (_latestPlaybackFrame is { IsComplete: true } completedFrame)
             {
                 _isV2PlaybackPlaying = false;
                 PausePlayback();
+                NativeAcceptanceObserveCompletedFrame(completedFrame);
                 PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
                 StatusTextBlock.Text = "模擬完整循環已完成。";
             }
@@ -653,6 +850,8 @@ public partial class MainWindow : Window
 
     private void DrawRoute(IReadOnlyList<TrainState>? states = null)
     {
+        if (_routeTrainContextMenuOpen) return;
+
         if (_v2Enabled)
         {
             DrawV2Route();
@@ -762,9 +961,11 @@ public partial class MainWindow : Window
                 },
                 ToolTip = $"{state.TrainId}\n{StateToChinese(state.State)}\n位置 {state.PositionMeters / 1000:0.###} km\n速度 {state.SpeedMetersPerSecond * 3.6:0.#} km/h"
             };
+            AttachRouteTrainFollowContext(train, state.TrainId);
             Canvas.SetLeft(train, Math.Clamp(x - 21, 0, width - 42));
             Canvas.SetTop(train, Math.Clamp(y - 11, 4, height - 26));
             RouteCanvas.Children.Add(train);
+            KeepFollowedRouteVehicleInView(state.TrainId, x, y);
         }
     }
 
@@ -856,23 +1057,30 @@ public partial class MainWindow : Window
 
     private const double RouteCanvasMinimumStationPitch = 92;
     private const double RouteCanvasHorizontalPadding = 120;
+    // WPF can expose a very large finite sentinel (rather than Infinity) while
+    // an unshown ScrollViewer is awaiting its first measure pass. Do not let
+    // that value become a canvas dimension or Polyline coordinate.
+    private const double MaxFiniteLayoutDimension = 1_000_000;
     private double _routeCanvasLayoutViewportHeight = double.NaN;
+
+    private static bool IsFiniteLayoutDimension(double value) =>
+        double.IsFinite(value) && value >= 1 && value <= MaxFiniteLayoutDimension;
 
     private double PrepareRouteCanvasWidth()
     {
         var viewportWidth = RouteScrollViewer.ViewportWidth;
-        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        if (!IsFiniteLayoutDimension(viewportWidth))
         {
             viewportWidth = RouteScrollViewer.ActualWidth;
         }
-        if (!double.IsFinite(viewportWidth) || viewportWidth < 1)
+        if (!IsFiniteLayoutDimension(viewportWidth))
         {
             viewportWidth = RouteCanvas.ActualWidth;
         }
 
         var stationCount = _latestPlaybackFrame?.TopologyInfrastructure?.Stations.Count
             ?? _route?.Stations.Count ?? 0;
-        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount);
+        var width = CalculateRouteCanvasWidth(viewportWidth, stationCount, _routeMapHorizontalZoom);
         if (!double.IsFinite(RouteCanvas.Width) || Math.Abs(RouteCanvas.Width - width) > .5)
         {
             RouteCanvas.Width = width;
@@ -883,9 +1091,19 @@ public partial class MainWindow : Window
     private double PrepareRouteCanvasHeight()
     {
         var viewportHeight = RouteScrollViewer.ViewportHeight;
-        if (!double.IsFinite(viewportHeight) || viewportHeight < 1)
+        if (!IsFiniteLayoutDimension(viewportHeight))
         {
             viewportHeight = RouteScrollViewer.ActualHeight;
+        }
+
+        if (!IsFiniteLayoutDimension(viewportHeight))
+        {
+            viewportHeight = RouteCanvas.MinHeight;
+        }
+
+        if (!IsFiniteLayoutDimension(viewportHeight))
+        {
+            viewportHeight = 300;
         }
 
         var desiredHeight = Math.Max(300, viewportHeight);
@@ -905,13 +1123,117 @@ public partial class MainWindow : Window
         return RouteCanvas.Height;
     }
 
-    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount)
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount) =>
+        CalculateRouteCanvasWidth(viewportWidth, stationCount, 1);
+
+    private static double CalculateRouteCanvasWidth(double viewportWidth, int stationCount, double horizontalZoom)
     {
-        var usableViewport = double.IsFinite(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
+        var usableViewport = IsFiniteLayoutDimension(viewportWidth) ? Math.Max(0, viewportWidth) : 0;
+        // An unbuilt route is a placeholder, not a zoomable route map.
+        if (stationCount <= 0) return Math.Max(100, usableViewport);
         var desiredWidth = stationCount <= 0
             ? usableViewport
             : RouteCanvasHorizontalPadding + stationCount * RouteCanvasMinimumStationPitch;
-        return Math.Max(100, Math.Max(usableViewport, desiredWidth));
+        var normalizedZoom = double.IsFinite(horizontalZoom) ? Math.Clamp(horizontalZoom, 1, 2) : 1;
+        return Math.Min(MaxFiniteLayoutDimension,
+            Math.Max(100, Math.Max(usableViewport, desiredWidth) * normalizedZoom));
+    }
+
+    private void SelectRouteHorizontalZoom(double zoom)
+    {
+        foreach (var item in RouteHorizontalZoomComboBox.Items.OfType<ComboBoxItem>())
+        {
+            if (double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out var itemZoom)
+                && Math.Abs(itemZoom - zoom) < .001)
+            {
+                RouteHorizontalZoomComboBox.SelectedItem = item;
+                return;
+            }
+        }
+
+        RouteHorizontalZoomComboBox.SelectedIndex = 0;
+        _routeMapHorizontalZoom = 1;
+    }
+
+    private void RouteHorizontalZoom_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initializingRouteDisplayPreferences
+            || RouteHorizontalZoomComboBox.SelectedItem is not ComboBoxItem item
+            || !double.TryParse(item.Tag?.ToString(), CultureInfo.InvariantCulture, out var zoom))
+        {
+            return;
+        }
+
+        var oldWidth = RouteCanvas.Width;
+        var viewportWidth = RouteScrollViewer.ViewportWidth;
+        if (!IsFiniteLayoutDimension(viewportWidth))
+        {
+            viewportWidth = RouteScrollViewer.ActualWidth;
+        }
+
+        var oldCenterRatio = double.IsFinite(oldWidth) && oldWidth > 0 && IsFiniteLayoutDimension(viewportWidth)
+            ? (RouteScrollViewer.HorizontalOffset + viewportWidth / 2) / oldWidth
+            : 0;
+        if (!double.IsFinite(oldCenterRatio) || oldCenterRatio < 0)
+        {
+            oldCenterRatio = 0;
+        }
+        _routeMapHorizontalZoom = Math.Clamp(zoom, 1, 2);
+        _topologyRouteVisualCache = null;
+        DrawRoute();
+
+        if (_followedRouteVehicleId is null && oldCenterRatio > 0)
+        {
+            RouteScrollViewer.ScrollToHorizontalOffset(
+                Math.Max(0, oldCenterRatio * RouteCanvas.Width - RouteScrollViewer.ViewportWidth / 2));
+        }
+
+        try
+        {
+            AppDisplayPreferences.SaveRouteMapHorizontalZoom(_routeMapHorizontalZoom);
+        }
+        catch (IOException)
+        {
+            StatusTextBlock.Text = "已調整路線圖左右縮放，但無法保存本機畫面設定。";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = "已調整路線圖左右縮放，但無法保存本機畫面設定。";
+        }
+    }
+
+    private void StopRouteFollow_Click(object sender, RoutedEventArgs e) => StopFollowingRouteVehicle();
+
+    private void FollowRouteVehicle(string vehicleId)
+    {
+        _followedRouteVehicleId = vehicleId;
+        UpdateRouteFollowUi();
+        DrawRoute();
+    }
+
+    private void StopFollowingRouteVehicle()
+    {
+        _followedRouteVehicleId = null;
+        UpdateRouteFollowUi();
+    }
+
+    private void UpdateRouteFollowUi()
+    {
+        if (RouteFollowStatusText is null || StopRouteFollowButton is null) return;
+        RouteFollowStatusText.Text = _followedRouteVehicleId is null
+            ? "未跟隨車輛"
+            : $"跟隨 {ShortVehicle(_followedRouteVehicleId)}";
+        StopRouteFollowButton.IsEnabled = _followedRouteVehicleId is not null;
+    }
+
+    private void KeepFollowedRouteVehicleInView(string vehicleId, double centerX, double centerY)
+    {
+        if (!string.Equals(_followedRouteVehicleId, vehicleId, StringComparison.OrdinalIgnoreCase)) return;
+
+        RouteScrollViewer.ScrollToHorizontalOffset(
+            Math.Max(0, centerX - RouteScrollViewer.ViewportWidth / 2));
+        RouteScrollViewer.ScrollToVerticalOffset(
+            Math.Max(0, centerY - RouteScrollViewer.ViewportHeight / 2));
     }
 
     private void RouteCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRoute();
@@ -923,6 +1245,7 @@ public partial class MainWindow : Window
 
     private void ClearResults()
     {
+        StopFollowingRouteVehicle();
         _route = null;
         _parameters = null;
         _cycle = null;
@@ -949,20 +1272,28 @@ public partial class MainWindow : Window
         DrawSpeedProfile();
     }
 
-    private void PausePlayback()
+    private void PausePlayback() => PausePlaybackWithInput(0);
+
+    private void PausePlaybackWithInput(long inputToken) => _ = PausePlaybackAsync(inputToken);
+
+    private async Task PausePlaybackAsync(long inputToken = 0)
     {
+        if (_latestPlaybackFrame?.IsComplete != true)
+        {
+            NativeAcceptancePauseDispatch();
+        }
         if (_v2Enabled && _playbackWorker is { } worker)
         {
             _isV2PlaybackPlaying = false;
             _playbackTimer.Stop();
-            _ = PauseWorkerSafelyAsync(worker);
+            await PauseWorkerSafelyAsync(worker, inputToken);
             return;
         }
 
         _playbackTimer.Stop();
     }
 
-    private async Task PauseWorkerSafelyAsync(SimulationPlaybackWorker worker)
+    private async Task PauseWorkerSafelyAsync(SimulationPlaybackWorker worker, long inputToken = 0)
     {
         try
         {
@@ -974,6 +1305,8 @@ public partial class MainWindow : Window
                     if (ReferenceEquals(_playbackWorker, worker))
                     {
                         UpdateV2PlaybackView(force: true);
+                        NativeAcceptanceInputHandlerEnded(inputToken, "normal Pause worker acknowledged");
+                        NativeAcceptanceApplicationVisualUpdate(inputToken, "post-Pause frame applied; not compositor present");
                     }
                 });
             }
@@ -992,6 +1325,8 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         _closeAfterPlaybackShutdown = true;
+        NativeAcceptanceAbortForLifecycle("window-closing");
+        _ = StopNativeAcceptanceMeasurementAsync();
         _playbackTimer.Stop();
         _ = CloseAfterPlaybackShutdownAsync();
     }
@@ -999,6 +1334,7 @@ public partial class MainWindow : Window
     private async Task CloseAfterPlaybackShutdownAsync()
     {
         await StopCurrentPlaybackResourcesAsync();
+        await StopNativeAcceptanceMeasurementAsync();
         await Dispatcher.InvokeAsync(Close);
     }
 
@@ -1072,6 +1408,11 @@ public partial class MainWindow : Window
         Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
             new Action(() => ValidationBorder.BringIntoView()));
+    }
+
+    private void HideValidation_Click(object sender, RoutedEventArgs e)
+    {
+        HideValidation();
     }
 
     private void HideValidation()

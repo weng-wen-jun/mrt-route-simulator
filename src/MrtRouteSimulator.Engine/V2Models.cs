@@ -123,7 +123,8 @@ public sealed record StationServiceInstruction(
     string StationId,
     StationServiceMode Mode,
     double? SpeedLimitMetersPerSecond = null,
-    double? DwellTimeSeconds = null);
+    double? DwellTimeSeconds = null,
+    string? WaitForOvertakeServiceRunId = null);
 
 public sealed record ServicePattern(
     string PatternId,
@@ -316,6 +317,20 @@ public sealed record SimulationSnapshot(
     IReadOnlyList<WorldTrainState> Trains,
     IReadOnlyList<SafetyObservation> SafetyObservations,
     IReadOnlyList<SimulationEvent> NewEvents);
+
+/// <summary>目前已預約進路中，位於列車車頭前方的實體軌道區段；供路線圖呈現。</summary>
+public sealed record LockedRouteSegment(
+    string VehicleId,
+    string ServiceRunId,
+    string TrackEdgeId,
+    double StartOffsetMeters,
+    double EndOffsetMeters,
+    IReadOnlyList<string> ResourceIds)
+{
+    public DirectedTrackTraversal? PreviousTraversal { get; init; }
+    public DirectedTrackTraversal Traversal { get; init; }
+    public DirectedTrackTraversal? NextTraversal { get; init; }
+}
 
 internal static class V2Validator
 {

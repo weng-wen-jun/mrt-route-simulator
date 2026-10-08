@@ -16,6 +16,13 @@ artifacts/
 .codex-remote-attachments/
 tmp/
 
+# Local generated build and acceptance evidence (reference documents are tracked)
+/output/
+**/__pycache__/
+*.pyc
+/docs/native-acceptance-evidence/
+/docs/native-acceptance-raw/
+
 # NuGet packages
 *.nupkg
 packages/

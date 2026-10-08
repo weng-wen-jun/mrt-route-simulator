@@ -8,8 +8,10 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AssemblyName>MRT路線進出站時間模擬器</AssemblyName>
     <RootNamespace>MrtRouteSimulator.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../MrtRouteSimulator.Engine/MrtRouteSimulator.Engine.csproj" />
+    <ProjectReference Include="../MrtRouteSimulator.Automation/MrtRouteSimulator.Automation.csproj" />
   </ItemGroup>
 </Project>

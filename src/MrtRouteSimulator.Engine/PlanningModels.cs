@@ -131,7 +131,8 @@ public sealed class StopPatternInstruction
         string stationId,
         StopPatternAction action,
         double? dwellTimeSeconds = null,
-        double? passingSpeedLimitMetersPerSecond = null)
+        double? passingSpeedLimitMetersPerSecond = null,
+        string? waitForOvertakeServiceRunId = null)
     {
         var errors = new List<string>();
         StationId = NormalizeRequired(stationId, "停站模式車站 ID", errors);
@@ -150,9 +151,16 @@ public sealed class StopPatternInstruction
             RequirePositiveFinite(passingSpeedLimitMetersPerSecond.Value, "通過速限覆寫", errors);
         }
 
+        if (waitForOvertakeServiceRunId is not null
+            && (string.IsNullOrWhiteSpace(waitForOvertakeServiceRunId) || action != StopPatternAction.Stop))
+        {
+            errors.Add("指定待避車次只能用於停站指令，且車次 ID 不可空白。");
+        }
+
         Action = action;
         DwellTimeSeconds = dwellTimeSeconds;
         PassingSpeedLimitMetersPerSecond = passingSpeedLimitMetersPerSecond;
+        WaitForOvertakeServiceRunId = waitForOvertakeServiceRunId?.Trim();
         RouteValidator.ThrowIfAny(errors);
     }
 
@@ -171,6 +179,7 @@ public sealed class StopPatternInstruction
     public bool Stop => IsStop;
     public double? DwellTimeSeconds { get; }
     public double? PassingSpeedLimitMetersPerSecond { get; }
+    public string? WaitForOvertakeServiceRunId { get; }
     public double? PassThroughSpeedLimitMetersPerSecond => PassingSpeedLimitMetersPerSecond;
 }
 

@@ -66,18 +66,29 @@ public sealed class SpeedLimitService
                 continue;
             }
 
-            var jerkAllowance = jerkMetersPerSecondCubed > 0
-                ? currentSpeedMetersPerSecond * brakingMetersPerSecondSquared / jerkMetersPerSecondCubed
-                    + brakingMetersPerSecondSquared * brakingMetersPerSecondSquared
-                    / (2 * jerkMetersPerSecondCubed * jerkMetersPerSecondCubed)
-                : 0;
-            var usableDistance = Math.Max(0, distance - jerkAllowance);
-            var brakingCurveSpeed = Math.Sqrt(
-                Math.Max(0, targetSpeed * targetSpeed + 2 * brakingMetersPerSecondSquared * usableDistance));
-            permitted = Math.Min(permitted, brakingCurveSpeed);
+            permitted = Math.Min(permitted, CalculateTargetPermittedSpeed(
+                distance, targetSpeed, brakingMetersPerSecondSquared,
+                jerkMetersPerSecondCubed, currentSpeedMetersPerSecond));
         }
 
         return Math.Clamp(permitted, 0, trainMaximumMetersPerSecond);
+    }
+
+    internal static double CalculateTargetPermittedSpeed(
+        double forwardDistanceMeters,
+        double targetSpeedMetersPerSecond,
+        double brakingMetersPerSecondSquared,
+        double jerkMetersPerSecondCubed,
+        double currentSpeedMetersPerSecond)
+    {
+        var jerkAllowance = jerkMetersPerSecondCubed > 0
+            ? currentSpeedMetersPerSecond * brakingMetersPerSecondSquared / jerkMetersPerSecondCubed
+                + brakingMetersPerSecondSquared * brakingMetersPerSecondSquared
+                / (2 * jerkMetersPerSecondCubed * jerkMetersPerSecondCubed)
+            : 0;
+        var usableDistance = Math.Max(0, forwardDistanceMeters - jerkAllowance);
+        return Math.Sqrt(Math.Max(0, targetSpeedMetersPerSecond * targetSpeedMetersPerSecond
+            + 2 * brakingMetersPerSecondSquared * usableDistance));
     }
 
     public IReadOnlyList<string> GetOverlapWarnings()

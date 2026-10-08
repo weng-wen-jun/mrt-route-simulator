@@ -63,7 +63,8 @@ public sealed record ProjectServiceType(
 
 public sealed record ProjectStopPatternInstruction(
     string StationId, StopPatternAction Action, double? DwellTimeSeconds = null,
-    double? PassingSpeedLimitMetersPerSecond = null);
+    double? PassingSpeedLimitMetersPerSecond = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? WaitForOvertakeServiceRunId = null);
 
 public sealed record ProjectStopPattern(string Id, string DisplayName, ProjectStopPatternInstruction[] Instructions);
 
@@ -459,7 +460,8 @@ public static class SimulationProjectFormat
                             _ => throw new SimulationValidationException(["停站模式動作無效。"])
                         },
                         instruction.PassingSpeedLimitMetersPerSecond,
-                        instruction.DwellTimeSeconds)).ToArray())),
+                        instruction.DwellTimeSeconds,
+                        instruction.WaitForOvertakeServiceRunId)).ToArray())),
                 serviceRunPlans: null,
                 resolvedDispatch,
                 vehicleCatalog,
@@ -550,7 +552,8 @@ public static class SimulationProjectFormat
 
     private static StopPatternDefinition ToRuntime(ProjectStopPattern item) => new(item.Id, item.DisplayName,
         item.Instructions.Select(instruction => new StopPatternInstruction(instruction.StationId, instruction.Action,
-            instruction.DwellTimeSeconds, instruction.PassingSpeedLimitMetersPerSecond)));
+            instruction.DwellTimeSeconds, instruction.PassingSpeedLimitMetersPerSecond,
+            instruction.WaitForOvertakeServiceRunId)));
 
     private static DispatchPlanDefinition ToRuntime(ProjectDispatchPlan item) => new(
         item.SimpleHeadwayPlans?.Select(plan => new HeadwayDirectionPlan(plan.Direction, TimeSpan.FromSeconds(plan.FirstDepartureTimeSeconds),

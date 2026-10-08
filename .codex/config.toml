@@ -1,0 +1,7 @@
+[mcp_servers.mrt-route-simulator]
+command = "dotnet"
+args = ["output/v4.1.0-unified/bin/MrtRouteSimulator.Mcp/release/MrtRouteSimulator.Mcp.dll", "--workspace-root", "."]
+cwd = 'D:\AI\codex\mrt-route-simulator'
+startup_timeout_sec = 20
+tool_timeout_sec = 180
+enabled = true

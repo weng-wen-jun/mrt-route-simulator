@@ -175,7 +175,8 @@ public static class TopologyProjectFormat
                     _ => throw new SimulationValidationException(["停站模式動作無效。"])
                 },
                 instruction.PassingSpeedLimitMetersPerSecond,
-                instruction.DwellTimeSeconds)).ToArray())).ToArray();
+                instruction.DwellTimeSeconds,
+                instruction.WaitForOvertakeServiceRunId)).ToArray())).ToArray();
         var train = new TrainParameters(
             document.Train.MaxSpeedMetersPerSecond,
             document.Train.AccelerationMetersPerSecondSquared,
@@ -273,6 +274,81 @@ public static class TopologyProjectFormat
         {
             ValidateDispatchReferences(row.ServiceTypeId, row.VehicleTypeId, row.StopPatternId, row.OriginPlatformId,
                 serviceIds, vehicleIds, stopPatternIds, platformIds, "手動班表", errors);
+        }
+        ValidateSpecifiedOvertakeWaits(document, errors);
+    }
+
+    private static void ValidateSpecifiedOvertakeWaits(TopologyProjectDocument document, ICollection<string> errors)
+    {
+        var rows = document.Dispatch.ManualTimetableRows ?? [];
+        var rowsByRunId = rows.Where(row => !string.IsNullOrWhiteSpace(row.ServiceRunId))
+            .GroupBy(row => row.ServiceRunId!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var patterns = document.StopPatterns.Where(pattern => !string.IsNullOrWhiteSpace(pattern.Id))
+            .GroupBy(pattern => pattern.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var services = document.ServiceTypes.Where(service => !string.IsNullOrWhiteSpace(service.Id))
+            .GroupBy(service => service.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var vehicles = document.VehicleTypes.Where(vehicle => !string.IsNullOrWhiteSpace(vehicle.Id))
+            .GroupBy(vehicle => vehicle.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        string? ResolvePatternId(ProjectManualTimetableRow row)
+        {
+            if (row.StopPatternId is not null) return row.StopPatternId;
+            services.TryGetValue(row.ServiceTypeId, out var service);
+            var vehicleTypeId = row.VehicleTypeId ?? service?.DefaultVehicleTypeId;
+            if (vehicleTypeId is not null && vehicles.TryGetValue(vehicleTypeId, out var vehicle)
+                && vehicle.DefaultStopPatternId is not null) return vehicle.DefaultStopPatternId;
+            return service?.DefaultStopPatternId;
+        }
+
+        foreach (var pattern in document.StopPatterns)
+        foreach (var instruction in pattern.Instructions ?? [])
+        {
+            var targetId = instruction.WaitForOvertakeServiceRunId;
+            if (targetId is null) continue;
+            if (string.IsNullOrWhiteSpace(targetId) || instruction.Action != StopPatternAction.Stop)
+            {
+                errors.Add($"停站模式「{pattern.Id}」在「{instruction.StationId}」的指定待避車次只可用於停站，且車次 ID 不可空白。");
+                continue;
+            }
+            if (document.Dispatch.ActiveMode != DispatchPlanningMode.ManualTimetable
+                || !rowsByRunId.TryGetValue(targetId, out var target))
+            {
+                errors.Add($"停站模式「{pattern.Id}」在「{instruction.StationId}」指定的待避車次「{targetId}」必須存在於啟用的手動班表。");
+                continue;
+            }
+
+            var targetPatternId = ResolvePatternId(target);
+            if (targetPatternId is null || !patterns.TryGetValue(targetPatternId, out var targetPattern)
+                || targetPattern.Instructions.All(item =>
+                    !item.StationId.Equals(instruction.StationId, StringComparison.OrdinalIgnoreCase)
+                    || item.Action != StopPatternAction.Pass))
+                errors.Add($"指定待避車次「{targetId}」必須在「{instruction.StationId}」跨站通過。");
+            if (!services.TryGetValue(target.ServiceTypeId, out var expressService)
+                || !expressService.CanRequestOvertake)
+                errors.Add($"指定待避車次「{targetId}」的服務類型必須允許越行。");
+
+            var routeId = document.DirectionRouteBindings.FirstOrDefault(binding => binding.Direction == target.Direction)
+                ?.ServiceRouteId;
+            if (!document.Topology.PassingOperations.Any(operation =>
+                    operation.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase)
+                    && (operation.ExpressServiceTypeId is null
+                        || operation.ExpressServiceTypeId.Equals(target.ServiceTypeId, StringComparison.OrdinalIgnoreCase))
+                    && document.Topology.PassingFacilities.Any(facility =>
+                        facility.FacilityId.Equals(operation.FacilityId, StringComparison.OrdinalIgnoreCase)
+                        && facility.StationId.Equals(instruction.StationId, StringComparison.OrdinalIgnoreCase))))
+                errors.Add($"指定待避車次「{targetId}」在「{instruction.StationId}」缺少適用的實體越行作業。");
+
+            foreach (var local in rows.Where(row => string.Equals(ResolvePatternId(row), pattern.Id, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (local.Direction != target.Direction
+                    || string.Equals(local.ServiceRunId, targetId, StringComparison.OrdinalIgnoreCase)
+                    || local.VehicleId is not null && string.Equals(local.VehicleId, target.VehicleId, StringComparison.OrdinalIgnoreCase))
+                    errors.Add($"待避車次「{local.ServiceRunId}」與指定越行車次「{targetId}」必須同方向且使用不同車次／車輛。");
+            }
         }
     }
 
@@ -383,7 +459,8 @@ public static class TopologyProjectFormat
             instruction.StationId,
             instruction.Action,
             instruction.DwellTimeSeconds,
-            instruction.PassingSpeedLimitMetersPerSecond)));
+            instruction.PassingSpeedLimitMetersPerSecond,
+            instruction.WaitForOvertakeServiceRunId)));
 
     private static DispatchPlanDefinition ToRuntime(ProjectDispatchPlan item) => new(
         item.SimpleHeadwayPlans?.Select(plan => new HeadwayDirectionPlan(

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -17,14 +18,38 @@ namespace MrtRouteSimulator.App;
 /// </summary>
 internal enum ProjectWorkspacePage
 {
-    Project, QuickBuilder, Infrastructure, Operations, Dispatch, Simulation, Schematic, Results, Validation
+    // Keep these values stable: MainWindow and existing round-trip tests still use them.
+    Project,
+    QuickBuilder,
+    Infrastructure,
+    Operations,
+    Dispatch,
+    Simulation,
+    Schematic,
+    Results,
+    Validation,
+
+    // The settings-workspace pages are deliberately appended so old persisted/reflective
+    // callers never silently open another page after the navigation redesign.
+    Stations,
+    Tracks,
+    Vehicle,
+    Services,
+    StopPatterns,
+    DispatchPlanning,
+    AdvancedData
 }
 
-internal sealed class TopologyEditorWindow : Window
+internal sealed partial class TopologyEditorWindow : Window
 {
     private readonly ProjectEditorState state;
     private readonly ProjectViewModel project;
     private readonly InfrastructureViewModel infrastructure = new();
+    private readonly ObservableCollection<TurnbackOperationEditorViewModel> turnbackOperations = [];
+    private readonly ObservableCollection<PassingOperationEditorViewModel> passingOperations = [];
+    private readonly ObservableCollection<StationOperationEditorViewModel> stationOperations = [];
+    private readonly ObservableCollection<DirectedConnectionEditorViewModel> directedConnections = [];
+    private readonly ObservableCollection<TrackCurveEditorViewModel> curves = [];
     private readonly ServiceNetworkViewModel serviceNetwork = new();
     private readonly DispatchViewModel dispatch = new();
     private readonly SimulationViewModel simulation;
@@ -34,7 +59,17 @@ internal sealed class TopologyEditorWindow : Window
     private readonly TextBlock selectionDetails = new() { TextWrapping = TextWrapping.Wrap };
     private readonly ListBox validationList = new();
     private readonly ListBox navigation = new();
+    private readonly ObservableCollection<NavItem> navigationItems = [];
     private readonly Dictionary<ProjectValidationTargetKind, List<ValidationEditorTarget>> validationTargets = [];
+    private readonly Dictionary<string, Action> pageCommitHooks = new(StringComparer.Ordinal);
+    private string? activePageCommitHookKey;
+    private readonly ColumnDefinition rightPanelColumn = new() { Width = new GridLength(280) };
+    private Grid? rightPanel;
+    private Button? rightPanelToggle;
+    private bool? rightPanelManuallyExpanded;
+    private readonly TextBlock workspaceSummary = new();
+    private readonly TextBlock validationSummary = new();
+    private readonly TextBox workspaceSearch = new();
     private DataGrid? routeGrid;
     private DataGrid? traversalGrid;
     private DataGrid? routeStopGrid;
@@ -46,11 +81,12 @@ internal sealed class TopologyEditorWindow : Window
     private readonly ProjectWorkspacePage initialPage;
     private ProjectWorkspacePage currentPage;
     private bool changingNavigation;
+    private NavItem? lastNavigationItem;
 
     public TopologyEditorWindow(TopologyProjectDocument document, ProjectWorkspacePage initialPage = ProjectWorkspacePage.Project)
     {
         ArgumentNullException.ThrowIfNull(document);
-        this.initialPage = Enum.IsDefined(initialPage) ? initialPage : ProjectWorkspacePage.Project;
+        this.initialPage = NormalizePage(initialPage);
         state = ProjectDocumentMapper.CreateEditorState(document);
         project = new ProjectViewModel(state);
         simulation = new SimulationViewModel(state);
@@ -63,6 +99,7 @@ internal sealed class TopologyEditorWindow : Window
         MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Content = BuildShell();
+        SizeChanged += (_, _) => UpdateRightPanelForWidth();
     }
 
     public TopologyProjectDocument? Result { get; private set; }
@@ -70,46 +107,102 @@ internal sealed class TopologyEditorWindow : Window
     private UIElement BuildShell()
     {
         var root = new Grid { Background = Brushes.White };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(184) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(280) });
+        root.ColumnDefinitions.Add(rightPanelColumn);
+
+        var header = new Grid { Margin = new Thickness(14, 10, 14, 4) };
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
+        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        workspaceSummary.Text = "專案工作區";
+        workspaceSummary.FontSize = 16;
+        workspaceSummary.FontWeight = FontWeights.SemiBold;
+        workspaceSummary.VerticalAlignment = VerticalAlignment.Center;
+        header.Children.Add(workspaceSummary);
+        workspaceSearch.Width = 220;
+        workspaceSearch.Height = 28;
+        workspaceSearch.Margin = new Thickness(8, 0, 0, 0);
+        workspaceSearch.VerticalContentAlignment = VerticalAlignment.Center;
+        workspaceSearch.ToolTip = "搜尋工作區頁面";
+        workspaceSearch.SetValue(AutomationProperties.NameProperty, "搜尋工作區頁面");
+        workspaceSearch.TextChanged += (_, _) =>
+        {
+            var view = CollectionViewSource.GetDefaultView(navigationItems);
+            var query = workspaceSearch.Text.Trim();
+            view.Filter = string.IsNullOrWhiteSpace(query)
+                ? null
+                : item => item is NavItem nav && nav.Label.Contains(query, StringComparison.OrdinalIgnoreCase);
+            view.Refresh();
+        };
+        Grid.SetColumn(workspaceSearch, 1);
+        header.Children.Add(workspaceSearch);
+        rightPanelToggle = CreateButton("收合", (_, _) => ToggleRightPanel(), true);
+        Grid.SetColumn(rightPanelToggle, 2);
+        header.Children.Add(rightPanelToggle);
+        Grid.SetRow(header, 0);
+        Grid.SetColumnSpan(header, 3);
+        root.Children.Add(header);
 
         navigation.Margin = new Thickness(10);
         navigation.BorderThickness = new Thickness(0);
         navigation.Background = new SolidColorBrush(Color.FromRgb(247, 249, 252));
-        navigation.DisplayMemberPath = nameof(NavItem.Label);
-        navigation.ItemsSource = new[]
-        {
-            new NavItem(ProjectWorkspacePage.Project, "專案", ShowProjectHome),
-            new NavItem(ProjectWorkspacePage.QuickBuilder, "快速建立", ShowQuickBuilder),
-            new NavItem(ProjectWorkspacePage.Infrastructure, "基礎設施", ShowInfrastructure),
-            new NavItem(ProjectWorkspacePage.Operations, "營運", ShowOperations),
-            new NavItem(ProjectWorkspacePage.Dispatch, "發車計畫", ShowDispatch),
-            new NavItem(ProjectWorkspacePage.Simulation, "模擬設定", ShowSimulation),
-            new NavItem(ProjectWorkspacePage.Schematic, "線路示意圖", ShowSchematic),
-            new NavItem(ProjectWorkspacePage.Results, "結果", ShowResults),
-            new NavItem(ProjectWorkspacePage.Validation, "驗證", ShowValidation)
-        };
+        navigationItems.Reset([
+            new NavItem(ProjectWorkspacePage.Project, "總覽", ShowProjectHome),
+            new NavItem(ProjectWorkspacePage.Stations, "車站與月台", ShowStationsPage),
+            new NavItem(ProjectWorkspacePage.Tracks, "軌道與設施", ShowTracksPage),
+            new NavItem(ProjectWorkspacePage.Vehicle, "車型", ShowVehiclePage),
+            new NavItem(ProjectWorkspacePage.Services, "服務與路徑", ShowServicesPage),
+            new NavItem(ProjectWorkspacePage.StopPatterns, "停站模式", ShowStopPatternsPage),
+            new NavItem(ProjectWorkspacePage.DispatchPlanning, "班表與接續", ShowDispatchPlanningPage),
+            new NavItem(ProjectWorkspacePage.Simulation, "模擬設定", ShowSimulationPage),
+            new NavItem(ProjectWorkspacePage.AdvancedData, "進階資料", ShowAdvancedDataPage),
+            new NavItem(ProjectWorkspacePage.Validation, "驗證訊息（進階）", ShowValidation)
+        ]);
+        navigation.ItemsSource = navigationItems;
+        var navigationTemplate = new DataTemplate();
+        var navigationText = new FrameworkElementFactory(typeof(TextBlock));
+        navigationText.SetBinding(TextBlock.TextProperty, new Binding(nameof(NavItem.Label)));
+        navigationText.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
+        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(4, 5, 4, 5));
+        navigationTemplate.VisualTree = navigationText;
+        navigation.ItemTemplate = navigationTemplate;
         navigation.SelectionChanged += (_, _) => OpenSelectedNavigationItem();
-        navigation.SelectedIndex = (int)initialPage;
+        navigation.SelectedItem = navigationItems.FirstOrDefault(item => item.Page == initialPage)
+            ?? navigationItems.First();
+        lastNavigationItem = navigation.SelectedItem as NavItem;
+        Grid.SetRow(navigation, 1);
         Grid.SetColumn(navigation, 0);
         root.Children.Add(navigation);
 
         workspace.Margin = new Thickness(12, 12, 8, 12);
+        Grid.SetRow(workspace, 1);
         Grid.SetColumn(workspace, 1);
         root.Children.Add(workspace);
 
         var right = new Grid { Margin = new Thickness(8, 12, 12, 12) };
+        rightPanel = right;
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(230) });
         right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        right.Children.Add(new TextBlock { Text = "屬性", FontSize = 17, FontWeight = FontWeights.SemiBold });
+        var propertyHeader = new DockPanel();
+        propertyHeader.Children.Add(new TextBlock { Text = "選取項目", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        right.Children.Add(propertyHeader);
         selectionDetails.Margin = new Thickness(0, 8, 0, 12);
         selectionDetails.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
-        Grid.SetRow(selectionDetails, 1);
-        right.Children.Add(selectionDetails);
+        var selectionScroll = new ScrollViewer
+        {
+            Content = selectionDetails,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
+        };
+        Grid.SetRow(selectionScroll, 1);
+        right.Children.Add(selectionScroll);
         var validationTitle = new TextBlock { Text = "驗證", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
         Grid.SetRow(validationTitle, 2);
         right.Children.Add(validationTitle);
@@ -120,7 +213,17 @@ internal sealed class TopologyEditorWindow : Window
         Grid.SetRow(validationList, 3);
         validationList.DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage);
         right.Children.Add(validationList);
-        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        Grid.SetRow(right, 1);
+        Grid.SetColumn(right, 2);
+        root.Children.Add(right);
+
+        var footer = new DockPanel { Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
+        validationSummary.Text = "尚未驗證草稿";
+        validationSummary.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        validationSummary.VerticalAlignment = VerticalAlignment.Center;
+        DockPanel.SetDock(validationSummary, Dock.Left);
+        footer.Children.Add(validationSummary);
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var advanced = new CheckBox { Content = "進階識別碼", IsChecked = advancedMode, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         advanced.Checked += (_, _) => advancedMode = true;
         advanced.Unchecked += (_, _) => advancedMode = false;
@@ -128,16 +231,38 @@ internal sealed class TopologyEditorWindow : Window
         actions.Children.Add(CreateButton("驗證", (_, _) => RefreshValidation(), true));
         actions.Children.Add(CreateButton("套用", (_, _) => Apply(), false));
         actions.Children.Add(CreateButton("取消", (_, _) => DialogResult = false, true));
-        Grid.SetRow(actions, 4);
-        right.Children.Add(actions);
-        Grid.SetColumn(right, 2);
-        root.Children.Add(right);
+        DockPanel.SetDock(actions, Dock.Right);
+        footer.Children.Add(actions);
+        Grid.SetRow(footer, 2);
+        Grid.SetColumnSpan(footer, 3);
+        root.Children.Add(footer);
+        UpdateWorkspaceSummary();
         return root;
     }
 
     private void Navigate(ProjectWorkspacePage page)
     {
-        var item = navigation.Items.OfType<NavItem>().First(candidate => candidate.Page == page);
+        if (page is ProjectWorkspacePage.QuickBuilder or ProjectWorkspacePage.Schematic or ProjectWorkspacePage.Results)
+        {
+            var previousHookKey = activePageCommitHookKey;
+            try
+            {
+                CommitPageDrafts();
+                activePageCommitHookKey = null;
+                if (page == ProjectWorkspacePage.QuickBuilder) ShowQuickBuilder();
+                else if (page == ProjectWorkspacePage.Schematic) ShowSchematic();
+                else ShowResults();
+                currentPage = page;
+                UpdateWorkspaceSummary();
+            }
+            catch (EditorValidationException exception) { activePageCommitHookKey = previousHookKey; SetValidationMessages(exception.Messages); }
+            catch (SimulationValidationException exception) { activePageCommitHookKey = previousHookKey; ShowErrors(exception.Errors); }
+            catch (Exception exception) { activePageCommitHookKey = previousHookKey; SetValidationMessages([ProjectEditorValidationService.CreateError(exception.Message, state.Draft)]); }
+            return;
+        }
+        page = NormalizePage(page);
+        if (!string.IsNullOrWhiteSpace(workspaceSearch.Text)) workspaceSearch.Clear();
+        var item = navigationItems.First(candidate => candidate.Page == page);
         if (ReferenceEquals(navigation.SelectedItem, item)) OpenSelectedNavigationItem();
         else navigation.SelectedItem = item;
     }
@@ -145,23 +270,39 @@ internal sealed class TopologyEditorWindow : Window
     private void OpenSelectedNavigationItem()
     {
         if (changingNavigation || navigation.SelectedItem is not NavItem item) return;
+        string? previousHookKey = activePageCommitHookKey;
         try
         {
+            CommitPageDrafts();
+            activePageCommitHookKey = null;
             item.Open();
             currentPage = item.Page;
+            if ((item.Page is ProjectWorkspacePage.Vehicle or ProjectWorkspacePage.Services
+                or ProjectWorkspacePage.StopPatterns or ProjectWorkspacePage.DispatchPlanning)
+                && activePageCommitHookKey is null)
+            {
+                RegisterPageCommitHook("operations-pages", CommitOperationsPageDrafts);
+            }
+            if (previousHookKey is not null && !string.Equals(previousHookKey, activePageCommitHookKey, StringComparison.Ordinal))
+                pageCommitHooks.Remove(previousHookKey);
+            lastNavigationItem = item;
+            UpdateWorkspaceSummary();
         }
         catch (EditorValidationException exception)
         {
+            activePageCommitHookKey = previousHookKey;
             SetValidationMessages(exception.Messages);
             RestoreNavigationSelection();
         }
         catch (SimulationValidationException exception)
         {
+            activePageCommitHookKey = previousHookKey;
             ShowErrors(exception.Errors);
             RestoreNavigationSelection();
         }
         catch (Exception exception)
         {
+            activePageCommitHookKey = previousHookKey;
             SetValidationMessages([ProjectEditorValidationService.CreateError(exception.Message, state.Draft)]);
             RestoreNavigationSelection();
         }
@@ -170,7 +311,8 @@ internal sealed class TopologyEditorWindow : Window
     private void RestoreNavigationSelection()
     {
         changingNavigation = true;
-        navigation.SelectedItem = navigation.Items.OfType<NavItem>().FirstOrDefault(candidate => candidate.Page == currentPage);
+        if (!string.IsNullOrWhiteSpace(workspaceSearch.Text)) workspaceSearch.Clear();
+        navigation.SelectedItem = lastNavigationItem ?? navigationItems.First();
         changingNavigation = false;
     }
 
@@ -180,7 +322,7 @@ internal sealed class TopologyEditorWindow : Window
         var document = state.Draft;
         var topology = document.Topology;
         var validation = ProjectEditorValidationService.Validate(document);
-        var panel = NewPage("專案", "首頁只顯示摘要；請由左側進入各個格式版本 8 工作區編輯。");
+        var panel = NewPage("專案", "請由左側進入各個格式版本 8 工作區編輯；專案識別資料可在此修改。");
         panel.Children.Add(SummaryGrid(
             ("專案名稱", project.ProjectName), ("專案格式版本", document.SchemaVersion.ToString(CultureInfo.InvariantCulture)),
             ("模擬引擎", "V2 拓撲原生"), ("軌道節點數", topology.Nodes.Count.ToString(CultureInfo.InvariantCulture)),
@@ -191,8 +333,32 @@ internal sealed class TopologyEditorWindow : Window
             ("服務／車型數", $"{document.ServiceTypes.Length}／{document.VehicleTypes.Length}"),
             ("發車班次數", CalculateDispatchRunCount(document).ToString(CultureInfo.InvariantCulture)),
             ("拓撲驗證", validation.Any(item => item.Severity == ProjectValidationSeverity.Error) ? "有錯誤" : "通過")));
+        panel.Children.Add(new TextBlock
+        {
+            Text = "從這裡開始編輯大型存檔。快速建立只用於一次性起稿；載入既有拓撲後，請由車站、軌道、營運與班表頁直接修改同一份 Schema 8 草稿。",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)),
+            Margin = new Thickness(0, 12, 0, 8)
+        });
+        panel.Children.Add(CreateButton("快速建立／重新起稿…", (_, _) => Navigate(ProjectWorkspacePage.QuickBuilder), true));
+        panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), false));
         workspace.Content = panel;
         RefreshValidation();
+    }
+
+    private void EditProjectIdentity()
+    {
+        var answer = Ask("編輯專案識別資料", ("專案編號", state.Draft.ProjectId), ("專案名稱", state.Draft.ProjectName));
+        if (answer is null) return;
+        RunEdit(() =>
+        {
+            var id = answer["專案編號"].Trim();
+            var name = answer["專案名稱"].Trim();
+            if (id.Length is < 1 or > 100 || name.Length is < 1 or > 200)
+                throw new SimulationValidationException(["專案編號需為 1 至 100 字，名稱需為 1 至 200 字。"]);
+            return state.Draft with { ProjectId = id, ProjectName = name };
+        });
+        ShowProjectHome();
     }
 
     private void ShowQuickBuilder()
@@ -230,14 +396,19 @@ internal sealed class TopologyEditorWindow : Window
         var tabs = new TabControl();
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Node, "軌道節點", infrastructure.Nodes, AddNode, DeleteSelectedNode));
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Edge, "軌道區段", infrastructure.Edges, AddEdge, DeleteSelectedEdge));
-        var facilityTab = EditorTab(ProjectValidationTargetKind.TurnbackFacility, "設施", infrastructure.Facilities, ShowFacilityMenu, DeleteSelectedFacility, true);
+        var facilityTab = EditorTab(ProjectValidationTargetKind.TurnbackFacility, "設施", infrastructure.Facilities, ShowFacilityMenu, DeleteSelectedFacility, true, EditSelectedFacility);
         tabs.Items.Add(facilityTab);
         RegisterValidationTarget(ProjectValidationTargetKind.PassingFacility, validationTargets[ProjectValidationTargetKind.TurnbackFacility][0]);
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Station, "車站", infrastructure.Stations, AddStation, DeleteSelectedStation));
         tabs.Items.Add(StationAndPlatformTab());
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.SpeedLimit, "速限", infrastructure.SpeedLimits, AddSpeedLimit, DeleteSelectedSpeedLimit));
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Gradient, "坡度", infrastructure.Gradients, AddGradient, DeleteSelectedGradient));
+        tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Edge, "曲線", curves, AddCurve, DeleteSelectedCurve));
         tabs.Items.Add(ResourceTab());
+        tabs.Items.Add(EditorTab(ProjectValidationTargetKind.TurnbackFacility, "折返作業", turnbackOperations, AddTurnbackOperation, DeleteSelectedTurnbackOperation));
+        tabs.Items.Add(EditorTab(ProjectValidationTargetKind.PassingFacility, "待避作業", passingOperations, AddPassingOperation, DeleteSelectedPassingOperation));
+        tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Station, "車站作業", stationOperations, AddStationOperation, DeleteSelectedStationOperation));
+        tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Edge, "有向接續", directedConnections, AddDirectedConnection, DeleteSelectedDirectedConnection));
         panel.Children.Add(tabs);
         workspace.Content = panel;
     }
@@ -336,6 +507,9 @@ internal sealed class TopologyEditorWindow : Window
     {
         CommitTableDrafts();
         var panel = NewPage("發車計畫", "起點只能指定服務路徑上的實體月台。每筆班距或手動班表可選停站模式、車型與續行設定，不使用全線里程。 ");
+        panel.Children.Add(SummaryGrid(("啟用模式", UiDisplayText.Enum(state.Draft.Dispatch.ActiveMode)),
+            ("車輛分配", UiDisplayText.Enum(state.Draft.Dispatch.VehicleAssignmentMode))));
+        panel.Children.Add(CreateButton("設定啟用模式與車輛分配…", (_, _) => EditDispatchModes(), false));
         var tabs = new TabControl();
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.HeadwayPlan, "班距計畫", dispatch.HeadwayPlans, AddHeadwayPlan, EditSelectedHeadwayPlan, DeleteSelectedHeadwayPlan));
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.ManualTimetable, "手動班表", dispatch.ManualRows, AddManualTimetableRow, EditSelectedManualRow, DeleteSelectedManualRow));
@@ -344,33 +518,136 @@ internal sealed class TopologyEditorWindow : Window
         workspace.Content = panel;
     }
 
+    private void EditDispatchModes()
+    {
+        var modes = Enum.GetValues<DispatchPlanningMode>().Select(item => UiDisplayText.Enum(item)).Distinct().ToArray();
+        var mode = Choose("設定發車模式", "啟用模式", modes, UiDisplayText.Enum(state.Draft.Dispatch.ActiveMode));
+        if (mode is null) return;
+        var assignments = Enum.GetValues<VehicleAssignmentMode>().Select(item => UiDisplayText.Enum(item)).Distinct().ToArray();
+        var assignment = Choose("設定車輛分配", "車輛分配", assignments, UiDisplayText.Enum(state.Draft.Dispatch.VehicleAssignmentMode));
+        if (assignment is null) return;
+        if (!UiDisplayText.TryParseEnum(typeof(DispatchPlanningMode), mode, out var parsedMode)
+            || !UiDisplayText.TryParseEnum(typeof(VehicleAssignmentMode), assignment, out var parsedAssignment))
+        {
+            ShowErrors(["發車模式或車輛分配選項無效。"]);
+            return;
+        }
+        RunEdit(() => state.Draft with { Dispatch = state.Draft.Dispatch with
+        {
+            ActiveMode = (DispatchPlanningMode)parsedMode!, VehicleAssignmentMode = (VehicleAssignmentMode)parsedAssignment!
+        } });
+        ShowDispatch();
+    }
+
     private void ShowSimulation()
     {
         CommitTableDrafts();
-        var panel = NewPage("模擬設定", "格式版本 8 專案通過驗證後可直接送入 V2 模擬世界，不需建立相容路線。 ");
+        var panel = NewPage("模擬設定", "格式版本 8 專案通過驗證後可直接送入 V2 模擬世界。列車數保存為專案摘要；實際車次以發車計畫展開結果為準。 ");
         panel.Children.Add(SummaryGrid(("專案格式", simulation.Schema), ("引擎", simulation.Engine), ("營運模式", simulation.Profile),
-            ("移動閉塞", UiDisplayText.Enum(state.Draft.Simulation.MovingBlockMode)), ("起始時鐘", TimeSpan.FromSeconds(state.Draft.Simulation.StartClockSeconds).ToString("hh\\:mm\\:ss"))));
-        panel.Children.Add(CreateButton("調整模擬與安全參數…", (_, _) => EditSimulationSettings(), false));
+            ("移動閉塞", UiDisplayText.Enum(state.Draft.Simulation.MovingBlockMode)), ("起始時鐘", TimeSpan.FromSeconds(state.Draft.Simulation.StartClockSeconds).ToString("hh\\:mm\\:ss")),
+            ("存檔列車數摘要", state.Draft.Simulation.TrainCount.ToString(CultureInfo.InvariantCulture)),
+            ("指定班距", state.Draft.Simulation.HeadwaySeconds is { } headway ? $"{headway:0.###} 秒" : "未指定")));
+        panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), false));
+        panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), false));
+        panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), false));
         workspace.Content = panel;
+    }
+
+    private void EditTrainSettings()
+    {
+        var train = state.Draft.Train;
+        var answer = Ask("列車基準參數", ("最高速度（m/s）", train.MaxSpeedMetersPerSecond.ToString(CultureInfo.InvariantCulture)),
+            ("加速度（m/s²）", train.AccelerationMetersPerSecondSquared.ToString(CultureInfo.InvariantCulture)),
+            ("減速度（m/s²）", train.DecelerationMetersPerSecondSquared.ToString(CultureInfo.InvariantCulture)),
+            ("預設停站（秒）", train.DefaultDwellTimeSeconds.ToString(CultureInfo.InvariantCulture)),
+            ("起點折返（秒）", train.OriginTurnaroundTimeSeconds.ToString(CultureInfo.InvariantCulture)),
+            ("終點折返（秒）", train.TerminalTurnaroundTimeSeconds.ToString(CultureInfo.InvariantCulture)));
+        if (answer is null) return;
+        RunEdit(() => state.Draft with { Train = train with
+        {
+            MaxSpeedMetersPerSecond = Parse(answer["最高速度（m/s）"], "最高速度"),
+            AccelerationMetersPerSecondSquared = Parse(answer["加速度（m/s²）"], "加速度"),
+            DecelerationMetersPerSecondSquared = Parse(answer["減速度（m/s²）"], "減速度"),
+            DefaultDwellTimeSeconds = Parse(answer["預設停站（秒）"], "預設停站"),
+            OriginTurnaroundTimeSeconds = Parse(answer["起點折返（秒）"], "起點折返"),
+            TerminalTurnaroundTimeSeconds = Parse(answer["終點折返（秒）"], "終點折返")
+        } });
+        ShowSimulation();
+    }
+
+    private void EditOperationalSettings()
+    {
+        var operational = state.Draft.Operations;
+        var answer = Ask("營運與安全參數", ("加加速度（m/s³）", operational.JerkMetersPerSecondCubed.ToString(CultureInfo.InvariantCulture)),
+            ("惰行比例", operational.CoastingRatio.ToString(CultureInfo.InvariantCulture)),
+            ("進站控制距離（m）", operational.ApproachDistanceMeters.ToString(CultureInfo.InvariantCulture)),
+            ("進站控制速度（m/s）", operational.ApproachSpeedMetersPerSecond.ToString(CultureInfo.InvariantCulture)),
+            ("牽引漸弱比例", operational.TractionFadeRatio.ToString(CultureInfo.InvariantCulture)),
+            ("列車長度（m）", operational.TrainLengthMeters.ToString(CultureInfo.InvariantCulture)),
+            ("營運煞車減速度（m/s²）", operational.ServiceBrakingMetersPerSecondSquared.ToString(CultureInfo.InvariantCulture)),
+            ("緊急煞車減速度（m/s²）", operational.EmergencyBrakingMetersPerSecondSquared.ToString(CultureInfo.InvariantCulture)),
+            ("控制反應時間（秒）", operational.ControlReactionTimeSeconds.ToString(CultureInfo.InvariantCulture)),
+            ("煞車建立時間（秒）", operational.BrakeBuildUpTimeSeconds.ToString(CultureInfo.InvariantCulture)),
+            ("定位誤差（m）", operational.PositioningErrorMeters.ToString(CultureInfo.InvariantCulture)),
+            ("安全餘量（m）", operational.SafetyMarginMeters.ToString(CultureInfo.InvariantCulture)),
+            ("絕對最小間隔（m）", operational.AbsoluteMinimumGapMeters.ToString(CultureInfo.InvariantCulture)));
+        if (answer is null) return;
+        RunEdit(() => state.Draft with { Operations = operational with
+        {
+            JerkMetersPerSecondCubed = Parse(answer["加加速度（m/s³）"], "加加速度"),
+            CoastingRatio = Parse(answer["惰行比例"], "惰行比例"),
+            ApproachDistanceMeters = Parse(answer["進站控制距離（m）"], "進站控制距離"),
+            ApproachSpeedMetersPerSecond = Parse(answer["進站控制速度（m/s）"], "進站控制速度"),
+            TractionFadeRatio = Parse(answer["牽引漸弱比例"], "牽引漸弱比例"),
+            TrainLengthMeters = Parse(answer["列車長度（m）"], "列車長度"),
+            ServiceBrakingMetersPerSecondSquared = Parse(answer["營運煞車減速度（m/s²）"], "營運煞車減速度"),
+            EmergencyBrakingMetersPerSecondSquared = Parse(answer["緊急煞車減速度（m/s²）"], "緊急煞車減速度"),
+            ControlReactionTimeSeconds = Parse(answer["控制反應時間（秒）"], "控制反應時間"),
+            BrakeBuildUpTimeSeconds = Parse(answer["煞車建立時間（秒）"], "煞車建立時間"),
+            PositioningErrorMeters = Parse(answer["定位誤差（m）"], "定位誤差"),
+            SafetyMarginMeters = Parse(answer["安全餘量（m）"], "安全餘量"),
+            AbsoluteMinimumGapMeters = Parse(answer["絕對最小間隔（m）"], "絕對最小間隔")
+        } });
+        ShowSimulation();
     }
 
     private void EditSimulationSettings()
     {
         var settings = state.Draft.Simulation;
-        var operational = state.Draft.Operations;
-        var answer = Ask("模擬與安全參數", ("起始時鐘（秒）", settings.StartClockSeconds.ToString(CultureInfo.InvariantCulture)),
+        var answer = Ask("模擬參數", ("起始時鐘（秒）", settings.StartClockSeconds.ToString(CultureInfo.InvariantCulture)),
             ("播放倍率", settings.PlaybackSpeed.ToString(CultureInfo.InvariantCulture)),
-            ("控制反應時間（秒）", operational.ControlReactionTimeSeconds.ToString(CultureInfo.InvariantCulture)),
-            ("安全餘量（m）", operational.SafetyMarginMeters.ToString(CultureInfo.InvariantCulture)),
-            ("絕對最小間隔（m）", operational.AbsoluteMinimumGapMeters.ToString(CultureInfo.InvariantCulture)));
+            ("存檔列車數摘要", settings.TrainCount.ToString(CultureInfo.InvariantCulture)),
+            ("指定班距（秒，可留空）", settings.HeadwaySeconds?.ToString(CultureInfo.InvariantCulture) ?? ""));
         if (answer is null) return;
+        var profiles = Enum.GetValues<OperationProfileMode>().Select(item => UiDisplayText.Enum(item)).ToArray();
+        var profile = Choose("設定營運模式", "營運模式", profiles, UiDisplayText.Enum(settings.ProfileMode));
+        if (profile is null) return;
+        var movingModes = Enum.GetValues<MovingBlockMode>().Select(item => UiDisplayText.Enum(item)).ToArray();
+        var moving = Choose("設定移動閉塞", "移動閉塞", movingModes, UiDisplayText.Enum(settings.MovingBlockMode));
+        if (moving is null) return;
+        var brakingModes = Enum.GetValues<BrakingEstimationMode>().Select(item => UiDisplayText.Enum(item)).ToArray();
+        var braking = Choose("設定煞車估算", "煞車估算", brakingModes, UiDisplayText.Enum(settings.BrakingEstimationMode));
+        if (braking is null) return;
+        if (!UiDisplayText.TryParseEnum(typeof(OperationProfileMode), profile, out var parsedProfile)
+            || !UiDisplayText.TryParseEnum(typeof(MovingBlockMode), moving, out var parsedMoving)
+            || !UiDisplayText.TryParseEnum(typeof(BrakingEstimationMode), braking, out var parsedBraking))
+        {
+            ShowErrors(["模擬模式選項無效。"]);
+            return;
+        }
         RunEdit(() =>
         {
+            if (!int.TryParse(answer["存檔列車數摘要"], NumberStyles.Integer, CultureInfo.InvariantCulture, out var trainCount) || trainCount < 1)
+                throw new SimulationValidationException(["存檔列車數摘要必須是大於 0 的整數。"]);
+            var headwayText = answer["指定班距（秒，可留空）"].Trim();
+            var headway = headwayText.Length == 0 ? (double?)null : Parse(headwayText, "指定班距");
+            if (headway is <= 0) throw new SimulationValidationException(["指定班距必須大於 0 秒，或留空。"]);
             var candidate = state.Draft with
             {
-                Simulation = settings with { StartClockSeconds = Parse(answer["起始時鐘（秒）"], "起始時鐘"), PlaybackSpeed = Parse(answer["播放倍率"], "播放倍率") },
-                Operations = operational with { ControlReactionTimeSeconds = Parse(answer["控制反應時間（秒）"], "控制反應時間"),
-                    SafetyMarginMeters = Parse(answer["安全餘量（m）"], "安全餘量"), AbsoluteMinimumGapMeters = Parse(answer["絕對最小間隔（m）"], "絕對最小間隔") }
+                Simulation = settings with { StartClockSeconds = Parse(answer["起始時鐘（秒）"], "起始時鐘"),
+                    PlaybackSpeed = Parse(answer["播放倍率"], "播放倍率"), TrainCount = trainCount, HeadwaySeconds = headway,
+                    ProfileMode = (OperationProfileMode)parsedProfile!, MovingBlockMode = (MovingBlockMode)parsedMoving!,
+                    BrakingEstimationMode = (BrakingEstimationMode)parsedBraking! }
             };
             TopologyProjectFormat.Validate(candidate);
             return candidate;
@@ -520,13 +797,17 @@ internal sealed class TopologyEditorWindow : Window
 
     private static ProjectWorkspacePage PageFor(ProjectValidationTargetKind kind) => kind switch
     {
-        ProjectValidationTargetKind.Node or ProjectValidationTargetKind.Edge or ProjectValidationTargetKind.Station
-            or ProjectValidationTargetKind.Platform or ProjectValidationTargetKind.Resource or ProjectValidationTargetKind.SpeedLimit
-            or ProjectValidationTargetKind.Gradient or ProjectValidationTargetKind.TurnbackFacility
-            or ProjectValidationTargetKind.PassingFacility => ProjectWorkspacePage.Infrastructure,
-        ProjectValidationTargetKind.ServiceRoute or ProjectValidationTargetKind.StopPattern
-            or ProjectValidationTargetKind.VehicleType or ProjectValidationTargetKind.ServiceType => ProjectWorkspacePage.Operations,
-        ProjectValidationTargetKind.HeadwayPlan or ProjectValidationTargetKind.ManualTimetable => ProjectWorkspacePage.Dispatch,
+        ProjectValidationTargetKind.Station or ProjectValidationTargetKind.Platform
+            => ProjectWorkspacePage.Stations,
+        ProjectValidationTargetKind.Node or ProjectValidationTargetKind.Edge
+            or ProjectValidationTargetKind.SpeedLimit or ProjectValidationTargetKind.TurnbackFacility
+            or ProjectValidationTargetKind.PassingFacility => ProjectWorkspacePage.Tracks,
+        ProjectValidationTargetKind.VehicleType => ProjectWorkspacePage.Vehicle,
+        ProjectValidationTargetKind.ServiceRoute or ProjectValidationTargetKind.ServiceType => ProjectWorkspacePage.Services,
+        ProjectValidationTargetKind.StopPattern => ProjectWorkspacePage.StopPatterns,
+        ProjectValidationTargetKind.HeadwayPlan or ProjectValidationTargetKind.ManualTimetable => ProjectWorkspacePage.DispatchPlanning,
+        ProjectValidationTargetKind.Gradient or ProjectValidationTargetKind.Resource
+            => ProjectWorkspacePage.AdvancedData,
         ProjectValidationTargetKind.Simulation => ProjectWorkspacePage.Simulation,
         _ => ProjectWorkspacePage.Project
     };
@@ -597,7 +878,92 @@ internal sealed class TopologyEditorWindow : Window
             && string.Equals(binding.Path?.Path, fieldName, StringComparison.Ordinal);
     }
 
-    private TabItem EditorTab<T>(ProjectValidationTargetKind targetKind, string title, ObservableCollection<T> source, Action add, Action? delete, bool readOnly = false)
+    private void RegisterPageCommitHook(string key, Action commit)
+    {
+        if (string.IsNullOrWhiteSpace(key)) throw new ArgumentException("表單提交 hook 必須有穩定識別碼。", nameof(key));
+        ArgumentNullException.ThrowIfNull(commit);
+        pageCommitHooks[key] = commit;
+        activePageCommitHookKey = key;
+    }
+
+    private void CommitPageDrafts()
+    {
+        // Only the visible page owns live controls. Running closures from prior pages
+        // would re-apply stale values after a successful A -> B -> A navigation.
+        if (activePageCommitHookKey is { } key && pageCommitHooks.TryGetValue(key, out var commit))
+        {
+            commit();
+        }
+        else if (currentPage is ProjectWorkspacePage.Services or ProjectWorkspacePage.StopPatterns
+            or ProjectWorkspacePage.Vehicle or ProjectWorkspacePage.DispatchPlanning)
+        {
+            if (!CommitOperationsPageEditors())
+                throw new EditorValidationException(validationMessages.Select(item => item.Source).ToArray());
+        }
+        CommitTableDrafts();
+    }
+
+    private void CommitOperationsPageDrafts()
+    {
+        if (!CommitOperationsPageEditors())
+            throw new EditorValidationException(validationMessages.Select(item => item.Source).ToArray());
+    }
+
+    private static ProjectWorkspacePage NormalizePage(ProjectWorkspacePage page) => page switch
+    {
+        ProjectWorkspacePage.Infrastructure => ProjectWorkspacePage.Tracks,
+        ProjectWorkspacePage.Operations => ProjectWorkspacePage.Services,
+        ProjectWorkspacePage.Dispatch => ProjectWorkspacePage.DispatchPlanning,
+        ProjectWorkspacePage.QuickBuilder or ProjectWorkspacePage.Schematic or ProjectWorkspacePage.Results => ProjectWorkspacePage.Project,
+        _ when Enum.IsDefined(page) => page,
+        _ => ProjectWorkspacePage.Project
+    };
+
+    private void UpdateWorkspaceSummary()
+    {
+        if (workspaceSummary is null) return;
+        var document = state.Draft;
+        workspaceSummary.Text = $"{document.ProjectName}  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
+    }
+
+    private void ToggleRightPanel()
+    {
+        rightPanelManuallyExpanded = rightPanelColumn.Width.Value == 0;
+        SetRightPanelExpanded(rightPanelManuallyExpanded.Value);
+    }
+
+    private void UpdateRightPanelForWidth()
+    {
+        if (rightPanelManuallyExpanded is null)
+            SetRightPanelExpanded(ActualWidth >= 1100);
+    }
+
+    private void SetRightPanelExpanded(bool expanded)
+    {
+        rightPanelColumn.Width = expanded ? new GridLength(280) : new GridLength(0);
+        if (rightPanel is not null) rightPanel.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        if (rightPanelToggle is null) return;
+        rightPanelToggle.Content = expanded ? "收合" : "展開";
+        rightPanelToggle.ToolTip = expanded ? "收合右側選取與驗證摘要" : "展開右側選取與驗證摘要";
+    }
+
+    private string PageLabel(ProjectWorkspacePage page) => page switch
+    {
+        ProjectWorkspacePage.Project => "專案總覽",
+        ProjectWorkspacePage.QuickBuilder => "快速建立",
+        ProjectWorkspacePage.Stations => "車站與月台",
+        ProjectWorkspacePage.Tracks => "軌道與設施",
+        ProjectWorkspacePage.Vehicle => "車型",
+        ProjectWorkspacePage.Services => "服務與行車路徑",
+        ProjectWorkspacePage.StopPatterns => "停站模式",
+        ProjectWorkspacePage.DispatchPlanning => "班表與接續",
+        ProjectWorkspacePage.Simulation => "模擬設定",
+        ProjectWorkspacePage.AdvancedData => "進階資料",
+        ProjectWorkspacePage.Validation => "驗證訊息",
+        _ => "工作區"
+    };
+
+    private TabItem EditorTab<T>(ProjectValidationTargetKind targetKind, string title, ObservableCollection<T> source, Action add, Action? delete, bool readOnly = false, Action? edit = null)
     {
         var view = CollectionViewSource.GetDefaultView(source);
         view.Filter = null;
@@ -606,6 +972,7 @@ internal sealed class TopologyEditorWindow : Window
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         actions.Children.Add(CreateButton(readOnly ? "新增設施…" : "新增", (_, _) => add(), !readOnly));
+        if (edit is not null) actions.Children.Add(CreateButton("編輯選取項目…", (_, _) => edit(), true));
         if (delete is not null) actions.Children.Add(CreateButton("刪除", (_, _) => delete(), true));
         var search = new TextBox { Width = 150, Margin = new Thickness(6, 0, 0, 0), ToolTip = "依名稱、ID、類型或關聯搜尋" };
         search.TextChanged += (_, _) =>
@@ -619,7 +986,7 @@ internal sealed class TopologyEditorWindow : Window
         panel.Children.Add(actions);
         panel.Children.Add(grid);
         var tab = new TabItem { Header = title, Content = panel };
-        RegisterValidationTarget(targetKind, new ValidationEditorTarget(grid, [tab]));
+        RegisterValidationTarget(targetKind, new ValidationEditorTarget(grid, [tab]), append: true);
         return tab;
     }
 
@@ -775,7 +1142,12 @@ internal sealed class TopologyEditorWindow : Window
         infrastructure.Platforms.Reset(state.Draft.Topology.Platforms.Select(item => new PlatformEditorViewModel(item)));
         infrastructure.SpeedLimits.Reset(state.Draft.Topology.SpeedLimits.Select(item => new TrackSpeedLimitEditorViewModel(item)));
         infrastructure.Gradients.Reset(state.Draft.Topology.Gradients.Select(item => new GradientEditorViewModel(item)));
+        curves.Reset(state.Draft.Topology.Curves.Select(item => new TrackCurveEditorViewModel(item)));
         infrastructure.Resources.Reset(state.Draft.Topology.Resources.Select(item => new ResourceEditorViewModel(item)));
+        turnbackOperations.Reset(state.Draft.Topology.TurnbackOperations.Select(item => new TurnbackOperationEditorViewModel(item)));
+        passingOperations.Reset(state.Draft.Topology.PassingOperations.Select(item => new PassingOperationEditorViewModel(item)));
+        stationOperations.Reset(state.Draft.Topology.StationOperations.Select(item => new StationOperationEditorViewModel(item)));
+        directedConnections.Reset(state.Draft.Topology.DirectedConnections.Select(item => new DirectedConnectionEditorViewModel(item)));
         serviceNetwork.Routes.Reset(state.Draft.ServiceRoutes.Select(item => new ServiceRouteEditorViewModel(item)));
         serviceNetwork.StopPatterns.Reset(state.Draft.StopPatterns.Select(item => new StopPatternEditorViewModel(item)));
         var routesByDirection = state.Draft.DirectionRouteBindings.ToDictionary(item => item.Direction, item => item.ServiceRouteId);
@@ -803,7 +1175,11 @@ internal sealed class TopologyEditorWindow : Window
             Nodes = infrastructure.Nodes.Select(item => item.ToDomain()).ToArray(), Edges = infrastructure.Edges.Select(item => item.ToDomain()).ToArray(),
             Stations = infrastructure.Stations.Select(item => item.ToDomain()).ToArray(), Platforms = infrastructure.Platforms.Select(item => item.ToDomain()).ToArray(),
             SpeedLimits = infrastructure.SpeedLimits.Select(item => item.ToDomain()).ToArray(), Gradients = infrastructure.Gradients.Select(item => item.ToDomain()).ToArray(),
-            Resources = infrastructure.Resources.Select(item => item.ToDomain()).ToArray()
+            Curves = curves.Select(item => item.ToDomain()).ToArray(), Resources = infrastructure.Resources.Select(item => item.ToDomain()).ToArray(),
+            TurnbackOperations = turnbackOperations.Select(item => item.ToDomain()).ToArray(),
+            PassingOperations = passingOperations.Select(item => item.ToDomain()).ToArray(),
+            StationOperations = stationOperations.Select(item => item.ToDomain()).ToArray(),
+            DirectedConnections = directedConnections.Select(item => item.ToDomain()).ToArray()
         };
         var dispatchPlan = state.Draft.Dispatch with
         {
@@ -825,7 +1201,7 @@ internal sealed class TopologyEditorWindow : Window
     {
         try
         {
-            CommitTableDrafts();
+            CommitPageDrafts();
             SetValidationMessages(ProjectEditorValidationService.Validate(state.Draft));
         }
         catch (EditorValidationException exception) { SetValidationMessages(exception.Messages); }
@@ -835,7 +1211,14 @@ internal sealed class TopologyEditorWindow : Window
 
     private void Apply()
     {
-        try { CommitTableDrafts(); Result = state.Commit(); DialogResult = true; }
+        try
+        {
+            CommitPageDrafts();
+            var candidate = state.Commit();
+            TopologyProjectFormat.CreateRuntime(candidate);
+            Result = candidate;
+            DialogResult = true;
+        }
         catch (EditorValidationException exception)
         {
             SetValidationMessages(exception.Messages);
@@ -1045,12 +1428,218 @@ internal sealed class TopologyEditorWindow : Window
         RunEdit(() => state.Draft with { Topology = state.Draft.Topology with { Gradients = state.Draft.Topology.Gradients.Append(new TrackGradientSegment(NextId("GRADE"), edge.Id, 0, edge.LengthMeters, 0)).ToArray() } });
     }
 
+    private void AddCurve()
+    {
+        var edge = infrastructure.Edges.FirstOrDefault();
+        if (edge is null) { ShowErrors(["請先建立軌道區段。"]); return; }
+        RunEdit(() => state.Draft with { Topology = state.Draft.Topology with
+        {
+            Curves = state.Draft.Topology.Curves.Append(new TrackCurveSegment(
+                NextDocumentId("CURVE", state.Draft.Topology.Curves.Select(item => item.CurveId)), edge.Id, 0, edge.LengthMeters, 300)).ToArray()
+        } });
+    }
+
+    private void AddTurnbackOperation()
+    {
+        var facility = state.Draft.Topology.TurnbackFacilities.FirstOrDefault();
+        var arrival = state.Draft.DirectionRouteBindings.FirstOrDefault();
+        var departure = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction != arrival?.Direction);
+        if (facility is null || arrival is null || departure is null)
+        {
+            ShowErrors(["請先建立折返設施與上下行服務路徑。"]);
+            return;
+        }
+        RunEdit(() => state.Draft with { Topology = state.Draft.Topology with
+        {
+            TurnbackOperations = state.Draft.Topology.TurnbackOperations.Append(new TurnbackOperationDefinition
+            {
+                OperationId = NextDocumentId("TURNBACK", state.Draft.Topology.TurnbackOperations.Select(item => item.OperationId)),
+                FacilityId = facility.FacilityId, ArrivalServiceRouteId = arrival.ServiceRouteId,
+                DepartureServiceRouteId = departure.ServiceRouteId, MinimumDwellTimeSeconds = 30
+            }).ToArray()
+        } });
+    }
+
+    private void AddPassingOperation()
+    {
+        var facility = state.Draft.Topology.PassingFacilities.FirstOrDefault();
+        var route = state.Draft.ServiceRoutes.FirstOrDefault();
+        if (facility is null || route is null)
+        {
+            ShowErrors(["請先建立待避設施與服務路徑。"]);
+            return;
+        }
+        RunEdit(() => state.Draft with { Topology = state.Draft.Topology with
+        {
+            PassingOperations = state.Draft.Topology.PassingOperations.Append(new PassingOperationDefinition
+            {
+                OperationId = NextDocumentId("PASSING", state.Draft.Topology.PassingOperations.Select(item => item.OperationId)),
+                FacilityId = facility.FacilityId, ServiceRouteId = route.ServiceRouteId
+            }).ToArray()
+        } });
+    }
+
+    private void AddStationOperation()
+    {
+        var station = state.Draft.Topology.Stations.FirstOrDefault();
+        if (station is null) { ShowErrors(["請先建立車站。"]); return; }
+        RunEdit(() => state.Draft with { Topology = state.Draft.Topology with
+        {
+            StationOperations = state.Draft.Topology.StationOperations.Append(new StationOperationDefinition
+            {
+                StationOperationId = NextDocumentId("STATION-OP", state.Draft.Topology.StationOperations.Select(item => item.StationOperationId)),
+                StationId = station.StationId, ArrivalPlatformIds = station.PlatformIds,
+                DeparturePlatformIds = station.PlatformIds, DefaultDwellTimeSeconds = station.DefaultDwellTimeSeconds
+            }).ToArray()
+        } });
+    }
+
+    private void AddDirectedConnection()
+    {
+        if (state.Draft.Topology.Edges.Count < 2)
+        {
+            ShowErrors(["請先建立至少兩條軌道區段。"]);
+            return;
+        }
+        var first = state.Draft.Topology.Edges[0];
+        var second = state.Draft.Topology.Edges[1];
+        directedConnections.Add(new DirectedConnectionEditorViewModel(new DirectedTrackConnectionDefinition(
+            first.TrackEdgeId, TraversalDirection.Forward, second.TrackEdgeId, TraversalDirection.Forward)));
+        RefreshValidation();
+    }
+
+    private void DeleteSelectedCurve() => RemoveEditorRow(curves);
+    private void DeleteSelectedTurnbackOperation() => RemoveEditorRow(turnbackOperations);
+    private void DeleteSelectedPassingOperation() => RemoveEditorRow(passingOperations);
+    private void DeleteSelectedStationOperation() => RemoveEditorRow(stationOperations);
+    private void DeleteSelectedDirectedConnection() => RemoveEditorRow(directedConnections);
+
+    private void RemoveEditorRow<T>(ObservableCollection<T> rows) where T : class
+    {
+        if (Selected<T>() is not { } selected || !rows.Remove(selected)) return;
+        RefreshValidation();
+    }
+
     private void AddResource() => RunEdit(() => state.Draft with { Topology = state.Draft.Topology with { Resources = state.Draft.Topology.Resources.Append(new ConflictResourceDefinition(NextId("RESOURCE"), "手動資源", ConflictResourceKind.Other)).ToArray() } });
 
     private void DeleteSelectedNode() { if (Selected<TrackNodeEditorViewModel>() is { } row) RunEdit(() => TopologyEditingService.DeleteTrackNode(state.Draft, row.Id)); }
     private void DeleteSelectedEdge() { if (Selected<TrackEdgeEditorViewModel>() is { } row) RunEdit(() => TopologyEditingService.DeleteTrackEdge(state.Draft, row.Id)); }
     private void DeleteSelectedStation() { if (Selected<StationEditorViewModel>() is { } row) RunEdit(() => TopologyEditingService.DeleteStation(state.Draft, row.Id)); }
     private void DeleteSelectedPlatform() { if (Selected<PlatformEditorViewModel>() is { } row) RunEdit(() => TopologyEditingService.DeletePlatform(state.Draft, row.Id)); }
+    private void EditSelectedFacility()
+    {
+        if (Selected<FacilityEditorViewModel>() is not { } row) return;
+        switch (row.BackingKind)
+        {
+            case FacilityEditorKind.Turnback:
+                EditTurnbackFacility(row.Id);
+                break;
+            case FacilityEditorKind.Passing:
+                EditPassingFacility(row.Id);
+                break;
+            case FacilityEditorKind.CrossoverEdge:
+                ShowErrors(["橫渡線是實體軌道區段；請在「軌道區段」分頁修改接軌側、節點及長度。"]);
+                break;
+        }
+    }
+
+    private void EditTurnbackFacility(string id)
+    {
+        var source = state.Draft.Topology.TurnbackFacilities.Single(item => IdEquals(item.FacilityId, id));
+        var stop = source.TurnbackStopPosition;
+        var answer = Ask("編輯折返設施", ("名稱", source.Name), ("種類", UiDisplayText.Enum(source.Kind)),
+            ("到達軌道區段", source.ArrivalTrackEdgeId),
+            ("到達停點偏移（m）", source.ArrivalStopOffsetMeters.ToString(CultureInfo.InvariantCulture)),
+            ("出發軌道區段", source.DepartureTrackEdgeId),
+            ("出發起點偏移（m）", source.DepartureStartOffsetMeters.ToString(CultureInfo.InvariantCulture)),
+            ("實體路徑（區段|方向，逗號分隔）", FormatTraversals(source.Traversals)),
+            ("停等後路徑索引（可留空）", source.TurnbackStopAfterTraversalIndex?.ToString(CultureInfo.InvariantCulture) ?? ""),
+            ("停等軌道區段（可留空）", stop?.TrackEdgeId ?? ""),
+            ("停等偏移（m，可留空）", stop?.OffsetMeters.ToString(CultureInfo.InvariantCulture) ?? ""),
+            ("衝突資源（逗號分隔）", string.Join(", ", source.ConflictResourceIds)));
+        if (answer is null) return;
+        RunEdit(() =>
+        {
+            if (!UiDisplayText.TryParseEnum(typeof(TurnbackFacilityKind), answer["種類"], out var kindValue))
+                throw new SimulationValidationException(["折返設施種類無效。"]);
+            var stopEdge = answer["停等軌道區段（可留空）"].Trim();
+            var stopOffset = answer["停等偏移（m，可留空）"].Trim();
+            if ((stopEdge.Length == 0) != (stopOffset.Length == 0))
+                throw new SimulationValidationException(["停等軌道區段與偏移量必須同時填寫或同時留空。"]);
+            var indexText = answer["停等後路徑索引（可留空）"].Trim();
+            if (indexText.Length > 0 && (!int.TryParse(indexText, out var index) || index < 0))
+                throw new SimulationValidationException(["停等後路徑索引必須是非負整數。"]);
+            var edited = source with
+            {
+                Name = answer["名稱"].Trim(), Kind = (TurnbackFacilityKind)kindValue!,
+                ArrivalTrackEdgeId = answer["到達軌道區段"].Trim(),
+                ArrivalStopOffsetMeters = Parse(answer["到達停點偏移（m）"], "到達停點偏移"),
+                DepartureTrackEdgeId = answer["出發軌道區段"].Trim(),
+                DepartureStartOffsetMeters = Parse(answer["出發起點偏移（m）"], "出發起點偏移"),
+                Traversals = ParseTraversals(answer["實體路徑（區段|方向，逗號分隔）"]),
+                TurnbackStopAfterTraversalIndex = indexText.Length == 0 ? null : int.Parse(indexText, CultureInfo.InvariantCulture),
+                TurnbackStopPosition = stopEdge.Length == 0 ? null : new TrackPosition(stopEdge, Parse(stopOffset, "停等偏移")),
+                ConflictResourceIds = TopologyOperationEditorValues.SplitIds(answer["衝突資源（逗號分隔）"])
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            };
+            return state.Draft with { Topology = state.Draft.Topology with
+            {
+                TurnbackFacilities = state.Draft.Topology.TurnbackFacilities.Select(item => IdEquals(item.FacilityId, id) ? edited : item).ToArray()
+            } };
+        });
+        ShowInfrastructure();
+    }
+
+    private void EditPassingFacility(string id)
+    {
+        var source = state.Draft.Topology.PassingFacilities.Single(item => IdEquals(item.FacilityId, id));
+        var answer = Ask("編輯待避設施", ("名稱", source.Name), ("車站", source.StationId),
+            ("到達軌道區段", source.ArrivalTrackEdgeId),
+            ("到達偏移（m）", source.ArrivalOffsetMeters.ToString(CultureInfo.InvariantCulture)),
+            ("出發軌道區段", source.DepartureTrackEdgeId),
+            ("出發起點偏移（m）", source.DepartureStartOffsetMeters.ToString(CultureInfo.InvariantCulture)),
+            ("實體路徑（區段|方向，逗號分隔）", FormatTraversals(source.Traversals)),
+            ("普通車月台", source.LocalPlatformId), ("快速車月台", source.ExpressPlatformId),
+            ("衝突資源（逗號分隔）", string.Join(", ", source.ConflictResourceIds)));
+        if (answer is null) return;
+        RunEdit(() =>
+        {
+            var edited = source with
+            {
+                Name = answer["名稱"].Trim(), StationId = answer["車站"].Trim(),
+                ArrivalTrackEdgeId = answer["到達軌道區段"].Trim(),
+                ArrivalOffsetMeters = Parse(answer["到達偏移（m）"], "到達偏移"),
+                DepartureTrackEdgeId = answer["出發軌道區段"].Trim(),
+                DepartureStartOffsetMeters = Parse(answer["出發起點偏移（m）"], "出發起點偏移"),
+                Traversals = ParseTraversals(answer["實體路徑（區段|方向，逗號分隔）"]),
+                LocalPlatformId = answer["普通車月台"].Trim(), ExpressPlatformId = answer["快速車月台"].Trim(),
+                ConflictResourceIds = TopologyOperationEditorValues.SplitIds(answer["衝突資源（逗號分隔）"])
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+            };
+            return state.Draft with { Topology = state.Draft.Topology with
+            {
+                PassingFacilities = state.Draft.Topology.PassingFacilities.Select(item => IdEquals(item.FacilityId, id) ? edited : item).ToArray()
+            } };
+        });
+        ShowInfrastructure();
+    }
+
+    private static string FormatTraversals(IEnumerable<DirectedTrackTraversal> traversals) =>
+        string.Join(", ", traversals.Select(item => $"{item.TrackEdgeId}|{UiDisplayText.Enum(item.Direction)}"));
+
+    private static DirectedTrackTraversal[] ParseTraversals(string text)
+    {
+        var items = TopologyOperationEditorValues.SplitIds(text);
+        if (items.Length == 0) throw new SimulationValidationException(["實體設施至少需要一段有向軌道路徑。"]);
+        return items.Select(item =>
+        {
+            var separator = item.LastIndexOf('|');
+            if (separator <= 0 || !UiDisplayText.TryParseEnum(typeof(TraversalDirection), item[(separator + 1)..].Trim(), out var direction))
+                throw new SimulationValidationException([$"路徑「{item}」須使用「軌道區段|正向／反向」格式。"]);
+            return new DirectedTrackTraversal(item[..separator].Trim(), (TraversalDirection)direction!);
+        }).ToArray();
+    }
+
     private void DeleteSelectedFacility()
     {
         if (Selected<FacilityEditorViewModel>() is not { } row) return;
@@ -1280,7 +1869,9 @@ internal sealed class TopologyEditorWindow : Window
 
     private void AddHeadwayPlan()
     {
-        var route = state.Draft.DirectionRouteBindings.FirstOrDefault();
+        var direction = ChooseDispatchDirection(state.Draft.DirectionRouteBindings.FirstOrDefault()?.Direction ?? TrainDirection.Outbound);
+        if (direction is null) return;
+        var route = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction);
         var service = state.Draft.ServiceTypes.FirstOrDefault();
         if (route is null || service is null) { ShowErrors(["請先建立方向綁定與服務類型，才能建立班距計畫。"]); return; }
         var origin = GetRouteOriginPlatform(route.ServiceRouteId);
@@ -1305,7 +1896,9 @@ internal sealed class TopologyEditorWindow : Window
     private void EditSelectedHeadwayPlan()
     {
         if (Selected<HeadwayPlanEditorViewModel>() is not { } row) return;
-        var origins = GetAllowedDispatchOrigins(row.Direction);
+        var direction = ChooseDispatchDirection(row.Direction);
+        if (direction is null) return;
+        var origins = GetAllowedDispatchOrigins(direction.Value);
         if (origins.Count == 0) { ShowErrors(["目前方向綁定的服務路徑尚未有可作為起點的實體停靠站。"]); return; }
         var answer = Ask("編輯班距計畫", ("首班發車秒數", row.FirstDepartureSeconds.ToString(CultureInfo.InvariantCulture)),
             ("班距秒數", row.HeadwaySeconds.ToString(CultureInfo.InvariantCulture)), ("班次數", row.RunCount.ToString(CultureInfo.InvariantCulture)),
@@ -1315,6 +1908,7 @@ internal sealed class TopologyEditorWindow : Window
         if (origin is null) return;
         try
         {
+            row.Direction = direction.Value;
             row.FirstDepartureSeconds = Parse(answer["首班發車秒數"], "首班時間");
             row.HeadwaySeconds = Parse(answer["班距秒數"], "班距");
             if (!int.TryParse(answer["班次數"], out var count) || count <= 0) throw new SimulationValidationException(["班次數必須是大於 0 的整數。"]);
@@ -1327,7 +1921,9 @@ internal sealed class TopologyEditorWindow : Window
 
     private void AddManualTimetableRow()
     {
-        var route = state.Draft.DirectionRouteBindings.FirstOrDefault();
+        var direction = ChooseDispatchDirection(state.Draft.DirectionRouteBindings.FirstOrDefault()?.Direction ?? TrainDirection.Outbound);
+        if (direction is null) return;
+        var route = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction);
         var service = state.Draft.ServiceTypes.FirstOrDefault();
         if (route is null || service is null) { ShowErrors(["請先建立方向綁定與服務類型，才能建立手動班表。"]); return; }
         RunEdit(() => state.Draft with
@@ -1352,7 +1948,9 @@ internal sealed class TopologyEditorWindow : Window
     private void EditSelectedManualRow()
     {
         if (Selected<ManualTimetableEditorViewModel>() is not { } row) return;
-        var origins = GetAllowedDispatchOrigins(row.Direction);
+        var direction = ChooseDispatchDirection(row.Direction);
+        if (direction is null) return;
+        var origins = GetAllowedDispatchOrigins(direction.Value);
         if (origins.Count == 0) { ShowErrors(["目前方向綁定的服務路徑尚未有可作為起點的實體停靠站。"]); return; }
         var answer = Ask("編輯手動班表", ("發車秒數", row.DepartureSeconds.ToString(CultureInfo.InvariantCulture)), ("服務類型", row.ServiceType),
             ("車型", row.VehicleType), ("停站模式", row.StopPattern), ("車輛編號", row.VehicleId), ("車次編號", row.ServiceRunId),
@@ -1362,6 +1960,7 @@ internal sealed class TopologyEditorWindow : Window
         if (origin is null) return;
         try
         {
+            row.Direction = direction.Value;
             row.DepartureSeconds = Parse(answer["發車秒數"], "出發時間");
             if (!UiDisplayText.TryParseBoolean(answer["終點後續行"], out var continuation)) throw new SimulationValidationException(["終點後續行必須填寫是或否。"]);
             row.ServiceType = answer["服務類型"]; row.VehicleType = answer["車型"]; row.StopPattern = answer["停站模式"]; row.VehicleId = answer["車輛編號"]; row.ServiceRunId = answer["車次編號"]; row.OriginPlatform = origin; row.ContinueAfterTerminal = continuation; row.ContinuationServiceRunId = answer["接續車次編號"];
@@ -1372,6 +1971,14 @@ internal sealed class TopologyEditorWindow : Window
 
     private string? GetRouteOriginPlatform(string routeId) => state.Draft.ServiceRoutes
         .FirstOrDefault(item => item.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase))?.Stops.FirstOrDefault()?.CandidatePlatformIds.FirstOrDefault();
+
+    private TrainDirection? ChooseDispatchDirection(TrainDirection current)
+    {
+        var choices = new[] { TrainDirection.Outbound, TrainDirection.Inbound };
+        var chosen = Choose("選擇班次方向", "方向", choices.Select(item => UiDisplayText.Enum(item)).ToArray(), UiDisplayText.Enum(current));
+        if (chosen is null) return null;
+        return choices.First(item => UiDisplayText.Enum(item) == chosen);
+    }
 
     private IReadOnlyList<string> GetAllowedDispatchOrigins(TrainDirection direction)
     {
@@ -1700,6 +2307,14 @@ internal sealed class TopologyEditorWindow : Window
     {
         validationMessages.Reset(messages.Select(message => new ProjectValidationMessageViewModel(message)));
         selectionDetails.Text = string.Join(Environment.NewLine, validationMessages.Select(message => UiDisplayText.ValidationMessage(message.Source.Message)));
+        if (validationSummary is not null)
+        {
+            var errors = validationMessages.Count(item => item.Source.Severity == ProjectValidationSeverity.Error);
+            var warnings = validationMessages.Count(item => item.Source.Severity == ProjectValidationSeverity.Warning);
+            validationSummary.Text = errors == 0 && warnings == 0
+                ? "驗證通過 · 草稿可套用"
+                : $"驗證摘要：{errors} 個錯誤、{warnings} 個提醒 · 點選訊息可定位";
+        }
     }
 
     private string NextId(string prefix)
@@ -1752,7 +2367,8 @@ internal sealed class TopologyEditorWindow : Window
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
         buttons.Children.Add(CreateButton("建立", (_, _) => dialog.DialogResult = true, false));
         buttons.Children.Add(CreateButton("取消", (_, _) => dialog.DialogResult = false, true));
-        panel.Children.Add(buttons); dialog.Content = panel;
+        panel.Children.Add(buttons);
+        dialog.Content = new ScrollViewer { Content = panel, MaxHeight = 660, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         return dialog.ShowDialog() == true ? inputs.ToDictionary(item => item.Key, item => item.Value.Text, StringComparer.Ordinal) : null;
     }
 

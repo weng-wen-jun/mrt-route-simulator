@@ -61,7 +61,14 @@ public sealed record PlaybackPerformanceSnapshot(
     int TrajectoryCount,
     int SafetyHistoryCount,
     int EventCount,
-    long FrameDropCount);
+    long FrameDropCount)
+{
+    /// <summary>
+    /// Worker-side timestamp used only by the opt-in dispatcher-delay diagnostic.
+    /// A zero value means that the producer did not expose a timestamp.
+    /// </summary>
+    public long FramePublishedTimestamp { get; init; }
+}
 
 /// <summary>
 /// Immutable presentation data. Histories are persistent immutable lists: appending new engine
@@ -78,6 +85,7 @@ public sealed record PlaybackFrame(
     ImmutableList<TrajectorySample> Trajectory,
     ImmutableList<SafetyObservation> SafetyHistory,
     ImmutableDictionary<string, TrackPosition> TrainCenterPositions,
+    ImmutableArray<LockedRouteSegment> ActiveRouteLocks,
     bool IsComplete,
     MovingBlockMode MovingBlockMode,
     BrakingEstimationMode BrakingEstimationMode,
@@ -122,8 +130,9 @@ public sealed record PlaybackFrame(
 public sealed class SimulationPlaybackWorker : IAsyncDisposable
 {
     private const double MaximumAdvancePerSliceSeconds = 0.5;
+    private const double PacingToleranceSeconds = 1e-8;
     private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(33);
-    private static readonly TimeSpan IdlePlaybackDelay = TimeSpan.FromMilliseconds(2);
+    private static readonly TimeSpan MinimumPacingWait = TimeSpan.FromMilliseconds(1);
 
     private readonly SimulationWorld _world;
     private readonly PlaybackWorldContext _context;
@@ -141,9 +150,14 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         FullMode = BoundedChannelFullMode.DropOldest,
         AllowSynchronousContinuations = false
     });
+    // A separate reliable wakeup avoids leaving Reader.WaitToReadAsync waiters behind when
+    // the coordinator's deadline wins. Every successful command write releases exactly one
+    // permit; WaitAsync(timeout, cancellation) removes its waiter on timeout or cancellation.
+    private readonly SemaphoreSlim _commandWakeup = new(0);
     private readonly CancellationTokenSource _cancellation = new();
     private readonly TaskCompletionSource<PlaybackFrame> _ready = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _runTask;
+    private readonly PlaybackPerformanceDiagnostics _diagnostics;
     private readonly object _disposeLock = new();
     private ImmutableList<SimulationEvent> _events = ImmutableList<SimulationEvent>.Empty;
     private ImmutableList<TrajectorySample> _trajectory = ImmutableList<TrajectorySample>.Empty;
@@ -162,15 +176,20 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
     private long _lastFrameTimestamp;
     private double _lastAdvanceMilliseconds;
     private double _lastFramePublishMilliseconds;
+    private long _noProgressAdvanceCount;
+    private double _noProgressAdvanceMilliseconds;
     private bool _isPlaying;
     private bool _isStopping;
     private int _stopRequested;
     private Task? _disposeTask;
 
-    public SimulationPlaybackWorker(SimulationWorld actualWorld)
+    public SimulationPlaybackWorker(
+        SimulationWorld actualWorld,
+        PlaybackPerformanceDiagnostics? diagnostics = null)
     {
         _world = actualWorld ?? throw new ArgumentNullException(nameof(actualWorld));
         _context = PlaybackWorldContext.Capture(actualWorld);
+        _diagnostics = diagnostics ?? new PlaybackPerformanceDiagnostics();
         _runTask = Task.Run(RunAsync);
     }
 
@@ -179,6 +198,12 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
     public Task Completion => _runTask;
 
     public Guid GenerationId => _generationId;
+
+    /// <summary>
+    /// Aggregate worker timings are disabled by default. Tests and diagnostics runners can
+    /// enable this instance without changing the production playback path.
+    /// </summary>
+    public PlaybackPerformanceDiagnostics Diagnostics => _diagnostics;
 
     public bool TryReadLatestFrame(out PlaybackFrame? frame)
     {
@@ -190,7 +215,21 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
 
         if (frame is not null)
         {
-            Interlocked.Exchange(ref _acknowledgedFrameSequence, frame.Sequence);
+            var previousAcknowledged = Interlocked.Exchange(ref _acknowledgedFrameSequence, frame.Sequence);
+            var skipped = previousAcknowledged > 0
+                ? Math.Max(0, frame.Sequence - previousAcknowledged - 1)
+                : 0;
+            if (skipped > 0)
+            {
+                _diagnostics.RecordCount(
+                    PlaybackDiagnosticMetricNames.DroppedFrameCount,
+                    skipped);
+            }
+
+            if (frame.Sequence != previousAcknowledged)
+            {
+                _diagnostics.RecordCount(PlaybackDiagnosticMetricNames.WorkerFrameConsumedCount);
+            }
         }
 
         return frame is not null;
@@ -240,7 +279,14 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
                 var completion = NewCompletion();
                 if (_commands.Writer.TryWrite(PlaybackCommand.Stop(completion)))
                 {
+                    _commandWakeup.Release();
                     await completion.Task.ConfigureAwait(false);
+                }
+                else
+                {
+                    // A faulted/closing command channel may not accept the reliable Stop
+                    // command. Cancellation is the fallback wakeup for a worker still unwinding.
+                    _cancellation.Cancel();
                 }
             }
 
@@ -251,6 +297,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             _commands.Writer.TryComplete();
             _cancellation.Cancel();
             _frames.Writer.TryComplete();
+            _commandWakeup.Dispose();
             _cancellation.Dispose();
         }
     }
@@ -265,6 +312,10 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             {
                 if (_commands.Reader.TryRead(out var command))
                 {
+                    // Keep the wakeup permit count aligned with reliable channel commands. A
+                    // command can race this TryRead, so a failed non-blocking wait is harmless;
+                    // the next loop will consume the permit or read the queued command.
+                    _commandWakeup.Wait(0);
                     Execute(command);
                     if (_isStopping)
                     {
@@ -276,7 +327,8 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
 
                 if (!_isPlaying)
                 {
-                    await _commands.Reader.WaitToReadAsync(_cancellation.Token).ConfigureAwait(false);
+                    await _commandWakeup.WaitAsync(Timeout.InfiniteTimeSpan, _cancellation.Token)
+                        .ConfigureAwait(false);
                     continue;
                 }
 
@@ -285,7 +337,10 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
                 if (now - _lastFrameTimestamp >= FrameInterval.TotalSeconds * Stopwatch.Frequency
                     || _world.IsComplete)
                 {
-                    PublishFrame(force: true);
+                    // Snapshot-changing commands force an immediate frame in Execute. Play only
+                    // changes coordinator state, so the playback loop remains on the established
+                    // ~33 ms cadence and the first frame after Play may still be the prior one.
+                    PublishFrame(force: _world.IsComplete);
                 }
 
                 if (!_isPlaying)
@@ -293,10 +348,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
                     continue;
                 }
 
-                if (GetTargetSimulationTime() <= _world.CurrentTimeSeconds + 1e-8)
-                {
-                    await Task.Delay(IdlePlaybackDelay, _cancellation.Token).ConfigureAwait(false);
-                }
+                await WaitForPlaybackWorkAsync(_cancellation.Token).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
@@ -344,6 +396,8 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
                     break;
                 case PlaybackCommandKind.Reset:
                     _isPlaying = false;
+                    _noProgressAdvanceCount = 0;
+                    _noProgressAdvanceMilliseconds = 0;
                     _world.Reset();
                     _events = ImmutableList<SimulationEvent>.Empty;
                     _trajectory = ImmutableList<TrajectorySample>.Empty;
@@ -388,7 +442,14 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
                     throw new InvalidOperationException("不支援的播放命令。");
             }
 
-            if (command.Kind != PlaybackCommandKind.Stop)
+            // Starting/resuming playback does not change the world snapshot.  The UI already
+            // owns the last frame and the coordinator will publish the next physics frame on
+            // its normal cadence.  Publishing another identical frame here only makes the Play
+            // acknowledgement wait for an unnecessary snapshot/list assembly and leaves an
+            // extra frame in the bounded latest-frame channel.  Commands that change the
+            // observable snapshot (Pause, Reset, deterministic AdvanceTo, and setting modes)
+            // still publish immediately so their acknowledgements remain frame-visible.
+            if (command.Kind is not (PlaybackCommandKind.Stop or PlaybackCommandKind.Play))
             {
                 PublishFrame(force: true);
             }
@@ -439,16 +500,39 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         }
 
         var target = GetTargetSimulationTime();
-        var boundedTarget = Math.Min(target, _world.CurrentTimeSeconds + MaximumAdvancePerSliceSeconds);
-        if (boundedTarget <= _world.CurrentTimeSeconds + 1e-8)
+        var nextTick = _world.CurrentTimeSeconds + SimulationWorld.FixedTimeStepSeconds;
+        // AdvanceTo executes only complete fixed ticks. Do not call it before the next tick's
+        // wall-clock deadline: that was the source of the millions of no-progress calls in the
+        // previous coordinator loop.
+        if (target + PacingToleranceSeconds < nextTick)
         {
             return;
         }
 
+        var boundedTarget = Math.Min(target, _world.CurrentTimeSeconds + MaximumAdvancePerSliceSeconds);
+        if (boundedTarget + PacingToleranceSeconds < nextTick)
+        {
+            return;
+        }
+
+        var before = _world.CurrentTimeSeconds;
         var stopwatch = Stopwatch.StartNew();
         _world.AdvanceTo(boundedTarget);
         stopwatch.Stop();
         _lastAdvanceMilliseconds = stopwatch.Elapsed.TotalMilliseconds;
+        if (_world.CurrentTimeSeconds > before + 1e-8)
+        {
+            _diagnostics.RecordTiming(
+                PlaybackDiagnosticMetricNames.WorkerAdvance,
+                _lastAdvanceMilliseconds);
+        }
+        else if (_diagnostics.IsEnabled)
+        {
+            // Keep this defensive accounting local and publish it once per frame. Under the
+            // deadline gate this should remain zero unless a future engine tolerance changes.
+            _noProgressAdvanceCount++;
+            _noProgressAdvanceMilliseconds += _lastAdvanceMilliseconds;
+        }
 
         if (_world.IsComplete)
         {
@@ -459,6 +543,40 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         {
             UpdateEffectiveRate();
         }
+    }
+
+    private async Task WaitForPlaybackWorkAsync(CancellationToken cancellationToken)
+    {
+        var wait = GetTimeUntilNextPhysicsTick();
+        // SemaphoreSlim's timeout overload owns the timeout/cancellation race and removes its
+        // waiter, unlike abandoning a ChannelReader.WaitToReadAsync task when a deadline wins.
+        await _commandWakeup.WaitAsync(wait, cancellationToken).ConfigureAwait(false);
+    }
+
+    private TimeSpan GetTimeUntilNextPhysicsTick()
+    {
+        var nextTick = _world.CurrentTimeSeconds + SimulationWorld.FixedTimeStepSeconds;
+        var remainingSimulationSeconds = nextTick - GetTargetSimulationTime();
+        if (remainingSimulationSeconds <= PacingToleranceSeconds)
+        {
+            return TimeSpan.Zero;
+        }
+
+        var wallSeconds = remainingSimulationSeconds / _requestedPlaybackRate;
+        if (!double.IsFinite(wallSeconds) || wallSeconds <= 0)
+        {
+            return wallSeconds > 0 ? Timeout.InfiniteTimeSpan : TimeSpan.Zero;
+        }
+
+        // SemaphoreSlim timeout has an Int32-millisecond ceiling, even though TimeSpan can
+        // represent much longer waits. Extremely small valid rates still accept commands.
+        if (wallSeconds >= int.MaxValue / 1000d)
+        {
+            return TimeSpan.FromMilliseconds(int.MaxValue);
+        }
+
+        var requestedWait = TimeSpan.FromSeconds(wallSeconds);
+        return requestedWait < MinimumPacingWait ? MinimumPacingWait : requestedWait;
     }
 
     private void UpdateEffectiveRate()
@@ -483,6 +601,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         }
 
         var frameBuild = Stopwatch.StartNew();
+        FlushNoProgressAdvanceDiagnostics();
         var snapshot = _world.GetSnapshot();
         var newEvents = FreezeEvents(snapshot.NewEvents);
         AppendNewValues(_world.Events, ref _eventCursor, item => FreezeEvent(item), ref _events);
@@ -500,7 +619,12 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
         }
 
         var sequence = Interlocked.Increment(ref _sequence);
+        // This aggregate covers snapshot/list/center assembly. The immutable PlaybackFrame
+        // constructor remains outside the legacy per-frame field to keep default behavior intact.
         var frameBuildMilliseconds = frameBuild.Elapsed.TotalMilliseconds;
+        _diagnostics.RecordTiming(
+            PlaybackDiagnosticMetricNames.WorkerFrameBuild,
+            frameBuildMilliseconds);
         var performance = new PlaybackPerformanceSnapshot(
             _requestedPlaybackRate,
             _isPlaying ? _effectiveSimulationRate : 0,
@@ -511,7 +635,10 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             _trajectory.Count,
             _safetyHistory.Count,
             _events.Count,
-            Math.Max(0, sequence - Interlocked.Read(ref _acknowledgedFrameSequence) - 1));
+            Math.Max(0, sequence - Interlocked.Read(ref _acknowledgedFrameSequence) - 1))
+        {
+            FramePublishedTimestamp = _diagnostics.IsEnabled ? Stopwatch.GetTimestamp() : 0
+        };
         var frame = new PlaybackFrame(
             _generationId,
             sequence,
@@ -523,6 +650,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             _trajectory,
             _safetyHistory,
             centers.ToImmutable(),
+            _world.GetActiveRouteLocks().ToImmutableArray(),
             _world.IsComplete,
             _world.MovingBlockMode,
             _world.BrakingEstimationMode,
@@ -530,11 +658,37 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             performance);
 
         var publish = Stopwatch.StartNew();
-        _frames.Writer.TryWrite(frame);
+        var published = _frames.Writer.TryWrite(frame);
         publish.Stop();
         _lastFramePublishMilliseconds = publish.Elapsed.TotalMilliseconds;
+        _diagnostics.RecordTiming(
+            PlaybackDiagnosticMetricNames.WorkerFramePublish,
+            _lastFramePublishMilliseconds);
+        if (published)
+        {
+            _diagnostics.RecordCount(PlaybackDiagnosticMetricNames.WorkerFramePublishedCount);
+        }
         _lastFrameTimestamp = Stopwatch.GetTimestamp();
         _ready.TrySetResult(frame);
+    }
+
+    private void FlushNoProgressAdvanceDiagnostics()
+    {
+        if (!_diagnostics.IsEnabled || _noProgressAdvanceCount == 0)
+        {
+            return;
+        }
+
+        var count = _noProgressAdvanceCount;
+        var milliseconds = _noProgressAdvanceMilliseconds;
+        _noProgressAdvanceCount = 0;
+        _noProgressAdvanceMilliseconds = 0;
+        _diagnostics.RecordCount(
+            PlaybackDiagnosticMetricNames.WorkerNoProgressAdvanceCount,
+            count);
+        _diagnostics.RecordTiming(
+            PlaybackDiagnosticMetricNames.WorkerNoProgressAdvanceBatch,
+            milliseconds);
     }
 
     private void AppendNewValues<T>(
@@ -578,9 +732,14 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
     {
         lock (_disposeLock)
         {
-            if (Volatile.Read(ref _stopRequested) != 0 || _runTask.IsCompleted || !_commands.Writer.TryWrite(command))
+            if (Volatile.Read(ref _stopRequested) != 0 || _runTask.IsCompleted
+                || !_commands.Writer.TryWrite(command))
             {
                 command.Completion?.TrySetException(new ObjectDisposedException(nameof(SimulationPlaybackWorker)));
+            }
+            else
+            {
+                _commandWakeup.Release();
             }
         }
 

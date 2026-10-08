@@ -7,28 +7,89 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
+    private readonly PlaybackPerformanceDiagnostics _playbackDiagnostics = new();
+
+    /// <summary>
+    /// Opt-in aggregate profiler used by the offscreen playback diagnostics runner. Normal app
+    /// playback keeps this disabled and therefore does not collect per-frame samples.
+    /// </summary>
+    public PlaybackPerformanceDiagnostics PlaybackDiagnostics => _playbackDiagnostics;
+
+    public PlaybackPerformanceDiagnostics EnablePlaybackDiagnostics(bool enabled = true)
+    {
+        _playbackDiagnostics.Enable(enabled);
+        _resultAccumulator.Diagnostics = enabled ? _playbackDiagnostics : null;
+        _playbackWorker?.Diagnostics.Enable(enabled);
+        return _playbackDiagnostics;
+    }
+
+    public void ResetPlaybackDiagnostics()
+    {
+        _playbackDiagnostics.Reset();
+        _playbackWorker?.Diagnostics.Reset();
+    }
+
     private void WorkspaceTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!ReferenceEquals(sender, WorkspaceTabControl) || !_v2Enabled)
+        if (!ReferenceEquals(sender, WorkspaceTabControl)
+            || !ReferenceEquals(e.OriginalSource, WorkspaceTabControl)
+            || !_v2Enabled)
         {
             return;
         }
 
-        UpdateV2PlaybackView(force: true);
+        var inputToken = NativeAcceptanceBeginInputAction("tabClick", "WorkspaceTabControl");
+        NativeAcceptanceInputHandlerStarted(inputToken);
+        try { UpdateV2PlaybackViewCore(force: true, inputToken); }
+        finally
+        {
+            NativeAcceptanceInputHandlerEnded(inputToken);
+            NativeAcceptanceApplicationVisualUpdate(inputToken, "workspace tab frame applied; not compositor present");
+        }
+    }
+
+    private void SimulationViewTabControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, SimulationViewTabControl)
+            || !ReferenceEquals(e.OriginalSource, SimulationViewTabControl)
+            || !_v2Enabled)
+        {
+            return;
+        }
+
+        // A nested-view switch must be visible immediately even while playback is paused.  The
+        // OriginalSource guard keeps child selectors (for example the speed-profile train
+        // ComboBox) from triggering a full nested-view refresh through routed bubbling.
+        var inputToken = NativeAcceptanceBeginInputAction("nestedTabClick", "SimulationViewTabControl");
+        NativeAcceptanceInputHandlerStarted(inputToken);
+        try { UpdateV2PlaybackViewCore(force: true, inputToken); }
+        finally
+        {
+            NativeAcceptanceInputHandlerEnded(inputToken);
+            NativeAcceptanceApplicationVisualUpdate(inputToken, "nested tab frame applied; not compositor present");
+        }
     }
 
     private void UpdateV2PlaybackView(bool force = false)
+        => UpdateV2PlaybackViewCore(force, inputToken: 0);
+
+    private void UpdateV2PlaybackViewCore(bool force, long inputToken)
     {
         if (!_v2Enabled || _playbackWorker is null)
         {
             return;
         }
 
-        if (_playbackWorker.TryReadLatestFrame(out var latestFrame)
-            && latestFrame is not null
-            && latestFrame.GenerationId == _playbackWorker.GenerationId)
         {
-            _latestPlaybackFrame = latestFrame;
+            using var phase = NativeAcceptanceMeasurePhase(inputToken, "playback.frameRead");
+            if (_playbackWorker.TryReadLatestFrame(out var latestFrame)
+                && latestFrame is not null
+                && latestFrame.GenerationId == _playbackWorker.GenerationId)
+            {
+                _playbackDiagnostics.ObserveDispatcherApplyAge(
+                    latestFrame.Performance.FramePublishedTimestamp);
+                _latestPlaybackFrame = latestFrame;
+            }
         }
 
         var frame = _latestPlaybackFrame;
@@ -47,7 +108,10 @@ public partial class MainWindow
         SimulationResultDelta? delta = null;
         if (frameChanged)
         {
-            delta = _resultAccumulator.Advance(frame);
+            using (NativeAcceptanceMeasurePhase(inputToken, "playback.accumulator"))
+            {
+                delta = _resultAccumulator.Advance(frame);
+            }
             _lastAccumulatorMilliseconds = delta.AccumulatorMilliseconds;
             if (delta.WasReset)
             {
@@ -100,34 +164,61 @@ public partial class MainWindow
         var refreshDynamicRows = frameChanged || force;
         if (refreshDynamicRows && RefreshDue(ref _lastTrainRenderTimestamp, 50, force))
         {
-            var trainRows = frame.Trains
-                .Where(state => state.Phase != OperationalPhase.OutOfService)
-                .Select(state => new CurrentTrainRow(
-                    state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
-                    state.IsActive ? DirectionToChinese(state.Direction) : "—",
-                    state.IsActive ? PhaseToChinese(state.Phase) : "待發",
-                    frame.GetTrainCenterPosition(state.VehicleId) is { } center
-                        && _stationChainageProjection?.ToChainage(center) is { } centerChainage
-                            ? $"{centerChainage / 1000:0.000}" : "—",
-                    $"{state.SpeedMetersPerSecond * 3.6:0.#}",
-                    GetV2CurrentLocation(state),
-                    state.NextStationId ?? "—"))
-                .ToArray();
-            ApplyRowsByKey(CurrentTrainRows, trainRows, row => row.TrainId);
-            SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
+            using (NativeAcceptanceMeasurePhase(inputToken, "playback.trainRows"))
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.TrainRowUpdate))
+            {
+                var trainRows = frame.Trains
+                    .Where(state => state.Phase != OperationalPhase.OutOfService)
+                    .Select(state => new CurrentTrainRow(
+                        state.VehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal) + $"｜{state.ServiceClassId}",
+                        state.IsActive ? DirectionToChinese(state.Direction) : "—",
+                        state.IsActive ? PhaseToChinese(state.Phase) : "待發",
+                        frame.GetTrainCenterPosition(state.VehicleId) is { } center
+                            && _stationChainageProjection?.ToChainage(center) is { } centerChainage
+                                ? $"{centerChainage / 1000:0.000}" : "—",
+                        $"{state.SpeedMetersPerSecond * 3.6:0.#}",
+                        GetV2CurrentLocation(state),
+                        state.NextStationId ?? "—"))
+                    .ToArray();
+                ApplyRowsByKey(CurrentTrainRows, trainRows, row => row.TrainId);
+                SimulationClockText.Text = TrajectoryAnalysis.FormatClock(_startClockSeconds + _playbackTimeSeconds);
+            }
         }
 
         if (refreshDynamicRows && ReferenceEquals(selectedTab, SimulationTabItem))
         {
-            if (RefreshDue(ref _lastRouteRenderTimestamp, 33, force))
+            var selectedSimulationView = SimulationViewTabControl.SelectedItem;
+            var routeViewSelected = SimulationViewTabControl.SelectedIndex == 0;
+            var speedViewSelected = ReferenceEquals(selectedSimulationView, SpeedProfileTabItem);
+            if (routeViewSelected && RefreshDue(ref _lastRouteRenderTimestamp, 33, force))
             {
-                var routeRender = Stopwatch.StartNew();
-                DrawV2Route(frame.GetSnapshot());
-                _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;
+                using (NativeAcceptanceMeasurePhase(inputToken, "playback.selectedChart"))
+                using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.RouteMarkerRender))
+                {
+                    var routeRender = Stopwatch.StartNew();
+                    DrawV2Route(frame.GetSnapshot());
+                    _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;
+                }
             }
-            if (RefreshDue(ref _lastChartRenderTimestamp, 250, force))
+            if (speedViewSelected && RefreshDue(ref _lastChartRenderTimestamp, 250, force))
             {
-                DrawV2SpeedProfile();
+                using (NativeAcceptanceMeasurePhase(inputToken, "playback.selectedChart"))
+                using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.SpeedChartRender))
+                {
+                    DrawV2SpeedProfile();
+                }
+            }
+        }
+
+        // The event grid belongs to the diagram page, so keep it synchronized
+        // independently of the safety page. Switching directly to the
+        // diagram after playback must still show events already in the frame.
+        if (frame.Events.Count != _lastRenderedEventCount || force)
+        {
+            using (NativeAcceptanceMeasurePhase(inputToken, "playback.eventRows"))
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.EventRowUpdate))
+            {
+                AppendVisibleEventRows(frame);
             }
         }
 
@@ -135,26 +226,24 @@ public partial class MainWindow
         {
             if (refreshDynamicRows && RefreshDue(ref _lastSafetyRenderTimestamp, 100, force))
             {
-                var safetyRows = frame.CurrentSafety
-                    .Where(MatchesSafetyFilters)
-                    .Select(observation => new SafetyRow(
-                        $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}",
-                        observation.TrackId,
-                        $"{observation.FollowerFrontPositionMeters / 1000:0.00}",
-                        $"{observation.LeaderRearPositionMeters / 1000:0.00}",
-                        $"{observation.ActualGapMeters:0.0}",
-                        $"{observation.DynamicSafetyDistanceMeters:0.0}",
-                        $"{observation.ObstacleBrakingDemandMeters:0.0}",
-                        $"{observation.SafetyMarginMeters:0.0}",
-                        SafetyStatusToChinese(observation.Status)))
-                    .ToArray();
-                ApplyRowsByKey(SafetyRows, safetyRows,
-                    row => $"{row.Pair}|{row.Track}");
-            }
-
-            if (frame.Events.Count != _lastRenderedEventCount || force)
-            {
-                AppendVisibleEventRows(frame);
+                using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.SafetyRowUpdate))
+                {
+                    var safetyRows = frame.CurrentSafety
+                        .Where(MatchesSafetyFilters)
+                        .Select(observation => new SafetyRow(
+                            $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}",
+                            observation.TrackId,
+                            $"{observation.FollowerFrontPositionMeters / 1000:0.00}",
+                            $"{observation.LeaderRearPositionMeters / 1000:0.00}",
+                            $"{observation.ActualGapMeters:0.0}",
+                            $"{observation.DynamicSafetyDistanceMeters:0.0}",
+                            $"{observation.ObstacleBrakingDemandMeters:0.0}",
+                            $"{observation.SafetyMarginMeters:0.0}",
+                            SafetyStatusToChinese(observation.Status)))
+                        .ToArray();
+                    ApplyRowsByKey(SafetyRows, safetyRows,
+                        row => $"{row.Pair}|{row.Track}");
+                }
             }
 
             if ((_safetyHistoryDirty || force) && RefreshDue(ref _lastSafetySummaryTimestamp, 1000, force))
@@ -166,13 +255,20 @@ public partial class MainWindow
 
             if (refreshDynamicRows && RefreshDue(ref _lastChartRenderTimestamp, 250, force))
             {
-                DrawSafetyDistanceChart();
+                using (NativeAcceptanceMeasurePhase(inputToken, "playback.selectedChart"))
+                using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.SafetyChartRender))
+                {
+                    DrawSafetyDistanceChart();
+                }
             }
         }
 
         if (ReferenceEquals(selectedTab, ResultsTabItem) && (_timetableDirty || force))
         {
-            PopulateV3Timetable();
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.TimetableUpdate))
+            {
+                PopulateV3Timetable();
+            }
             _timetableDirty = false;
         }
 
@@ -180,7 +276,10 @@ public partial class MainWindow
             && (_segmentDetailsDirty || force)
             && RefreshDue(ref _lastSegmentRefreshTimestamp, 1000, force))
         {
-            PopulateV3SegmentDetails();
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.SegmentStatistics))
+            {
+                PopulateV3SegmentDetails();
+            }
             _segmentDetailsDirty = false;
         }
 
@@ -188,7 +287,10 @@ public partial class MainWindow
             && (_comparisonDirty || force)
             && (!_isV2PlaybackPlaying || frame.IsComplete || force || RefreshDue(ref _lastComparisonRefreshTimestamp, 1000, force)))
         {
-            PopulateV1V2Comparison();
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.V1V2Comparison))
+            {
+                PopulateV1V2Comparison();
+            }
             _comparisonDirty = false;
             _lastComparisonRefreshTimestamp = now;
         }
@@ -196,7 +298,10 @@ public partial class MainWindow
         if (ReferenceEquals(selectedTab, ResourceTabItem)
             && (_resourceOccupancyDirty || force || RefreshDue(ref _lastResourceRefreshTimestamp, 1000, false)))
         {
-            PopulateResourceOccupancy();
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.ResourceOccupancy))
+            {
+                PopulateResourceOccupancy();
+            }
             _resourceOccupancyDirty = false;
             _lastResourceRefreshTimestamp = now;
         }
@@ -213,18 +318,33 @@ public partial class MainWindow
             && refreshDynamicRows
             && RefreshDue(ref _lastChartRenderTimestamp, 250, force))
         {
-            DrawTimeDistanceDiagram();
+            using (NativeAcceptanceMeasurePhase(inputToken, "playback.selectedChart"))
+            using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.TimeDistanceRender))
+            {
+                DrawTimeDistanceDiagramCore(inputToken);
+            }
         }
 
         if (_actualSummaryDirty && (delta?.HasNewEvents == true || force || delta?.WasReset == true))
         {
-            UpdateV2ActualSummary();
+            using (NativeAcceptanceMeasurePhase(inputToken, "playback.summary"))
+            {
+                UpdateV2ActualSummary();
+            }
             _actualSummaryDirty = false;
         }
 
         _lastRenderedPlaybackFrameSequence = frame.Sequence;
         renderTimer.Stop();
         _lastUiRenderMilliseconds = renderTimer.Elapsed.TotalMilliseconds;
+        _playbackDiagnostics.RecordTiming(
+            PlaybackDiagnosticMetricNames.ApplyPlaybackFrame,
+            _lastUiRenderMilliseconds);
+        _playbackDiagnostics.RecordCount(PlaybackDiagnosticMetricNames.UiFrameAppliedCount);
+        if (frameChanged)
+        {
+            _playbackDiagnostics.RecordCount(PlaybackDiagnosticMetricNames.UiFrameConsumedCount);
+        }
         PlaybackStatusText.ToolTip =
             $"模擬推進 {frame.Performance.SimulationAdvanceMilliseconds:0.0} ms；frame 建立 {frame.Performance.FrameBuildMilliseconds:0.0} ms；"
             + $"frame 發布 {frame.Performance.FramePublishMilliseconds:0.0} ms；結果累積 {_lastAccumulatorMilliseconds:0.0} ms；"

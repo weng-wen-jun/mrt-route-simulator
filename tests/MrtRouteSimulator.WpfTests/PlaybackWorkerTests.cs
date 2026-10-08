@@ -1,7 +1,8 @@
-using System.Collections;
+﻿using System.Collections;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Threading;
 using MrtRouteSimulator.App;
 using MrtRouteSimulator.Engine;
@@ -10,7 +11,7 @@ internal static class PlaybackWorkerTests
 {
     public static void Run(string root)
     {
-        var path = Path.Combine(root, "samples", "V4.0.0-topology-baseline.mrtsim.json");
+        var path = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
         var window = new MainWindow();
         try
@@ -44,6 +45,20 @@ internal static class PlaybackWorkerTests
             WpfTestWait.Invoke(window, "DrawV2Route");
             Require(!ReferenceEquals(staticRail, routeCanvas.Children[0]),
                 "路線圖尺寸改變後應重新計算固定配線。");
+            var trainMarker = routeCanvas.Children.OfType<Border>().FirstOrDefault(item => item.Tag is string)
+                ?? throw new InvalidOperationException("路線圖應顯示可開啟右鍵選單的列車標記。");
+            var followItem = trainMarker.ContextMenu?.Items.OfType<MenuItem>().SingleOrDefault();
+            Require(followItem is not null,
+                "列車標記右鍵選單應提供視角跟隨切換。");
+            followItem!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Require(WpfTestWait.Field(window, "_followedRouteVehicleId") is string followedVehicleId
+                    && followedVehicleId.Equals((string)trainMarker.Tag, StringComparison.OrdinalIgnoreCase),
+                "右鍵選單應啟用該列車的視角跟隨。");
+            Require(((Button)window.FindName("StopRouteFollowButton")).IsEnabled,
+                "啟用視角跟隨後，上方停止跟隨按鈕應可用。");
+            ((Button)window.FindName("StopRouteFollowButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Require(WpfTestWait.Field(window, "_followedRouteVehicleId") is null,
+                "上方停止跟隨按鈕應解除路線圖視角跟隨。");
             var tabs = (TabControl)window.FindName("WorkspaceTabControl");
             Require(window.TimetableRows.Count == 0,
                 "隱藏的時刻表分頁在播放初始化時不可預先刷新。");
@@ -104,6 +119,20 @@ internal static class PlaybackWorkerTests
             RequireTimetableParity(window, accumulator, latest!);
             RequireComparisonParity(window, accumulator, latest!);
             Console.WriteLine("  固定步進與增量資源結果完成");
+
+            // The normal WPF reset path must enqueue only Reset.  Its ordered worker command
+            // publishes the single reset frame; a preceding Pause would leave two sequence
+            // increments even though the first frame is immediately discarded by the UI.
+            WpfTestWait.Wait(worker.AdvanceToSimulationTimeAsync(1));
+            WpfTestWait.Invoke(window, "UpdateV2PlaybackView");
+            var beforeUiReset = WpfTestWait.LatestFrame(window);
+            WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ResetPlaybackAsync"));
+            var afterUiReset = WpfTestWait.LatestFrame(window);
+            Require(afterUiReset.Sequence == beforeUiReset.Sequence + 1,
+                $"正常 WPF Reset 應只發布一個 reset frame；before={beforeUiReset.Sequence}, after={afterUiReset.Sequence}。");
+            Require(afterUiReset.SimulationTimeSeconds == 0,
+                "正常 WPF Reset 必須回到 0 秒。");
+            Console.WriteLine("  WPF Reset single-frame boundary 完成");
 
             WpfTestWait.Wait(worker.PlayAsync(10));
             WpfTestWait.Wait(worker.PauseAsync());

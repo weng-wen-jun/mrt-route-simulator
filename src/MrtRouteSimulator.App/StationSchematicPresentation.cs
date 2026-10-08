@@ -387,7 +387,7 @@ internal static class StationSchematicPresentation
     }
 
     public static void DrawConnection(Canvas canvas, Point from, Point to, Vector incoming, Vector outgoing, Brush brush, string tooltip,
-        bool allowLaneTurn = false)
+        bool allowLaneTurn = false, double strokeThickness = 5)
     {
         // Shared topology-node endpoints are already directly connected. Do not
         // manufacture a connector (or a missing-space warning) from the two edge
@@ -424,7 +424,7 @@ internal static class StationSchematicPresentation
                     h00 * from.Y + h10 * firstHandle.Y + h01 * to.Y + h11 * lastHandle.Y);
                 laneTurnPoints.Add(point);
             }
-            canvas.Children.Add(new Polyline { Points = laneTurnPoints, Stroke = brush, StrokeThickness = 5,
+            canvas.Children.Add(new Polyline { Points = laneTurnPoints, Stroke = brush, StrokeThickness = strokeThickness,
                 StrokeLineJoin = PenLineJoin.Round, ToolTip = tooltip });
             return;
         }
@@ -447,7 +447,7 @@ internal static class StationSchematicPresentation
             var smooth = t * t * (3 - 2 * t);
             points.Add(new Point(from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * smooth));
         }
-        canvas.Children.Add(new Polyline { Points = points, Stroke = brush, StrokeThickness = 5,
+        canvas.Children.Add(new Polyline { Points = points, Stroke = brush, StrokeThickness = strokeThickness,
             StrokeLineJoin = PenLineJoin.Round, ToolTip = tooltip });
     }
     public static void DrawChainageReference(Canvas canvas, StationChainageProjection? projection, double top)

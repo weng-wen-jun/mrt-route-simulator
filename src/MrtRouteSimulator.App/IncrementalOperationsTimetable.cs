@@ -134,6 +134,7 @@ internal sealed class IncrementalOperationsTimetable
     private bool MatchesStation(OperationsTimetableEntry entry, SimulationEvent item) =>
         _topology is { } topology
             ? topology.MatchesStationEvent(entry.Direction, entry.StationId, item)
+                || topology.MatchesTurnbackOriginEvent(entry.StationId, item)
             : Math.Abs(item.PositionMeters - entry.PositionMeters) <= PositionToleranceMeters;
 
     private void RefreshStatus(RunState run, int index)

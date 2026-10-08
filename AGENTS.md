@@ -279,7 +279,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7（legacy 匯入／固定時刻�
 2. `SimulationProject.cs`（若影響 legacy 匯入或固定時刻表）
 3. `MainWindow.ProjectFiles.cs`／`MainWindow.Topology.cs`
 4. `tests/MrtRouteSimulator.Tests/Program.cs`／`TopologyRegressionTests.cs`
-5. `samples/V4.0.0-topology-baseline.mrtsim.json` 與完整 topology 範例
+5. `samples/10-小型-三站完整拓樸基準範例.mrtsim.json` 與完整 topology 範例
 6. `MODEL_SPEC.md`
 7. 必要時 `README.md`／`CHANGELOG.md`
 
@@ -389,13 +389,21 @@ SimulationWorld.Tick() = 固定 0.1 s
 
 測試清單以 runner 原始碼為準；最近一次完整執行的通過數與建置結果以 `QA_REPORT.md` 為準，不在本導覽固定寫死數量。
 
+### MCP／桌面自動化（V4.1）
+
+- `src/MrtRouteSimulator.Mcp`：官方 MCP C# SDK stdio Host；工具 schema、Codex 連線及日誌 stdout 邊界。
+- `src/MrtRouteSimulator.Automation`：workspace 檔案操作、headless session 共用互斥鎖、同使用者 named pipe transport。
+- `src/MrtRouteSimulator.App/MainWindow.Mcp.cs`：opt-in Dispatcher façade；所有 world 命令沿用現有播放 worker，不得另建桌面模擬資料源。
+- 先讀 [MCP 文件](docs/MCP.md)。完整 solution 首次還原須用 MCP 的 NuGet.Config；原 root NuGet.Config 保留給離線核心。若既有 exe 鎖住輸出，使用文件所列 artifacts 目錄。
+- 修改 MCP 要驗證標準 initialize／tools/list／tools/call、並行 session 操作、WPF named pipe 專項與相同 runtime 結果；程式呼叫不等於 OS 滑鼠／DPI／compositor 驗收。
+
 ### Topology samples
 
-- `samples/V4.0.0-topology-baseline.mrtsim.json`
-- `samples/V4.0.0-完整拓撲執行驗證範例.mrtsim.json`
+- `samples/10-小型-三站完整拓樸基準範例.mrtsim.json`
+- `samples/11-小型-三站完整拓樸運行範例.mrtsim.json`
 - `samples/README.md`
 
-用途：Schema 8 基線與完整 physical facility 情境驗證；`samples` 內舊 V3.x 檔名只保留情境沿革，內容仍是 Schema 8。
+用途：Schema 8 基線與完整 physical facility 情境驗證；samples 內範例檔名依規模排序並使用中文，內容仍是 Schema 8。
 
 ---
 
@@ -641,7 +649,7 @@ Release build
 專案根目錄：
 
 ```powershell
-dotnet restore .\MrtRouteSimulator.slnx --configfile .\NuGet.Config
+dotnet restore .\MrtRouteSimulator.slnx --configfile .\src\MrtRouteSimulator.Mcp\NuGet.Config
 dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 ```

@@ -8,10 +8,10 @@ public partial class MainWindow
     private const double QuickBuilderExpandedWidth = 450;
 
     private void OpenInfrastructureWorkspace_Click(object sender, RoutedEventArgs e) =>
-        OpenTopologyWorkspace(ProjectWorkspacePage.Infrastructure);
+        OpenTopologyWorkspace(ProjectWorkspacePage.Tracks);
 
     private void OpenOperationsWorkspace_Click(object sender, RoutedEventArgs e) =>
-        OpenTopologyWorkspace(ProjectWorkspacePage.Operations);
+        OpenTopologyWorkspace(ProjectWorkspacePage.Services);
 
     private void OpenSimulationWorkspace_Click(object sender, RoutedEventArgs e) =>
         OpenTopologyWorkspace(ProjectWorkspacePage.Simulation);
@@ -60,5 +60,17 @@ public partial class MainWindow
         QuickBuilderColumn.Width = collapsed
             ? new GridLength(0)
             : new GridLength(QuickBuilderExpandedWidth);
+        UpdateQuickBuilderWidth();
+    }
+
+    private void UpdateQuickBuilderWidth()
+    {
+        if (QuickBuilderColumn is null || QuickBuilderSidebar is null
+            || QuickBuilderSidebar.Visibility == Visibility.Collapsed) return;
+        // Use the measured, interface-scaled content width, not physical pixels.
+        // Keep the editor usable while reserving most of a compact window for results.
+        var width = ShellContentGrid.ActualWidth;
+        if (!IsFiniteLayoutDimension(width)) return;
+        QuickBuilderColumn.Width = new GridLength(Math.Clamp(width * .38, 280, QuickBuilderExpandedWidth));
     }
 }

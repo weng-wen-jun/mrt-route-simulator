@@ -69,6 +69,19 @@ internal static class ProjectLoadTests
                     || !document.VehicleTypes.All(item => vehicleRows.Any(row => row.Id == item.Id && row.Name == item.DisplayName))
                     || !document.ServiceTypes.All(item => serviceRows.Any(row => row.Id == item.Id && row.Name == item.DisplayName)))
                     throw new InvalidOperationException("載入 Schema 8 拓撲後，車型／服務目錄不得留在示範資料或只顯示內部 ID。");
+                if (document.StopPatterns.Any(pattern => pattern.Instructions.Any(item =>
+                        item.WaitForOvertakeServiceRunId is not null)))
+                {
+                    var inputRows = ((IEnumerable<ServicePatternInputRow>)typeof(MainWindow)
+                        .GetProperty("ServicePatternRows")!.GetValue(window)!).ToArray();
+                    foreach (var instruction in document.StopPatterns.SelectMany(pattern => pattern.Instructions
+                                 .Where(item => item.WaitForOvertakeServiceRunId is not null)
+                                 .Select(item => (pattern.Id, Instruction: item))))
+                        if (!inputRows.Any(row => row.PatternId == instruction.Id
+                            && row.StationId == instruction.Instruction.StationId
+                            && row.WaitForOvertakeServiceRunId == instruction.Instruction.WaitForOvertakeServiceRunId))
+                            throw new InvalidOperationException("載入專案後停站模式輸入表遺失指定待避車次。");
+                }
 
                 var serviceFilter = (ComboBox)window.FindName("IntervalServiceTypeComboBox")!;
                 var patternFilter = (ComboBox)window.FindName("IntervalStopPatternComboBox")!;
@@ -110,6 +123,8 @@ internal static class ProjectLoadTests
                     throw new InvalidOperationException("軌道編輯器套用後遺失實體接軌側別。");
             }
             Console.WriteLine("[通過] WPF 軌道編輯器往返保存實體接軌側別");
+            VerifyServicePreferredPlatformNullRoundTrip(root);
+            VerifyTopologyCollectionEditorsRoundTrip(root);
             var invalidTurn = pocket with { Topology = pocket.Topology with
             {
                 DirectedConnections = pocket.Topology.DirectedConnections.Append(
@@ -135,4 +150,66 @@ internal static class ProjectLoadTests
 
     private static object? Field(MainWindow window, string name) =>
         typeof(MainWindow).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(window);
+
+    private static void VerifyServicePreferredPlatformNullRoundTrip(string root)
+    {
+        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+        var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ServiceTypeEditorViewModel")!;
+        foreach (var source in document.ServiceTypes)
+        {
+            var editor = Activator.CreateInstance(editorType, [source])!;
+            var restored = (ProjectServiceType)editorType.GetMethod("ToDomain")!.Invoke(editor, null)!;
+            if (source.PreferredPlatformIds is null && restored.PreferredPlatformIds is not null)
+                throw new InvalidOperationException($"服務 {source.Id} 未修改套用後不應把 preferredPlatformIds null 變成空陣列。");
+            if (source.PreferredPlatformIds is not null
+                && !source.PreferredPlatformIds.SequenceEqual(restored.PreferredPlatformIds ?? []))
+                throw new InvalidOperationException($"服務 {source.Id} 套用後偏好月台內容不一致。");
+        }
+
+        var emptySource = document.ServiceTypes[0] with { PreferredPlatformIds = [] };
+        var emptyEditor = Activator.CreateInstance(editorType, [emptySource])!;
+        var emptyRestored = (ProjectServiceType)editorType.GetMethod("ToDomain")!.Invoke(emptyEditor, null)!;
+        if (emptyRestored.PreferredPlatformIds is null || emptyRestored.PreferredPlatformIds.Length != 0)
+            throw new InvalidOperationException("明確的 preferredPlatformIds 空陣列不可被轉成 null。");
+        Console.WriteLine("[通過] WPF 服務編輯器保存 sample 14 的 null／空陣列偏好月台語意");
+    }
+
+    private static void VerifyTopologyCollectionEditorsRoundTrip(string root)
+    {
+        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
+        var assembly = typeof(MainWindow).Assembly;
+        var edgeType = assembly.GetType("MrtRouteSimulator.App.TrackEdgeEditorViewModel")!;
+        var edge = document.Topology.Edges.First(item => item.ConflictResourceIds.Count > 0);
+        var edgeEditor = Activator.CreateInstance(edgeType, [edge])!;
+        var edgeIds = (string)edgeType.GetProperty("ConflictResourceIds")!.GetValue(edgeEditor)!;
+        var edgeRestored = (TrackEdgeDefinition)edgeType.GetMethod("ToDomain")!.Invoke(edgeEditor, null)!;
+        if (!edge.ConflictResourceIds.SetEquals(edgeRestored.ConflictResourceIds)
+            || !edge.ConflictResourceIds.All(edgeIds.Contains))
+            throw new InvalidOperationException("軌道區段未編輯套用後遺失衝突資源集合。");
+
+        var replacementResources = document.Topology.Resources.Take(2).Select(item => item.ResourceId).ToArray();
+        edgeType.GetProperty("ConflictResourceIds")!.SetValue(edgeEditor,
+            $"{replacementResources[0]}，{replacementResources[1]}, {replacementResources[0]}");
+        edgeRestored = (TrackEdgeDefinition)edgeType.GetMethod("ToDomain")!.Invoke(edgeEditor, null)!;
+        if (!new HashSet<string>(replacementResources, StringComparer.OrdinalIgnoreCase).SetEquals(edgeRestored.ConflictResourceIds))
+            throw new InvalidOperationException("軌道區段衝突資源清單未正確解析全形／半形分隔或重複 ID。");
+
+        var platformType = assembly.GetType("MrtRouteSimulator.App.PlatformEditorViewModel")!;
+        var platform = document.Topology.Platforms.First(item => item.AllowedServiceTypeIds.Count > 0);
+        var platformEditor = Activator.CreateInstance(platformType, [platform])!;
+        var restoredPlatform = (PlatformDefinitionV4)platformType.GetMethod("ToDomain")!.Invoke(platformEditor, null)!;
+        if (!platform.AllowedVehicleTypeIds.SetEquals(restoredPlatform.AllowedVehicleTypeIds)
+            || !platform.AllowedServiceTypeIds.SetEquals(restoredPlatform.AllowedServiceTypeIds))
+            throw new InvalidOperationException("月台未編輯套用後遺失車型／服務限制集合。");
+
+        platformType.GetProperty("AllowedVehicleTypeIds")!.SetValue(platformEditor, "EMU-6，EMU-6");
+        platformType.GetProperty("AllowedServiceTypeIds")!.SetValue(platformEditor, "EXPRESS; SECTION，EXPRESS");
+        restoredPlatform = (PlatformDefinitionV4)platformType.GetMethod("ToDomain")!.Invoke(platformEditor, null)!;
+        if (!new HashSet<string>(["EMU-6"], StringComparer.OrdinalIgnoreCase).SetEquals(restoredPlatform.AllowedVehicleTypeIds)
+            || !new HashSet<string>(["EXPRESS", "SECTION"], StringComparer.OrdinalIgnoreCase).SetEquals(restoredPlatform.AllowedServiceTypeIds))
+            throw new InvalidOperationException("月台限制清單未正確解析全形／半形分隔或重複 ID。");
+        Console.WriteLine("[通過] WPF 編輯器保存 sample 14 的衝突資源／月台限制集合並可編輯");
+    }
 }

@@ -109,6 +109,8 @@ public sealed class ServicePatternInputRow : INotifyPropertyChanged
     public double? DwellTimeSeconds { get; set; }
 
     public double? SpeedLimitKmh { get; set; }
+
+    public string WaitForOvertakeServiceRunId { get; set; } = string.Empty;
 }
 
 public sealed class ServiceRunInputRow

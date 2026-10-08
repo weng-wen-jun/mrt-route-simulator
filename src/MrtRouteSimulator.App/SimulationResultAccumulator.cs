@@ -35,6 +35,12 @@ public sealed class SimulationResultAccumulator
     private int _safetyCursor;
     private double _lastSimulationTimeSeconds;
 
+    /// <summary>
+    /// Optional UI-owned profiler. It is null during normal playback so accumulator behavior
+    /// and allocation remain unchanged unless a diagnostics runner explicitly attaches it.
+    /// </summary>
+    public PlaybackPerformanceDiagnostics? Diagnostics { get; set; }
+
     public int LastProcessedEventIndex => _eventCursor;
 
     public int LastProcessedTrajectoryIndex => _trajectoryCursor;
@@ -110,6 +116,9 @@ public sealed class SimulationResultAccumulator
         _safetyCursor = frame.SafetyHistory.Count;
         _lastSimulationTimeSeconds = frame.SimulationTimeSeconds;
         stopwatch.Stop();
+        Diagnostics?.RecordTiming(
+            PlaybackDiagnosticMetricNames.ResultAccumulator,
+            stopwatch.Elapsed.TotalMilliseconds);
         return new SimulationResultDelta(wasReset, newEvents, newTrajectory, newSafety, stopwatch.Elapsed.TotalMilliseconds);
     }
 

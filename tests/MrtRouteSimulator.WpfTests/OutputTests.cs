@@ -1,4 +1,4 @@
-using System.Reflection;
+﻿using System.Reflection;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -12,12 +12,26 @@ using MrtRouteSimulator.Engine;
 /// </summary>
 internal static class OutputTests
 {
+    public static void RunLarge(string root)
+    {
+        var output = Path.Combine(root, "artifacts", "output-qa-large");
+        Directory.CreateDirectory(output);
+        var large = Load(root, "14-大型-二十八站完整營運範例.mrtsim.json");
+        try
+        {
+            VerifyLoadedPlan(large.Window, "大型完整營運");
+            AdvanceAndVerify(large, output, "large");
+        }
+        finally { WpfTestWait.Close(large.Window); }
+        Console.WriteLine("[通過] 大型 sample 14 輸出頁與 CSV／PNG／PDF 回歸");
+    }
+
     public static void Run(string root)
     {
         var output = Path.Combine(root, "artifacts", "output-qa");
         Directory.CreateDirectory(output);
 
-        var complete = Load(root, "V4.0.0-完整拓撲執行驗證範例.mrtsim.json");
+        var complete = Load(root, "11-小型-三站完整拓樸運行範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(complete.Window, "完整拓撲");
@@ -28,7 +42,7 @@ internal static class OutputTests
             WpfTestWait.Close(complete.Window);
         }
 
-        var rearTurnback = Load(root, "PDF-RearTurnback.mrtsim.json");
+        var rearTurnback = Load(root, "09-小型-三站站後尾軌折返範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(rearTurnback.Window, "TrainCenter 尾軌折返");
@@ -182,6 +196,9 @@ internal static class OutputTests
         }
 
         VerifyDiagramExports(window, output, label);
+        // This check advances playback by one second. Run it after all
+        // frame-to-accumulator parity checks so they compare the same frame.
+        VerifyOutputFilterRefresh(scenario, frame, planned, label);
     }
 
     private static void VerifyIntervalDirectionFilter(MainWindow window, TrainDirection direction, string label, string scenario)
@@ -196,6 +213,116 @@ internal static class OutputTests
             && window.IntervalStatisticRows.All(row => row.Direction == label),
             $"{scenario} 區間統計方向篩選混入其他方向。");
     }
+
+    private static void VerifyOutputFilterRefresh(
+        (MainWindow Window, SimulationPlaybackWorker Worker, TopologyProjectDocument Document) scenario,
+        PlaybackFrame frame,
+        PlannedTimelineArtifact planned,
+        string label)
+    {
+        var window = scenario.Window;
+        SelectTab(window, "DiagramTabItem");
+        Invoke(window, "UpdateV2PlaybackView", true);
+        Require(window.EventRows.Count == Math.Min(300, frame.Events.Count),
+            $"{label} 直接進入運行圖後，事件表未同步目前 frame。 ");
+
+        var diagram = (Canvas)window.FindName("TimeDistanceCanvas")!;
+        diagram.Width = 1200;
+        diagram.Height = 380;
+        diagram.Measure(new Size(1200, 380));
+        diagram.Arrange(new Rect(0, 0, 1200, 380));
+
+        var direction = (ComboBox)window.FindName("DiagramDirectionComboBox")!;
+        var allDirection = direction.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Tag, "All"));
+        direction.SelectedItem = allDirection;
+        Invoke(window, "DrawTimeDistanceDiagram");
+        var allMarkers = diagram.Children.OfType<System.Windows.Shapes.Ellipse>().Count();
+
+        var markerTypes = new[]
+        {
+            SimulationEventType.Departure,
+            SimulationEventType.Arrival,
+            SimulationEventType.StationPassed,
+            SimulationEventType.TurnaroundStarted,
+            SimulationEventType.TailTrackReached,
+            SimulationEventType.TailTrackReturnStarted,
+            SimulationEventType.DirectionChanged,
+            SimulationEventType.ServiceEnded,
+            SimulationEventType.DepartureDelayed,
+            SimulationEventType.WaitingForResource,
+            SimulationEventType.ObstacleEmergencyStop,
+            SimulationEventType.PredictedCollision,
+            SimulationEventType.Collision,
+            SimulationEventType.SafetyStatusChanged
+        };
+        var availableMaxTime = Math.Max(
+            frame.Trajectory.Count == 0 ? 0 : frame.Trajectory.Max(item => item.SimulationTimeSeconds),
+            !planned.Trajectory.Any() ? 0 : planned.Trajectory.Max(item => item.SimulationTimeSeconds));
+        bool IsVisibleMarker(SimulationEvent item) => item.SimulationTimeSeconds >= 0
+            && item.SimulationTimeSeconds <= availableMaxTime
+            && markerTypes.Contains(item.EventType);
+        var expectedAll = frame.Events.Count(IsVisibleMarker);
+        Require(allMarkers == expectedAll,
+            $"{label} 運行圖事件標記數量不符全方向事件：{allMarkers}/{expectedAll}。 ");
+
+        var outbound = direction.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Tag, "Outbound"));
+        direction.SelectedItem = outbound;
+        Invoke(window, "DrawTimeDistanceDiagram");
+        var expectedOutbound = frame.Events.Count(item => item.Direction == TrainDirection.Outbound
+            && IsVisibleMarker(item));
+        var outboundMarkers = diagram.Children.OfType<System.Windows.Shapes.Ellipse>().Count();
+        Require(expectedOutbound > 0 && outboundMarkers == expectedOutbound,
+            $"{label} 運行圖下行事件標記未套用方向篩選：{outboundMarkers}/{expectedOutbound}。 ");
+
+        direction.SelectedItem = allDirection;
+        var vehicle = (ComboBox)window.FindName("DiagramVehicleComboBox")!;
+        var selectedVehicle = vehicle.Items.Cast<string>().FirstOrDefault(item => item != "全部");
+        Require(selectedVehicle is not null, $"{label} 運行圖缺少車輛篩選選項。 ");
+        vehicle.SelectedItem = selectedVehicle;
+        Invoke(window, "DrawTimeDistanceDiagram");
+        var expectedVehicle = frame.Events.Count(item => item.VehicleId == selectedVehicle
+            && IsVisibleMarker(item));
+        var vehicleMarkers = diagram.Children.OfType<System.Windows.Shapes.Ellipse>().Count();
+        Require(expectedVehicle > 0 && vehicleMarkers == expectedVehicle,
+            $"{label} 運行圖事件標記未套用車輛篩選：{vehicleMarkers}/{expectedVehicle}。 ");
+
+        SelectTab(window, "IntervalStatisticsTabItem");
+        var serviceType = (ComboBox)window.FindName("IntervalServiceTypeComboBox")!;
+        var selectedOption = serviceType.Items.OfType<CatalogOption>().FirstOrDefault(item => !string.IsNullOrWhiteSpace(item.Id));
+        Require(selectedOption is not null, $"{label} 區間統計缺少服務篩選選項。 ");
+        serviceType.SelectedItem = selectedOption;
+        Invoke(window, "PopulateIntervalStatistics", false);
+        var selectedId = ((CatalogOption)serviceType.SelectedItem!).Id;
+        WpfTestWait.Wait(scenario.Worker.AdvanceToSimulationTimeAsync(frame.CurrentTimeSeconds + 1));
+        Invoke(window, "UpdateV2PlaybackView", true);
+        var retainedId = ((CatalogOption)serviceType.SelectedItem!).Id;
+        Require(retainedId == selectedId,
+            $"{label} 播放 frame 刷新時區間服務篩選被重設：{selectedId}/{retainedId}。 ");
+
+        var latestFrame = WpfTestWait.LatestFrame(window);
+        var historyDirections = latestFrame.SafetyHistory.Select(item => item.Direction).Distinct().ToArray();
+        if (historyDirections.Length >= 2)
+        {
+            SelectTab(window, "SafetyTabItem");
+            var safetyDirection = (ComboBox)window.FindName("SafetyDirectionComboBox")!;
+            safetyDirection.SelectedItem = safetyDirection.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Tag, "All"));
+            Invoke(window, "UpdateV2PlaybackView", true);
+            var allPairs = ((ComboBox)window.FindName("SafetyPairComboBox")).Items.Cast<string>().ToArray();
+            safetyDirection.SelectedItem = safetyDirection.Items.Cast<ComboBoxItem>().Single(item => Equals(item.Tag, "Outbound"));
+            var outboundPairs = ((ComboBox)window.FindName("SafetyPairComboBox")).Items.Cast<string>().ToArray();
+            var expectedPairs = latestFrame.SafetyHistory
+                .Where(item => item.Direction == TrainDirection.Outbound)
+                .Select(item => $"{ShortVehicle(item.FollowerVehicleId)} → {ShortVehicle(item.LeaderVehicleId)}｜下行｜{item.TrackId}")
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            Require(allPairs.Length > outboundPairs.Length && outboundPairs.SequenceEqual(expectedPairs),
+                $"{label} 暫停時安全方向篩選未刷新配對選單：all={string.Join("|", allPairs)}; out={string.Join("|", outboundPairs)}; expected={string.Join("|", expectedPairs)}。 ");
+        }
+    }
+
+    private static string ShortVehicle(string vehicleId) =>
+        vehicleId.Replace("Vehicle ", "V", StringComparison.Ordinal);
 
     internal static void VerifyIncrementalIntervalParity(
         IntervalStatisticsResult expected,
@@ -248,6 +375,7 @@ internal static class OutputTests
                 + $"entry={expectedItem.EntrySpeedMetersPerSecond}/{actualItem.EntrySpeedMetersPerSecond}; "
                 + $"exit={expectedItem.ExitSpeedMetersPerSecond}/{actualItem.ExitSpeedMetersPerSecond}; "
                 + $"limit={expectedItem.MinimumEffectiveSpeedLimitMetersPerSecond}/{actualItem.MinimumEffectiveSpeedLimitMetersPerSecond}; "
+                + $"observed={expectedItem.FirstObservedTimeSeconds}/{expectedItem.LastObservedTimeSeconds} vs {actualItem.FirstObservedTimeSeconds}/{actualItem.LastObservedTimeSeconds}; "
                 + $"phases={string.Join('|', Enum.GetValues<OperationalPhase>().Select(phase => $"{phase}:{expectedItem.PhaseSeconds.GetValueOrDefault(phase):0.###}/{actualItem.PhaseSeconds.GetValueOrDefault(phase):0.###}"))}; "
                 + $"controls={expectedItem.ControlEvents.TotalCount}/{actualItem.ControlEvents.TotalCount}。 ");
         }
@@ -348,7 +476,9 @@ internal static class OutputTests
         canvas.Measure(new Size(1200, 380));
         canvas.Arrange(new Rect(0, 0, 1200, 380));
         canvas.UpdateLayout();
-        Invoke(window, "DrawTimeDistanceDiagram");
+        // Formal image exports retain the preceding full-history renderer, not the bounded
+        // interactive geometry. CSV continues to consume the complete retained source.
+        Invoke(window, "DrawTimeDistanceDiagramFull");
         canvas.UpdateLayout();
         Require(canvas.Children.Count > 0, $"{label}時間里程圖不可空白。");
 
