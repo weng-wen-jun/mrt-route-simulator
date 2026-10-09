@@ -102,6 +102,14 @@ internal static class Program
                 TrackDiagramThemeTests.Run(GetRoot(args));
                 return 0;
             }
+            if (args.Contains("--visual-rules-only"))
+            {
+                // 全範例配線圖版面規則；不含需要互動桌面的像素匯出測試。
+                VisualRulesTests.Run();
+                TrackDiagramThemeTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF visual rules only");
+                return 0;
+            }
             if (args.Contains("--synchronous-export-only"))
             {
                 SynchronousDiagramExportTests.Run(GetRoot(args));
