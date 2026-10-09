@@ -21,7 +21,52 @@ internal static class TrackDiagramThemeTests
         VerifyRailStyles(root);
         VerifyPlatforms(root);
         VerifyStationLabels(root);
+        VerifyTrackOccupancySnapshot(root);
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyTrackOccupancySnapshot(string root)
+    {
+        var snapshotType = AppType("TrackOccupancySnapshot");
+        var input = new Dictionary<string, IReadOnlyList<TrackOccupancyInterval>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["T2"] = [new TrackOccupancyInterval("E1", 300, 420)],
+            ["T1"] = [new TrackOccupancyInterval("E1", 10, 150), new TrackOccupancyInterval("E2", 0, 0)],
+            ["T3"] = [new TrackOccupancyInterval("E3", 5, 95)]
+        };
+        var result = (ImmutableDictionary<string, ImmutableArray<string>>)CallStatic(snapshotType, "Build", input)!;
+        Require(result.Count == 2 && result.ContainsKey("E1") && result.ContainsKey("e3"),
+            "占用彙整必須以 edge 為 key，且不分大小寫。");
+        Require(!result.ContainsKey("E2"), "只在節點邊界接觸（零長度區間）的區段不可點亮。");
+        Require(result["E1"].SequenceEqual(["T1", "T2"]), "同一區段的兩列車必須合併成一筆並依車號排序。");
+        Require(((ImmutableDictionary<string, ImmutableArray<string>>)StaticValue(snapshotType, "Empty")!).IsEmpty,
+            "Empty 必須是空字典。");
+
+        var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
+            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+        var window = new MainWindow();
+        try
+        {
+            WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
+            var worker = (SimulationPlaybackWorker)WpfTestWait.Field(window, "_playbackWorker")!;
+            WpfTestWait.Wait(worker.Ready);
+            ((DispatcherTimer)WpfTestWait.Field(window, "_playbackTimer")!).Stop();
+            WpfTestWait.Wait(worker.AdvanceToSimulationTimeAsync(60));
+            WpfTestWait.Invoke(window, "UpdateV2PlaybackView");
+            var frame = WpfTestWait.LatestFrame(window);
+            Require(frame.TrackEdgeOccupants.Count > 0, "運行中的 frame 必須帶有區段占用資料。");
+            foreach (var train in frame.Trains.Where(item => item.IsActive
+                         && item.Phase is not (OperationalPhase.Pending or OperationalPhase.OutOfService)
+                         && frame.TrainCenterPositions.ContainsKey(item.VehicleId)))
+            {
+                var centerEdge = frame.TrainCenterPositions[train.VehicleId].TrackEdgeId;
+                Require(frame.TrackEdgeOccupants.TryGetValue(centerEdge, out var occupants)
+                        && occupants.Contains(train.VehicleId, StringComparer.OrdinalIgnoreCase),
+                    $"{train.VehicleId}：車體中心所在區段 {centerEdge} 必須列為占用。");
+            }
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 區段占用彙整與 PlaybackFrame 傳遞");
     }
 
     private static void VerifyStationLabels(string root)
