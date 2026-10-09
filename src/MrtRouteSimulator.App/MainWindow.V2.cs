@@ -1374,31 +1374,24 @@ public partial class MainWindow
             var offset = center.OffsetMeters;
             var ratio = Math.Clamp(offset / edge.LengthMeters, 0, 1);
             var point = geometry.PointAt(ratio);
-            var index = ParseVehicleIndex(state.VehicleId);
-            var marker = new Border
+            Point? front = null;
+            if (state.TrackEdgeId is { } frontEdgeId && state.OffsetMeters is { } frontOffset
+                && edgeGeometries.TryGetValue(frontEdgeId, out var frontGeometry)
+                && infrastructure.TryGetEdge(frontEdgeId, out var frontEdge) && frontEdge.LengthMeters > 0)
             {
-                Width = 24,
-                Height = 16,
-                CornerRadius = new CornerRadius(3),
-                Background = new SolidColorBrush(state.Phase is OperationalPhase.Collided or OperationalPhase.EmergencyStopped
-                    ? Color.FromRgb(196, 48, 48)
-                    : TrainColors[index % TrainColors.Length]),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(2),
-                Child = new TextBlock
-                {
-                    Text = VehicleMarkerLabel(state.VehicleId),
-                    Foreground = Brushes.White,
-                    FontSize = 9,
-                    FontWeight = FontWeights.Bold,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
-            };
+                front = frontGeometry.PointAt(Math.Clamp(frontOffset / frontEdge.LengthMeters, 0, 1));
+            }
+
+            var fill = state.Phase is OperationalPhase.Collided or OperationalPhase.EmergencyStopped
+                ? UiTheme.DangerBrush
+                : UiTheme.VehicleBrush(ParseVehicleIndex(state.VehicleId));
+            var marker = TrainMarkerPresentation.Create(
+                state.VehicleId,
+                fill,
+                TrainMarkerPresentation.Heading(front, point, state.Direction),
+                $"{state.VehicleId}｜{state.ServiceRunId}\n車體中心 {stationChainage?.ToChainage(center) / 1000:0.000}K\n車頭 {state.TrackEdgeId}，偏移 {state.OffsetMeters:0.#} m\n{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線");
             AttachTrainMarkerNavigation(marker, state.VehicleId);
-            Canvas.SetLeft(marker, Math.Clamp(point.X - 12, 0, width - 24));
-            Canvas.SetTop(marker, Math.Clamp(point.Y - 8, 0, height - 16));
+            TrainMarkerPresentation.Place(marker, point, width, height);
             RouteCanvas.Children.Add(marker);
             KeepFollowedRouteVehicleInView(state.VehicleId, point.X, point.Y);
         }
@@ -2433,21 +2426,7 @@ public partial class MainWindow
         }
     }
 
-    private static string VehicleMarkerLabel(string vehicleId)
-    {
-        if (vehicleId.StartsWith("Vehicle ", StringComparison.Ordinal)
-            && int.TryParse(vehicleId.AsSpan(8), out var legacyNumber))
-        {
-            return $"V{legacyNumber:00}";
-        }
-
-        if (vehicleId.StartsWith("AUTO-", StringComparison.OrdinalIgnoreCase))
-        {
-            return "A" + vehicleId[5..].TrimStart('0').PadLeft(2, '0');
-        }
-
-        return vehicleId.Length <= 5 ? vehicleId : vehicleId[..5];
-    }
+    private static string VehicleMarkerLabel(string vehicleId) => TrainMarkerPresentation.Label(vehicleId);
 
     private static string DirectionToChinese(TrainDirection direction) =>
         direction == TrainDirection.Outbound ? "下行" : "上行";
