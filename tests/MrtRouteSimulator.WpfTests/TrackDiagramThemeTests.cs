@@ -19,7 +19,63 @@ internal static class TrackDiagramThemeTests
         VerifyThemeTokens();
         VerifyTrainMarkers(root);
         VerifyRailStyles(root);
+        VerifyPlatforms(root);
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyPlatforms(string root)
+    {
+        var theme = AppType("UiTheme");
+        var platformFill = StaticValue(theme, "PlatformFillBrush");
+        var main = new MainWindow();
+        try
+        {
+            foreach (var (file, width) in new[]
+            {
+                ("10-小型-三站完整拓樸基準範例.mrtsim.json", 1200d),
+                ("14-大型-二十八站完整營運範例.mrtsim.json", 1370d)
+            })
+            {
+                var (canvas, sample) = DrawSample(main, root, file, width, 0);
+                var bodies = canvas.Children.OfType<Rectangle>().Where(item => item.Tag?.GetType().Name == "PlatformBodyAnchor").ToArray();
+                Require(bodies.Length > 0 && bodies.All(body => ReferenceEquals(body.Fill, platformFill)
+                        && ReferenceEquals(body.Stroke, StaticValue(theme, "HairlineBrush")) && body.RadiusX == 3),
+                    $"{file}：月台本體必須是白底、細框、圓角 3。");
+                var badges = canvas.Children.OfType<Ellipse>().ToArray();
+                var directions = sample.Topology.Platforms.ToDictionary(item => item.PlatformId, item => item.AllowedDirection,
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (var number in canvas.Children.OfType<TextBlock>().Where(item => item.Tag?.GetType().Name == "PlatformNumberAnchor"))
+                {
+                    var platformId = (string)number.Tag.GetType().GetProperty("PlatformId")!.GetValue(number.Tag)!;
+                    number.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    var textBox = new Rect(Canvas.GetLeft(number), Canvas.GetTop(number), number.DesiredSize.Width, number.DesiredSize.Height);
+                    var textCenter = new Point(textBox.Left + textBox.Width / 2, textBox.Top + textBox.Height / 2);
+                    var badge = badges.SingleOrDefault(item =>
+                        new Rect(Canvas.GetLeft(item), Canvas.GetTop(item), item.Width, item.Height).Contains(textCenter));
+                    Require(badge is not null, $"{file}/{platformId}：月台編號缺少對應的圓點。");
+                    var toneName = directions[platformId] switch
+                    {
+                        TrackDirection.Outbound => "RailDownBrush",
+                        TrackDirection.Inbound => "RailUpBrush",
+                        _ => "PlatformBidirectionalBrush"
+                    };
+                    var tone = StaticValue(theme, toneName);
+                    var hollow = ReferenceEquals(badge!.Fill, platformFill);
+                    Require(number.Background is null, $"{file}/{platformId}：編號不可再有白底方塊。");
+                    Require(hollow
+                            ? ReferenceEquals(badge.Stroke, tone) && ReferenceEquals(number.Foreground, tone)
+                            : ReferenceEquals(badge.Fill, tone) && number.Foreground is SolidColorBrush white && white.Color == Colors.White,
+                        $"{file}/{platformId}：編號圓點顏色必須對應行車方向（{toneName}）。");
+                    var badgeBox = new Rect(Canvas.GetLeft(badge), Canvas.GetTop(badge), badge.Width, badge.Height);
+                    Require(badgeBox.Contains(textBox), $"{file}/{platformId}：編號文字必須完整落在圓點內。");
+                    Require(Panel.GetZIndex(badge) == 2 && Panel.GetZIndex(number) == 3, $"{file}/{platformId}：圓點與編號圖層順序錯誤。");
+                }
+                var warnings = (IReadOnlyList<string>)CallStatic(AppType("StationSchematicPresentation"), "ValidateStationLabels", canvas)!;
+                Require(warnings.Count == 0, $"{file}：{string.Join("；", warnings)}");
+            }
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 白色月台與方向色編號圓點");
     }
 
     private static void VerifyRailStyles(string root)

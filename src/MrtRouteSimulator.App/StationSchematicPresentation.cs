@@ -977,7 +977,11 @@ internal static class StationSchematicPresentation
             var markerOnly = group.All(f => throughMarkerIds.Contains(f.Platform.PlatformId));
             var body = new Rectangle { Width = rect.Width, Height = rect.Height,
                 Tag = new PlatformBodyAnchor(group.Key.StationId, group.Key.Body),
-                Fill = new SolidColorBrush(Color.FromRgb(25, 96, 125)),
+                Fill = UiTheme.PlatformFillBrush,
+                Stroke = UiTheme.HairlineBrush,
+                StrokeThickness = 1,
+                RadiusX = 3,
+                RadiusY = 3,
                 Opacity = markerOnly ? 0 : 1,
                 IsHitTestVisible = !markerOnly,
                 ToolTip = string.Join("\n", group.Select(f => $"{f.Platform.Name} · {f.Platform.TrackEdgeId}")) };
@@ -988,31 +992,48 @@ internal static class StationSchematicPresentation
                 var number = string.IsNullOrWhiteSpace(face.Platform.PlatformNumber)
                     ? face.Platform.AllowedDirection == TrackDirection.Outbound ? "1" : face.Platform.AllowedDirection == TrackDirection.Inbound ? "2" : "•"
                     : face.Platform.PlatformNumber;
-                var label = new TextBlock { Text = number, FontSize = 10, Foreground = Brushes.Black,
+                var tone = PlatformNumberBrush(face.Platform.AllowedDirection);
+                // 非載客的通過正線只是營運標記，以空心圓點與載客月台區分。
+                var hollow = throughMarkerIds.Contains(face.Platform.PlatformId);
+                var label = new TextBlock { Text = number, FontSize = 10, FontWeight = FontWeights.SemiBold,
+                    Foreground = hollow ? tone : Brushes.White,
                     Tag = new PlatformNumberAnchor(face.Platform.StationId, face.Platform.PlatformId),
-                    Background = Brushes.White, Padding = new Thickness(2, 0, 2, 0), IsHitTestVisible = false };
-                Panel.SetZIndex(label, 2);
+                    IsHitTestVisible = false };
+                Panel.SetZIndex(label, 3);
                 label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var left = face.Box.Left + face.Box.Width / 2 - label.DesiredSize.Width / 2;
-                var top = face.Box.Top;
-                var step = label.DesiredSize.Height + 2;
-                var direction = face.Box.Top + face.Box.Height / 2 <= middle ? -1 : 1;
-                var numberBounds = new Rect(left, top, label.DesiredSize.Width, label.DesiredSize.Height);
-                // A dense full-line overview can place adjacent platform centres
-                // only a few pixels apart.  Preserve every platform marker, but
-                // stagger its small number tag rather than rendering two tags on
-                // top of one another.
-                for (var attempt = 0; placedPlatformNumberBounds.Any(previous => previous.IntersectsWith(numberBounds)); attempt++)
+                var diameter = Math.Max(Math.Max(13, Math.Ceiling(label.DesiredSize.Height)), Math.Ceiling(label.DesiredSize.Width) + 4);
+                var centerX = face.Box.Left + face.Box.Width / 2;
+                var centerY = face.Box.Top + face.Box.Height / 2;
+                var step = diameter + 2;
+                var direction = centerY <= middle ? -1 : 1;
+                var badgeBounds = new Rect(centerX - diameter / 2, centerY - diameter / 2, diameter, diameter);
+                // 密集總覽中相鄰月台中心可能只差幾個像素；保留每個編號，但錯開圓點。
+                for (var attempt = 0; placedPlatformNumberBounds.Any(previous => previous.IntersectsWith(badgeBounds)); attempt++)
                 {
                     var offset = (attempt / 2 + 1) * step;
-                    top = face.Box.Top + (attempt % 2 == 0 ? direction : -direction) * offset;
-                    numberBounds.Y = top;
+                    badgeBounds.Y = centerY - diameter / 2 + (attempt % 2 == 0 ? direction : -direction) * offset;
                 }
-                placedPlatformNumberBounds.Add(numberBounds);
-                Canvas.SetLeft(label, left); Canvas.SetTop(label, top); canvas.Children.Add(label);
+                placedPlatformNumberBounds.Add(badgeBounds);
+                var badge = new Ellipse { Width = diameter, Height = diameter,
+                    Fill = hollow ? UiTheme.PlatformFillBrush : tone,
+                    Stroke = hollow ? tone : null,
+                    StrokeThickness = hollow ? 1.2 : 0,
+                    IsHitTestVisible = false };
+                Panel.SetZIndex(badge, 2);
+                Canvas.SetLeft(badge, badgeBounds.Left); Canvas.SetTop(badge, badgeBounds.Top); canvas.Children.Add(badge);
+                Canvas.SetLeft(label, badgeBounds.Left + (diameter - label.DesiredSize.Width) / 2);
+                Canvas.SetTop(label, badgeBounds.Top + (diameter - label.DesiredSize.Height) / 2);
+                canvas.Children.Add(label);
             }
         }
         return stationBounds.ToDictionary(p => p.Key, p => p.Value.Left + p.Value.Width / 2,
             StringComparer.OrdinalIgnoreCase);
     }
+
+    private static SolidColorBrush PlatformNumberBrush(TrackDirection direction) => direction switch
+    {
+        TrackDirection.Outbound => UiTheme.RailDownBrush,
+        TrackDirection.Inbound => UiTheme.RailUpBrush,
+        _ => UiTheme.PlatformBidirectionalBrush
+    };
 }
