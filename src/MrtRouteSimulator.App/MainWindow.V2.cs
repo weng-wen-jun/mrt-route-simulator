@@ -14,14 +14,7 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
-    private static readonly Color[] LockedRouteColors =
-    [
-        Color.FromRgb(232, 95, 27),
-        Color.FromRgb(190, 42, 116),
-        Color.FromRgb(215, 145, 24),
-        Color.FromRgb(207, 57, 49),
-        Color.FromRgb(160, 57, 119)
-    ];
+    private static readonly Color[] LockedRouteColors = UiTheme.LockedRoutePalette;
 
     private SimulationPlaybackWorker? _playbackWorker;
     private PlaybackFrame? _latestPlaybackFrame;
