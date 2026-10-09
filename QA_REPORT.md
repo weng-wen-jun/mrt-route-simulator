@@ -1,5 +1,13 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 介面翻新第一輪（2026-10-09）
+
+- Release build：Engine、Automation、App、Tests、WpfTests、PlaybackBenchmarks 六個專案皆 0 warning／0 error。MCP 專案未建置：`ModelContextProtocol` 2.2.0 不在本機 NuGet 快取，還原需下載，待使用者確認；MCP 只依賴未修改的 Automation／Engine。
+- Engine runner：198/198 通過（與改動前基準相同）。
+- WPF runner：新增 `TrackDiagramThemeTests`（UiTheme、膠囊列車、雙色軌道、月台圓點、站名徽章、占用彙整、亮燈開關與圖例）8 項全部通過；`--visual-rules-only`（全範例主圖／編輯器版面矩陣）、`--playback-only`、`--mcp-only`、`--validation-warning-only`、`--interface-scale-only`、`--speed-only`、`--output-only` 通過。
+- 未能在本次驗收完成：驗收期間 Windows session 已中斷連線並鎖定（`query user` 顯示 `Disc`），離屏渲染輸出空白影像、視窗工作區僅約 336 DIP。`SynchronousDiagramExportTests`、`--pacing-lazy-only`、`--workspace-only`、`--native-final-only`、`--diagram-compact-only`、`--outer-shell-only` 與大型 28 站 `--large-playback-only` 失敗；以改動前 commit `43938b8` 重建後，在同一環境以完全相同訊息與版面數值失敗，判定為環境限制而非回歸。完整 WPF runner、大型路線截圖與人工外觀檢查需在互動桌面 session 重跑。
+- 未涵蓋：主視窗外框、結果圖表、拓樸編輯器軌道顏色（子專案 C／D／E）；原生桌面 DPI 與滑鼠操作未重跑。
+
 ## OSS 申請前整理（2026-10-08）
 
 > 以下待提交敘述保留初次整理時的快照。後續使用者已授權本地提交、正常推送至 origin/main 並保留 Git 歷史，不含 tag／Release；GitHub 私人漏洞回報已啟用且 API 讀回 true，另補 SECURITY.md。公開結果以遠端 commit 核對為準。
