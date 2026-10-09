@@ -454,7 +454,7 @@ internal static class StationSchematicPresentation
     {
         if (projection is null) return;
         var label = new TextBlock { Text = $"起始站中心 0.000K · 配線里程 {projection.MinimumChainageMeters / 1000:0.000}K ～ {projection.MaximumChainageMeters / 1000:0.000}K",
-            FontSize = 10, Foreground = Brushes.SlateGray };
+            FontSize = 10, Foreground = UiTheme.TextMutedBrush };
         Canvas.SetLeft(label, 12); Canvas.SetTop(label, top); canvas.Children.Add(label);
     }
     // 標籤只能縮窄，不得為了避開邊界而移動月臺中心線。
@@ -695,10 +695,40 @@ internal static class StationSchematicPresentation
         }
     }
 
-    public static void DrawLegend(Canvas canvas)
+    public static void DrawLegend(Canvas canvas, bool showOccupancy = false, bool showLockedRoutes = false)
     {
-        var legend = new TextBlock { Text = "← 上行　　下行 →　　靠右行駛・里程向右增加", FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(25, 96, 125)) };
+        var legend = new StackPanel { Orientation = Orientation.Horizontal, Tag = "RouteLegend" };
+        void AddText(string text, Brush brush, double leftMargin) => legend.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            Foreground = brush,
+            Margin = new Thickness(leftMargin, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        void AddSwatch(Brush brush, double height) => legend.Children.Add(new Border
+        {
+            Width = 18,
+            Height = height,
+            CornerRadius = new CornerRadius(height / 2),
+            Background = brush,
+            Margin = new Thickness(16, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        AddText("← 上行", UiTheme.RailUpBrush, 0);
+        AddText("下行 →", UiTheme.RailDownBrush, 12);
+        AddText("靠右行駛・里程向右增加", UiTheme.TextSubtleBrush, 12);
+        if (showOccupancy)
+        {
+            AddSwatch(UiTheme.OccupancyGlowBrush, 10);
+            AddText("區段占用", UiTheme.TextMutedBrush, 5);
+        }
+        if (showLockedRoutes)
+        {
+            AddSwatch(UiTheme.LockedRouteBrushes[0], 3);
+            AddText("已鎖定進路", UiTheme.TextMutedBrush, 5);
+        }
         Canvas.SetLeft(legend, 18); Canvas.SetTop(legend, 12); canvas.Children.Add(legend);
     }
     public static void ApplyNodeLayout(Dictionary<string, (Point From, Point To)> points,

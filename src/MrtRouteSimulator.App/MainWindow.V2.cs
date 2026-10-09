@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
@@ -28,6 +29,7 @@ public partial class MainWindow
     private double _lastRouteRenderMilliseconds;
     private int _routeStaticRebuildCount;
     private TopologyRouteVisualCache? _topologyRouteVisualCache;
+    private ImmutableDictionary<string, ImmutableArray<string>> _routeTrackOccupants = TrackOccupancySnapshot.Empty;
 
     private void RouteLockVisibility_Changed(object sender, RoutedEventArgs e)
     {
@@ -43,6 +45,8 @@ public partial class MainWindow
         {
             StatusTextBlock.Text = "已切換進路顯示，但無法保存本機畫面設定。";
         }
+        // 圖例屬於靜態快取圖層，切換後必須整張重建。
+        _topologyRouteVisualCache = null;
         if (IsLoaded) DrawRoute();
     }
 
@@ -72,6 +76,7 @@ public partial class MainWindow
         double Height,
         IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> EdgeGeometries,
         StationChainageProjection? StationChainage,
+        IReadOnlyDictionary<string, PointCollection> RailPoints,
         int StaticChildCount);
     private long _lastSafetyRenderTimestamp;
     private long _lastChartRenderTimestamp;
@@ -692,6 +697,7 @@ public partial class MainWindow
 
         if (_latestPlaybackFrame is { } topologyWorld)
         {
+            _routeTrackOccupants = topologyWorld.TrackEdgeOccupants;
             DrawTopologyGraphRoute(
                 topologyWorld.TopologyInfrastructure!,
                 _activeTopologyProjectDocument,
@@ -703,6 +709,7 @@ public partial class MainWindow
             return;
         }
 
+        _routeTrackOccupants = TrackOccupancySnapshot.Empty;
         RouteCanvas.Children.Clear();
         _topologyRouteVisualCache = null;
         if (_route is null)
@@ -867,6 +874,7 @@ public partial class MainWindow
                 RouteCanvas.Children.RemoveAt(RouteCanvas.Children.Count - 1);
             }
 
+            DrawTopologyTrackOccupancy(cached.RailPoints);
             DrawTopologyRouteLocks(infrastructure, activeRouteLocks, cached.EdgeGeometries);
             DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
                 cached.EdgeGeometries, cached.StationChainage, width, height);
@@ -1102,7 +1110,7 @@ public partial class MainWindow
             topologyProject?.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
         var railTones = TrackRailStyle.Classify(infrastructure.Edges.Values, outboundEdgeIds, inboundEdgeIds);
-        StationSchematicPresentation.DrawLegend(RouteCanvas);
+        StationSchematicPresentation.DrawLegend(RouteCanvas, ShowTrackOccupancyMenuItem.IsChecked, ShowLockedRoutesMenuItem.IsChecked);
         var platformVisuals = new List<(
             PlatformDefinitionV4 Platform,
             TrackEdgeDefinition Edge,
@@ -1187,11 +1195,13 @@ public partial class MainWindow
                 fromEdge is null ? TrackRailStyle.SideThickness : TrackRailStyle.Thickness(fromEdge));
         }
 
+        var railPoints = new Dictionary<string, PointCollection>(StringComparer.OrdinalIgnoreCase);
         foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
         {
             var geometry = edgeGeometries[edge.TrackEdgeId];
             var points = new PointCollection(geometry.Points);
             points.Freeze();
+            railPoints[edge.TrackEdgeId] = points;
             var thickness = TrackRailStyle.Thickness(edge);
             var emphasizeSideTrack = edgeGeometries.Count >= 32
                 && edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.Siding;
@@ -1280,10 +1290,11 @@ public partial class MainWindow
         StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
 
         StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, 36);
-        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, 54, 9, Color.FromRgb(108, 119, 132));
+        AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, 54, 9, UiTheme.TextSubtle);
         _topologyRouteVisualCache = new TopologyRouteVisualCache(
             infrastructure, topologyProject, width, RouteCanvas.Height, edgeGeometries, stationChainage,
-            RouteCanvas.Children.Count);
+            railPoints, RouteCanvas.Children.Count);
+        DrawTopologyTrackOccupancy(railPoints);
         DrawTopologyRouteLocks(infrastructure, activeRouteLocks, edgeGeometries);
         DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
             edgeGeometries, stationChainage, width, height);
@@ -1293,6 +1304,29 @@ public partial class MainWindow
             TraversalDirection direction) => direction == TraversalDirection.Forward
                 ? (edge.FromNodeId, edge.ToNodeId)
                 : (edge.ToNodeId, edge.FromNodeId);
+    }
+
+    private void DrawTopologyTrackOccupancy(IReadOnlyDictionary<string, PointCollection> railPoints)
+    {
+        if (!ShowTrackOccupancyMenuItem.IsChecked) return;
+
+        foreach (var (edgeId, vehicles) in _routeTrackOccupants)
+        {
+            if (vehicles.IsDefaultOrEmpty || !railPoints.TryGetValue(edgeId, out var points)) continue;
+
+            // 整條區段亮燈（號誌盤風格）；ZIndex -1 讓光帶壓在軌道下，不改變 Children 索引與快取。
+            var glow = new Polyline
+            {
+                Points = points,
+                Stroke = UiTheme.OccupancyGlowBrush,
+                StrokeThickness = UiTheme.OccupancyGlowThickness,
+                StrokeLineJoin = PenLineJoin.Round,
+                IsHitTestVisible = false,
+                Tag = "TrackOccupancy:" + edgeId
+            };
+            Panel.SetZIndex(glow, -1);
+            RouteCanvas.Children.Add(glow);
+        }
     }
 
     private void DrawTopologyRouteLocks(

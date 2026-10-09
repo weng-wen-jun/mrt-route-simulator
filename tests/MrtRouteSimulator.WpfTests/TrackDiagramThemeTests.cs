@@ -23,7 +23,77 @@ internal static class TrackDiagramThemeTests
         VerifyStationLabels(root);
         VerifyTrackOccupancySnapshot(root);
         VerifyTrackOccupancyPreference();
+        VerifyOccupancyGlowAndLegend(root);
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyOccupancyGlowAndLegend(string root)
+    {
+        var glowBrush = StaticValue(AppType("UiTheme"), "OccupancyGlowBrush");
+        var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
+            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+        var window = new MainWindow();
+        try
+        {
+            WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
+            var worker = (SimulationPlaybackWorker)WpfTestWait.Field(window, "_playbackWorker")!;
+            WpfTestWait.Wait(worker.Ready);
+            ((DispatcherTimer)WpfTestWait.Field(window, "_playbackTimer")!).Stop();
+            WpfTestWait.Wait(worker.AdvanceToSimulationTimeAsync(60));
+            WpfTestWait.Invoke(window, "UpdateV2PlaybackView");
+            var frame = WpfTestWait.LatestFrame(window);
+            Require(frame.TrackEdgeOccupants.Count > 0, "測試前提：60 秒時必須有占用區段。");
+
+            var occupancyItem = (MenuItem)window.FindName("ShowTrackOccupancyMenuItem");
+            var locksItem = (MenuItem)window.FindName("ShowLockedRoutesMenuItem");
+            var cacheField = typeof(MainWindow).GetField("_topologyRouteVisualCache", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var canvas = (Canvas)window.FindName("RouteCanvas");
+            void Redraw(bool occupancy, bool locks)
+            {
+                occupancyItem.IsChecked = occupancy;
+                locksItem.IsChecked = locks;
+                cacheField.SetValue(window, null);
+                canvas.Width = 1200;
+                canvas.Height = 400;
+                canvas.Measure(new Size(1200, 400));
+                canvas.Arrange(new Rect(0, 0, 1200, 400));
+                WpfTestWait.Invoke(window, "DrawV2Route");
+            }
+            Polyline[] Glows() => canvas.Children.OfType<Polyline>()
+                .Where(line => line.Tag is string tag && tag.StartsWith("TrackOccupancy:", StringComparison.Ordinal)).ToArray();
+            string[] LegendTexts() => canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, "RouteLegend"))
+                .Children.OfType<TextBlock>().Select(text => text.Text).ToArray();
+
+            Redraw(occupancy: true, locks: true);
+            var glows = Glows();
+            var glowEdges = glows.Select(line => ((string)line.Tag).Split(':', 2)[1]).ToArray();
+            Require(glowEdges.Length == glowEdges.Distinct(StringComparer.OrdinalIgnoreCase).Count(), "每個占用區段只能有一條光帶。");
+            Require(glowEdges.ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(frame.TrackEdgeOccupants.Keys),
+                "光帶必須恰好對應 frame 中的占用區段。");
+            var rails = canvas.Children.OfType<Polyline>().Where(line => line.ToolTip is string tip && tip.Contains('\n'))
+                .ToDictionary(line => ((string)line.ToolTip!).Split('\n', 2)[0], StringComparer.OrdinalIgnoreCase);
+            foreach (var glow in glows)
+            {
+                var edgeId = ((string)glow.Tag).Split(':', 2)[1];
+                Require(Panel.GetZIndex(glow) == -1 && !glow.IsHitTestVisible && glow.ToolTip is null
+                        && ReferenceEquals(glow.Stroke, glowBrush) && glow.StrokeThickness == 16,
+                    $"{edgeId}：光帶必須壓在軌道下、不可互動、無提示文字、使用 UiTheme 光帶色與 16px。");
+                Require(ReferenceEquals(glow.Points, rails[edgeId].Points), $"{edgeId}：光帶必須沿用軌道同一組凍結座標。");
+            }
+            var legend = LegendTexts();
+            Require(legend.Contains("區段占用") && legend.Contains("已鎖定進路") && legend.Contains("← 上行") && legend.Contains("下行 →"),
+                "兩個開關都開啟時圖例必須含上下行、區段占用與已鎖定進路。");
+
+            WpfTestWait.Invoke(window, "DrawV2Route");
+            Require(Glows().Length == glows.Length, "靜態快取命中時光帶不可重複疊加。");
+
+            Redraw(occupancy: false, locks: false);
+            Require(Glows().Length == 0, "關閉亮燈後不可再有光帶。");
+            legend = LegendTexts();
+            Require(!legend.Contains("區段占用") && !legend.Contains("已鎖定進路"), "關閉開關後圖例不可再列出對應項目。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 區段占用光帶、快取重用與圖例");
     }
 
     private static void VerifyTrackOccupancyPreference()
