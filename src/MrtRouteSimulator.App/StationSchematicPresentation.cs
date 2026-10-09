@@ -472,7 +472,8 @@ internal static class StationSchematicPresentation
     internal sealed record PlatformLayoutIssue(string Message);
     internal sealed record PlatformNumberAnchor(string StationId, string PlatformId);
 
-    public static void DrawStationNames(Canvas canvas, IEnumerable<(string Id, string Name)> stations, double width)
+    public static void DrawStationNames(Canvas canvas,
+        IEnumerable<(string Id, string Name, double? ChainageMeters)> stations, double width)
     {
         var bodies = canvas.Children.OfType<Rectangle>().Where(r => r.Tag is PlatformBodyAnchor).ToArray();
         if (bodies.Length == 0) return;
@@ -498,10 +499,7 @@ internal static class StationSchematicPresentation
             // 在總覽圖中交錯上下放置，可讓相鄰站名保有可讀間距；若真的衝突，
             // 仍沿同側垂直避讓，且不會改寫月臺／軌道位置。
             var above = stationIndex++ % 2 == 0;
-            var label = new TextBlock { Text = $"{station.Id}\n{station.Name}", FontSize = 11,
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(30, 46, 64)),
-                Background = Brushes.White, ToolTip = $"{station.Id} · {station.Name}" };
+            var label = CreateStationLabel(station.Id, station.Name, station.ChainageMeters);
             PlaceStationLabel(label, station.Id, center, above ? upper : lower, width);
             label.Width = Math.Min(label.Width, 110);
             Canvas.SetLeft(label, center - label.Width / 2);
@@ -519,10 +517,35 @@ internal static class StationSchematicPresentation
             canvas.Children.Add(new Line { X1 = center, X2 = center,
                 Y1 = above ? box.Bottom + 2 : box.Top - 2,
                 Y2 = above ? stationBounds.Top - 3 : stationBounds.Bottom + 3,
-                Stroke = Brushes.SlateGray, StrokeThickness = .7, IsHitTestVisible = false });
+                Stroke = UiTheme.HairlineBrush, StrokeThickness = 1, IsHitTestVisible = false });
             canvas.Children.Add(label);
             canvas.Height = Math.Max(canvas.Height, box.Bottom + 28);
         }
+    }
+
+    // 站名已含 ID（例如「O03 站」）時不再重複 ID；否則把 ID 移到次要資訊。
+    public static (string Primary, string Secondary) StationLabelLines(string id, string name, double? chainageMeters)
+    {
+        var primary = string.IsNullOrWhiteSpace(name) ? id : name.Trim();
+        var parts = new List<string>();
+        if (!primary.Contains(id, StringComparison.OrdinalIgnoreCase)) parts.Add(id);
+        if (chainageMeters is { } meters && double.IsFinite(meters)) parts.Add($"{meters / 1000:0.000}K");
+        return (primary, string.Join(" · ", parts));
+    }
+
+    private static Border CreateStationLabel(string id, string name, double? chainageMeters)
+    {
+        var (primary, secondary) = StationLabelLines(id, name, chainageMeters);
+        var text = new TextBlock { TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+            Foreground = UiTheme.TextStrongBrush };
+        text.Inlines.Add(new System.Windows.Documents.Run(primary) { FontSize = 12, FontWeight = FontWeights.SemiBold });
+        if (secondary.Length > 0)
+        {
+            text.Inlines.Add(new System.Windows.Documents.LineBreak());
+            text.Inlines.Add(new System.Windows.Documents.Run(secondary) { FontSize = 11, Foreground = UiTheme.TextMutedBrush });
+        }
+        return new Border { Background = UiTheme.StationBadgeFillBrush, CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(6, 3, 6, 3), Child = text, ToolTip = $"{id} · {name}" };
     }
 
     // 示意圖警告不改寫 topology 或模擬位置；亦供 WPF 回歸測試使用。

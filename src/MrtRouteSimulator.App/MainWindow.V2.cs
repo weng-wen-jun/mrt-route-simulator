@@ -1256,8 +1256,8 @@ public partial class MainWindow
             });
         }
 
-        StationSchematicPresentation.DrawStationNames(RouteCanvas, stationVisuals.Select(s => (s.Station.StationId,
-            s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
+        StationSchematicPresentation.DrawStationNames(RouteCanvas, stationVisuals.Select(s => (s.Station.StationId, s.Station.Name,
+            stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? km : (double?)null)), width);
         StationSchematicPresentation.DrawLayoutWarnings(RouteCanvas);
 
         StationSchematicPresentation.DrawChainageReference(RouteCanvas, stationChainage, 36);

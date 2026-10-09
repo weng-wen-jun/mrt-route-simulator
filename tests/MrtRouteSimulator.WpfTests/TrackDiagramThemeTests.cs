@@ -20,7 +20,45 @@ internal static class TrackDiagramThemeTests
         VerifyTrainMarkers(root);
         VerifyRailStyles(root);
         VerifyPlatforms(root);
+        VerifyStationLabels(root);
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyStationLabels(string root)
+    {
+        var presentation = AppType("StationSchematicPresentation");
+        (string Primary, string Secondary) Lines(string id, string name, double? meters) =>
+            ((string, string))CallStatic(presentation, "StationLabelLines", id, name, meters)!;
+        Require(Lines("O03", "O03 站", 2197) == ("O03 站", "2.197K"), "站名已含 ID 時不可重複顯示 ID。");
+        Require(Lines("BL12", "台北車站", 1234) == ("台北車站", "BL12 · 1.234K"), "站名不含 ID 時次要資訊必須帶 ID 與里程。");
+        Require(Lines("W", "西站", null) == ("西站", "W"), "沒有里程時次要資訊只有 ID。");
+        Require(Lines("X", "  ", null) == ("X", ""), "空白站名以 ID 為主要名稱。");
+        Require(Lines("o03", "O03 站", null) == ("O03 站", ""), "ID 比對不分大小寫。");
+
+        var badgeFill = StaticValue(AppType("UiTheme"), "StationBadgeFillBrush");
+        var main = new MainWindow();
+        try
+        {
+            var (small, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var labels = small.Children.OfType<FrameworkElement>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor").ToArray();
+            Require(labels.Length == 3 && labels.All(item => item is Border border
+                    && ReferenceEquals(border.Background, badgeFill) && border.Child is TextBlock),
+                "範例 10 的三個站名都必須是淺灰圓角徽章。");
+            var west = labels.Cast<Border>().Select(border => PlainText((TextBlock)border.Child)).Single(text => text.Contains("西站"));
+            Require(west.Contains("W · "), $"西站徽章的次要資訊必須帶 ID 與里程，實際：{west}");
+
+            var (large, _) = DrawSample(main, root, "14-大型-二十八站完整營運範例.mrtsim.json", 1370, 0);
+            foreach (var label in large.Children.OfType<Border>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor"))
+            {
+                var stationId = (string)label.Tag.GetType().GetProperty("StationId")!.GetValue(label.Tag)!;
+                var text = PlainText((TextBlock)label.Child);
+                Require(text.Split(stationId).Length - 1 == 1, $"{stationId}：站名徽章不可重複顯示 ID（{text}）。");
+            }
+            var warnings = (IReadOnlyList<string>)CallStatic(presentation, "ValidateStationLabels", large)!;
+            Require(warnings.Count == 0, $"範例 14：{string.Join("；", warnings)}");
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 站名徽章與 ID 去重");
     }
 
     private static void VerifyPlatforms(string root)
@@ -269,6 +307,14 @@ internal static class TrackDiagramThemeTests
         Require(ReferenceEquals(lockColors, locked), "MainWindow.LockedRouteColors 必須直接引用 UiTheme.LockedRoutePalette。");
         Console.WriteLine("[通過] UiTheme 色票、凍結畫筆與色盤規則");
     }
+
+    // 站名徽章以 Inlines 組成，TextBlock.Text 不會反映其內容，需從 Run／LineBreak 取出純文字。
+    private static string PlainText(TextBlock text) => string.Concat(text.Inlines.Select(inline => inline switch
+    {
+        System.Windows.Documents.Run run => run.Text,
+        System.Windows.Documents.LineBreak => "\n",
+        _ => ""
+    }));
 
     private static (double H, double S, double V) Hsv(Color color)
     {
