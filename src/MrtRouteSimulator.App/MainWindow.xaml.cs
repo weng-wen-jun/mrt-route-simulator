@@ -40,6 +40,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        RouteCanvas.Background = UiTheme.CanvasBackgroundBrush;
         InterfaceScaleService.ApplyToWindow(this);
         UpdateInterfaceScaleMenu();
         ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();

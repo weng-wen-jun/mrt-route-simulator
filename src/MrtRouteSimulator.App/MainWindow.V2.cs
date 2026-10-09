@@ -1082,7 +1082,7 @@ public partial class MainWindow
             StationSchematicPresentation.UsesCompactLaneTransitions(topologyProject, width),
             topologyProject?.Topology.PassingFacilities, width >= 2000);
         edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
-        var railColor = Color.FromRgb(25, 96, 125);
+        var railTones = TrackRailStyle.Classify(infrastructure.Edges.Values, outboundEdgeIds, inboundEdgeIds);
         StationSchematicPresentation.DrawLegend(RouteCanvas);
         var platformVisuals = new List<(
             PlatformDefinitionV4 Platform,
@@ -1159,35 +1159,40 @@ public partial class MainWindow
             var allowLaneTurn = fromEdge is not null && toEdge is not null
                 && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
                     || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
-            StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
+            var fromTone = railTones.GetValueOrDefault(connection.FromTrackEdgeId, RailTone.Neutral);
+            var toTone = railTones.GetValueOrDefault(connection.ToTrackEdgeId, RailTone.Neutral);
+            StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing,
+                TrackRailStyle.Brush(fromTone == toTone ? fromTone : RailTone.Neutral),
                 $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
-                allowLaneTurn);
+                allowLaneTurn,
+                fromEdge is null ? TrackRailStyle.SideThickness : TrackRailStyle.Thickness(fromEdge));
         }
 
         foreach (var edge in infrastructure.Edges.Values.OrderBy(item => item.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
         {
             var geometry = edgeGeometries[edge.TrackEdgeId];
+            var points = new PointCollection(geometry.Points);
+            points.Freeze();
+            var thickness = TrackRailStyle.Thickness(edge);
             var emphasizeSideTrack = edgeGeometries.Count >= 32
                 && edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.Siding;
             if (emphasizeSideTrack)
             {
-                // The large-route overview intentionally keeps short passing-track
-                // transitions shallow.  Reserve a light outline so the parallel
-                // side track remains visible instead of blending into the mainline.
+                // 大型總覽的短側線轉折刻意壓平；保留白色襯底讓它與正線分得開。
                 RouteCanvas.Children.Add(new Polyline
                 {
-                    Points = new PointCollection(geometry.Points),
+                    Points = points,
                     Stroke = Brushes.White,
-                    StrokeThickness = 7,
+                    StrokeThickness = thickness + 3,
                     StrokeLineJoin = PenLineJoin.Round,
                     IsHitTestVisible = false
                 });
             }
             RouteCanvas.Children.Add(new Polyline
             {
-                Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
-                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
+                Points = points,
+                Stroke = TrackRailStyle.Brush(railTones.GetValueOrDefault(edge.TrackEdgeId, RailTone.Neutral)),
+                StrokeThickness = thickness,
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)} · {edge.LengthMeters:0.#} m · 預設 {edge.DefaultSpeedLimitMetersPerSecond * 3.6:0.#} km/h"
             });
@@ -1200,15 +1205,20 @@ public partial class MainWindow
                 {
                     tangent.Normalize();
                     var normal = new Vector(-tangent.Y, tangent.X);
+                    var size = thickness * .55;
                     RouteCanvas.Children.Add(new Polygon
                     {
-                        Points = new PointCollection { arrowCenter + tangent * 7, arrowCenter - tangent * 5 + normal * 5, arrowCenter - tangent * 5 - normal * 5 },
-                        Fill = new SolidColorBrush(railColor),
+                        Points = new PointCollection
+                        {
+                            arrowCenter + tangent * size * 1.2,
+                            arrowCenter - tangent * size * .8 + normal * size,
+                            arrowCenter - tangent * size * .8 - normal * size
+                        },
+                        Fill = Brushes.White,
                         IsHitTestVisible = false
                     });
                 }
             }
-
         }
 
         foreach (var node in nodes.Where(node => node.Kind == TrackNodeKind.BufferStop))
@@ -1238,8 +1248,10 @@ public partial class MainWindow
                 Y1 = point.Y - normal.Y,
                 X2 = point.X + normal.X,
                 Y2 = point.Y + normal.Y,
-                Stroke = new SolidColorBrush(railColor),
-                StrokeThickness = 5,
+                Stroke = UiTheme.RailNeutralStrongBrush,
+                StrokeThickness = 4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
                 ToolTip = $"{node.Name} · 止衝\n中心基準里程 {stationChainage?.ToChainage(new(edge.TrackEdgeId, atStart ? 0 : edge.LengthMeters)) / 1000:0.000}K"
             });
         }

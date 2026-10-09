@@ -18,7 +18,55 @@ internal static class TrackDiagramThemeTests
     {
         VerifyThemeTokens();
         VerifyTrainMarkers(root);
+        VerifyRailStyles(root);
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyRailStyles(string root)
+    {
+        var theme = AppType("UiTheme");
+        Color ThemeColor(string name) => (Color)StaticValue(theme, name)!;
+        var main = new MainWindow();
+        try
+        {
+            var routeCanvas = (Canvas)main.FindName("RouteCanvas");
+            Require(ReferenceEquals(routeCanvas.Background, StaticValue(theme, "CanvasBackgroundBrush")),
+                "配線圖底色必須取自 UiTheme.CanvasBackgroundBrush。");
+            var (canvas, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var rails = canvas.Children.OfType<Polyline>()
+                .Where(line => line.ToolTip is string tip && tip.Contains('\n'))
+                .ToDictionary(line => ((string)line.ToolTip!).Split('\n', 2)[0], StringComparer.OrdinalIgnoreCase);
+            var expected = new (string EdgeId, string Color, double Thickness)[]
+            {
+                ("DOWN-W-M", "RailDown", 6), ("DOWN-M-LOCAL", "RailDown", 6), ("DOWN-M-E", "RailDown", 6),
+                ("UP-E-M", "RailUp", 6), ("UP-M-W", "RailUp", 6),
+                ("PASS-LOOP-M", "RailDownSoft", 4),
+                ("TAIL-OUT", "RailNeutral", 4), ("TAIL-W-OUT", "RailNeutral", 4), ("POCKET-OUT", "RailNeutral", 4),
+                ("TAIL-OUT:ENTRY", "RailNeutral", 4), ("POCKET-OUT:EXIT", "RailNeutral", 4)
+            };
+            foreach (var (edgeId, colorName, thickness) in expected)
+            {
+                Require(rails.TryGetValue(edgeId, out var rail), $"缺少軌道 {edgeId}。");
+                Require(rail!.Stroke is SolidColorBrush brush && brush.Color == ThemeColor(colorName) && rail.StrokeThickness == thickness,
+                    $"{edgeId} 應為 {colorName}／{thickness}px，實際 {(rail.Stroke as SolidColorBrush)?.Color}／{rail.StrokeThickness}px。");
+                Require(rail.Points.IsFrozen, $"{edgeId}：軌道點集合必須凍結以便亮燈圖層共用。");
+            }
+
+            var chevrons = canvas.Children.OfType<Polygon>().ToArray();
+            Require(chevrons.Length > 0 && chevrons.All(arrow => arrow.Fill is SolidColorBrush fill && fill.Color == Colors.White),
+                "單向軌道的方向箭頭必須是畫在軌道上的白色三角形。");
+            var bufferStops = canvas.Children.OfType<Line>().Where(line => line.ToolTip is string tip && tip.Contains("止衝")).ToArray();
+            Require(bufferStops.Length > 0 && bufferStops.All(line => line.Stroke is SolidColorBrush stroke
+                    && stroke.Color == ThemeColor("RailNeutralStrong") && line.StrokeThickness == 4),
+                "止衝擋必須使用 RailNeutralStrong、4px。");
+            var allowed = new[] { "RailDown", "RailUp", "RailDownSoft", "RailUpSoft", "RailNeutral" }.Select(ThemeColor).ToArray();
+            var connectors = canvas.Children.OfType<Polyline>()
+                .Where(line => line.ToolTip is string tip && tip.StartsWith("合法轉向", StringComparison.Ordinal)).ToArray();
+            Require(connectors.All(line => line.Stroke is SolidColorBrush stroke && allowed.Contains(stroke.Color)),
+                "接軌曲線顏色必須取自軌道色票。");
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 雙色軌道、白色方向箭頭、接軌與止衝擋");
     }
 
     private static void VerifyTrainMarkers(string root)

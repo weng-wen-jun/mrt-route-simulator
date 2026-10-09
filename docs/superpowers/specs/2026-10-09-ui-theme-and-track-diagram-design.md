@@ -84,7 +84,7 @@
 - **配色**（每條 edge 只有一個顏色）：
   1. 屬於下行服務路徑（`outboundEdgeIds`）且不屬於上行 → `RailDown`。
   2. 屬於上行服務路徑（`inboundEdgeIds`）且不屬於下行 → `RailUp`。
-  3. `PassingTrack`／`Siding` 不在任何路徑內時，跟隨共用端點節點的單一方向路徑 edge，使用對應的 `*Soft` 色；兩個方向都有或都沒有時用 `RailNeutral`。
+  3. `PassingTrack`／`Siding` 不在任何路徑內時，先跟隨兩端都共用的並行路徑 edge；找不到單一方向時，才跟隨共用任一端點的路徑 edge，使用對應的 `*Soft` 色。兩個方向都有或都沒有時用 `RailNeutral`。（車站節點可能同時被上下行正線共用，所以要先看並行 edge。）
   4. 其他（`Crossover`、`TailTrack`、`Turnback`、`PocketTrack`、`DepotLead`、`Approach`，以及無法判定的正線）→ `RailNeutral`。
 - **粗細**：正線 6 px；側線與設施軌 4 px。大型路線（≥ 32 edges）側線保留白色襯底，避免和正線混在一起。
 - **方向**：沿用既有位置（edge 比例 0.38）與單向判斷，改成畫在軌道上的白色小三角形（`Polygon`，半寬約 3.5 px）。雙向 edge 不畫。
