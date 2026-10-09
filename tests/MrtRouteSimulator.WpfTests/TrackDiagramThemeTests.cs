@@ -22,7 +22,69 @@ internal static class TrackDiagramThemeTests
         VerifyPlatforms(root);
         VerifyStationLabels(root);
         VerifyTrackOccupancySnapshot(root);
+        VerifyTrackOccupancyPreference();
         Console.WriteLine("PASS WPF track diagram theme");
+    }
+
+    private static void VerifyTrackOccupancyPreference()
+    {
+        var preferences = AppType("AppDisplayPreferences");
+        var settingsType = preferences.GetNestedType("DisplaySettings", BindingFlags.NonPublic)!;
+        var load = preferences.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(method => method.Name == "Load" && method.GetParameters().Length == 1
+                && method.GetParameters()[0].ParameterType == typeof(string));
+        var save = preferences.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+            .Single(method => method.Name == "Save" && method.GetParameters().Length == 2);
+        var constructor = settingsType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(item => item.GetParameters().Select(parameter => parameter.ParameterType)
+                .SequenceEqual([typeof(bool), typeof(double), typeof(double)]));
+        var occupancy = settingsType.GetProperty("ShowTrackOccupancy")!;
+        object Load(string path) => load.Invoke(null, [path])!;
+        bool Occupancy(object settings) => (bool)occupancy.GetValue(settings)!;
+        bool Locks(object settings) => (bool)settingsType.GetProperty("ShowLockedRoutes")!.GetValue(settings)!;
+
+        var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"mrt-track-occupancy-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = System.IO.Path.Combine(directory, "display-settings.json");
+        try
+        {
+            Require(Occupancy(Load(path)), "沒有偏好檔時區段占用亮燈預設開啟。");
+            File.WriteAllText(path, "{\"ShowLockedRoutes\":true,\"RouteMapHorizontalZoom\":1.5}");
+            var legacy = Load(path);
+            Require(Occupancy(legacy) && Locks(legacy), "舊偏好檔缺少欄位時視為開啟，且保留其他偏好。");
+            File.WriteAllText(path, "{\"ShowTrackOccupancy\":false,\"ShowLockedRoutes\":true}");
+            var off = Load(path);
+            Require(!Occupancy(off) && Locks(off), "明確關閉時必須讀成關閉。");
+            foreach (var malformed in new[] { "\"false\"", "null", "0", "[]" })
+            {
+                File.WriteAllText(path, $"{{\"ShowTrackOccupancy\":{malformed},\"ShowLockedRoutes\":true}}");
+                var settings = Load(path);
+                Require(Occupancy(settings) && Locks(settings), $"格式錯誤的 ShowTrackOccupancy（{malformed}）必須視為開啟且保留其他偏好。");
+            }
+            var saved = constructor.Invoke([true, 1.5, 1.1]);
+            occupancy.SetValue(saved, false);
+            save.Invoke(null, [path, saved]);
+            var reloaded = Load(path);
+            Require(!Occupancy(reloaded) && Locks(reloaded), "關閉後存檔再讀必須維持關閉。");
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true);
+        }
+
+        var main = new MainWindow();
+        try
+        {
+            var item = main.FindName("ShowTrackOccupancyMenuItem") as MenuItem;
+            var locks = (MenuItem)main.FindName("ShowLockedRoutesMenuItem");
+            Require(item is not null && item.IsCheckable && Equals(item.Header, "顯示區段占用亮燈")
+                    && System.Windows.Automation.AutomationProperties.GetName(item) == "顯示區段占用亮燈",
+                "顯示設定選單必須提供可勾選的「顯示區段占用亮燈」。");
+            var parent = (ItemsControl)locks.Parent;
+            Require(parent.Items.IndexOf(item) == parent.Items.IndexOf(locks) + 1, "亮燈開關必須緊接在鎖定進路開關之後。");
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 區段占用亮燈偏好與選單");
     }
 
     private static void VerifyTrackOccupancySnapshot(string root)

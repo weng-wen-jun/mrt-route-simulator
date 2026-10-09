@@ -46,6 +46,25 @@ public partial class MainWindow
         if (IsLoaded) DrawRoute();
     }
 
+    private void TrackOccupancyVisibility_Changed(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            AppDisplayPreferences.SaveShowTrackOccupancy(ShowTrackOccupancyMenuItem.IsChecked);
+        }
+        catch (IOException)
+        {
+            StatusTextBlock.Text = "已切換區段占用亮燈，但無法保存本機畫面設定。";
+        }
+        catch (UnauthorizedAccessException)
+        {
+            StatusTextBlock.Text = "已切換區段占用亮燈，但無法保存本機畫面設定。";
+        }
+        // 圖例屬於靜態快取圖層，切換後必須整張重建。
+        _topologyRouteVisualCache = null;
+        if (IsLoaded) DrawRoute();
+    }
+
     private sealed record TopologyRouteVisualCache(
         InfrastructureGraphV4 Infrastructure,
         TopologyProjectDocument? Project,

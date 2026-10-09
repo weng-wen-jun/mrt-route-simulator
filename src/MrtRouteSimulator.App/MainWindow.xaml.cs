@@ -44,6 +44,7 @@ public partial class MainWindow : Window
         InterfaceScaleService.ApplyToWindow(this);
         UpdateInterfaceScaleMenu();
         ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
+        ShowTrackOccupancyMenuItem.IsChecked = AppDisplayPreferences.LoadShowTrackOccupancy();
         _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
         SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
         _initializingRouteDisplayPreferences = false;
