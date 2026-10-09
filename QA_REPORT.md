@@ -1,11 +1,12 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
-## 介面翻新第一輪（2026-10-09）
+## 介面翻新第一輪（2026-10-09～10）
 
-- Release build：Engine、Automation、App、Tests、WpfTests、PlaybackBenchmarks 六個專案皆 0 warning／0 error。MCP 專案未建置：`ModelContextProtocol` 2.2.0 不在本機 NuGet 快取，還原需下載，待使用者確認；MCP 只依賴未修改的 Automation／Engine。
+- Release build：`MrtRouteSimulator.slnx` 全部專案（含 MCP，經使用者同意自 nuget.org 還原）0 warning／0 error。
 - Engine runner：198/198 通過（與改動前基準相同）。
-- WPF runner：新增 `TrackDiagramThemeTests`（UiTheme、膠囊列車、雙色軌道、月台圓點、站名徽章、占用彙整、亮燈開關與圖例）8 項全部通過；`--visual-rules-only`（全範例主圖／編輯器版面矩陣）、`--playback-only`、`--mcp-only`、`--validation-warning-only`、`--interface-scale-only`、`--speed-only`、`--output-only` 通過。
-- 未能在本次驗收完成：驗收期間 Windows session 已中斷連線並鎖定（`query user` 顯示 `Disc`），離屏渲染輸出空白影像、視窗工作區僅約 336 DIP。`SynchronousDiagramExportTests`、`--pacing-lazy-only`、`--workspace-only`、`--native-final-only`、`--diagram-compact-only`、`--outer-shell-only` 與大型 28 站 `--large-playback-only` 失敗；以改動前 commit `43938b8` 重建後，在同一環境以完全相同訊息與版面數值失敗，判定為環境限制而非回歸。完整 WPF runner、大型路線截圖與人工外觀檢查需在互動桌面 session 重跑。
+- WPF runner（互動桌面 session）：完整 runner `PASS WPF visual rules`，95 項 `[通過]`，318 秒；新增 `TrackDiagramThemeTests` 12 項（UiTheme、膠囊列車與播放中箭頭方向含折返、雙色軌道、月台圓點、站名徽章與完整詞去重、占用彙整、亮燈開關、光帶與圖例、圖例隨開關重建、鎖定進路共用畫筆、線性路線分支膠囊）全部通過。
+- MCP 桌面橋接測試：維持範例 10 全流程，另加範例 14 段落（載入、固定 tick、儲存、事件、時刻表、切頁、CSV）。範例 14 的運行圖 PNG／PDF 匯出超過影像編碼器尺寸上限，且經 MCP 換專案後匯出 PDF 會失敗；兩者在改動前 commit `43938b8` 同樣重現，屬既有問題，已另開待辦。
+- 環境注意：Windows session 中斷連線或鎖定時（`query user` 顯示 `Disc`），離屏渲染輸出空白影像、視窗工作區異常縮小，像素匯出與視窗版面類 WPF 測試會在改動前後以相同訊息失敗；驗收需在互動桌面 session 執行。執行期間不可操作測試開出的視窗。
 - 未涵蓋：主視窗外框、結果圖表、拓樸編輯器軌道顏色（子專案 C／D／E）；原生桌面 DPI 與滑鼠操作未重跑。
 
 ## OSS 申請前整理（2026-10-08）
