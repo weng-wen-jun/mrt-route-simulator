@@ -25,8 +25,141 @@ internal static class TrackDiagramThemeTests
         VerifyTrackOccupancySnapshot(root);
         VerifyTrackOccupancyPreference();
         VerifyOccupancyGlowAndLegend(root);
+        VerifyLegendFollowsToggles(root);
+        VerifyLockedRouteBrushes();
+        VerifyLegacyTrainMarkers(root);
         Console.WriteLine("PASS WPF track diagram theme");
     }
+
+    private static SimulationWorld CreateWorld(TopologyProjectDocument sample, TopologyProjectRuntime runtime) =>
+        new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            runtime.DispatchPlan.Runs.Count, sample.Simulation.HeadwaySeconds,
+            ProfileMode: sample.Simulation.ProfileMode, MovingBlockMode: sample.Simulation.MovingBlockMode,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan, VehicleTypes: runtime.VehicleTypes,
+            ServiceTypes: runtime.ServiceTypes, Topology: runtime.Topology).CreateWorld();
+
+    private static string[] LegendTexts(Canvas canvas) =>
+        canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, "RouteLegend"))
+            .Children.OfType<TextBlock>().Select(text => text.Text).ToArray();
+
+    // 開關以程式切換（例如 MCP 或測試）且未手動清快取時，靜態快取也必須重建圖例。
+    private static void VerifyLegendFollowsToggles(string root)
+    {
+        var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
+            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = CreateWorld(sample, runtime);
+        var main = new MainWindow();
+        try
+        {
+            var occupancy = (MenuItem)main.FindName("ShowTrackOccupancyMenuItem");
+            var locks = (MenuItem)main.FindName("ShowLockedRoutesMenuItem");
+            occupancy.IsChecked = false;
+            locks.IsChecked = false;
+            var canvas = (Canvas)main.FindName("RouteCanvas");
+            canvas.Children.Clear();
+            canvas.Width = 1200;
+            canvas.Height = 400;
+            var snapshot = world.GetSnapshot();
+            var centers = snapshot.Trains
+                .Select(state => (state.VehicleId, Center: world.GetTrainCenterPosition(state.VehicleId)))
+                .Where(item => item.Center is not null)
+                .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+            var draw = typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            object[] arguments = [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, world.GetActiveRouteLocks()];
+            draw.Invoke(main, arguments);
+            Require(!LegendTexts(canvas).Contains("區段占用"), "測試前提：開關關閉時圖例不含區段占用。");
+            occupancy.IsChecked = true;
+            locks.IsChecked = true;
+            draw.Invoke(main, arguments);
+            var legend = LegendTexts(canvas);
+            Require(legend.Contains("區段占用") && legend.Contains("已鎖定進路"), "開關改變後，即使沒有手動清除快取，圖例也必須更新。");
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 圖例隨開關更新，不依賴手動清快取");
+    }
+
+    private static void VerifyLockedRouteBrushes()
+    {
+        var sample = StationLayoutTemplateService.Build(StationLayoutTemplateKind.CentralPocket);
+        sample = sample with { Dispatch = sample.Dispatch with
+        {
+            ManualTimetableRows = sample.Dispatch.ManualTimetableRows!
+                .Select(row => row with { PlannedDepartureTimeSeconds = 0 }).ToArray()
+        } };
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            2, 1, MovingBlockMode: MovingBlockMode.Control,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan,
+            VehicleTypes: runtime.VehicleTypes, ServiceTypes: runtime.ServiceTypes,
+            Topology: runtime.Topology).CreateWorld();
+        world.Tick();
+        var locked = world.GetActiveRouteLocks();
+        Require(locked.Count > 0, "測試前提：共用袋狀軌應有已預約進路。");
+        var lockedBrushes = (SolidColorBrush[])StaticValue(AppType("UiTheme"), "LockedRouteBrushes")!;
+        var main = new MainWindow();
+        try
+        {
+            ((MenuItem)main.FindName("ShowLockedRoutesMenuItem")).IsChecked = true;
+            var canvas = (Canvas)main.FindName("RouteCanvas");
+            canvas.Children.Clear();
+            canvas.Width = 1200;
+            canvas.Height = 400;
+            var snapshot = world.GetSnapshot();
+            var centers = snapshot.Trains
+                .Select(state => (state.VehicleId, Center: world.GetTrainCenterPosition(state.VehicleId)))
+                .Where(item => item.Center is not null)
+                .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+            typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, locked]);
+            var overlays = canvas.Children.OfType<Polyline>()
+                .Where(line => line.ToolTip?.ToString()?.Contains("已鎖定進路", StringComparison.Ordinal) == true
+                    && !ReferenceEquals(line.Stroke, Brushes.White))
+                .ToArray();
+            Require(overlays.Length > 0 && overlays.All(line => lockedBrushes.Any(brush => ReferenceEquals(brush, line.Stroke))),
+                "鎖定進路與接軌必須使用 UiTheme 共用的凍結畫筆，不可每幀新建。");
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 鎖定進路使用共用凍結畫筆");
+    }
+
+    // 沒有播放 frame 時，線性路線分支也必須畫出與配線圖一致、寬度隨車號調整的膠囊。
+    private static void VerifyLegacyTrainMarkers(string root)
+    {
+        var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
+            System.IO.Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
+        var world = CreateWorld(sample, TopologyProjectFormat.CreateRuntime(sample));
+        world.AdvanceTo(120);
+        var main = new MainWindow();
+        try
+        {
+            var routeField = typeof(MainWindow).GetField("_route", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            if (routeField.GetValue(main) is null)
+                routeField.SetValue(main, typeof(MainWindow).GetMethod("BuildRoutePreview", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(main, null));
+            Require(WpfTestWait.Field(main, "_latestPlaybackFrame") is null, "測試前提：沒有播放 frame 時才會走線性路線分支。");
+            var canvas = (Canvas)main.FindName("RouteCanvas");
+            canvas.Width = 1200;
+            canvas.Height = 400;
+            canvas.Measure(new Size(1200, 400));
+            canvas.Arrange(new Rect(0, 0, 1200, 400));
+            WpfTestWait.Invoke(main, "DrawV2Route", world.GetSnapshot());
+            var trains = canvas.Children.OfType<Border>().Where(border => border.Tag is string).ToArray();
+            Require(trains.Length > 0, "線性路線分支應畫出列車標記。");
+            foreach (var train in trains)
+            {
+                Require(train.Height == 18 && train.Child is Grid grid
+                        && grid.Children.OfType<TextBlock>().Single().Text == TrainMarkerLabel((string)train.Tag),
+                    $"{train.Tag}：線性路線分支也必須使用膠囊列車標記，寬度隨車號調整。");
+                Require(Canvas.GetLeft(train) >= 0 && Canvas.GetLeft(train) + train.Width <= canvas.Width + 1e-9,
+                    $"{train.Tag}：線性路線分支的列車不可超出畫布。");
+            }
+        }
+        finally { main.Close(); }
+        Console.WriteLine("[通過] 線性路線分支使用膠囊列車標記");
+    }
+
+    private static string TrainMarkerLabel(string vehicleId) =>
+        (string)CallStatic(AppType("TrainMarkerPresentation"), "Label", vehicleId)!;
 
     private static void VerifyOccupancyGlowAndLegend(string root)
     {
@@ -212,6 +345,11 @@ internal static class TrackDiagramThemeTests
         Require(Lines("W", "西站", null) == ("西站", "W"), "沒有里程時次要資訊只有 ID。");
         Require(Lines("X", "  ", null) == ("X", ""), "空白站名以 ID 為主要名稱。");
         Require(Lines("o03", "O03 站", null) == ("O03 站", ""), "ID 比對不分大小寫。");
+        // ID 必須以完整詞出現才算已在站名中：前後不可緊接英數字。
+        Require(Lines("E", "East", 1000) == ("East", "E · 1.000K"), "短英文代號不可因被站名包含而消失。");
+        Require(Lines("A1", "A12 站", null) == ("A12 站", "A1"), "代號後緊接數字時不算同一個詞。");
+        Require(Lines("O03", "O03站", null) == ("O03站", ""), "代號後緊接中文仍算已出現在站名中。");
+        Require(Lines("M", "M 站", null) == ("M 站", ""), "以空白分隔的單字母代號仍應去重。");
 
         var badgeFill = StaticValue(AppType("UiTheme"), "StationBadgeFillBrush");
         var main = new MainWindow();
@@ -359,13 +497,28 @@ internal static class TrackDiagramThemeTests
             ("A--B-C-0123456789", "ABC-01234…"),
             ("ABCDEFGHIJKLMN", "ABCDEFGHI…")
         };
-        var mainLabel = typeof(MainWindow).GetMethod("VehicleMarkerLabel", BindingFlags.NonPublic | BindingFlags.Static)!;
+        // emoji 等補充平面字元不可被切成半個字元；空車號顯示 ?。
+        foreach (var input in new[] { "🚆TRAIN-LONG-NAME-01", "ABCDEFGH🚆XYZ", "🚆🚆🚆🚆🚆🚆" })
+        {
+            var label = Label(input);
+            Require(label.Length is > 0 and <= 10 && !label.EnumerateRunes().Any(rune => rune == System.Text.Rune.ReplacementChar),
+                $"車號 {input} 的標籤不可切斷字元（{label}）。");
+        }
+        Require(Label("🚆TRAIN-LONG-NAME-01").StartsWith("🚆", StringComparison.Ordinal), "縮寫必須保留完整的 emoji 首字。");
+        Require(Label("") == "?", "空車號必須顯示 ?。");
+
+        var widths = (System.Collections.IDictionary)StaticValue(presentation, "LabelWidths")!;
+        CallStatic(presentation, "Create", "CACHE-01", Brushes.Teal, 1, "tip");
+        var cached = (Border)CallStatic(presentation, "Create", "CACHE-01", Brushes.Teal, 1, "tip")!;
+        Require(widths.Contains("CACHE-01"), "車號寬度必須依標籤快取，不可每幀重新量測。");
+        Require(Equals(((Grid)cached.Child).Children.OfType<TextBlock>().Single().FontFamily, Application.Current.TryFindResource("AppFont")),
+            "車號必須以 App 字型量測與繪製。");
+
         foreach (var (input, expected) in labelCases)
         {
             var actual = Label(input);
             Require(actual == expected, $"車號 {input} 應顯示 {expected}，實際 {actual}。");
             Require(actual.Length is > 0 and <= 10, $"車號 {input} 的標籤長度必須介於 1～10。");
-            Require((string)mainLabel.Invoke(null, [input])! == expected, $"MainWindow.VehicleMarkerLabel 必須委派給 TrainMarkerPresentation（{input}）。");
         }
 
         int Heading(Point? front, Point center, TrainDirection direction) =>
@@ -543,9 +696,9 @@ internal static class TrackDiagramThemeTests
             "鎖定進路色盤必須全部是 R > B 且 G < 170 的紅／洋紅系。");
 
         var trainColors = (Color[])typeof(MainWindow).GetField("TrainColors", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
-        var lockColors = (Color[])typeof(MainWindow).GetField("LockedRouteColors", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
         Require(ReferenceEquals(trainColors, vehicle), "MainWindow.TrainColors 必須直接引用 UiTheme.VehiclePalette。");
-        Require(ReferenceEquals(lockColors, locked), "MainWindow.LockedRouteColors 必須直接引用 UiTheme.LockedRoutePalette。");
+        Require(typeof(MainWindow).GetField("LockedRouteColors", BindingFlags.NonPublic | BindingFlags.Static) is null,
+            "鎖定進路改用 UiTheme.LockedRouteBrushes，不可再保留另一份顏色別名。");
         Console.WriteLine("[通過] UiTheme 色票、凍結畫筆與色盤規則");
     }
 

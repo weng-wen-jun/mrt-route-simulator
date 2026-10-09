@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -14,9 +16,12 @@ internal static class TrainMarkerPresentation
     private static readonly char[] Separators = ['-', '_', ' '];
     private static readonly Geometry RightChevron = Frozen("M0,0 L3.5,3.5 L0,7");
     private static readonly Geometry LeftChevron = Frozen("M3.5,0 L0,3.5 L3.5,7");
+    // 寬度只由標籤與固定字型決定；快取後每幀不再重新量測（僅在 UI 執行緒使用）。
+    private static readonly Dictionary<string, double> LabelWidths = new(StringComparer.Ordinal);
 
     public static string Label(string vehicleId)
     {
+        if (string.IsNullOrWhiteSpace(vehicleId)) return "?";
         if (vehicleId.StartsWith("Vehicle ", StringComparison.Ordinal)
             && int.TryParse(vehicleId.AsSpan(8), out var legacyNumber))
         {
@@ -32,8 +37,23 @@ internal static class TrainMarkerPresentation
         var tokens = vehicleId.Split(Separators, StringSplitOptions.RemoveEmptyEntries);
         var label = tokens.Length <= 1
             ? vehicleId
-            : string.Concat(tokens[..^1].Select(token => char.ToUpperInvariant(token[0]))) + "-" + tokens[^1];
-        return label.Length <= MaximumLabelLength ? label : label[..(MaximumLabelLength - 1)] + "…";
+            : string.Concat(tokens[..^1].Select(token => StringInfo.GetNextTextElement(token, 0).ToUpperInvariant()))
+                + "-" + tokens[^1];
+        return label.Length <= MaximumLabelLength ? label : TruncateTextElements(label, MaximumLabelLength - 1) + "…";
+    }
+
+    // 依完整字元（text element）截斷，不把 emoji 等補充平面字元切成半個。
+    private static string TruncateTextElements(string text, int maximumLength)
+    {
+        var builder = new StringBuilder();
+        var elements = StringInfo.GetTextElementEnumerator(text);
+        while (elements.MoveNext())
+        {
+            var element = elements.GetTextElement();
+            if (builder.Length + element.Length > maximumLength) break;
+            builder.Append(element);
+        }
+        return builder.ToString();
     }
 
     public static int Heading(Point? front, Point center, TrainDirection direction)
@@ -44,16 +64,24 @@ internal static class TrainMarkerPresentation
 
     public static Border Create(string vehicleId, Brush fill, int heading, string toolTip)
     {
+        var label = Label(vehicleId);
         var text = new TextBlock
         {
-            Text = Label(vehicleId),
+            Text = label,
             Foreground = Brushes.White,
             FontSize = 10.5,
             FontWeight = FontWeights.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };
-        text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        // 明確指定 App 字型，讓量測與實際繪製使用同一套字型。
+        if (Application.Current?.TryFindResource("AppFont") is FontFamily appFont) text.FontFamily = appFont;
+        if (!LabelWidths.TryGetValue(label, out var textWidth))
+        {
+            text.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            textWidth = Math.Ceiling(text.DesiredSize.Width);
+            LabelWidths[label] = textWidth;
+        }
         var chevron = new System.Windows.Shapes.Path
         {
             Data = heading > 0 ? RightChevron : LeftChevron,
@@ -80,7 +108,7 @@ internal static class TrainMarkerPresentation
         grid.Children.Add(chevron);
         return new Border
         {
-            Width = Math.Max(MinimumWidth, Math.Ceiling(text.DesiredSize.Width) + 24),
+            Width = Math.Max(MinimumWidth, textWidth + 24),
             Height = MarkerHeight,
             CornerRadius = new CornerRadius(MarkerHeight / 2),
             Background = fill,

@@ -528,9 +528,23 @@ internal static class StationSchematicPresentation
     {
         var primary = string.IsNullOrWhiteSpace(name) ? id : name.Trim();
         var parts = new List<string>();
-        if (!primary.Contains(id, StringComparison.OrdinalIgnoreCase)) parts.Add(id);
+        if (!ContainsAsWord(primary, id)) parts.Add(id);
         if (chainageMeters is { } meters && double.IsFinite(meters)) parts.Add($"{meters / 1000:0.000}K");
         return (primary, string.Join(" · ", parts));
+    }
+
+    // ID 必須以完整詞出現：前後不可緊接英數字（中文、空白與符號都算邊界），避免 E／East 誤判。
+    private static bool ContainsAsWord(string text, string word)
+    {
+        if (word.Length == 0) return true;
+        for (var index = text.IndexOf(word, StringComparison.OrdinalIgnoreCase); index >= 0;
+             index = text.IndexOf(word, index + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = index + word.Length;
+            if ((index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
+                && (end >= text.Length || !char.IsAsciiLetterOrDigit(text[end]))) return true;
+        }
+        return false;
     }
 
     private static Border CreateStationLabel(string id, string name, double? chainageMeters)

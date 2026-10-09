@@ -16,17 +16,14 @@ internal static class AppDisplayPreferences
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MrtRouteSimulator", "display-settings.json");
 
-    public static bool LoadShowLockedRoutes() => Load().ShowLockedRoutes;
-
-    public static bool LoadShowTrackOccupancy() => Load().ShowTrackOccupancy;
+    // 主視窗啟動時一次讀取全部畫面偏好，避免同一個設定檔被重複讀取。
+    internal static DisplaySettings LoadAll() => Load();
 
     public static void SaveShowTrackOccupancy(bool show)
     {
         var settings = Load();
         Save(settings with { ShowTrackOccupancy = show });
     }
-
-    public static double LoadRouteMapHorizontalZoom() => Load().RouteMapHorizontalZoom;
 
     public static double LoadInterfaceScale() => Load().InterfaceScale;
 

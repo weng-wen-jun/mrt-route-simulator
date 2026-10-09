@@ -43,9 +43,10 @@ public partial class MainWindow : Window
         RouteCanvas.Background = UiTheme.CanvasBackgroundBrush;
         InterfaceScaleService.ApplyToWindow(this);
         UpdateInterfaceScaleMenu();
-        ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
-        ShowTrackOccupancyMenuItem.IsChecked = AppDisplayPreferences.LoadShowTrackOccupancy();
-        _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
+        var displaySettings = AppDisplayPreferences.LoadAll();
+        ShowLockedRoutesMenuItem.IsChecked = displaySettings.ShowLockedRoutes;
+        ShowTrackOccupancyMenuItem.IsChecked = displaySettings.ShowTrackOccupancy;
+        _routeMapHorizontalZoom = displaySettings.RouteMapHorizontalZoom;
         SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
         _initializingRouteDisplayPreferences = false;
         UpdateRouteFollowUi();

@@ -15,7 +15,6 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
-    private static readonly Color[] LockedRouteColors = UiTheme.LockedRoutePalette;
 
     private SimulationPlaybackWorker? _playbackWorker;
     private PlaybackFrame? _latestPlaybackFrame;
@@ -45,8 +44,6 @@ public partial class MainWindow
         {
             StatusTextBlock.Text = "已切換進路顯示，但無法保存本機畫面設定。";
         }
-        // 圖例屬於靜態快取圖層，切換後必須整張重建。
-        _topologyRouteVisualCache = null;
         if (IsLoaded) DrawRoute();
     }
 
@@ -64,8 +61,6 @@ public partial class MainWindow
         {
             StatusTextBlock.Text = "已切換區段占用亮燈，但無法保存本機畫面設定。";
         }
-        // 圖例屬於靜態快取圖層，切換後必須整張重建。
-        _topologyRouteVisualCache = null;
         if (IsLoaded) DrawRoute();
     }
 
@@ -77,6 +72,8 @@ public partial class MainWindow
         IReadOnlyDictionary<string, TopologySchematicEdgeGeometry> EdgeGeometries,
         StationChainageProjection? StationChainage,
         IReadOnlyDictionary<string, PointCollection> RailPoints,
+        bool LegendShowsOccupancy,
+        bool LegendShowsLockedRoutes,
         int StaticChildCount);
     private long _lastSafetyRenderTimestamp;
     private long _lastChartRenderTimestamp;
@@ -800,33 +797,19 @@ public partial class MainWindow
             var x = left + state.FrontPositionMeters / _route.TotalLengthMeters * trackWidth;
             var y = state.Direction == TrainDirection.Outbound ? outboundY : inboundY;
             (x, y) = GetSpatialReferencePointTrainPosition(state, x, y, left, trackWidth, outboundY, inboundY);
-            var index = ParseVehicleIndex(state.VehicleId);
-            var train = new Border
-            {
-                Width = 43,
-                Height = 23,
-                CornerRadius = new CornerRadius(11),
-                Background = new SolidColorBrush(state.Phase is OperationalPhase.Collided or OperationalPhase.EmergencyStopped
-                    ? Color.FromRgb(196, 48, 48)
-                    : TrainColors[index % TrainColors.Length]),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(2),
-                Child = new TextBlock
-                {
-                    Text = VehicleMarkerLabel(state.VehicleId),
-                    Foreground = Brushes.White,
-                    FontWeight = FontWeights.Bold,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center
-                },
-                ToolTip = $"{state.VehicleId}｜{state.ServiceRunId}｜{state.ServiceClassId}｜{state.ServicePatternId}\n"
+            // 與拓樸配線圖共用膠囊樣式；線性示意圖只有里程，箭頭依行車方向。
+            var train = TrainMarkerPresentation.Create(
+                state.VehicleId,
+                state.Phase is OperationalPhase.Collided or OperationalPhase.EmergencyStopped
+                    ? UiTheme.DangerBrush
+                    : UiTheme.VehicleBrush(ParseVehicleIndex(state.VehicleId)),
+                TrainMarkerPresentation.Heading(null, new Point(x, y), state.Direction),
+                $"{state.VehicleId}｜{state.ServiceRunId}｜{state.ServiceClassId}｜{state.ServicePatternId}\n"
                     + $"{DirectionToChinese(state.Direction)} {state.TrackId}\n"
                     + $"車頭 {state.FrontPositionMeters / 1000:0.00} km｜車尾 {state.RearPositionMeters / 1000:0.00} km\n"
-                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線"
-            };
+                    + $"{PhaseToChinese(state.Phase)}｜{state.SpeedMetersPerSecond * 3.6:0.#} km/h\n點選查看完整行程速度曲線");
             AttachTrainMarkerNavigation(train, state.VehicleId);
-            Canvas.SetLeft(train, Math.Clamp(x - 21.5, 0, width - 43));
-            Canvas.SetTop(train, y - 11.5);
+            TrainMarkerPresentation.Place(train, new Point(x, y), width, height);
             RouteCanvas.Children.Add(train);
             KeepFollowedRouteVehicleInView(state.VehicleId, x, y);
         }
@@ -867,7 +850,10 @@ public partial class MainWindow
             && cached.Width == width
             && cached.Height == RouteCanvas.Height
             && height <= cached.Height + .5
-            && RouteCanvas.Children.Count >= cached.StaticChildCount)
+            && RouteCanvas.Children.Count >= cached.StaticChildCount
+            // 圖例屬於靜態圖層；開關狀態改變時必須整張重建，不依賴呼叫端手動清除快取。
+            && cached.LegendShowsOccupancy == ShowTrackOccupancyMenuItem.IsChecked
+            && cached.LegendShowsLockedRoutes == ShowLockedRoutesMenuItem.IsChecked)
         {
             while (RouteCanvas.Children.Count > cached.StaticChildCount)
             {
@@ -1293,7 +1279,8 @@ public partial class MainWindow
         AddCanvasText(RouteCanvas, "軌道配線圖 · 將滑鼠移到軌道、月台或列車可查看詳細資料", 12, 54, 9, UiTheme.TextSubtle);
         _topologyRouteVisualCache = new TopologyRouteVisualCache(
             infrastructure, topologyProject, width, RouteCanvas.Height, edgeGeometries, stationChainage,
-            railPoints, RouteCanvas.Children.Count);
+            railPoints, ShowTrackOccupancyMenuItem.IsChecked, ShowLockedRoutesMenuItem.IsChecked,
+            RouteCanvas.Children.Count);
         DrawTopologyTrackOccupancy(railPoints);
         DrawTopologyRouteLocks(infrastructure, activeRouteLocks, edgeGeometries);
         DrawTopologyTrainMarkers(infrastructure, snapshot, trainCenterPositions,
@@ -1350,7 +1337,7 @@ public partial class MainWindow
             for (var step = 0; step <= 12; step++)
                 points.Add(geometry.PointAt(startRatio + (endRatio - startRatio) * step / 12));
 
-            var color = LockedRouteColors[ParseVehicleIndex(locked.VehicleId) % LockedRouteColors.Length];
+            var brush = UiTheme.LockedRouteBrushes[ParseVehicleIndex(locked.VehicleId) % UiTheme.LockedRouteBrushes.Length];
             RouteCanvas.Children.Add(new Polyline
             {
                 Points = points,
@@ -1362,7 +1349,7 @@ public partial class MainWindow
             RouteCanvas.Children.Add(new Polyline
             {
                 Points = points,
-                Stroke = new SolidColorBrush(color),
+                Stroke = brush,
                 StrokeThickness = 6,
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{locked.VehicleId}｜{locked.ServiceRunId} 已鎖定進路\n"
@@ -1371,10 +1358,10 @@ public partial class MainWindow
             });
             if (locked.PreviousTraversal is { } previous)
                 DrawLockedRouteConnection(infrastructure, edgeGeometries, previous, locked.Traversal,
-                    locked.VehicleId, locked.ServiceRunId, color, connections);
+                    locked.VehicleId, locked.ServiceRunId, brush, connections);
             if (locked.NextTraversal is { } next)
                 DrawLockedRouteConnection(infrastructure, edgeGeometries, locked.Traversal, next,
-                    locked.VehicleId, locked.ServiceRunId, color, connections);
+                    locked.VehicleId, locked.ServiceRunId, brush, connections);
         }
     }
 
@@ -1385,7 +1372,7 @@ public partial class MainWindow
         DirectedTrackTraversal toTraversal,
         string vehicleId,
         string serviceRunId,
-        Color color,
+        Brush brush,
         ISet<string> drawnConnections)
     {
         if (fromTraversal.TrackEdgeId.Equals(toTraversal.TrackEdgeId, StringComparison.OrdinalIgnoreCase)
@@ -1414,7 +1401,7 @@ public partial class MainWindow
         StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing,
             Brushes.White, tooltip, allowLaneTurn, 10);
         StationSchematicPresentation.DrawConnection(RouteCanvas, from, to, incoming, outgoing,
-            new SolidColorBrush(color), tooltip, allowLaneTurn, 6);
+            brush, tooltip, allowLaneTurn, 6);
     }
 
     private void DrawTopologyTrainMarkers(
@@ -2491,7 +2478,6 @@ public partial class MainWindow
         }
     }
 
-    private static string VehicleMarkerLabel(string vehicleId) => TrainMarkerPresentation.Label(vehicleId);
 
     private static string DirectionToChinese(TrainDirection direction) =>
         direction == TrainDirection.Outbound ? "下行" : "上行";
