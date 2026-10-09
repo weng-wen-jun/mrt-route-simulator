@@ -18,6 +18,7 @@ internal static class TrackDiagramThemeTests
     {
         VerifyThemeTokens();
         VerifyTrainMarkers(root);
+        VerifyLiveTrainMarkers(root);
         VerifyRailStyles(root);
         VerifyPlatforms(root);
         VerifyStationLabels(root);
@@ -418,6 +419,69 @@ internal static class TrackDiagramThemeTests
         }
         finally { main.Close(); }
         Console.WriteLine("[通過] 膠囊列車標記：短號、方向、定位與配色");
+    }
+
+    // 以實際播放中的列車驗證：正線上的箭頭方向（含同一列車折返前後），以及膠囊寬度容得下以實際繼承字型繪製的車號。
+    private static void VerifyLiveTrainMarkers(string root)
+    {
+        var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
+            System.IO.Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
+        var runtime = TopologyProjectFormat.CreateRuntime(sample);
+        var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
+            runtime.DispatchPlan.Runs.Count, sample.Simulation.HeadwaySeconds,
+            ProfileMode: sample.Simulation.ProfileMode, MovingBlockMode: sample.Simulation.MovingBlockMode,
+            ServicePatterns: runtime.ServicePatterns, DispatchPlan: runtime.DispatchPlan, VehicleTypes: runtime.VehicleTypes,
+            ServiceTypes: runtime.ServiceTypes, Topology: runtime.Topology).CreateWorld();
+        var edgeKinds = sample.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId, edge => edge.Kind, StringComparer.OrdinalIgnoreCase);
+        var draw = typeof(MainWindow).GetMethod("DrawTopologyGraphRoute", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var directionsByVehicle = new Dictionary<string, HashSet<TrainDirection>>(StringComparer.OrdinalIgnoreCase);
+        var main = new MainWindow();
+        try
+        {
+            ((MenuItem)main.FindName("ShowLockedRoutesMenuItem")).IsChecked = false;
+            var canvas = (Canvas)main.FindName("RouteCanvas");
+            canvas.Children.Clear();
+            canvas.Width = 1200;
+            canvas.Height = 400;
+            for (var time = 15d; time <= 1800 && !world.IsComplete; time += 15)
+            {
+                world.AdvanceTo(time);
+                var snapshot = world.GetSnapshot();
+                var centers = snapshot.Trains
+                    .Select(state => (state.VehicleId, Center: world.GetTrainCenterPosition(state.VehicleId)))
+                    .Where(item => item.Center is not null)
+                    .ToDictionary(item => item.VehicleId, item => item.Center!.Value, StringComparer.OrdinalIgnoreCase);
+                draw.Invoke(main, [runtime.Topology.Infrastructure, sample, snapshot, 1200d, 400d, centers, world.GetActiveRouteLocks()]);
+                foreach (var state in snapshot.Trains.Where(train => train.IsActive && train.SpeedMetersPerSecond > 1
+                             && centers.TryGetValue(train.VehicleId, out var center)
+                             && edgeKinds.GetValueOrDefault(center.TrackEdgeId) == TrackEdgeKind.Mainline
+                             && train.TrackEdgeId is { } frontEdge && edgeKinds.GetValueOrDefault(frontEdge) == TrackEdgeKind.Mainline))
+                {
+                    var marker = canvas.Children.OfType<Border>().Single(border => Equals(border.Tag, state.VehicleId));
+                    var chevron = ((Grid)marker.Child).Children.OfType<System.Windows.Shapes.Path>().Single();
+                    // 正線上下行（Outbound）一律往右、上行往左，與箭頭的推導方式無關，可獨立驗證方向。
+                    Require(Grid.GetColumn(chevron) == (state.Direction == TrainDirection.Outbound ? 1 : 0),
+                        $"{time}s {state.VehicleId}（{state.Direction}）：正線行進方向箭頭朝向錯誤。");
+                    if (!directionsByVehicle.TryGetValue(state.VehicleId, out var directions))
+                        directionsByVehicle[state.VehicleId] = directions = [];
+                    directions.Add(state.Direction);
+                }
+                foreach (var marker in canvas.Children.OfType<Border>().Where(border => border.Tag is string))
+                {
+                    var text = ((Grid)marker.Child).Children.OfType<TextBlock>().Single();
+                    var typeface = new Typeface(text.FontFamily, text.FontStyle, text.FontWeight, text.FontStretch);
+                    var rendered = new FormattedText(text.Text, System.Globalization.CultureInfo.InvariantCulture,
+                        FlowDirection.LeftToRight, typeface, text.FontSize, Brushes.White, 1).WidthIncludingTrailingWhitespace;
+                    // 內距 12 + 外框 3 + 箭頭 5 + 間距 3 = 23。
+                    Require(marker.Width >= Math.Ceiling(rendered) + 23,
+                        $"{marker.Tag}：膠囊寬 {marker.Width:0.#}px 容不下以實際字型「{text.FontFamily}」繪製的車號（{rendered:0.0}px）。");
+                }
+            }
+        }
+        finally { main.Close(); }
+        Require(directionsByVehicle.Values.SelectMany(set => set).Distinct().Count() == 2, "必須同時觀察到正線上行駛中的下行與上行列車。");
+        Require(directionsByVehicle.Values.Any(set => set.Count == 2), "必須觀察到同一列車折返前後兩個方向的箭頭。");
+        Console.WriteLine("[通過] 播放中列車箭頭方向（含折返）與車號寬度");
     }
 
     private static (Canvas Canvas, TopologyProjectDocument Sample) DrawSample(
