@@ -105,6 +105,7 @@
         <Setter Property="Height" Value="28" />
         <Setter Property="Padding" Value="0" />
         <Setter Property="Margin" Value="0,0,2,0" />
+        <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
     </Style>
 
     <Style x:Key="AppBarPrimaryButton" TargetType="Button" BasedOn="{StaticResource AppBarButton}">
@@ -230,6 +231,10 @@
                         </Popup>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="ToggleButton" Property="BorderBrush" Value="{x:Static app:UiTheme.AccentBrush}" />
+                            <Setter TargetName="ToggleButton" Property="BorderThickness" Value="2" />
+                        </Trigger>
                         <Trigger Property="IsEditable" Value="True">
                             <Setter Property="IsTabStop" Value="False" />
                             <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
@@ -343,7 +348,7 @@
     <!-- 選單：頂層顯示在深色標題列；下拉與右鍵選單為白色浮層 -->
     <Style TargetType="Menu">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{x:Static app:UiTheme.AppBarTextBrush}" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Template">
             <Setter.Value>
@@ -354,6 +359,16 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- 頂層選單項目的滑過底色：一般淺色視窗用 NavHover，標題列（AppBarMenu）覆寫為 AppBarRaised。 -->
+    <x:Static x:Key="MenuTopLevelHighlightBrush" Member="app:UiTheme.NavHoverBrush" />
+
+    <Style x:Key="AppBarMenu" TargetType="Menu" BasedOn="{StaticResource {x:Type Menu}}">
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.AppBarTextBrush}" />
+        <Style.Resources>
+            <x:Static x:Key="MenuTopLevelHighlightBrush" Member="app:UiTheme.AppBarRaisedBrush" />
+        </Style.Resources>
     </Style>
 
     <Style x:Key="{x:Static MenuItem.SeparatorStyleKey}" TargetType="Separator">
@@ -382,10 +397,10 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.AppBarRaisedBrush}" />
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource MenuTopLevelHighlightBrush}" />
             </Trigger>
             <Trigger Property="IsSubmenuOpen" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.AppBarRaisedBrush}" />
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource MenuTopLevelHighlightBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.45" />
@@ -399,7 +414,7 @@
         </Border>
         <ControlTemplate.Triggers>
             <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.AppBarRaisedBrush}" />
+                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource MenuTopLevelHighlightBrush}" />
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.45" />

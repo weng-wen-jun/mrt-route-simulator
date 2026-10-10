@@ -30,6 +30,9 @@ internal static class ShellLayoutTests
         VerifyAppBarInputClassification();
         VerifyDrawerKeepsValidationVisible();
         VerifyDataGridCellSelectionVisible();
+        VerifyDisabledAppBarTooltips();
+        VerifyMenuStyles();
+        VerifyComboFocusFrame();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -643,5 +646,87 @@ internal static class ShellLayoutTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 儲存格選取模式的 DataGrid 標示選取格與焦點格");
+    }
+
+    private static void VerifyDisabledAppBarTooltips()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            foreach (var name in new[] { "PlayButton", "ObstacleStopButton" })
+            {
+                var button = (Button)window.FindName(name)!;
+                button.IsEnabled = false; // 新視窗的急停鈕可能已啟用；固定前提為「停用中」。
+                Require(!button.IsEnabled && ToolTipService.GetShowOnDisabled(button) && button.ToolTip is not null,
+                    $"{name} 停用時也必須顯示提示框；enabled={button.IsEnabled}, showOnDisabled={ToolTipService.GetShowOnDisabled(button)}, toolTip={button.ToolTip}。");
+            }
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 停用中的標題列圖示鈕仍顯示提示框");
+    }
+
+    private static void VerifyMenuStyles()
+    {
+        var plainMenu = new Menu();
+        var plainItem = new MenuItem { Header = "一般選單" };
+        plainItem.Items.Add(new MenuItem { Header = "子項" });
+        plainMenu.Items.Add(plainItem);
+        var light = new Window { Width = 300, Height = 120, Content = plainMenu };
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            light.Show();
+            window.Show();
+            PumpLayout(light);
+            PumpLayout(window);
+            Require(ReferenceEquals(plainMenu.Foreground, UiTheme.TextStrongBrush), "一般選單必須是深色字，白字只屬於標題列選單。");
+            Require(ReferenceEquals(plainItem.TryFindResource("MenuTopLevelHighlightBrush"), UiTheme.NavHoverBrush),
+                "一般選單的頂層滑過底色應為 NavHover。");
+            var mainMenu = (Menu)window.FindName("MainMenu")!;
+            Require(ReferenceEquals(mainMenu.Style, Application.Current.FindResource("AppBarMenu"))
+                    && ReferenceEquals(mainMenu.Foreground, UiTheme.AppBarTextBrush),
+                "主選單必須套用 AppBarMenu 並為白字。");
+            var topItem = mainMenu.Items.OfType<MenuItem>().First();
+            Require(ReferenceEquals(topItem.TryFindResource("MenuTopLevelHighlightBrush"), UiTheme.AppBarRaisedBrush),
+                "標題列選單的頂層滑過底色應為 AppBarRaised。");
+        }
+        finally
+        {
+            light.Close();
+            WpfTestWait.Close(window);
+        }
+        Console.WriteLine("[通過] 選單白字只套用在標題列選單");
+    }
+
+    private static void VerifyComboFocusFrame()
+    {
+        var readOnly = new ComboBox { ItemsSource = new[] { "A", "B" }, SelectedIndex = 0, Width = 120 };
+        var editable = new ComboBox { IsEditable = true, ItemsSource = new[] { "1", "2" }, Width = 120 };
+        var panel = new StackPanel();
+        panel.Children.Add(readOnly);
+        panel.Children.Add(editable);
+        var window = new Window { Width = 300, Height = 200, Content = panel };
+        try
+        {
+            window.Show();
+            window.Activate();
+            PumpLayout(window);
+            foreach (var (combo, target) in new (ComboBox Combo, IInputElement Target)[]
+                     {
+                         (readOnly, readOnly),
+                         (editable, (IInputElement)editable.Template.FindName("PART_EditableTextBox", editable))
+                     })
+            {
+                Keyboard.Focus(target);
+                PumpLayout(window);
+                var toggle = (ToggleButton)combo.Template.FindName("ToggleButton", combo);
+                Require(combo.IsKeyboardFocusWithin && ReferenceEquals(toggle.BorderBrush, UiTheme.AccentBrush) && toggle.BorderThickness.Left >= 2,
+                    $"{(combo.IsEditable ? "可編輯" : "唯讀")}下拉取得焦點時必須顯示 Accent 2 px 框；focus={combo.IsKeyboardFocusWithin}, border={toggle.BorderBrush}, thickness={toggle.BorderThickness}。");
+            }
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 下拉選單取得焦點時顯示 Accent 框");
     }
 }

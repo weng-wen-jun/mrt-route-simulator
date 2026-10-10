@@ -34,7 +34,7 @@
                                TextTrimming="CharacterEllipsis" AutomationProperties.Name="目前存檔" />
                     <TextBlock x:Name="VersionSummaryText" Visibility="Collapsed" />
                 </StackPanel>
-                <Menu x:Name="MainMenu" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0"
+                <Menu x:Name="MainMenu" Style="{StaticResource AppBarMenu}" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0"
                       KeyboardNavigation.TabNavigation="Continue" AutomationProperties.Name="主選單">
                     <MenuItem Header="_檔案" AutomationProperties.Name="檔案選單">
                         <MenuItem Header="存檔" Click="SaveProject_Click" AutomationProperties.Name="儲存模擬專案" />
