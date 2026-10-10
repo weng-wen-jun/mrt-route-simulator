@@ -84,6 +84,20 @@ internal static class PdfPaginationRegressionTests
             "頁界內縮造成碰撞時，完整鄰近刻度必須保留在新增文字列。");
         Require(pages[0].PixelHeight > bitmap.PixelHeight,
             "新增刻度文字列時，頁面高度必須擴充而非裁掉文字。");
+        var legend = fixture.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, ChartPainter.LegendTag));
+        Require(82 + legend.ActualWidth > pages.Min(page => page.PixelWidth) / 1.6,
+            $"fixture 的圖例寬 {legend.ActualWidth:0} DIP 必須超過分頁寬，才能驗證等比縮小。");
+        foreach (var (page, index) in pages.Select((page, index) => (page, index + 1)))
+        {
+            var legendTop = (int)(28 * 1.6);
+            var legendBottom = (int)Math.Ceiling((28 + legend.ActualHeight) * 1.6);
+            Require(FindColorBounds(page, 0, page.PixelWidth, legendTop, legendBottom,
+                    (r, g, b) => r is >= 100 and <= 160 && g <= 40 && b is >= 100 and <= 160) is not null,
+                $"第 {index} 頁必須補畫圖例線段。");
+            Require(FindColorBounds(page, 0, page.PixelWidth, legendTop, legendBottom,
+                    (r, g, b) => r >= 220 && g is >= 180 and <= 230 && b <= 60) is not null,
+                $"第 {index} 頁的圖例比頁面寬時必須等比縮小，最後一項不能被切掉。");
+        }
         Require(!HasCyanPixels(pages[0], 147, 500, 48, 75),
             "靠近圖表頂端的車次文字必須移離圖例區域。");
         Require(HasCyanPixels(pages[0], 147, pages[0].PixelWidth, 80, 300)
@@ -339,7 +353,14 @@ internal static class PdfPaginationRegressionTests
         });
 
         AddText(canvas, "14-大型-二十八站完整營運範例｜計畫／理論與 V2 模擬實際運行圖", 82, 8, 14);
-        AddText(canvas, "實線：V2 模擬實際　虛線：無干擾計畫／理論", 82, 28, 10);
+        // 與運行圖相同的圖例元件；項目多到比 A4 分頁寬，驗證每頁補畫且等比縮小而不被切掉。
+        ChartPainter.DrawLegend(canvas, 82, 28,
+        [
+            new ChartLegendItem("V2 實際", Brushes.Purple, ChartLegendMarker.Line),
+            new ChartLegendItem("計畫／理論", Brushes.Purple, ChartLegendMarker.Dash),
+            .. Enumerable.Range(1, 8).Select(index => new ChartLegendItem($"項目{index}", Brushes.LightGray, ChartLegendMarker.Point)),
+            new ChartLegendItem("最後一項", Brushes.Gold, ChartLegendMarker.Point)
+        ]);
         AddText(canvas, "O04  4.28 km", 3, 320, 10);
         AddText(canvas, "O03  3.00 km", 3, 355, 10);
         AddTrainLabel(90, 48, "TRAIN-A", Brushes.Cyan);
