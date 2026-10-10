@@ -18,6 +18,8 @@ internal static class EditorThemeTests
     public static void Run(string root)
     {
         VerifyEditorStyles();
+        VerifyShell(root);
+        VerifyMinimumSizeAndScale(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
     }
@@ -143,6 +145,116 @@ internal static class EditorThemeTests
             .Distinct().ToArray();
         Require(findings.Length == 0, "編輯器程式不得寫死顏色：" + string.Join("、", findings));
         Console.WriteLine($"[通過] 編輯器程式無寫死顏色（{ScannedFiles.Length} 個檔案）");
+    }
+
+    internal static readonly string[] NavigationPages =
+        ["Project", "Stations", "Tracks", "Vehicle", "Services", "StopPatterns", "DispatchPlanning", "Simulation", "AdvancedData", "Validation"];
+
+    private static FrameworkElement Named(DependencyObject root, string name) =>
+        Descendants(root).OfType<FrameworkElement>().Single(element => element.Name == name);
+
+    private static void VerifyShell(string root)
+    {
+        var window = OpenEditor(root, "Tracks");
+        try
+        {
+            Require(ReferenceEquals(window.FontFamily, Application.Current.FindResource("AppFont"))
+                    && ReferenceEquals(window.Background, UiTheme.WindowBackgroundBrush),
+                "編輯器視窗必須套用 App 字型與視窗底色。");
+            var navigation = (ListBox)Field(window, "navigation")!;
+            Require(ReferenceEquals(navigation.Style, EditorChrome.StyleOf("EditorNavList"))
+                    && navigation.ReadLocalValue(Control.BackgroundProperty) == DependencyProperty.UnsetValue,
+                "左側導覽必須使用 EditorNavList，且不自行設定底色。");
+            var selected = (ListBoxItem)navigation.ItemContainerGenerator.ContainerFromItem(navigation.SelectedItem);
+            Require(ReferenceEquals(((Border)selected.Template.FindName("Chrome", selected)).Background, UiTheme.NavSelectedBrush)
+                    && ((Border)selected.Template.FindName("Indicator", selected)).Visibility == Visibility.Visible
+                    && ReferenceEquals(selected.Foreground, UiTheme.AccentBrush),
+                "選取的導覽項目必須是淺藍底、左側藍色指示條與藍字。");
+            var search = (TextBox)Field(window, "workspaceSearch")!;
+            Require(ReferenceEquals(search.Style, EditorChrome.StyleOf("SearchBox")) && Equals(search.Tag, "搜尋頁面")
+                    && AutomationProperties.GetName(search) == "搜尋工作區頁面",
+                "頁首搜尋框必須使用 SearchBox、提示字「搜尋頁面」，並保留自動化名稱。");
+            Require(ReferenceEquals(((TextBlock)Field(window, "workspaceSummary")!).Style, EditorChrome.StyleOf("ResultPageTitle")),
+                "頁首標題必須使用頁面標題樣式。");
+            var headerButtons = Descendants(Named(window, "EditorHeader")).OfType<Button>().Where(b => b.TemplatedParent is null).ToArray();
+            Require(headerButtons.Length == 1 && Equals(headerButtons[0].Content, "收合")
+                    && ReferenceEquals(headerButtons[0].Style, EditorChrome.StyleOf("GhostButton")),
+                "右側面板切換鈕維持文字「收合」，改用淡色按鈕樣式。");
+            var footerButtons = Descendants(Named(window, "EditorFooter")).OfType<Button>().Where(b => b.TemplatedParent is null)
+                .ToDictionary(button => (string)button.Content);
+            Require(ReferenceEquals(footerButtons["套用"].Style, EditorChrome.StyleOf("PrimaryButton"))
+                    && ReferenceEquals(footerButtons["驗證"].Style, EditorChrome.StyleOf("SecondaryButton"))
+                    && ReferenceEquals(footerButtons["取消"].Style, EditorChrome.StyleOf("SecondaryButton")),
+                "底部「套用」為主要按鈕，「驗證」「取消」為次要按鈕。");
+            var rightPanel = (Grid)Field(window, "rightPanel")!;
+            Require(rightPanel.Children.OfType<Border>().Count(border => ReferenceEquals(border.Style, EditorChrome.StyleOf("ResultCard"))) == 2,
+                "右側面板必須是「選取項目」「驗證」兩張卡片。");
+
+            var dot = (Ellipse)Field(window, "validationSummaryDot")!;
+            Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "尚未驗證時摘要色點為灰色。");
+            var setMessages = EditorType.GetMethod("SetValidationMessages", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            var longText = string.Concat(Enumerable.Repeat("很長的驗證訊息需要換行顯示，", 8));
+            setMessages.Invoke(window, [new ProjectValidationMessage[]
+            {
+                new(ProjectValidationSeverity.Error, longText),
+                new(ProjectValidationSeverity.Warning, "提醒訊息"),
+                new(ProjectValidationSeverity.Info, "資訊訊息")
+            }]);
+            window.UpdateLayout();
+            Require(ReferenceEquals(dot.Fill, UiTheme.DangerBrush), "有錯誤時摘要色點為紅色。");
+            var list = (ListBox)Field(window, "validationList")!;
+            var expected = new[] { UiTheme.DangerBrush, UiTheme.CautionBrush, UiTheme.TextSubtleBrush };
+            for (var index = 0; index < expected.Length; index++)
+            {
+                var container = (ListBoxItem)list.ItemContainerGenerator.ContainerFromIndex(index);
+                var ellipse = Descendants(container).OfType<Ellipse>().Single();
+                Require(ReferenceEquals(ellipse.Fill, expected[index]), $"驗證清單第 {index + 1} 列的色點顏色不符。");
+            }
+            var first = (ListBoxItem)list.ItemContainerGenerator.ContainerFromIndex(0);
+            var firstText = Descendants(first).OfType<TextBlock>().Single(text => text.Text.Length > 40);
+            var firstDot = Descendants(first).OfType<Ellipse>().Single();
+            Require(firstText.ActualHeight > firstDot.ActualHeight * 3 && firstDot.VerticalAlignment == VerticalAlignment.Top,
+                "很長的驗證訊息必須換行，色點對齊第一行。");
+            setMessages.Invoke(window, [new[] { new ProjectValidationMessage(ProjectValidationSeverity.Warning, "只有提醒") }]);
+            Require(ReferenceEquals(dot.Fill, UiTheme.CautionBrush), "只有提醒時摘要色點為黃色。");
+            setMessages.Invoke(window, [Array.Empty<ProjectValidationMessage>()]);
+            Require(ReferenceEquals(dot.Fill, UiTheme.SuccessBrush), "驗證通過時摘要色點為綠色。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 編輯器外殼：導覽、頁首、右側卡片、驗證色點與底部按鈕");
+    }
+
+    // 守門測試：最小視窗與 125% 縮放下，頁首與底部操作不可被裁切（可能在改動前就通過）。
+    private static void VerifyMinimumSizeAndScale(string root)
+    {
+        foreach (var scale in new[] { 1d, 1.25d })
+        {
+            var previous = ShellLayoutTests.SetInterfaceScale(scale);
+            var window = OpenEditor(root, "Project", 980, 640);
+            try
+            {
+                foreach (var page in NavigationPages)
+                {
+                    Navigate(window, page);
+                    var content = (FrameworkElement)window.Content;
+                    var bounds = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
+                    foreach (var area in new[] { "EditorHeader", "EditorFooter" })
+                    foreach (var element in Descendants(Named(window, area)).OfType<Control>()
+                                 .Where(control => control.TemplatedParent is null && control is Button or TextBox or CheckBox))
+                    {
+                        var rect = element.TransformToAncestor(content).TransformBounds(new Rect(element.RenderSize));
+                        Require(bounds.Contains(rect),
+                            $"{scale:P0}、980×640 的「{page}」頁，{area} 的「{(element as ContentControl)?.Content ?? AutomationProperties.GetName(element)}」被裁切。");
+                    }
+                }
+            }
+            finally
+            {
+                window.Close();
+                ShellLayoutTests.SetInterfaceScale(previous);
+            }
+        }
+        Console.WriteLine("[通過] 編輯器在 980×640 與 125% 縮放下頁首與底部操作完整可見");
     }
 
     internal static void Require(bool condition, string message)

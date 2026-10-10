@@ -69,6 +69,7 @@ internal sealed partial class TopologyEditorWindow : Window
     private bool? rightPanelManuallyExpanded;
     private readonly TextBlock workspaceSummary = new();
     private readonly TextBlock validationSummary = new();
+    private readonly Ellipse validationSummaryDot = EditorChrome.StatusDot(UiTheme.TextSubtleBrush);
     private readonly TextBox workspaceSearch = new();
     private DataGrid? routeGrid;
     private DataGrid? traversalGrid;
@@ -98,6 +99,7 @@ internal sealed partial class TopologyEditorWindow : Window
         MinWidth = 980;
         MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        EditorChrome.ApplyWindowChrome(this);
         Content = BuildShell();
         SizeChanged += (_, _) => UpdateRightPanelForWidth();
     }
@@ -106,7 +108,7 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private UIElement BuildShell()
     {
-        var root = new Grid { Background = Brushes.White };
+        var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -114,17 +116,16 @@ internal sealed partial class TopologyEditorWindow : Window
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.ColumnDefinitions.Add(rightPanelColumn);
 
-        var header = new Grid { Margin = new Thickness(14, 10, 14, 4) };
+        var header = new Grid { Name = "EditorHeader", Margin = new Thickness(14, 10, 14, 4) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
         workspaceSummary.Text = "專案工作區";
-        workspaceSummary.FontSize = 16;
-        workspaceSummary.FontWeight = FontWeights.SemiBold;
+        workspaceSummary.Style = EditorChrome.StyleOf("ResultPageTitle");
         workspaceSummary.VerticalAlignment = VerticalAlignment.Center;
         header.Children.Add(workspaceSummary);
+        EditorChrome.SearchBox("搜尋頁面", workspaceSearch);
         workspaceSearch.Width = 220;
-        workspaceSearch.Height = 28;
         workspaceSearch.Margin = new Thickness(8, 0, 0, 0);
         workspaceSearch.VerticalContentAlignment = VerticalAlignment.Center;
         workspaceSearch.ToolTip = "搜尋工作區頁面";
@@ -141,6 +142,7 @@ internal sealed partial class TopologyEditorWindow : Window
         Grid.SetColumn(workspaceSearch, 1);
         header.Children.Add(workspaceSearch);
         rightPanelToggle = CreateButton("收合", (_, _) => ToggleRightPanel(), true);
+        rightPanelToggle.Style = EditorChrome.StyleOf("GhostButton");
         Grid.SetColumn(rightPanelToggle, 2);
         header.Children.Add(rightPanelToggle);
         Grid.SetRow(header, 0);
@@ -149,7 +151,7 @@ internal sealed partial class TopologyEditorWindow : Window
 
         navigation.Margin = new Thickness(10);
         navigation.BorderThickness = new Thickness(0);
-        navigation.Background = new SolidColorBrush(Color.FromRgb(247, 249, 252));
+        navigation.Style = EditorChrome.StyleOf("EditorNavList");
         navigationItems.Reset([
             new NavItem(ProjectWorkspacePage.Project, "總覽", ShowProjectHome),
             new NavItem(ProjectWorkspacePage.Stations, "車站與月台", ShowStationsPage),
@@ -167,7 +169,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var navigationText = new FrameworkElementFactory(typeof(TextBlock));
         navigationText.SetBinding(TextBlock.TextProperty, new Binding(nameof(NavItem.Label)));
         navigationText.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(4, 5, 4, 5));
+        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(0, 2, 0, 2));
         navigationTemplate.VisualTree = navigationText;
         navigation.ItemTemplate = navigationTemplate;
         navigation.SelectionChanged += (_, _) => OpenSelectedNavigationItem();
@@ -185,44 +187,40 @@ internal sealed partial class TopologyEditorWindow : Window
 
         var right = new Grid { Margin = new Thickness(8, 12, 12, 12) };
         rightPanel = right;
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(230) });
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var propertyHeader = new DockPanel();
-        propertyHeader.Children.Add(new TextBlock { Text = "選取項目", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        right.Children.Add(propertyHeader);
-        selectionDetails.Margin = new Thickness(0, 8, 0, 12);
-        selectionDetails.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(270) });
+        selectionDetails.Margin = new Thickness(0, 0, 0, 4);
+        selectionDetails.Foreground = UiTheme.TextStrongBrush;
         var selectionScroll = new ScrollViewer
         {
             Content = selectionDetails,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Grid.SetRow(selectionScroll, 1);
-        right.Children.Add(selectionScroll);
-        var validationTitle = new TextBlock { Text = "驗證", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
-        Grid.SetRow(validationTitle, 2);
-        right.Children.Add(validationTitle);
-        validationList.BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232));
-        validationList.BorderThickness = new Thickness(1);
+        right.Children.Add(EditorChrome.Card(selectionScroll, "選取項目"));
+        // 驗證清單放在卡片內，不再有自己的框線；每列前的色點依嚴重度。
+        validationList.BorderThickness = new Thickness(0);
+        validationList.Padding = new Thickness(0);
         validationList.ItemsSource = validationMessages;
+        validationList.ItemTemplate = (DataTemplate)Application.Current.FindResource(EditorChrome.ValidationMessageTemplateKey);
         AttachValidationActivation(validationList);
-        Grid.SetRow(validationList, 3);
-        validationList.DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage);
-        right.Children.Add(validationList);
+        var validationCard = EditorChrome.Card(validationList, "驗證");
+        validationCard.Margin = new Thickness(0, 10, 0, 0);
+        Grid.SetRow(validationCard, 1);
+        right.Children.Add(validationCard);
         Grid.SetRow(right, 1);
         Grid.SetColumn(right, 2);
         root.Children.Add(right);
 
-        var footer = new DockPanel { Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
+        var footer = new DockPanel { Name = "EditorFooter", Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
         validationSummary.Text = "尚未驗證草稿";
-        validationSummary.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        validationSummary.Foreground = UiTheme.TextMutedBrush;
         validationSummary.VerticalAlignment = VerticalAlignment.Center;
-        DockPanel.SetDock(validationSummary, Dock.Left);
-        footer.Children.Add(validationSummary);
+        var summaryRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        summaryRow.Children.Add(validationSummaryDot);
+        summaryRow.Children.Add(validationSummary);
+        DockPanel.SetDock(summaryRow, Dock.Left);
+        footer.Children.Add(summaryRow);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var advanced = new CheckBox { Content = "進階識別碼", IsChecked = advancedMode, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         advanced.Checked += (_, _) => advancedMode = true;
@@ -1102,16 +1100,11 @@ internal sealed partial class TopologyEditorWindow : Window
             }));
     }
 
+    // 主次外觀由共用樣式決定；secondary=false 只保留給規格列出的主要動作。
     private static Button CreateButton(string label, RoutedEventHandler handler, bool secondary)
     {
-        var button = new Button
-        {
-            Content = label, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 7, 0),
-            Background = secondary ? Brushes.White : new SolidColorBrush(Color.FromRgb(34, 92, 175)),
-            Foreground = secondary ? new SolidColorBrush(Color.FromRgb(38, 51, 73)) : Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(164, 178, 202))
-        };
-        button.Click += handler;
+        var button = EditorChrome.Button(label, handler, primary: !secondary);
+        button.Margin = new Thickness(0, 0, 7, 0);
         return button;
     }
 
@@ -2314,6 +2307,7 @@ internal sealed partial class TopologyEditorWindow : Window
             validationSummary.Text = errors == 0 && warnings == 0
                 ? "驗證通過 · 草稿可套用"
                 : $"驗證摘要：{errors} 個錯誤、{warnings} 個提醒 · 點選訊息可定位";
+            validationSummaryDot.Fill = EditorChrome.ValidationSummaryBrush(validated: true, errors, warnings);
         }
     }
 
