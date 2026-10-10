@@ -461,4 +461,71 @@ internal static class ShellLayoutTests
         }
         Console.WriteLine("[通過] 大量驗證訊息時橫幅自行捲動，配線圖保有高度");
     }
+
+    internal static void CaptureScreenshots(string root)
+    {
+        var output = System.IO.Path.Combine(root, "artifacts", "shell-screenshots");
+        Directory.CreateDirectory(output);
+        var previousScale = SetInterfaceScale(1);
+        try
+        {
+            foreach (var (width, height) in new[] { (1280d, 800d), (1920d, 1080d) })
+            {
+                var window = new MainWindow { Width = width, Height = height };
+                try
+                {
+                    LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+                    window.Show();
+                    WpfTestWait.Wait(Task.Delay(200));
+                    WpfTestWait.Advance(window, 300); // 推進到 5 分鐘並刷新畫面，讓配線圖上有列車。
+                    var tabs = (TabControl)window.FindName("WorkspaceTabControl")!;
+                    tabs.SelectedItem = window.FindName("SimulationTabItem");
+                    ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
+                    Save(window, System.IO.Path.Combine(output, $"main-{width}x{height}.png"));
+                    tabs.SelectedItem = window.FindName("ResultsTabItem");
+                    Save(window, System.IO.Path.Combine(output, $"timetable-{width}x{height}.png"));
+                }
+                finally { WpfTestWait.Close(window); }
+            }
+            var drawerWindow = new MainWindow { Width = 1280, Height = 800 };
+            try
+            {
+                drawerWindow.Show();
+                ((Button)drawerWindow.FindName("QuickBuilderToggleButton")!).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                Save(drawerWindow, System.IO.Path.Combine(output, "drawer-1280x800.png"));
+            }
+            finally { WpfTestWait.Close(drawerWindow); }
+            var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
+            var pageType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;
+            var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
+                System.IO.Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            foreach (var page in new[] { "Tracks", "Services" })
+            {
+                var editor = (Window)Activator.CreateInstance(editorType, document, Enum.Parse(pageType, page))!;
+                editor.Width = 1280;
+                editor.Height = 800;
+                try
+                {
+                    editor.Show();
+                    Save(editor, System.IO.Path.Combine(output, $"editor-{page}-1280x800.png"));
+                }
+                finally { editor.Close(); }
+            }
+            Console.WriteLine($"shellScreenshots={output}");
+        }
+        finally { SetInterfaceScale(previousScale); }
+    }
+
+    private static void Save(Window window, string path)
+    {
+        PumpLayout(window);
+        // 只拍視窗內容（不含系統標題列）；內容已套用介面縮放。
+        var content = (FrameworkElement)window.Content;
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(content);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
 }

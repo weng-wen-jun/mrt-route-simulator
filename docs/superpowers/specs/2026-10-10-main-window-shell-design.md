@@ -4,7 +4,7 @@
 - 分支：`claude/ui-design-improvement-0a0ca4`（第一輪 A+B 已合併至 `main` 的 `c103ab3`）
 - 範圍：全面 UI 翻新子專案 C 的第一部分 C1
 - 前置：`docs/superpowers/specs/2026-10-09-ui-theme-and-track-diagram-design.md`（`UiTheme` 與配線圖）
-- 狀態：設計已於對話中逐段確認，待使用者審閱本文件
+- 狀態：已實作（2026-10-10）；實作中確定的細節已回寫於各節並標示「實作細化」
 
 ## 1. 目標與範圍
 
@@ -50,8 +50,9 @@
   - `_顯示設定`：介面縮放、顯示列車已鎖定的前方進路、顯示區段占用亮燈（不變；測試要求介面縮放位於標題含「顯示設定」的選單）。
   - `_原生驗收量測`：不變。
   - 原頂層「分析結果」移除，由導覽列取代；`OpenResults_Click` 一併移除。
-- **播放控制群組**（右側，依序）：建立模擬、▶ 播放（`PlayButton`）、Ⅱ 暫停、↺ 重設、⚠ 障礙物急停（`ObstacleStopButton`）、倍率（`PlaybackSpeedComboBox`）、時鐘（`SimulationClockText`，等寬字型、`TimeAccent` 綠）。元件從「模擬動畫」頁內容搬到標題列，名稱、事件、`IsEnabled` 初始值與自動化名稱不變。按鈕為 32×28 的圖示鈕並保留文字於 ToolTip 與自動化名稱；播放鈕使用主要（橘色）樣式。
+- **播放控制群組**（右側，依序）：建立模擬、▶ 播放（`PlayButton`）、Ⅱ 暫停、↺ 重設、⚠ 障礙物急停（`ObstacleStopButton`）、倍率（`PlaybackSpeedComboBox`）、時鐘（`SimulationClockText`，等寬字型、`TimeAccent` 綠；實作細化：深色標題列上改用亮綠 `#7EE0B5` 以保對比）。元件從「模擬動畫」頁內容搬到標題列，名稱、事件、`IsEnabled` 初始值與自動化名稱不變。按鈕為 32×28 的圖示鈕並保留文字於 ToolTip 與自動化名稱；播放鈕使用主要（橘色）樣式。
 - `PlaybackStatusText` 留在「模擬動畫」頁的子分頁列右側（第 2.4 節），不放進標題列。
+- `VersionSummaryText` 保留為隱藏元素，作為 App 名稱提示框的內容來源（實作細化）。
 
 ### 2.2 左側導覽列
 
@@ -83,19 +84,19 @@
 ### 2.4 「模擬動畫」頁
 
 - 原本頁內的播放按鈕列移除（已搬到標題列）。
-- `SimulationViewTabControl` 套用 `SegmentedTabControl` 範本：膠囊切換（灰底軌、白色選中塊）三項「配線圖／列車狀態／速度曲線」（`TabItem.Header` 改為較短文字，完整原名放 ToolTip 與自動化名稱）。
-- 同一列右側：`PlaybackStatusText`，以及原配線圖頁內的縮放與跟隨控制（`StopRouteFollowButton` 等，名稱不變）。
+- `SimulationViewTabControl` 套用 `SegmentedTabControl` 範本：膠囊切換（灰底軌、白色選中塊）三項「配線圖／列車狀態／速度曲線」。實作細化：`TabItem.Header` 保留完整原名（作為 ToolTip 與自動化名稱），膠囊顯示附加屬性 `ShellNav.ShortLabel`。
+- 同一列右側：`PlaybackStatusText`。實作細化：視角跟隨與左右縮放（`StopRouteFollowButton` 等，名稱不變）只對配線圖有效，因此留在「配線圖」子分頁內的工具列。
 - 配線圖區（`RouteScrollViewer`、`RouteCanvas`、`RouteViewportHost`）結構不變，佔滿剩餘高度。
 
 ### 2.5 快速起稿抽屜
 
-- `QuickBuilderSidebar`（名稱不變）改為覆蓋在主體左側、導覽列右緣起的抽屜：寬 `clamp(主體寬 × .38, 320, 450)`，白底、右側陰影線，最上方標題列含「快速建立線性路線」與關閉鈕（`QuickBuilderCloseButton`）。內容（`ConfigurationScrollViewer`、`QuickBuilderInputPanel` 等）不變。
+- `QuickBuilderSidebar`（名稱不變）改為覆蓋在主體左側、導覽列右緣起的抽屜：寬 `clamp(主體寬 × .38, 320, 450)`，白底、右側 1 px 分隔線（實作細化：不用 `DropShadowEffect`，避免抽屜內文字點陣模糊），最上方標題列含「快速建立線性路線」與關閉鈕（`QuickBuilderCloseButton`）。內容（`ConfigurationScrollViewer`、`QuickBuilderInputPanel` 等）不變。
 - 預設收起。開啟方式：導覽列「✎ 起稿」、選單「編輯 → 快速起稿」（`FocusRouteInput_Click` 開啟並聚焦第一個輸入框）。關閉：關閉鈕、再按一次「✎ 起稿」、或 Esc。
-- `SetQuickBuilderState(locked, collapsed)` 保留語意：`collapsed` 控制抽屜開關，`locked` 控制輸入停用；`QuickBuilderColumn` 移除，寬度改由抽屜自身計算（`UpdateQuickBuilderWidth` 改為設定抽屜寬）。
+- `SetQuickBuilderState(locked, collapsed)`：`locked` 控制輸入停用；`collapsed=true` 關閉抽屜。實作細化：它不再自動開啟抽屜，開啟只發生在使用者操作（起稿鈕、選單「快速起稿」、前往 V2 設定），避免啟動或清除結果時抽屜自行彈出；`QuickBuilderColumn` 移除，寬度改由抽屜自身計算（`UpdateQuickBuilderWidth` 改為設定抽屜寬）。
 
 ### 2.6 狀態列
 
-`StatusTextBlock` 名稱不變；24 px 高、`StatusBar` 淺灰底、深灰字。左側 8 px 圓點顯示播放狀態（播放中綠、暫停灰、錯誤橘），由既有播放狀態更新處設定。
+`StatusTextBlock` 名稱不變；24 px 高、`StatusBar` 淺灰底、深灰字。左側 8 px 圓點顯示播放狀態（播放中綠、暫停灰、錯誤橘）。實作細化：播放旗標 `_isV2PlaybackPlaying` 一律經由 `SetV2PlaybackPlaying(bool)` 設定並同步刷新圓點；驗證警告顯示中或播放工作者錯誤（`Completion.IsFaulted`）為橘色。
 
 ## 3. 共用控制項樣式
 
@@ -111,7 +112,9 @@
 | `Accent` | `#2F7FC1` | 選取、焦點、連結（與上行軌道同色） |
 | `NavSelected` / `NavHover` | `#EAF2FB` / `#F1F5F9` | 導覽列與清單的選中／滑過底 |
 | `Primary` / `PrimaryHover` | `#E86D2D` / `#B84719` | 主要動作（播放、建立） |
-| `TimeAccent` | `#16866B` | 模擬時鐘 |
+| `TimeAccent` | `#7EE0B5` | 模擬時鐘（深色標題列上；實作細化） |
+| `Success` | `#16866B` | 播放中狀態圓點、`App.xaml` 的 `SuccessBrush` 相容鍵 |
+| `TableHeader` / `GridLine` | `#F8FAFC` / `#F1F5F9` | DataGrid 表頭與橫向格線 |
 | `WarningSurface` / `WarningBorder` / `WarningText` | `#FFF4EC` / `#F4C3A0` / `#9A3A12` | 驗證橫幅 |
 | `StatusBar` | `#E9EEF4` | 狀態列 |
 | `TooltipBackground` | `#1E293B` | 提示框 |
@@ -142,14 +145,14 @@
 
 ### 4.3 `ShellTabControl` 與導覽附加屬性
 
-- 新增 `src/MrtRouteSimulator.App/ShellTabControl.cs`：`public sealed class ShellTabControl : TabControl`，新增依賴屬性 `PageHeader`（`object`），範本在內容區上方以 `ContentPresenter` 呈現。因為仍是 `TabControl`，`WorkspaceTabControl.SelectedItem = ...`、MCP `select_page`、`(TabControl)FindName("WorkspaceTabControl")` 等既有程式與測試不需改動。
+- 新增 `src/MrtRouteSimulator.App/ShellTabControl.cs`：`public sealed class ShellTabControl : TabControl`，新增依賴屬性 `PageHeader`（`object`），範本在內容區上方以 `ContentPresenter` 呈現；實作細化：另有 `NavFooter`（導覽列底部的「起稿」鈕），兩者皆為邏輯子元素以繼承資源與字型。因為仍是 `TabControl`，`WorkspaceTabControl.SelectedItem = ...`、MCP `select_page`、`(TabControl)FindName("WorkspaceTabControl")` 等既有程式與測試不需改動。
 - 新增 `src/MrtRouteSimulator.App/ShellNav.cs`：附加屬性 `ShortLabel`（string）與 `Icon`（string 字形），供 `NavRailTabControl` 與 `SegmentedTabControl` 範本使用。
 
 ### 4.4 主視窗 XAML 與程式
 
 - `MainWindow.xaml` 依第 2 節重排；名稱、事件、自動化名稱如第 2 節所列保留。
 - 移除 `QuickBuilderColumn` 與頂層「分析結果」選單；`MainWindow.WorkspaceNavigation.cs` 改寫 `SetQuickBuilderState`、`UpdateQuickBuilderWidth`，新增抽屜開關處理（`QuickBuilderToggleButton`、`QuickBuilderCloseButton`、Esc）。
-- 狀態列圓點由既有播放狀態更新處（`MainWindow.PlaybackRefresh.cs` 的狀態文字更新點）一併設定。
+- 狀態列圓點由 `MainWindow.Shell.cs` 的 `SetV2PlaybackPlaying`／`UpdateStatusIndicator` 設定（實作細化，見第 2.6 節）。
 - `InterfaceScaleService` 對視窗內容的縮放機制不變。
 
 ## 5. 相容性與不變條件

@@ -109,6 +109,11 @@ internal static class Program
                 Console.WriteLine($"shellBaselineRouteViewportHeight={ShellLayoutTests.MeasureRouteViewportHeight(GetRoot(args)):0.0}");
                 return 0;
             }
+            if (args.Contains("--shell-screenshots"))
+            {
+                ShellLayoutTests.CaptureScreenshots(GetRoot(args));
+                return 0;
+            }
             if (args.Contains("--shell-layout-only"))
             {
                 ShellLayoutTests.Run(GetRoot(args));
