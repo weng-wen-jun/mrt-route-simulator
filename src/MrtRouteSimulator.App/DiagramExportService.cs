@@ -121,6 +121,7 @@ internal static class DiagramExportService
         // complete, page-local text layer below instead of a bitmap fragment that can
         // cut a title, tick label, or train marker in half.
         var graphBitmap = Render(element, renderScale, includeText: false);
+        RequireSameRenderSize(bitmap, graphBitmap);
         var textBlocks = FindTextBlocks(element);
         var stationLeaders = FindStationLeaders(element);
         var logicalScale = bitmap.DpiX / 96d;
@@ -200,6 +201,8 @@ internal static class DiagramExportService
                 block.Visibility = visibility;
             }
         }
+
+        RequireSameRenderSize(bitmap, graphBitmap);
 
         var logicalScale = bitmap.DpiX / 96d;
         var logicalWidth = bitmap.PixelWidth / logicalScale;
@@ -485,6 +488,17 @@ internal static class DiagramExportService
         return page;
     }
 
+    // Overlay layers are cropped/placed with the base bitmap's coordinates.
+    // Report a size change explicitly instead of a WIC "value out of range"
+    // from CroppedBitmap or a silently stretched layer.
+    private static void RequireSameRenderSize(BitmapSource expected, BitmapSource actual)
+    {
+        if (expected.PixelWidth != actual.PixelWidth || expected.PixelHeight != actual.PixelHeight)
+            throw new InvalidOperationException(
+                $"運行圖在匯出期間改變尺寸：主圖 {expected.PixelWidth}x{expected.PixelHeight} px，"
+                + $"圖層 {actual.PixelWidth}x{actual.PixelHeight} px。");
+    }
+
     private static Rect PlacePdfTrainLabel(Rect desired, Rect bounds, List<Rect> occupied)
     {
         var x = Math.Clamp(desired.X, bounds.Left, Math.Max(bounds.Left, bounds.Right - desired.Width));
@@ -626,6 +640,18 @@ internal static class DiagramExportService
         // new children must be arranged before VisualBrush captures the tree;
         // otherwise a valid PNG/PDF can contain only the white background.
         element.UpdateLayout();
+        if (VisualTreeHelper.GetParent(element) is null && (!element.IsMeasureValid || !element.IsArrangeValid))
+        {
+            // A canvas outside any laid-out tree (an unshown window never applies
+            // its ScrollViewer template) is a visual root. VisualBrush would only
+            // lay it out lazily inside bitmap.Render, after its stale ActualWidth
+            // already sized this bitmap, so a second render of the same export
+            // would get another size. Lay it out now, and raise SizeChanged
+            // before any pixels are captured.
+            element.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            element.Arrange(new Rect(element.DesiredSize));
+            element.UpdateLayout();
+        }
         var width = Math.Max(1, element.ActualWidth);
         var height = Math.Max(1, element.ActualHeight);
         var pixelWidth = Math.Max(1, (int)Math.Ceiling(width * scale));
