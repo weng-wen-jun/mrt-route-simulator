@@ -27,6 +27,9 @@ internal static class ShellLayoutTests
         VerifyStatusIndicator(root);
         VerifyAppBarFits();
         VerifyValidationBanner(root);
+        VerifyAppBarInputClassification();
+        VerifyDrawerKeepsValidationVisible();
+        VerifyDataGridCellSelectionVisible();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -404,7 +407,7 @@ internal static class ShellLayoutTests
 
     private static void VerifyAppBarFits()
     {
-        foreach (var (width, height, scale) in new[] { (800d, 520d, 1d), (1280d, 800d, 1.25d) })
+        foreach (var (width, height, scale) in new[] { (800d, 520d, 1d), (800d, 520d, 1.25d), (1280d, 800d, 1.25d) })
         {
             var previousScale = SetInterfaceScale(scale);
             var window = new MainWindow { Width = width, Height = height };
@@ -414,6 +417,8 @@ internal static class ShellLayoutTests
                 PumpLayout(window);
                 ((TextBlock)window.FindName("CurrentProjectFileTextBlock")!).Text =
                     "目前存檔：" + string.Concat(Enumerable.Repeat("很長很長的專案檔名", 12)) + ".mrtsim.json";
+                // 播放中的時鐘格式比初始的 --:--:-- 寬，以最寬狀態量測。
+                ((TextBlock)window.FindName("SimulationClockText")!).Text = "00:05:00.0";
                 PumpLayout(window);
                 var content = (FrameworkElement)window.Content;
                 Rect Bounds(string name)
@@ -426,7 +431,9 @@ internal static class ShellLayoutTests
                 var bar = Bounds("PlaybackControlBar");
                 Require(title.Right <= menu.Left + .5 && menu.Right <= bar.Left + .5,
                     $"{width}×{height}@{scale:0.##}：標題、選單、播放列不可重疊；title={title}, menu={menu}, bar={bar}。");
-                Require(bar.Right <= content.ActualWidth + .5, $"{width}×{height}@{scale:0.##}：播放列不可超出視窗；bar={bar}, content={content.ActualWidth:0.0}。");
+                // 以外層捲動區的可視寬度為界（直向捲軸出現時不含捲軸）。
+                var viewport = ((ScrollViewer)window.FindName("ShellScrollViewer")!).ViewportWidth;
+                Require(bar.Right <= viewport + .5, $"{width}×{height}@{scale:0.##}：播放列不可超出可視寬度；bar={bar}, viewport={viewport:0.0}。");
             }
             finally
             {
@@ -434,7 +441,7 @@ internal static class ShellLayoutTests
                 SetInterfaceScale(previousScale);
             }
         }
-        Console.WriteLine("[通過] 標題列在 800 DIP 與 125% 介面縮放下不重疊、不超出");
+        Console.WriteLine("[通過] 標題列在 800 DIP（100%／125%）與 1280 DIP（125%）下不重疊、不超出");
     }
 
     private static void VerifyValidationBanner(string root)
@@ -527,5 +534,92 @@ internal static class ShellLayoutTests
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
         encoder.Save(stream);
+    }
+
+    // 原生驗收以按鈕文字分類點擊；標題列改為圖示鈕後必須改讀自動化名稱。
+    private static void VerifyAppBarInputClassification()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var bar = (Panel)window.FindName("PlaybackControlBar")!;
+            string Kind(string automationName)
+            {
+                var button = bar.Children.OfType<Button>().Single(item => AutomationProperties.GetName(item) == automationName);
+                var result = WpfTestWait.Invoke(window, "NativeAcceptanceClassifyInputSource", button)!;
+                return (string)result.GetType().GetField("Item1")!.GetValue(result)!;
+            }
+            Require(Kind("▶ 播放") is "play" or "resume", $"播放鈕應分類為 play，實際 {Kind("▶ 播放")}。");
+            Require(Kind("Ⅱ 暫停") == "pause", $"暫停鈕應分類為 pause，實際 {Kind("Ⅱ 暫停")}。");
+            Require(Kind("↺ 重設") == "reset", $"重設鈕應分類為 reset，實際 {Kind("↺ 重設")}。");
+            Require(Kind("建立模擬") == "otherClick", $"建立模擬應分類為 otherClick，實際 {Kind("建立模擬")}。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 標題列圖示鈕的原生驗收點擊分類沿用自動化名稱");
+    }
+
+    // 在抽屜內操作產生的驗證訊息（例如未選車站就按刪除）不得被抽屜蓋住。
+    private static void VerifyDrawerKeepsValidationVisible()
+    {
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            ((Button)window.FindName("QuickBuilderToggleButton")!).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            WpfTestWait.Invoke(window, "ShowValidation", (object)new[] { "請先選取要刪除的車站。" });
+            PumpLayout(window);
+            var content = (FrameworkElement)window.Content;
+            Rect Bounds(string name)
+            {
+                var element = (FrameworkElement)window.FindName(name)!;
+                return new Rect(element.TranslatePoint(new Point(0, 0), content), new Size(element.ActualWidth, element.ActualHeight));
+            }
+            var drawer = Bounds("QuickBuilderSidebar");
+            var message = Bounds("ValidationTextBlock");
+            Require(((FrameworkElement)window.FindName("QuickBuilderSidebar")!).IsVisible, "抽屜應保持開啟。");
+            Require(!drawer.IntersectsWith(message), $"抽屜開啟時驗證訊息不得被抽屜蓋住；drawer={drawer}, message={message}。");
+            Require(drawer.Height >= 300, $"抽屜仍需保有可操作高度，實際 {drawer.Height:0.0}。");
+            WpfTestWait.Invoke(window, "HideValidation");
+            PumpLayout(window);
+            Require(Bounds("QuickBuilderSidebar").Top < drawer.Top, "關閉警告後抽屜應回到頁首下緣。");
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 抽屜從頁首下緣開始，驗證訊息不被抽屜蓋住");
+    }
+
+    // 儲存格選取模式（例如停站模式矩陣）必須看得出選了哪一格，鍵盤焦點格要有框。
+    private static void VerifyDataGridCellSelectionVisible()
+    {
+        var grid = new DataGrid { SelectionUnit = DataGridSelectionUnit.Cell, Width = 300, Height = 120,
+            ItemsSource = new[] { new { A = "1", B = "2" }, new { A = "3", B = "4" } } };
+        grid.Columns.Add(new DataGridTextColumn { Header = "A", Binding = new System.Windows.Data.Binding("A") });
+        grid.Columns.Add(new DataGridTextColumn { Header = "B", Binding = new System.Windows.Data.Binding("B") });
+        var window = new Window { Width = 400, Height = 240, Content = grid };
+        try
+        {
+            window.Show();
+            window.Activate();
+            PumpLayout(window);
+            var row = (DataGridRow)grid.ItemContainerGenerator.ContainerFromIndex(0);
+            var presenter = FindDescendant<DataGridCellsPresenter>(row)!;
+            var cell = (DataGridCell)presenter.ItemContainerGenerator.ContainerFromIndex(1);
+            cell.IsSelected = true;
+            cell.Focus();
+            PumpLayout(window);
+            Require(ReferenceEquals(cell.Background, UiTheme.NavSelectedBrush),
+                $"選取的儲存格必須以 NavSelected 底色標示，實際 {cell.Background}。");
+            Require(cell.IsKeyboardFocusWithin && ReferenceEquals(cell.BorderBrush, UiTheme.AccentBrush) && cell.BorderThickness.Left >= 1,
+                $"鍵盤焦點所在的儲存格必須有 Accent 框；focus={cell.IsKeyboardFocusWithin}, border={cell.BorderBrush}, thickness={cell.BorderThickness}。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 儲存格選取模式的 DataGrid 標示選取格與焦點格");
     }
 }

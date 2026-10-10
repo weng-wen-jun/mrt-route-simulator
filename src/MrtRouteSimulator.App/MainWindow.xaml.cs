@@ -443,12 +443,12 @@ public partial class MainWindow : Window
         catch (SimulationValidationException exception)
         {
             ShowValidation(exception.Errors);
-            StatusTextBlock.Text = "資料驗證未通過；請依左側訊息修正。";
+            StatusTextBlock.Text = "資料驗證未通過；請依上方訊息修正。";
         }
         catch (InvalidOperationException exception)
         {
             ShowValidation([exception.Message]);
-            StatusTextBlock.Text = "資料驗證未通過；請依左側訊息修正。";
+            StatusTextBlock.Text = "資料驗證未通過；請依上方訊息修正。";
         }
         catch (Exception exception)
         {

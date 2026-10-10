@@ -104,7 +104,7 @@
         <Setter Property="Width" Value="32" />
         <Setter Property="Height" Value="28" />
         <Setter Property="Padding" Value="0" />
-        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Margin" Value="0,0,2,0" />
     </Style>
 
     <Style x:Key="AppBarPrimaryButton" TargetType="Button" BasedOn="{StaticResource AppBarButton}">
@@ -368,7 +368,7 @@
     </Style>
 
     <ControlTemplate x:Key="MenuTopLevelHeader" TargetType="MenuItem">
-        <Border x:Name="Chrome" CornerRadius="6" Padding="10,5" Background="Transparent">
+        <Border x:Name="Chrome" CornerRadius="6" Padding="8,5" Background="Transparent">
             <Grid>
                 <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
                 <Popup x:Name="PART_Popup" Placement="Bottom" VerticalOffset="6" AllowsTransparency="True" Focusable="False"
@@ -394,7 +394,7 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="MenuTopLevelItem" TargetType="MenuItem">
-        <Border x:Name="Chrome" CornerRadius="6" Padding="10,5" Background="Transparent">
+        <Border x:Name="Chrome" CornerRadius="6" Padding="8,5" Background="Transparent">
             <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
         </Border>
         <ControlTemplate.Triggers>
@@ -610,14 +610,19 @@
         </Style.Triggers>
     </Style>
 
+    <!-- 選取格用 NavSelected 底（整列選取時與列同色；儲存格選取模式如停站模式矩陣才看得出選了哪格），
+         鍵盤焦點所在的格以 Accent 細框標示。 -->
     <Style TargetType="DataGridCell">
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="FocusVisualStyle" Value="{x:Null}" />
         <Style.Triggers>
             <Trigger Property="IsSelected" Value="True">
-                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Background" Value="{x:Static app:UiTheme.NavSelectedBrush}" />
                 <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
-                <Setter Property="BorderBrush" Value="Transparent" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                <Setter Property="BorderBrush" Value="{x:Static app:UiTheme.AccentBrush}" />
             </Trigger>
         </Style.Triggers>
     </Style>

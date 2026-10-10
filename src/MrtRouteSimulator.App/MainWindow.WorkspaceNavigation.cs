@@ -61,6 +61,19 @@ public partial class MainWindow
     {
         QuickBuilderSidebar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         UpdateQuickBuilderWidth();
+        UpdateQuickBuilderDrawerTop();
+    }
+
+    private void PageHeaderPanel_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateQuickBuilderDrawerTop();
+
+    // 抽屜從頁首（KPI 細條與驗證橫幅）下緣開始：在抽屜內操作產生的驗證訊息才不會被抽屜蓋住。
+    private void UpdateQuickBuilderDrawerTop()
+    {
+        if (QuickBuilderSidebar?.Parent is not UIElement body || PageHeaderPanel is null || !PageHeaderPanel.IsVisible) return;
+        var headerBottom = PageHeaderPanel.TranslatePoint(new Point(0, PageHeaderPanel.ActualHeight), body).Y;
+        if (!double.IsFinite(headerBottom)) return;
+        var margin = new Thickness(NavRailWidth, Math.Max(0, headerBottom + 8), 0, 0);
+        if (QuickBuilderSidebar.Margin != margin) QuickBuilderSidebar.Margin = margin;
     }
 
     private void QuickBuilderToggle_Click(object sender, RoutedEventArgs e)

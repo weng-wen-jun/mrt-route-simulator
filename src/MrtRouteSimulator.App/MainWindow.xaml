@@ -19,7 +19,7 @@
         </Grid.RowDefinitions>
 
         <Border x:Name="AppBar" Grid.Row="0" Background="{x:Static app:UiTheme.AppBarBrush}">
-            <Grid Margin="14,0,10,0">
+            <Grid Margin="12,0,8,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -34,7 +34,7 @@
                                TextTrimming="CharacterEllipsis" AutomationProperties.Name="目前存檔" />
                     <TextBlock x:Name="VersionSummaryText" Visibility="Collapsed" />
                 </StackPanel>
-                <Menu x:Name="MainMenu" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0"
+                <Menu x:Name="MainMenu" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0"
                       KeyboardNavigation.TabNavigation="Continue" AutomationProperties.Name="主選單">
                     <MenuItem Header="_檔案" AutomationProperties.Name="檔案選單">
                         <MenuItem Header="存檔" Click="SaveProject_Click" AutomationProperties.Name="儲存模擬專案" />
@@ -104,7 +104,7 @@
                     <Button x:Name="ObstacleStopButton" Style="{StaticResource AppBarButton}" Content="&#xE7BA;" Click="ObstacleStop_Click"
                             IsEnabled="False" ToolTip="障礙物急停" AutomationProperties.Name="⚠ 障礙物急停"
                             Foreground="{x:Static app:UiTheme.RailDownSoftBrush}" />
-                    <ComboBox x:Name="PlaybackSpeedComboBox" Width="70" Height="28" MinHeight="28" Margin="4,0,8,0" SelectedIndex="2"
+                    <ComboBox x:Name="PlaybackSpeedComboBox" Width="70" Height="28" MinHeight="28" Margin="2,0,6,0" SelectedIndex="2"
                               SelectionChanged="PlaybackSpeed_SelectionChanged" ToolTip="播放倍率" AutomationProperties.Name="播放倍率">
                         <ComboBoxItem Content="1×" Tag="1" />
                         <ComboBoxItem Content="10×" Tag="10" />
@@ -113,7 +113,7 @@
                     </ComboBox>
                     <TextBlock x:Name="SimulationClockText" Text="--:--:--" Foreground="{x:Static app:UiTheme.TimeAccentBrush}"
                                FontFamily="{StaticResource MonoFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"
-                               MinWidth="72" TextAlignment="Right" AutomationProperties.Name="模擬時鐘" />
+                               MinWidth="86" TextAlignment="Right" AutomationProperties.Name="模擬時鐘" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -287,7 +287,7 @@
                     </StackPanel>
                 </app:ShellTabControl.NavFooter>
                 <app:ShellTabControl.PageHeader>
-                    <StackPanel>
+                    <StackPanel x:Name="PageHeaderPanel" SizeChanged="PageHeaderPanel_SizeChanged">
                         <Expander x:Name="RouteSummaryExpander" Style="{StaticResource KpiStripExpander}" Header="路線摘要（可收合）" IsExpanded="True">
                             <ScrollViewer x:Name="RouteSummaryScrollViewer" MaxHeight="100"
                                           VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Hidden">
