@@ -80,7 +80,14 @@ internal static class Program
             if (args.Contains("--mcp-only"))
             {
                 McpBridgeTests.Run(GetRoot(args));
+                McpProjectSwitchExportTests.Run(GetRoot(args));
                 Console.WriteLine("PASS WPF MCP bridge");
+                return 0;
+            }
+            if (args.Contains("--mcp-switch-export-only"))
+            {
+                McpProjectSwitchExportTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF MCP project switch export");
                 return 0;
             }
             if (args.Contains("--native-retention-only"))
@@ -258,6 +265,7 @@ internal static class Program
                 return 0;
             }
             McpBridgeTests.Run(GetRoot(args));
+            McpProjectSwitchExportTests.Run(GetRoot(args));
             RunValidationWarningTests();
             SynchronousDiagramExportTests.Run(GetRoot(args));
             PdfPaginationRegressionTests.Run(GetRoot(args));

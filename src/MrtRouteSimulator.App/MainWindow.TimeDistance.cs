@@ -496,11 +496,10 @@ public partial class MainWindow
             viewportWidth = DiagramScrollViewer?.ActualWidth ?? double.NaN;
         }
 
-        if (!IsFiniteLayoutDimension(viewportWidth))
-        {
-            viewportWidth = TimeDistanceCanvas?.ActualWidth ?? double.NaN;
-        }
-
+        // Never fall back to the canvas's own ActualWidth: it is the previous
+        // result of this method, so zoom would compound on every redraw while
+        // the viewport is unmeasured (e.g. an unshown window) and leak one
+        // project's/export's width into the next export.
         if (!IsFiniteLayoutDimension(viewportWidth))
         {
             viewportWidth = TimeDistanceCanvas?.MinWidth ?? 760;

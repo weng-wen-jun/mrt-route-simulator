@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -126,12 +127,36 @@ internal static class McpBridgeTests
 
     private static void RunTransportRecovery()
     {
-        var server = new DesktopBridgeServer((request, _) => Task.FromResult<object>(
-            request.Command == "oversize" ? new string('x', DesktopBridge.MaximumMessageBytes)
-                : new { ok = true }));
+        var server = new DesktopBridgeServer((request, _) => request.Command switch
+        {
+            "oversize" => Task.FromResult<object>(new string('x', DesktopBridge.MaximumMessageBytes)),
+            "fail" => throw new InvalidOperationException("外層失敗", new ArgumentException("內層細節")),
+            _ => Task.FromResult<object>(new { ok = true })
+        });
         try
         {
             var args = JsonSerializer.SerializeToElement(new { });
+            var log = new StringWriter();
+            var listener = new TextWriterTraceListener(log);
+            Trace.Listeners.Add(listener);
+            try
+            {
+                var failed = Task.Run(() => DesktopBridge.CallAsync(Environment.ProcessId,
+                    new DesktopRequest("fail", args), CancellationToken.None));
+                string? clientError = null;
+                try { WpfTestWait.Wait(failed); }
+                catch (InvalidOperationException exception) { clientError = exception.Message; }
+                listener.Flush();
+                var logged = log.ToString();
+                Require(clientError == "外層失敗", "client 仍只收到例外訊息。實際：" + clientError);
+                Require(logged.Contains("command 'fail'", StringComparison.Ordinal)
+                    && logged.Contains(typeof(InvalidOperationException).FullName!, StringComparison.Ordinal)
+                    && logged.Contains("內層細節", StringComparison.Ordinal)
+                    && logged.Contains(nameof(RunTransportRecovery), StringComparison.Ordinal),
+                    "橋接失敗須記錄命令、例外型別、內層例外與堆疊。實際：" + logged);
+            }
+            finally { Trace.Listeners.Remove(listener); }
+
             var oversized = Task.Run(() => DesktopBridge.CallAsync(Environment.ProcessId,
                 new DesktopRequest("oversize", args), CancellationToken.None));
             var rejected = false;
@@ -154,7 +179,7 @@ internal static class McpBridgeTests
                 new DesktopRequest("status", args), CancellationToken.None));
             WpfTestWait.Wait(recovered);
             Require(recovered.Result.GetProperty("ok").GetBoolean(), "錯誤後橋接仍須可供下一次呼叫。");
-            Console.WriteLine("[通過] MCP transport：超大回應與無效 framing 後可繼續服務");
+            Console.WriteLine("[通過] MCP transport：失敗記錄完整例外，超大回應與無效 framing 後可繼續服務");
         }
         finally { WpfTestWait.Wait(server.DisposeAsync().AsTask()); }
     }
