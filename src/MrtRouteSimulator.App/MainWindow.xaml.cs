@@ -982,49 +982,25 @@ public partial class MainWindow : Window
 
         if (_cycle is null || _parameters is null)
         {
-            AddCanvasText(SpeedCanvas, "建立模擬後顯示速度－時間曲線。", 22, 24, 12, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(SpeedCanvas, "建立模擬後顯示速度－時間曲線。");
             return;
         }
 
-        var left = 42d;
-        var right = 16d;
-        var top = 16d;
-        var bottom = 32d;
-        var plotWidth = width - left - right;
-        var plotHeight = height - top - bottom;
+        var area = new ChartPainter.ChartArea(42, 26, width - 42 - 16, height - 26 - 32);
         var totalTime = _cycle.OutboundTrip.TotalRunTimeSeconds;
-        var maxSpeed = _parameters.MaxSpeedMetersPerSecond * 1.08;
-
-        for (var index = 0; index <= 4; index++)
-        {
-            var y = top + plotHeight * index / 4;
-            SpeedCanvas.Children.Add(new Line
-            {
-                X1 = left,
-                X2 = left + plotWidth,
-                Y1 = y,
-                Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(226, 230, 237)),
-                StrokeThickness = 1
-            });
-        }
-
-        SpeedCanvas.Children.Add(new Line { X1 = left, X2 = left, Y1 = top, Y2 = top + plotHeight, Stroke = Brushes.SlateGray, StrokeThickness = 1.2 });
-        SpeedCanvas.Children.Add(new Line { X1 = left, X2 = left + plotWidth, Y1 = top + plotHeight, Y2 = top + plotHeight, Stroke = Brushes.SlateGray, StrokeThickness = 1.2 });
-        AddCanvasText(SpeedCanvas, "km/h", 3, 2, 10, Color.FromRgb(102, 112, 133));
-        AddCanvasText(SpeedCanvas, "時間", width - 42, height - 22, 10, Color.FromRgb(102, 112, 133));
-
-        var polyline = new Polyline
-        {
-            Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
-            StrokeThickness = 2.5,
-            StrokeLineJoin = PenLineJoin.Round
-        };
+        var vehicleBrush = UiTheme.VehicleBrush(0);
+        ChartPainter.DrawHeader(SpeedCanvas, "V1 理論速度",
+            [new ChartLegendItem("理論速度", vehicleBrush, ChartLegendMarker.Line)], area.Left, 4);
+        var maxSpeed = ChartPainter.DrawValueAxis(SpeedCanvas, area, _parameters.MaxSpeedMetersPerSecond * 3.6 * 1.08, "km/h");
+        ChartPainter.DrawTimeAxis(SpeedCanvas, area, Enumerable.Range(0, 5)
+            .Select(index => (area.Left + area.Width * index / 4, $"{totalTime * index / 4:0} s"))
+            .ToArray());
+        var polyline = ChartPainter.CreateSeries(vehicleBrush, 2.4);
 
         void AddPoint(double time, double speed)
         {
-            var x = left + Math.Clamp(time / totalTime, 0, 1) * plotWidth;
-            var y = top + plotHeight - Math.Clamp(speed / maxSpeed, 0, 1) * plotHeight;
+            var x = area.Left + Math.Clamp(time / totalTime, 0, 1) * area.Width;
+            var y = area.Bottom - Math.Clamp(speed * 3.6 / maxSpeed, 0, 1) * area.Height;
             polyline.Points.Add(new Point(x, y));
         }
 

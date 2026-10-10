@@ -19,6 +19,8 @@ internal static class ChartThemeTests
         VerifyNiceTicks();
         VerifyPainterElements();
         VerifyHeaderFitsNarrowCanvas();
+        VerifyV2Charts(root);
+        VerifyV1Charts();
         VerifyNoHardCodedChartColors(root);
         Console.WriteLine("PASS WPF chart theme");
     }
@@ -187,7 +189,9 @@ internal static class ChartThemeTests
     private static readonly (string File, string[] Methods)[] ChartSources =
     [
         ("ChartTheme.cs", []),
-        ("ChartPainter.cs", [])
+        ("ChartPainter.cs", []),
+        ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks"]),
+        ("MainWindow.xaml.cs", ["DrawSpeedProfile"])
     ];
 
     private static readonly Regex HardCodedColor = new(
@@ -231,6 +235,88 @@ internal static class ChartThemeTests
             else if (source[index] == '}' && --depth == 0) return source[open..(index + 1)];
         }
         throw new InvalidOperationException($"{file} 的 {method} 大括號不成對。");
+    }
+
+    private static void VerifyV2Charts(string root)
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            ShellLayoutTests.LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+            window.Show();
+            WpfTestWait.WaitForPlannedTimeline(window);
+            ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
+            ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 2;
+            ShellLayoutTests.PumpLayout(window);
+            WpfTestWait.Invoke(window, "DrawV2SpeedProfile");
+            VerifySpeedChart(window, "計畫速度");
+            WpfTestWait.Advance(window, 600);
+            Require(WpfTestWait.LatestFrame(window).SafetyHistory.Count > 0, "範例 14 推進 600 秒後必須已有相鄰列車安全觀測。");
+            ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
+            ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 2;
+            ShellLayoutTests.PumpLayout(window);
+            WpfTestWait.Invoke(window, "DrawV2SpeedProfile");
+            VerifySpeedChart(window, "實際速度");
+        }
+        finally { WpfTestWait.Close(window); }
+    }
+
+    private static void VerifySpeedChart(MainWindow window, string seriesLabel)
+    {
+        var canvas = (Canvas)window.FindName("SpeedCanvas")!;
+        var vehicle = ((ComboBox)window.FindName("SpeedProfileRunComboBox")!).SelectedItem?.ToString();
+        Require(vehicle is not null && canvas.ActualWidth >= 100, "速度曲線必須已選定列車且畫布已配置。");
+        var parseIndex = typeof(MainWindow).GetMethod("ParseVehicleIndex", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var vehicleBrush = UiTheme.VehicleBrush((int)parseIndex.Invoke(null, [vehicle])!);
+        var lines = canvas.Children.OfType<Polyline>().ToArray();
+        Require(lines.Length == 2, $"速度曲線應只有速限與速度兩條線，實際 {lines.Length}。");
+        Require(ReferenceEquals(lines[1].Stroke, vehicleBrush) && lines[1].StrokeThickness == 2.4,
+            $"{vehicle} 的速度線必須使用該列車的車輛色、線寬 2.4。");
+        Require(ReferenceEquals(lines[0].Stroke, ChartTheme.LimitSeries) && ReferenceEquals(lines[0].StrokeDashArray, ChartTheme.LongDash),
+            "速限線必須為 LimitSeries 灰色虛線（5,3）。");
+        Require(lines.SelectMany(line => line.Points).All(point => point.Y >= 26 - 0.01),
+            "速度與速限線不得高於繪圖區頂端。");
+        var ticks = canvas.Children.OfType<TextBlock>().Where(text => Equals(text.Tag, ChartPainter.ValueTickTag)).ToArray();
+        Require(ticks.Length >= 3 && ticks[0].Text == "0" && canvas.Children.OfType<TextBlock>().Any(text => text.Text == "km/h"),
+            "速度曲線必須有從 0 開始的 km/h 數值刻度。");
+        Require(canvas.Children.OfType<TextBlock>().Count(text => Equals(text.Tag, ChartPainter.TimeTickTag)) == 5,
+            "速度曲線必須有五個時間刻度。");
+        var legend = canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, ChartPainter.LegendTag));
+        Require(legend.Children.OfType<TextBlock>().Select(text => text.Text).SequenceEqual([seriesLabel, "軌道速限"]),
+            $"速度曲線圖例應為「{seriesLabel}／軌道速限」。");
+        Require(ReferenceEquals(((Line)legend.Children[0]).Stroke, vehicleBrush), "圖例的速度線樣本必須與速度線同色。");
+        var title = canvas.Children.OfType<TextBlock>().SingleOrDefault(text => Equals(text.Tag, ChartPainter.TitleTag));
+        Require(title?.Text == $"{vehicle} 速度", $"速度曲線標題應為「{vehicle} 速度」，實際「{title?.Text}」。");
+        Require(canvas.Children.OfType<TextBlock>().Where(text => text.Tag is "SpeedLimitLabel" or "StopStationLabel")
+                .All(text => ReferenceEquals(text.Foreground, ChartTheme.AxisLabel) && ReferenceEquals(text.FontFamily, ChartTheme.Font)),
+            "速限與停站標籤必須用 AxisLabel 色與 App 字型。");
+        Console.WriteLine($"[通過] 速度曲線主題（{seriesLabel}：車輛色、刻度、圖例、標題）");
+    }
+
+    private static void VerifyV1Charts()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            BuildV1Simulation(window);
+            ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
+            var views = (TabControl)window.FindName("SimulationViewTabControl")!;
+            views.SelectedIndex = 2;
+            ShellLayoutTests.PumpLayout(window);
+            WpfTestWait.Invoke(window, "DrawSpeedProfile");
+            var speed = (Canvas)window.FindName("SpeedCanvas")!;
+            var line = speed.Children.OfType<Polyline>().Single();
+            Require(ReferenceEquals(line.Stroke, UiTheme.VehicleBrush(0)), "V1 速度線必須使用第一台車的車輛色。");
+            Require(line.Points.All(point => point.Y >= 26 - 0.01), "V1 速度線不得高於繪圖區頂端。");
+            Require(speed.Children.OfType<TextBlock>().Any(text => Equals(text.Tag, ChartPainter.ValueTickTag) && text.Text == "0")
+                    && speed.Children.OfType<TextBlock>().Count(text => Equals(text.Tag, ChartPainter.TimeTickTag)) == 5
+                    && speed.Children.OfType<StackPanel>().Any(panel => Equals(panel.Tag, ChartPainter.LegendTag)),
+                "V1 速度曲線必須有數值刻度、五個時間刻度與圖例。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] V1 速度曲線使用圖表主題");
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>

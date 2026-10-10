@@ -1556,10 +1556,9 @@ public partial class MainWindow
             SpeedProfileSourceText.Text = plannedArtifact is null
                 ? "計畫時間軸計算中…"
                 : selectedVehicleId is null ? "尚無列車" : $"{selectedVehicleId} · 尚無軌跡";
-            AddCanvasText(canvas, plannedArtifact is null
-                    ? "實際模擬可先播放；計畫速度圖完成後會自動顯示。"
-                    : "播放後顯示所選列車的上下行、停站及折返軌跡。",
-                16, 18, 12, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(canvas, plannedArtifact is null
+                ? "實際模擬可先播放；計畫速度圖完成後會自動顯示。"
+                : "播放後顯示所選列車的上下行、停站及折返軌跡。");
             return;
         }
 
@@ -1573,61 +1572,53 @@ public partial class MainWindow
         SpeedProfileSourceText.ToolTip = $"{selectedVehicleId} · 同一列車上下行及折返接續軌跡；"
             + (useActual ? "顯示截至目前的實際運行。" : "顯示計畫模擬時間範圍內的運行。");
 
-        var left = 42d;
-        var top = 26d;
-        var right = 15d;
-        var bottom = 62d;
-        var plotWidth = width - left - right;
-        var plotHeight = height - top - bottom;
+        // 下方 62 DIP 留給時間刻度與兩列停站標籤。
+        var area = new ChartPainter.ChartArea(42, 26, width - 42 - 15, height - 26 - 62);
         var minTime = samples[0].SimulationTimeSeconds;
         var maxTime = Math.Max(minTime + 1, samples[^1].SimulationTimeSeconds);
-        var maxSpeed = Math.Max(_parameters.MaxSpeedMetersPerSecond,
-            samples.Max(sample => Math.Max(sample.SpeedMetersPerSecond, GetDisplaySpeedLimitMetersPerSecond(sample)))) * 3.6 * 1.1;
-        DrawAxes(canvas, left, top, plotWidth, plotHeight, "km/h", string.Empty);
-        DrawSpeedTimeAxisTicks(canvas, left, top, plotWidth, plotHeight, minTime, maxTime);
+        var vehicleBrush = UiTheme.VehicleBrush(ParseVehicleIndex(selectedVehicleId!));
+        ChartPainter.DrawHeader(canvas, $"{selectedVehicleId} 速度",
+        [
+            new ChartLegendItem(useActual ? "實際速度" : "計畫速度", vehicleBrush, ChartLegendMarker.Line),
+            new ChartLegendItem("軌道速限", ChartTheme.LimitSeries, ChartLegendMarker.Dash)
+        ], area.Left, 4);
+        var maxSpeed = ChartPainter.DrawValueAxis(canvas, area, Math.Max(_parameters.MaxSpeedMetersPerSecond,
+            samples.Max(sample => Math.Max(sample.SpeedMetersPerSecond, GetDisplaySpeedLimitMetersPerSecond(sample)))) * 3.6 * 1.1,
+            "km/h");
+        DrawSpeedTimeAxisTicks(canvas, area, minTime, maxTime);
 
-        var speedLine = new Polyline
-        {
-            Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
-            StrokeThickness = 2.4
-        };
-        var limitLine = new Polyline
-        {
-            Stroke = new SolidColorBrush(Color.FromRgb(205, 126, 24)),
-            StrokeThickness = 1.4,
-            StrokeDashArray = [4, 3]
-        };
+        var speedLine = ChartPainter.CreateSeries(vehicleBrush, 2.4);
+        var limitLine = ChartPainter.CreateSeries(ChartTheme.LimitSeries, 1.4, ChartTheme.LongDash);
         var displaySamples = TrajectoryAnalysis.DecimatePreservingCriticalPoints(samples, 450);
         foreach (var sample in displaySamples)
         {
-            var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
-            var y = top + plotHeight - sample.SpeedMetersPerSecond * 3.6 / maxSpeed * plotHeight;
-            speedLine.Points.Add(new Point(x, y));
+            var x = area.Left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * area.Width;
+            speedLine.Points.Add(new Point(x, area.Bottom - sample.SpeedMetersPerSecond * 3.6 / maxSpeed * area.Height));
             var limit = GetDisplaySpeedLimitMetersPerSecond(sample) * 3.6;
-            limitLine.Points.Add(new Point(x, top + plotHeight - limit / maxSpeed * plotHeight));
+            limitLine.Points.Add(new Point(x, area.Bottom - limit / maxSpeed * area.Height));
         }
 
         canvas.Children.Add(limitLine);
         canvas.Children.Add(speedLine);
-        DrawSpeedLimitLabels(canvas, displaySamples, left, top, plotWidth, plotHeight, minTime, maxTime, maxSpeed);
-        DrawSpeedStopLabels(canvas, displaySamples, left, top + plotHeight, plotWidth, minTime, maxTime);
+        DrawSpeedLimitLabels(canvas, displaySamples, area.Left, area.Top, area.Width, area.Height, minTime, maxTime, maxSpeed);
+        DrawSpeedStopLabels(canvas, displaySamples, area.Left, area.Bottom, area.Width, minTime, maxTime);
         var previousDirection = samples[0].Direction;
         var directionChangeIndex = 0;
         foreach (var sample in samples.Skip(1))
         {
             if (sample.Direction == previousDirection) continue;
             previousDirection = sample.Direction;
-            var x = left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
+            var x = area.Left + (sample.SimulationTimeSeconds - minTime) / (maxTime - minTime) * area.Width;
             canvas.Children.Add(new Line
             {
-                X1 = x, X2 = x, Y1 = top + 16, Y2 = top + plotHeight,
-                Stroke = Brushes.SlateGray, StrokeDashArray = [2, 3],
+                X1 = x, X2 = x, Y1 = area.Top + 16, Y2 = area.Bottom,
+                Stroke = ChartTheme.Annotation, StrokeDashArray = ChartTheme.ShortDot,
                 ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + sample.SimulationTimeSeconds)} 換向為{DirectionToChinese(sample.Direction)} · {sample.ServiceRunId}"
             });
-            AddCanvasText(canvas, $"轉{DirectionToChinese(sample.Direction)}", Math.Clamp(x + 3, left, left + plotWidth - 45),
-                top + 18 + directionChangeIndex++ % 2 * 15, 10, Color.FromRgb(85, 94, 112));
+            ChartPainter.Place(canvas, ChartPainter.CreateLabel($"轉{DirectionToChinese(sample.Direction)}", ChartTheme.Annotation),
+                Math.Clamp(x + 3, area.Left, Math.Max(area.Left, area.Right - 45)),
+                area.Top + 18 + directionChangeIndex++ % 2 * 15);
         }
-        AddCanvasText(canvas, useActual ? "— 實際速度　- - 軌道速限" : "— 計畫速度　- - 軌道速限", left + 8, top - 22, 10, Color.FromRgb(85, 94, 112));
     }
 
     private void DrawSpeedLimitLabels(
@@ -1654,8 +1645,9 @@ public partial class MainWindow
             {
                 Text = $"{limit:0.#}",
                 FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(153, 92, 12)),
-                Background = new SolidColorBrush(Color.FromArgb(225, 250, 251, 253)),
+                FontFamily = ChartTheme.Font,
+                Foreground = ChartTheme.AxisLabel,
+                Background = ChartTheme.Background,
                 ToolTip = $"軌道速限 {limit:0.#} km/h",
                 Tag = "SpeedLimitLabel"
             };
@@ -1703,14 +1695,15 @@ public partial class MainWindow
             canvas.Children.Add(new Line
             {
                 X1 = x, X2 = x, Y1 = axisY - 5, Y2 = axisY + 4,
-                Stroke = Brushes.SteelBlue, StrokeThickness = 1,
+                Stroke = ChartTheme.AxisLabel, StrokeThickness = 1,
                 ToolTip = tooltip
             });
             var label = new TextBlock
             {
                 Text = first.CurrentStationId,
                 FontSize = 9,
-                Foreground = Brushes.SteelBlue,
+                FontFamily = ChartTheme.Font,
+                Foreground = ChartTheme.AxisLabel,
                 ToolTip = tooltip,
                 Tag = "StopStationLabel"
             };
@@ -1723,38 +1716,18 @@ public partial class MainWindow
         }
     }
 
-    private void DrawSpeedTimeAxisTicks(
-        Canvas canvas,
-        double left,
-        double top,
-        double width,
-        double height,
-        double minTime,
-        double maxTime)
+    // 速度曲線與距離圖共用：四等分時間刻度，以時鐘時間標示。
+    private void DrawSpeedTimeAxisTicks(Canvas canvas, ChartPainter.ChartArea area, double minTime, double maxTime)
     {
         const int tickCount = 4;
+        var ticks = new List<(double X, string Label)>(tickCount + 1);
         for (var index = 0; index <= tickCount; index++)
         {
             var ratio = index / (double)tickCount;
-            var x = left + ratio * width;
-            var time = minTime + ratio * (maxTime - minTime);
-            canvas.Children.Add(new Line
-            {
-                X1 = x,
-                X2 = x,
-                Y1 = top + height,
-                Y2 = top + height + 4,
-                Stroke = Brushes.SlateGray,
-                StrokeThickness = 1
-            });
-            AddCanvasText(
-                canvas,
-                TrajectoryAnalysis.FormatClock(_startClockSeconds + time),
-                Math.Clamp(x - 24, left - 2, left + width - 48),
-                top + height + 5,
-                9,
-                Color.FromRgb(102, 112, 133));
+            ticks.Add((area.Left + ratio * area.Width,
+                TrajectoryAnalysis.FormatClock(_startClockSeconds + minTime + ratio * (maxTime - minTime))));
         }
+        ChartPainter.DrawTimeAxis(canvas, area, ticks);
     }
 
     private static double? GetMinimumPlannedIntervalSeconds(ResolvedDispatchPlan dispatchPlan)
