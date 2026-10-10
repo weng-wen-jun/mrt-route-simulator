@@ -192,8 +192,10 @@ internal static class ChartThemeTests
         ("ChartTheme.cs", []),
         ("ChartPainter.cs", []),
         ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks",
-            "DrawSafetyDistanceChart", "AddSafetyMarginChip"]),
-        ("MainWindow.xaml.cs", ["DrawSpeedProfile"])
+            "DrawSafetyDistanceChart", "AddSafetyMarginChip", "DrawTimeDistanceDiagramFull"]),
+        ("MainWindow.xaml.cs", ["DrawSpeedProfile"]),
+        ("MainWindow.TimeDistance.cs", []),
+        ("TimeDistanceStationLabelLayout.cs", [])
     ];
 
     private static readonly Regex HardCodedColor = new(
@@ -260,6 +262,7 @@ internal static class ChartThemeTests
             WpfTestWait.Invoke(window, "DrawV2SpeedProfile");
             VerifySpeedChart(window, "實際速度");
             VerifySafetyChart(window);
+            VerifyTimeDistanceCharts(window);
         }
         finally { WpfTestWait.Close(window); }
     }
@@ -371,6 +374,64 @@ internal static class ChartThemeTests
                 && ReferenceEquals(label.Foreground, dot.Fill),
             $"最低裕度標籤「{label.Text}」的色點與文字必須依狀態「{status}」取 StatusTones 色。");
         Console.WriteLine("[通過] 相鄰列車距離圖主題、刻度與最低裕度色點");
+    }
+
+    private static void VerifyTimeDistanceCharts(MainWindow window)
+    {
+        ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("DiagramTabItem");
+        ShellLayoutTests.PumpLayout(window);
+        var canvas = (Canvas)window.FindName("TimeDistanceCanvas")!;
+        var showEvents = (CheckBox)window.FindName("ShowEventsCheckBox")!;
+        try
+        {
+            foreach (var renderer in new[] { "DrawInteractiveTimeDistanceDiagram", "DrawTimeDistanceDiagramFull" })
+            {
+                foreach (var events in new[] { true, false })
+                {
+                    showEvents.IsChecked = events;
+                    WpfTestWait.Invoke(window, renderer);
+                    var context = $"{renderer}（事件點{(events ? "開" : "關")}）";
+                    var title = canvas.Children.OfType<TextBlock>().Single(text => Equals(text.Tag, ChartPainter.TitleTag));
+                    Require(title.Text.Contains("計畫／理論與 V2 模擬實際運行圖", StringComparison.Ordinal)
+                            && ReferenceEquals(title.Foreground, ChartTheme.Title) && title.FontSize == 13 && Canvas.GetTop(title) == 8,
+                        $"{context} 標題必須沿用原文字、圖表標題樣式、位於第 8 DIP。");
+                    var legend = canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, ChartPainter.LegendTag));
+                    string[] expected = events ? ["V2 實際", "計畫／理論", "站點事件", "端點事件", "安全事件"] : ["V2 實際", "計畫／理論"];
+                    var legendTexts = legend.Children.OfType<TextBlock>().Select(text => text.Text).ToArray();
+                    Require(legendTexts.Take(expected.Length).SequenceEqual(expected)
+                            && legendTexts.Skip(expected.Length).All(text => text.StartsWith('（')),
+                        $"{context} 圖例應為 {string.Join("／", expected)}，實際 {string.Join("／", legendTexts)}。");
+                    var markers = canvas.Children.OfType<Ellipse>().Where(marker => marker.Visibility == Visibility.Visible).ToArray();
+                    Require(events ? markers.Length > 0 : markers.Length == 0, $"{context} 事件點顯示必須跟隨勾選。");
+                    Require(markers.All(marker => ReferenceEquals(marker.Stroke, ChartTheme.MarkerOutline)
+                            && (ReferenceEquals(marker.Fill, ChartTheme.EventStation) || ReferenceEquals(marker.Fill, ChartTheme.EventTerminal)
+                                || ReferenceEquals(marker.Fill, ChartTheme.EventSafety))),
+                        $"{context} 事件點必須用 ChartTheme 事件色與白色外框。");
+                    var stationLabels = canvas.Children.OfType<TextBlock>().Where(text => text.Tag is TimeDistanceStationLabelTag).ToArray();
+                    Require(stationLabels.Length > 0 && stationLabels.All(text => ReferenceEquals(text.FontFamily, ChartTheme.Font)
+                            && ((SolidColorBrush)text.Foreground).Color == ChartTheme.AxisLabel.Color),
+                        $"{context} 車站標籤必須用 App 字型與 AxisLabel 色。");
+                    var gridLines = canvas.Children.OfType<Line>().Where(line => Math.Abs(line.Y1 - line.Y2) < .01 && line.X2 > line.X1 + 100
+                        && !ReferenceEquals(line.Stroke, ChartTheme.Axis)).ToArray();
+                    Require(gridLines.Length > 0 && gridLines.All(line => ReferenceEquals(line.Stroke, ChartTheme.Grid)),
+                        $"{context} 車站格線必須用 Grid 畫筆。");
+                    var series = canvas.Children.OfType<Polyline>().Where(line => line.Points.Count > 0).ToArray();
+                    Require(series.Length > 0 && series.All(line => UiTheme.VehicleBrushes.Any(brush => ReferenceEquals(brush, line.Stroke))),
+                        $"{context} 列車線必須使用車輛色盤的共用畫筆。");
+                }
+            }
+
+            typeof(MainWindow).GetField("_diagramLayoutKey", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, null);
+            WpfTestWait.Invoke(window, "DrawInteractiveTimeDistanceDiagram");
+            var axis = (Canvas)window.FindName("DiagramTimeAxisCanvas")!;
+            Require(axis.Children.OfType<Line>().Any() && axis.Children.OfType<Line>().All(line => ReferenceEquals(line.Stroke, ChartTheme.Axis)),
+                "固定時間軸的軸線與刻度短線必須用 Axis 畫筆。");
+            Require(axis.Children.OfType<TextBlock>().All(text => ReferenceEquals(text.Foreground, ChartTheme.AxisLabel)
+                    && ReferenceEquals(text.FontFamily, ChartTheme.Font)),
+                "固定時間軸文字必須用 AxisLabel 色與 App 字型。");
+        }
+        finally { showEvents.IsChecked = true; }
+        Console.WriteLine("[通過] 運行圖兩條繪製路徑的標題、圖例、事件點、格線與標籤主題一致");
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>

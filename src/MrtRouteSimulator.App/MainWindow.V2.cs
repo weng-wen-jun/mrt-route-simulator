@@ -1879,7 +1879,7 @@ public partial class MainWindow
         var height = double.IsFinite(measuredHeight) ? Math.Max(380, measuredHeight) : 380;
         if ((_route is null && _activeTopologyProjectDocument is null) || _latestPlaybackFrame is null)
         {
-            AddCanvasText(TimeDistanceCanvas, "建立並播放 V2 模擬後顯示時間－里程運行圖。", 22, 22, 13, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(TimeDistanceCanvas, "建立並播放 V2 模擬後顯示時間－里程運行圖。");
             return;
         }
 
@@ -1898,7 +1898,7 @@ public partial class MainWindow
             : [];
         if (actual.Count == 0 && planned.Count == 0)
         {
-            AddCanvasText(TimeDistanceCanvas, "播放後即時建立運行圖；空圖不會啟動零列車模擬引擎。", 22, 22, 13, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(TimeDistanceCanvas, "播放後即時建立運行圖；空圖不會啟動零列車模擬引擎。");
             return;
         }
 
@@ -1933,22 +1933,18 @@ public partial class MainWindow
         var staticStarted = System.Diagnostics.Stopwatch.GetTimestamp();
         double ToDiagramY(double position) => top + plotHeight
             - (position - minimumPosition) / positionSpan * plotHeight;
-        DrawAxes(
+        ChartPainter.DrawAxes(
             TimeDistanceCanvas,
-            left,
-            top,
-            plotWidth,
-            plotHeight,
+            new ChartPainter.ChartArea(left, top, plotWidth, plotHeight),
             tailTrackLayouts.Count == 0 ? "累積里程" : "累積里程（含尾軌）",
             "時間");
-        AddCanvasText(
+        ChartPainter.DrawTitle(
             TimeDistanceCanvas,
             $"{displayRouteName}｜計畫／理論與 V2 模擬實際運行圖｜{UiDisplayText.Enum(_latestPlaybackFrame.MovingBlockMode)}｜"
                 + $"{(_activeTopologyProjectDocument is null ? $"速限 {_latestPlaybackFrame.SpeedLimits.Limits.Count} 段" : "拓撲軌道區段速限")}｜固定時間步進 0.1 秒",
             left,
-            8,
-            14,
-            Color.FromRgb(34, 43, 60));
+            8);
+        ChartPainter.DrawLegend(TimeDistanceCanvas, left, 28, GetDiagramLegendItems(ShowEventsCheckBox?.IsChecked != false));
 
         foreach (var station in displayStations)
         {
@@ -1959,8 +1955,8 @@ public partial class MainWindow
                 X2 = left + plotWidth,
                 Y1 = y,
                 Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(222, 227, 235)),
-                StrokeThickness = 1
+                Stroke = ChartTheme.Grid,
+                StrokeThickness = ChartTheme.GridThickness
             });
         }
 
@@ -1973,9 +1969,9 @@ public partial class MainWindow
                 X2 = left + plotWidth,
                 Y1 = y,
                 Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(188, 92, 52)),
-                StrokeThickness = 1,
-                StrokeDashArray = [4, 3]
+                Stroke = ChartTheme.TailTrack,
+                StrokeThickness = ChartTheme.GridThickness,
+                StrokeDashArray = ChartTheme.TailDash
             });
         }
 
@@ -1983,12 +1979,12 @@ public partial class MainWindow
                 station.StationId,
                 $"{station.StationId}  {station.PositionMeters / 1000:0.00} km",
                 ToDiagramY(station.PositionMeters),
-                Color.FromRgb(82, 93, 111)))
+                ChartTheme.AxisLabel.Color))
             .Concat(tailTrackLayouts.Select(tail => new TimeDistanceStationLabelSpec(
                 tail.Layout.VirtualNodeId,
                 $"{tail.Layout.VirtualNodeId}  {tail.Layout.VirtualNodePositionMeters / 1000:0.00} km",
                 ToDiagramY(tail.Layout.VirtualNodePositionMeters),
-                Color.FromRgb(188, 92, 52),
+                ChartTheme.TailTrack.Color,
                 IsTail: true)))
             .ToArray();
         foreach (var placement in TimeDistanceStationLabelLayout.Arrange(
@@ -2010,8 +2006,8 @@ public partial class MainWindow
                 X2 = x,
                 Y1 = top,
                 Y2 = top + plotHeight,
-                Stroke = new SolidColorBrush(Color.FromRgb(232, 235, 241)),
-                StrokeThickness = 1
+                Stroke = ChartTheme.Grid,
+                StrokeThickness = ChartTheme.GridThickness
             });
             AddDiagramTimeTickLabel(TimeDistanceCanvas, time, x, previousTickX,
                 startTime + visibleDuration, top + plotHeight + 8);
@@ -2065,17 +2061,12 @@ public partial class MainWindow
                 or SimulationEventType.TailTrackReturnStarted
                 or SimulationEventType.DirectionChanged
                 or SimulationEventType.ServiceEnded;
-            var markerColor = isSafetyEvent
-                ? Color.FromRgb(196, 48, 48)
-                : isTerminalEvent
-                    ? Color.FromRgb(126, 87, 194)
-                    : Color.FromRgb(22, 134, 107);
             var marker = new Ellipse
             {
                 Width = 8,
                 Height = 8,
-                Fill = new SolidColorBrush(markerColor),
-                Stroke = Brushes.White,
+                Fill = isSafetyEvent ? ChartTheme.EventSafety : isTerminalEvent ? ChartTheme.EventTerminal : ChartTheme.EventStation,
+                Stroke = ChartTheme.MarkerOutline,
                 StrokeThickness = 1,
                 ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + simulationEvent.SimulationTimeSeconds)}"
                     + $"｜{EventTypeToChinese(simulationEvent.EventType)}\n{simulationEvent.Message}"
@@ -2086,13 +2077,6 @@ public partial class MainWindow
         }
 
         _playbackDiagnostics.RecordTiming("TimeDistanceFull.EventVisuals", System.Diagnostics.Stopwatch.GetElapsedTime(eventsStarted).TotalMilliseconds);
-        AddCanvasText(
-            TimeDistanceCanvas,
-            GetDiagramLegend(ShowEventsCheckBox?.IsChecked != false),
-            left,
-            28,
-            10,
-            Color.FromRgb(82, 93, 111));
 
         void DrawSeries(IReadOnlyList<TrajectorySample> source, bool isPlanned)
         {
@@ -2112,12 +2096,12 @@ public partial class MainWindow
             foreach (var group in groups)
             {
                 var selectedVehicle = vehicleFilter is not null and not "全部";
-                var index = ParseVehicleIndex(group.Key.VehicleId);
+                var brush = UiTheme.VehicleBrush(ParseVehicleIndex(group.Key.VehicleId));
                 var line = new Polyline
                 {
-                    Stroke = new SolidColorBrush(TrainColors[index % TrainColors.Length]),
+                    Stroke = brush,
                     StrokeThickness = selectedVehicle ? 3.1 : isPlanned ? 1.4 : 2.2,
-                    StrokeDashArray = isPlanned ? [6, 4] : null,
+                    StrokeDashArray = isPlanned ? ChartTheme.PlannedDash : null,
                     Opacity = selectedVehicle || vehicleFilter is null or "全部" ? (isPlanned ? 0.55 : 0.95) : 0.22,
                     ToolTip = $"{group.Key.VehicleId}｜{group.Key.ServiceRunId}｜{DirectionToChinese(group.Key.Direction)}"
                 };
@@ -2136,13 +2120,11 @@ public partial class MainWindow
                 if (points.Count > 0)
                 {
                     var first = points[0];
-                    AddCanvasText(
+                    ChartPainter.Place(
                         TimeDistanceCanvas,
-                        ShortVehicle(first.VehicleId),
+                        ChartPainter.CreateLabel(ShortVehicle(first.VehicleId), brush, 9),
                         left + (first.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth + 3,
-                        ToDiagramY(first.PositionMeters) - 15,
-                        9,
-                        TrainColors[index % TrainColors.Length]);
+                        ToDiagramY(first.PositionMeters) - 15);
                 }
                 _playbackDiagnostics.RecordTiming("TimeDistanceFull.SeriesVisuals", System.Diagnostics.Stopwatch.GetElapsedTime(visualsStarted).TotalMilliseconds);
             }
@@ -2549,35 +2531,4 @@ public partial class MainWindow
         SimulationEventType.ServiceEnded => "退出營運",
         _ => "其他事件"
     };
-
-    private static void DrawAxes(
-        Canvas canvas,
-        double left,
-        double top,
-        double width,
-        double height,
-        string verticalLabel,
-        string horizontalLabel)
-    {
-        canvas.Children.Add(new Line
-        {
-            X1 = left,
-            X2 = left,
-            Y1 = top,
-            Y2 = top + height,
-            Stroke = Brushes.SlateGray,
-            StrokeThickness = 1.1
-        });
-        canvas.Children.Add(new Line
-        {
-            X1 = left,
-            X2 = left + width,
-            Y1 = top + height,
-            Y2 = top + height,
-            Stroke = Brushes.SlateGray,
-            StrokeThickness = 1.1
-        });
-        AddCanvasText(canvas, verticalLabel, 3, 2, 10, Color.FromRgb(102, 112, 133));
-        AddCanvasText(canvas, horizontalLabel, left + width - 48, top + height + 12, 10, Color.FromRgb(102, 112, 133));
-    }
 }
