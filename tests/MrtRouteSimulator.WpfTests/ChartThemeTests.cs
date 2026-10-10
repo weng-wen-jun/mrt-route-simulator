@@ -16,6 +16,10 @@ internal static class ChartThemeTests
     public static void Run(string root)
     {
         VerifyThemeTokens();
+        VerifyNiceTicks();
+        VerifyPainterElements();
+        VerifyHeaderFitsNarrowCanvas();
+        VerifyNoHardCodedChartColors(root);
         Console.WriteLine("PASS WPF chart theme");
     }
 
@@ -68,6 +72,165 @@ internal static class ChartThemeTests
                 && ChartTheme.TimeTickFontSize == 9 && ChartTheme.TitleFontSize == 13 && ChartTheme.LegendFontSize == 11
                 && ChartTheme.MessageFontSize == 12, "圖表線寬與字級常數不符規格。");
         Console.WriteLine("[通過] ChartTheme 色票直接引用 UiTheme 且凍結");
+    }
+
+    private static void VerifyNiceTicks()
+    {
+        void Expect(double max, double[] expected)
+        {
+            var actual = ChartPainter.NiceTicks(max);
+            Require(actual.Length == expected.Length && actual.Zip(expected).All(pair => Math.Abs(pair.First - pair.Second) < 1e-9),
+                $"NiceTicks({max}) 應為 {string.Join("/", expected)}，實際 {string.Join("/", actual)}。");
+        }
+        Expect(80.1, [0, 20, 40, 60, 80, 100]);
+        Expect(1767.7, [0, 500, 1000, 1500, 2000]);
+        Expect(100, [0, 20, 40, 60, 80, 100]);
+        Expect(50, [0, 10, 20, 30, 40, 50]);
+        Expect(0.3, [0, 0.1, 0.2, 0.3]);
+        foreach (var invalid in new[] { 0d, -5d, double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+            Expect(invalid, [0, 1]);
+        var huge = ChartPainter.NiceTicks(double.MaxValue);
+        Require(huge.All(double.IsFinite) && huge[^1] >= double.MaxValue * 0.999, "極大值的刻度不得溢位成無限大。");
+        Console.WriteLine("[通過] ChartPainter 取整刻度（含 0、負值、NaN、無限大與極大值防護）");
+    }
+
+    private static void VerifyPainterElements()
+    {
+        var canvas = new Canvas { Width = 600, Height = 300 };
+        var area = new ChartPainter.ChartArea(42, 26, 540, 200);
+        var top = ChartPainter.DrawValueAxis(canvas, area, 80.1, "km/h");
+        Require(top == 100, $"DrawValueAxis 應回傳刻度最大值 100，實際 {top}。");
+        var grid = canvas.Children.OfType<Line>().Where(line => Equals(line.Tag, ChartPainter.GridTag)).ToArray();
+        Require(grid.Length == 5 && grid.All(line => ReferenceEquals(line.Stroke, ChartTheme.Grid) && line.StrokeThickness == 1)
+                && Math.Abs(grid.Min(line => line.Y1) - area.Top) < 1e-9,
+            "80.1 的數值軸應有 5 條格線（0 以外），最上面一條在繪圖區頂端，且用 Grid 畫筆。");
+        var ticks = canvas.Children.OfType<TextBlock>().Where(text => Equals(text.Tag, ChartPainter.ValueTickTag)).ToArray();
+        Require(ticks.Select(text => text.Text).SequenceEqual(["0", "20", "40", "60", "80", "100"])
+                && ticks.All(text => ReferenceEquals(text.Foreground, ChartTheme.AxisLabel) && text.FontSize == 10
+                    && Canvas.GetLeft(text) + text.DesiredSize.Width <= area.Left),
+            "數值刻度文字應為 0～100、AxisLabel 色、10 px，且位於 Y 軸左側。");
+        var axes = canvas.Children.OfType<Line>().Where(line => ReferenceEquals(line.Stroke, ChartTheme.Axis)).ToArray();
+        Require(axes.Length == 2 && axes.All(line => line.StrokeThickness == 1.2), "兩條軸線必須用 Axis 畫筆、線寬 1.2。");
+        Require(canvas.Children.OfType<TextBlock>().Any(text => text.Text == "km/h" && ReferenceEquals(text.Foreground, ChartTheme.AxisLabel)),
+            "單位文字必須用 AxisLabel 色。");
+
+        ChartPainter.DrawTimeAxis(canvas, area, [(42d, "06:00:00"), (582d, "07:00:00")]);
+        var timeLabels = canvas.Children.OfType<TextBlock>().Where(text => Equals(text.Tag, ChartPainter.TimeTickTag)).ToArray();
+        Require(timeLabels.Length == 2 && timeLabels.All(text => text.FontSize == 9 && ReferenceEquals(text.Foreground, ChartTheme.AxisLabel)
+                    && Canvas.GetLeft(text) >= area.Left - 2 && Canvas.GetLeft(text) + text.DesiredSize.Width <= area.Right + 0.01
+                    && Math.Abs(Canvas.GetTop(text) - (area.Bottom + 5)) < 1e-9),
+            "時間刻度文字必須 9 px、AxisLabel 色，置中於刻度但不超出繪圖區左右界。");
+
+        var legend = ChartPainter.DrawLegend(canvas, 50, 4,
+        [
+            new ChartLegendItem("實線", ChartTheme.PrimarySeries, ChartLegendMarker.Line),
+            new ChartLegendItem("虛線", ChartTheme.ThresholdSeries, ChartLegendMarker.Dash),
+            new ChartLegendItem("點線", ChartTheme.DangerSeries, ChartLegendMarker.Dot),
+            new ChartLegendItem("色點", ChartTheme.EventStation, ChartLegendMarker.Point)
+        ]);
+        Require(Equals(legend.Tag, ChartPainter.LegendTag) && Canvas.GetLeft(legend) == 50 && Canvas.GetTop(legend) == 4
+                && legend.Orientation == Orientation.Horizontal, "圖例必須是 Tag=ChartLegend 的水平 StackPanel，放在指定位置。");
+        Require(legend.Children.OfType<TextBlock>().Select(text => text.Text).SequenceEqual(["實線", "虛線", "點線", "色點"])
+                && legend.Children.OfType<TextBlock>().All(text => text.FontSize == 11 && ReferenceEquals(text.Foreground, ChartTheme.LegendText)),
+            "圖例文字必須依序、11 px、LegendText 色。");
+        var markers = legend.Children.OfType<Shape>().ToArray();
+        Require(markers.Length == 4
+                && markers[0] is Line { StrokeDashArray: var solid } && (solid?.Count ?? 0) == 0
+                && markers[1] is Line { StrokeDashArray: { } dash } && dash.SequenceEqual(new double[] { 3, 2 })
+                && markers[2] is Line { StrokeDashArray: { } dot } && dot.SequenceEqual(new double[] { 1, 1.5 })
+                && markers[3] is Ellipse { Fill: var pointFill, Stroke: var pointStroke }
+                && ReferenceEquals(pointFill, ChartTheme.EventStation) && ReferenceEquals(pointStroke, ChartTheme.MarkerOutline)
+                && ReferenceEquals(markers[0].Stroke, ChartTheme.PrimarySeries),
+            "圖例樣本必須依線型為實線／虛線／點線／白框色點，顏色與項目一致。");
+
+        var title = ChartPainter.DrawTitle(canvas, "測試標題", 42, 4);
+        Require(Equals(title.Tag, ChartPainter.TitleTag) && title.FontSize == 13 && title.FontWeight == FontWeights.SemiBold
+                && ReferenceEquals(title.Foreground, ChartTheme.Title), "標題必須 13 px 半粗體、Title 色、Tag=ChartTitle。");
+        var messageCanvas = new Canvas();
+        ChartPainter.DrawMessage(messageCanvas, "尚無資料");
+        var message = messageCanvas.Children.OfType<TextBlock>().Single();
+        Require(messageCanvas.Children.Count == 1 && message.Text == "尚無資料" && message.FontSize == 12
+                && Equals(message.Tag, ChartPainter.MessageTag) && ReferenceEquals(message.Foreground, ChartTheme.Message)
+                && Canvas.GetLeft(message) == 18 && Canvas.GetTop(message) == 18,
+            "空白提示必須 12 px、Message 色、Tag=ChartMessage，放在 (18, 18)。");
+        var series = ChartPainter.CreateSeries(ChartTheme.DangerSeries, 1.8, ChartTheme.ShortDot);
+        Require(ReferenceEquals(series.Stroke, ChartTheme.DangerSeries) && series.StrokeThickness == 1.8
+                && ReferenceEquals(series.StrokeDashArray, ChartTheme.ShortDot), "CreateSeries 必須套用畫筆、線寬與線型。");
+        Require(canvas.Children.OfType<TextBlock>().Concat(legend.Children.OfType<TextBlock>())
+                .All(text => ReferenceEquals(text.FontFamily, ChartTheme.Font)), "所有圖表文字必須使用 App 字型。");
+        Console.WriteLine("[通過] ChartPainter 軸線、刻度、圖例、標題與空白提示樣式");
+    }
+
+    private static void VerifyHeaderFitsNarrowCanvas()
+    {
+        ChartLegendItem[] items =
+        [
+            new("實際淨距", ChartTheme.PrimarySeries, ChartLegendMarker.Line),
+            new("動態安全距離", ChartTheme.ThresholdSeries, ChartLegendMarker.Dash),
+            new("障礙物煞車需求", ChartTheme.DangerSeries, ChartLegendMarker.Dot)
+        ];
+        var wide = new Canvas { Width = 900, Height = 200 };
+        var (wideTitle, wideLegend) = ChartPainter.DrawHeader(wide, "FULL-O04 → FULL-O13", items, 52, 4);
+        Require(wideTitle is not null && Canvas.GetLeft(wideTitle) == 52
+                && Canvas.GetLeft(wideLegend) >= 52 + wideTitle.DesiredSize.Width + 16 - 0.01,
+            "寬畫布：標題在左、圖例接在標題右側。");
+        var narrow = new Canvas { Width = 420, Height = 200 };
+        var (narrowTitle, narrowLegend) = ChartPainter.DrawHeader(narrow, "FULL-O04 → FULL-O13", items, 52, 4);
+        Require(narrowTitle is null && !narrow.Children.OfType<TextBlock>().Any(text => Equals(text.Tag, ChartPainter.TitleTag)),
+            "窄畫布放不下標題＋圖例時必須省略標題。");
+        Require(Canvas.GetLeft(narrowLegend) == 52 && 52 + narrowLegend.DesiredSize.Width <= 420 - 4,
+            $"窄畫布的圖例必須完整留在畫布內（寬 {narrowLegend.DesiredSize.Width:0.0}）。");
+        Console.WriteLine("[通過] 標題列在窄畫布省略標題、保留完整圖例");
+    }
+
+    // 掃描範圍：方法清單為空表示整個檔案，否則只掃描列出的方法本體。後續 Task 逐步加入。
+    private static readonly (string File, string[] Methods)[] ChartSources =
+    [
+        ("ChartTheme.cs", []),
+        ("ChartPainter.cs", [])
+    ];
+
+    private static readonly Regex HardCodedColor = new(
+        @"\bColor\.From(Rgb|Argb)\b|\bBrushes\.(?!Transparent\b)[A-Z]\w*|\bColors\.(?!Transparent\b)[A-Z]\w*",
+        RegexOptions.Compiled);
+
+    private static void VerifyNoHardCodedChartColors(string root)
+    {
+        Require(HardCodedColor.IsMatch("Stroke = Brushes.SlateGray") && HardCodedColor.IsMatch("Color.FromRgb(1, 2, 3)")
+                && HardCodedColor.IsMatch("Color.FromArgb(1, 2, 3, 4)") && HardCodedColor.IsMatch("Colors.White")
+                && !HardCodedColor.IsMatch("Brushes.Transparent") && !HardCodedColor.IsMatch("UiTheme.VehicleBrushes[0]")
+                && !HardCodedColor.IsMatch("SystemColors.ControlBrush"), "寫死顏色掃描規則自我檢查失敗。");
+        var sample = "private void A()\n{\n    if (x) { y(); }\n}\nprivate void B() { z(); }";
+        var body = MethodBody(sample, "A", "sample");
+        Require(body.Contains("y();", StringComparison.Ordinal) && !body.Contains("z();", StringComparison.Ordinal),
+            "方法本體擷取自我檢查失敗。");
+
+        var findings = new List<string>();
+        foreach (var (file, methods) in ChartSources)
+        {
+            var source = File.ReadAllText(System.IO.Path.Combine(root, "src", "MrtRouteSimulator.App", file));
+            IEnumerable<(string Scope, string Text)> scopes = methods.Length == 0
+                ? [(file, source)]
+                : methods.Select(method => ($"{file} {method}", MethodBody(source, method, file)));
+            foreach (var (scope, text) in scopes)
+                findings.AddRange(HardCodedColor.Matches(text).Select(match => $"{scope}：{match.Value}"));
+        }
+        Require(findings.Count == 0, "圖表程式不得寫死顏色：" + string.Join("、", findings.Distinct()));
+        Console.WriteLine($"[通過] 圖表程式無寫死顏色（{ChartSources.Length} 個來源檔）");
+    }
+
+    private static string MethodBody(string source, string method, string file)
+    {
+        var match = Regex.Match(source, @"(private|internal|public)[^;{=]*?\b" + Regex.Escape(method) + @"\s*\(");
+        Require(match.Success, $"{file} 找不到方法 {method}。");
+        var open = source.IndexOf('{', match.Index);
+        var depth = 0;
+        for (var index = open; index < source.Length; index++)
+        {
+            if (source[index] == '{') depth++;
+            else if (source[index] == '}' && --depth == 0) return source[open..(index + 1)];
+        }
+        throw new InvalidOperationException($"{file} 的 {method} 大括號不成對。");
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>
