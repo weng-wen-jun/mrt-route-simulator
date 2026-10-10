@@ -16,7 +16,41 @@ internal static class ShellLayoutTests
 {
     public static void Run(string root)
     {
+        VerifyShellTokens();
         Console.WriteLine("PASS WPF shell layout");
+    }
+
+    private static readonly string[] ShellTokens =
+    [
+        "AppBar", "AppBarRaised", "AppBarText", "AppBarMuted", "WindowBackground", "Surface", "Border", "Accent",
+        "NavSelected", "NavHover", "Primary", "PrimaryHover", "TimeAccent", "Success", "WarningSurface",
+        "WarningBorder", "WarningText", "StatusBar", "TooltipBackground", "TableHeader", "GridLine"
+    ];
+
+    private static void VerifyShellTokens()
+    {
+        var theme = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.UiTheme")!;
+        Require(theme.IsPublic, "UiTheme 必須是 public，XAML 才能以 x:Static 引用。");
+        foreach (var token in ShellTokens)
+        {
+            var color = theme.GetField(token)?.GetValue(null);
+            var brush = theme.GetField(token + "Brush")?.GetValue(null) as SolidColorBrush;
+            Require(color is Color value && brush is not null && brush.IsFrozen && brush.Color == value,
+                $"UiTheme 缺少外殼色票 {token} 或其凍結畫筆。");
+        }
+        var legacy = new (string Key, string Token)[]
+        {
+            ("InkBrush", "TextStrong"), ("MutedBrush", "TextMuted"), ("PrimaryBrush", "Primary"),
+            ("PrimaryDarkBrush", "PrimaryHover"), ("SurfaceBrush", "Surface"), ("BackgroundBrush", "WindowBackground"),
+            ("BorderBrush", "Border"), ("SuccessBrush", "Success")
+        };
+        foreach (var (key, token) in legacy)
+        {
+            Require(Application.Current.TryFindResource(key) is SolidColorBrush brush
+                    && brush.Color == (Color)theme.GetField(token)!.GetValue(null)!,
+                $"App.xaml 的 {key} 必須取自 UiTheme.{token}。");
+        }
+        Console.WriteLine("[通過] UiTheme 外殼色票與相容資源鍵");
     }
 
     // 1280×800、100% 介面縮放、範例 10、模擬頁「配線圖」子分頁的 RouteScrollViewer 高度。
