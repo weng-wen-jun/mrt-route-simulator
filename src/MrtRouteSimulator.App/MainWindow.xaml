@@ -342,7 +342,7 @@
                                         SelectionChanged="SimulationViewTabControl_SelectionChanged"
                                         AutomationProperties.Name="模擬即時檢視">
                                 <TabItem Header="軌道配線與列車位置" app:ShellNav.ShortLabel="配線圖">
-                                    <Border Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
+                                    <Border Background="{x:Static app:UiTheme.CanvasBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="9" Padding="8">
                                         <Grid>
                                             <Grid.RowDefinitions>
                                                 <RowDefinition Height="Auto" />
@@ -385,36 +385,32 @@
                                 </TabItem>
                                 <TabItem Header="即時列車狀態" app:ShellNav.ShortLabel="列車狀態">
                                     <DataGrid x:Name="CurrentTrainDataGrid" Margin="0,6,0,0"
-                                              ItemsSource="{Binding CurrentTrainRows}" IsReadOnly="True" RowHeaderWidth="0">
+                                              ItemsSource="{Binding CurrentTrainRows}" IsReadOnly="True" RowHeaderWidth="0" app:ResultTable.Enabled="True">
                                         <DataGrid.Columns>
                                             <DataGridTextColumn Header="列車" Binding="{Binding TrainId}" Width="100" />
                                             <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="80" />
-                                            <DataGridTextColumn Header="狀態" Binding="{Binding State}" Width="110" />
-                                            <DataGridTextColumn Header="車體中心 km" Binding="{Binding PositionKm}" Width="120" />
-                                            <DataGridTextColumn Header="速度 km/h" Binding="{Binding SpeedKmh}" Width="110" />
+                                            <DataGridTextColumn Header="狀態" Binding="{Binding State}" Width="124" app:ResultTable.Kind="Status" />
+                                            <DataGridTextColumn Header="車體中心 km" Binding="{Binding PositionKm}" Width="120" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="速度 km/h" Binding="{Binding SpeedKmh}" Width="110" app:ResultTable.Kind="Numeric" />
                                             <DataGridTextColumn Header="下一站" Binding="{Binding NextStation}" Width="*" />
                                         </DataGrid.Columns>
                                     </DataGrid>
                                 </TabItem>
                                 <TabItem x:Name="SpeedProfileTabItem" Header="完整行程速度曲線" app:ShellNav.ShortLabel="速度曲線">
-                                    <Grid Margin="0,6,0,0">
+                                    <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto" />
                                             <RowDefinition Height="*" />
                                         </Grid.RowDefinitions>
-                                        <DockPanel LastChildFill="True" Margin="0,0,0,6">
-                                            <TextBlock Text="列車完整行程速度曲線" DockPanel.Dock="Left" Style="{StaticResource SectionTitle}"
-                                                       Margin="0,0,12,0" VerticalAlignment="Center" />
-                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                                <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽"
-                                                           Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                                                <ComboBox x:Name="SpeedProfileRunComboBox" Width="190"
-                                                          SelectionChanged="SpeedProfileRun_SelectionChanged"
-                                                          AutomationProperties.Name="完整行程列車" />
-                                            </StackPanel>
+                                        <DockPanel x:Name="SpeedProfileToolbar" Margin="0,0,0,6" LastChildFill="True">
+                                            <TextBlock Text="列車" DockPanel.Dock="Left" Style="{StaticResource FilterLabel}" />
+                                            <ComboBox x:Name="SpeedProfileRunComboBox" DockPanel.Dock="Left" Width="190"
+                                                      SelectionChanged="SpeedProfileRun_SelectionChanged"
+                                                      AutomationProperties.Name="完整行程列車" />
+                                            <TextBlock x:Name="SpeedProfileSourceText" Text="V2 實際／計畫預覽"
+                                                       Style="{StaticResource ResultPageDescription}" Margin="10,0,0,0" />
                                         </DockPanel>
-                                        <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}"
-                                                BorderThickness="1" CornerRadius="8" Padding="6">
+                                        <Border Grid.Row="1" Style="{StaticResource ChartCard}">
                                             <ScrollViewer x:Name="SpeedScrollViewer"
                                                           VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                                                           SizeChanged="SpeedScrollViewer_SizeChanged">
@@ -733,92 +729,116 @@
                     </TabItem>
 
                     <TabItem x:Name="DiagramTabItem" Header="列車運行圖／匯出" app:ShellNav.ShortLabel="運行圖" app:ShellNav.Icon="&#xE9D2;">
-                        <Grid x:Name="DiagramWorkspaceGrid" Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <Expander x:Name="DiagramControlsExpander"
-                                      Header="運行圖篩選、縮放與匯出（可收合）"
-                                      IsExpanded="True"
-                                      Expanded="DiagramLayoutExpander_Changed"
-                                      Collapsed="DiagramLayoutExpander_Changed"
-                                      Margin="0,0,0,8">
-                            <WrapPanel>
-                                <TextBlock Text="方向" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="DiagramDirectionComboBox" Width="108" SelectedIndex="0" SelectionChanged="DiagramFilter_Changed" ToolTip="選擇顯示上下行、僅下行或僅上行；計畫線、實際線與事件觸發點一起篩選，PNG／PDF 亦跟隨。" Margin="0,0,10,6">
-                                    <ComboBoxItem Content="上下行皆顯示" Tag="All" />
-                                    <ComboBoxItem Content="僅下行" Tag="Outbound" />
-                                    <ComboBoxItem Content="僅上行" Tag="Inbound" />
-                                </ComboBox>
-                                <TextBlock Text="車輛" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="DiagramVehicleComboBox" Width="125" SelectionChanged="DiagramFilter_Changed" Margin="0,0,10,6" />
-                                <CheckBox x:Name="ShowPlannedCheckBox" Content="計畫／理論" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <CheckBox x:Name="ShowActualCheckBox" Content="模擬實際" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <CheckBox x:Name="ShowEventsCheckBox" Content="顯示事件觸發點" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="顯示或隱藏運行圖的事件圓點；不影響列車軌跡、事件表及實際全量 CSV。" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <TextBlock Text="左右縮放" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <Slider x:Name="DiagramZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="上下縮放" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <Slider x:Name="DiagramVerticalZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" ToolTip="只調整里程軸高度，不改變時間軸寬度。" Margin="0,0,10,6" />
-                                <TextBlock Text="起始分鐘" VerticalAlignment="Center" Margin="0,0,4,6" />
-                                <TextBox x:Name="DiagramStartMinuteTextBox" Width="48" Text="0" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,0,7,6" />
-                                <TextBlock Text="結束分鐘" VerticalAlignment="Center" Margin="0,0,4,6" />
-                                <TextBox x:Name="DiagramEndMinuteTextBox" Width="55" Text="" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,0,10,6" />
-                                <TextBlock Text="時間刻度（分）" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="DiagramTimeTickComboBox" Width="80" IsEditable="True" SelectedIndex="0" ToolTip="選擇或輸入每格分鐘數，再按套用刻度。自動為六等分；可輸入1～1440分鐘，最多2000格，過密時保留原設定。" Margin="0,0,6,6">
-                                    <ComboBoxItem Content="自動" />
-                                    <ComboBoxItem Content="1" />
-                                    <ComboBoxItem Content="2" />
-                                    <ComboBoxItem Content="5" />
-                                    <ComboBoxItem Content="10" />
-                                    <ComboBoxItem Content="15" />
-                                    <ComboBoxItem Content="30" />
-                                    <ComboBoxItem Content="60" />
-                                </ComboBox>
-                                <Button Content="套用刻度" Style="{StaticResource SecondaryButton}" Click="DiagramTimeTicksApply_Click" Margin="0,0,10,6" />
-                                <CheckBox x:Name="DiagramShowEndTimeCheckBox" Content="顯示終點時間" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="在固定間隔刻度之外補上目前圖表右端時間；有設定結束分鐘時顯示該篩選終點，並非尚未完成模擬的實際完成時間。PNG／PDF亦跟隨。" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <CheckBox x:Name="HighResolutionCheckBox" Content="高解析 PNG" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <ComboBox x:Name="PdfPageSizeComboBox" Width="68" SelectedIndex="0" Margin="0,0,6,6">
-                                    <ComboBoxItem Content="A4" Tag="A4" />
-                                    <ComboBoxItem Content="A3" Tag="A3" />
-                                </ComboBox>
-                                <CheckBox x:Name="PdfSplitPagesCheckBox" Content="PDF 分頁" IsChecked="True" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <Button Content="匯出 PNG" Style="{StaticResource SecondaryButton}" Click="ExportPng_Click" Margin="0,0,6,6" />
-                                <Button Content="匯出 PDF" Style="{StaticResource SecondaryButton}" Click="ExportPdf_Click" Margin="0,0,6,6" />
-                                <Button Content="匯出實際全量 CSV" ToolTip="匯出全部 V2 實際軌跡；不受運行圖方向、車輛、時間範圍及計畫／實際勾選影響。" Style="{StaticResource SecondaryButton}" Click="ExportCsv_Click" Margin="0,0,6,6" />
-                            </WrapPanel>
-                            </Expander>
-                            <Border Grid.Row="1" x:Name="DiagramViewportBorder" MinHeight="344"
-                                    Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="32" />
-                                    </Grid.RowDefinitions>
-                                <ScrollViewer x:Name="DiagramScrollViewer" MinHeight="300" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
-                                              SizeChanged="DiagramScrollViewer_SizeChanged" ScrollChanged="DiagramScrollViewer_ScrollChanged">
-                                    <Canvas x:Name="TimeDistanceCanvas" MinWidth="760" MinHeight="380" SizeChanged="TimeDistanceCanvas_SizeChanged" AutomationProperties.Name="時間里程列車運行圖" />
-                                </ScrollViewer>
-                                    <Border x:Name="DiagramTimeAxisViewport" Grid.Row="1" Height="32" HorizontalAlignment="Left" ClipToBounds="True" Background="#FAFBFD">
-                                        <Canvas x:Name="DiagramTimeAxisCanvas" Height="32" AutomationProperties.Name="固定時間橫軸" IsHitTestVisible="False" />
+                        <app:ResultPage Title="列車運行圖／匯出">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="時間－里程運行圖；篩選同時套用到 PNG／PDF" Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <Grid x:Name="DiagramWorkspaceGrid">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Expander x:Name="DiagramControlsExpander"
+                                          Header="運行圖篩選、縮放與匯出（可收合）"
+                                          IsExpanded="True"
+                                          Expanded="DiagramLayoutExpander_Changed"
+                                          Collapsed="DiagramLayoutExpander_Changed"
+                                          Margin="0,0,0,8">
+                                    <Border Style="{StaticResource FilterCard}" Margin="0,4,0,0">
+                                        <StackPanel>
+                                            <DockPanel>
+                                                <TextBlock Text="篩選" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
+                                                <WrapPanel>
+                                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                                    <ComboBox x:Name="DiagramDirectionComboBox" Width="108" SelectedIndex="0" SelectionChanged="DiagramFilter_Changed" ToolTip="選擇顯示上下行、僅下行或僅上行；計畫線、實際線與事件觸發點一起篩選，PNG／PDF 亦跟隨。" Margin="0,3,12,3">
+                                                        <ComboBoxItem Content="上下行皆顯示" Tag="All" />
+                                                        <ComboBoxItem Content="僅下行" Tag="Outbound" />
+                                                        <ComboBoxItem Content="僅上行" Tag="Inbound" />
+                                                    </ComboBox>
+                                                    <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
+                                                    <ComboBox x:Name="DiagramVehicleComboBox" Width="125" SelectionChanged="DiagramFilter_Changed" Margin="0,3,12,3" />
+                                                    <CheckBox x:Name="ShowPlannedCheckBox" Content="計畫／理論" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <CheckBox x:Name="ShowActualCheckBox" Content="模擬實際" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <CheckBox x:Name="ShowEventsCheckBox" Content="顯示事件觸發點" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="顯示或隱藏運行圖的事件圓點；不影響列車軌跡、事件表及實際全量 CSV。" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                </WrapPanel>
+                                            </DockPanel>
+                                            <DockPanel Margin="0,2,0,0">
+                                                <TextBlock Text="檢視" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
+                                                <WrapPanel>
+                                                    <TextBlock Text="左右縮放" Style="{StaticResource FilterLabel}" />
+                                                    <Slider x:Name="DiagramZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <TextBlock Text="上下縮放" Style="{StaticResource FilterLabel}" />
+                                                    <Slider x:Name="DiagramVerticalZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" ToolTip="只調整里程軸高度，不改變時間軸寬度。" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <TextBlock Text="起始分鐘" Style="{StaticResource FilterLabel}" />
+                                                    <TextBox x:Name="DiagramStartMinuteTextBox" Width="48" Text="0" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,8,3" />
+                                                    <TextBlock Text="結束分鐘" Style="{StaticResource FilterLabel}" />
+                                                    <TextBox x:Name="DiagramEndMinuteTextBox" Width="55" Text="" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,12,3" />
+                                                    <TextBlock Text="時間刻度（分）" Style="{StaticResource FilterLabel}" />
+                                                    <ComboBox x:Name="DiagramTimeTickComboBox" Width="80" IsEditable="True" SelectedIndex="0" ToolTip="選擇或輸入每格分鐘數，再按套用刻度。自動為六等分；可輸入1～1440分鐘，最多2000格，過密時保留原設定。" Margin="0,3,6,3">
+                                                        <ComboBoxItem Content="自動" />
+                                                        <ComboBoxItem Content="1" />
+                                                        <ComboBoxItem Content="2" />
+                                                        <ComboBoxItem Content="5" />
+                                                        <ComboBoxItem Content="10" />
+                                                        <ComboBoxItem Content="15" />
+                                                        <ComboBoxItem Content="30" />
+                                                        <ComboBoxItem Content="60" />
+                                                    </ComboBox>
+                                                    <Button Content="套用刻度" Style="{StaticResource SecondaryButton}" Click="DiagramTimeTicksApply_Click" Margin="0,3,12,3" />
+                                                    <CheckBox x:Name="DiagramShowEndTimeCheckBox" Content="顯示終點時間" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="在固定間隔刻度之外補上目前圖表右端時間；有設定結束分鐘時顯示該篩選終點，並非尚未完成模擬的實際完成時間。PNG／PDF亦跟隨。" Margin="0,3,0,3" VerticalAlignment="Center" />
+                                                </WrapPanel>
+                                            </DockPanel>
+                                            <DockPanel Margin="0,2,0,0">
+                                                <TextBlock Text="匯出" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
+                                                <WrapPanel>
+                                                    <CheckBox x:Name="HighResolutionCheckBox" Content="高解析 PNG" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <TextBlock Text="PDF 紙張" Style="{StaticResource FilterLabel}" />
+                                                    <ComboBox x:Name="PdfPageSizeComboBox" Width="68" SelectedIndex="0" Margin="0,3,8,3">
+                                                        <ComboBoxItem Content="A4" Tag="A4" />
+                                                        <ComboBoxItem Content="A3" Tag="A3" />
+                                                    </ComboBox>
+                                                    <CheckBox x:Name="PdfSplitPagesCheckBox" Content="PDF 分頁" IsChecked="True" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    <Button Content="匯出 PNG" Style="{StaticResource SecondaryButton}" Click="ExportPng_Click" Margin="0,3,6,3" />
+                                                    <Button Content="匯出 PDF" Style="{StaticResource SecondaryButton}" Click="ExportPdf_Click" Margin="0,3,6,3" />
+                                                    <Button Content="匯出實際全量 CSV" ToolTip="匯出全部 V2 實際軌跡；不受運行圖方向、車輛、時間範圍及計畫／實際勾選影響。" Style="{StaticResource SecondaryButton}" Click="ExportCsv_Click" Margin="0,3,0,3" />
+                                                </WrapPanel>
+                                            </DockPanel>
+                                        </StackPanel>
                                     </Border>
-                                </Grid>
-                            </Border>
-                            <Expander Grid.Row="2" x:Name="DiagramEventsExpander" Header="事件列表（可收折）" IsExpanded="True"
-                                      Expanded="DiagramLayoutExpander_Changed" Collapsed="DiagramLayoutExpander_Changed"
-                                      Margin="0,8,0,0">
-                            <DataGrid x:Name="EventDataGrid" Height="140" ItemsSource="{Binding EventRows}" IsReadOnly="True" RowHeaderWidth="0" Margin="0,6,0,0">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="時間" Binding="{Binding Time}" Width="95" />
-                                    <DataGridTextColumn Header="事件" Binding="{Binding Type}" Width="110" />
-                                    <DataGridTextColumn Header="車輛／車次" Binding="{Binding Vehicle}" Width="130" />
-                                    <DataGridTextColumn Header="里程 km" Binding="{Binding PositionKm}" Width="80" />
-                                    <DataGridTextColumn Header="說明" Binding="{Binding Message}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            </Expander>
-                        </Grid>
+                                </Expander>
+                                <Border Grid.Row="1" x:Name="DiagramViewportBorder" MinHeight="344" Style="{StaticResource ChartCard}">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="32" />
+                                        </Grid.RowDefinitions>
+                                        <ScrollViewer x:Name="DiagramScrollViewer" MinHeight="300" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+                                                      SizeChanged="DiagramScrollViewer_SizeChanged" ScrollChanged="DiagramScrollViewer_ScrollChanged">
+                                            <Canvas x:Name="TimeDistanceCanvas" MinWidth="760" MinHeight="380" SizeChanged="TimeDistanceCanvas_SizeChanged" AutomationProperties.Name="時間里程列車運行圖" />
+                                        </ScrollViewer>
+                                        <Border x:Name="DiagramTimeAxisViewport" Grid.Row="1" Height="32" HorizontalAlignment="Left" ClipToBounds="True"
+                                                Background="{x:Static app:UiTheme.CanvasBackgroundBrush}">
+                                            <Canvas x:Name="DiagramTimeAxisCanvas" Height="32" AutomationProperties.Name="固定時間橫軸" IsHitTestVisible="False" />
+                                        </Border>
+                                    </Grid>
+                                </Border>
+                                <Expander Grid.Row="2" x:Name="DiagramEventsExpander" Header="事件列表（可收折）" IsExpanded="True"
+                                          Expanded="DiagramLayoutExpander_Changed" Collapsed="DiagramLayoutExpander_Changed"
+                                          Margin="0,8,0,0">
+                                    <DataGrid x:Name="EventDataGrid" Height="140" ItemsSource="{Binding EventRows}" IsReadOnly="True" RowHeaderWidth="0" Margin="0,6,0,0"
+                                              app:ResultTable.Enabled="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="時間" Binding="{Binding Time}" Width="95" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="事件" Binding="{Binding Type}" Width="110" />
+                                            <DataGridTextColumn Header="車輛／車次" Binding="{Binding Vehicle}" Width="130" />
+                                            <DataGridTextColumn Header="里程 km" Binding="{Binding PositionKm}" Width="80" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="說明" Binding="{Binding Message}" Width="*" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Expander>
+                            </Grid>
+                        </app:ResultPage>
                     </TabItem>
                 </app:ShellTabControl>
         </Grid>

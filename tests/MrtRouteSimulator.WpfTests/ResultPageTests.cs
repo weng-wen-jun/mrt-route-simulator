@@ -19,6 +19,8 @@ internal static class ResultPageTests
         VerifyBasicPages();
         VerifySafetyAndStatisticsPages();
         VerifyCrowdedHeaders();
+        VerifyDiagramAndSimulationPages();
+        VerifyNoHardCodedColors(root);
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -373,5 +375,57 @@ internal static class ResultPageTests
             }
         }
         Console.WriteLine("[通過] 窄視窗與 125% 縮放下頁首動作區與篩選卡不重疊");
+    }
+
+    private static void VerifyDiagramAndSimulationPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var diagram = Page(window, "DiagramTabItem");
+            RequireIn(window, diagram.Content, "Content", "DiagramWorkspaceGrid", "DiagramControlsExpander",
+                "DiagramViewportBorder", "DiagramEventsExpander", "EventDataGrid");
+            var groups = new (string Name, string[] Controls, string[] Buttons)[]
+            {
+                ("篩選", ["DiagramDirectionComboBox", "DiagramVehicleComboBox", "ShowPlannedCheckBox", "ShowActualCheckBox", "ShowEventsCheckBox"], []),
+                ("檢視", ["DiagramZoomSlider", "DiagramVerticalZoomSlider", "DiagramStartMinuteTextBox", "DiagramEndMinuteTextBox",
+                    "DiagramTimeTickComboBox", "DiagramShowEndTimeCheckBox"], ["套用刻度"]),
+                ("匯出", ["HighResolutionCheckBox", "PdfPageSizeComboBox", "PdfSplitPagesCheckBox"], ["匯出 PNG", "匯出 PDF", "匯出實際全量 CSV"])
+            };
+            foreach (var (name, controls, buttons) in groups)
+            {
+                var row = FindLogical<DockPanel>(diagram.Content, panel => panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text == name);
+                Require(row is not null, $"運行圖控制面板缺少「{name}」列。");
+                RequireIn(window, row, name, controls);
+                foreach (var text in buttons)
+                    Require(FindLogical<Button>(row, button => Equals(button.Content, text)) is not null, $"「{text}」必須位於「{name}」列。");
+            }
+            Require(window.FindName("DiagramViewportBorder") is Border { Style: var viewportStyle }
+                    && ReferenceEquals(viewportStyle, Application.Current.FindResource("ChartCard")),
+                "運行圖外框必須使用 ChartCard。");
+            VerifyTableColumns(window, "EventDataGrid", ["時間", "里程 km"], []);
+
+            VerifyTableColumns(window, "CurrentTrainDataGrid", ["車體中心 km", "速度 km/h"], ["狀態"]);
+            var toolbar = (DockPanel)window.FindName("SpeedProfileToolbar")!;
+            Require(toolbar is not null && toolbar.Children.OfType<TextBlock>().First().Text == "列車"
+                    && toolbar.Children.Contains((UIElement)window.FindName("SpeedProfileRunComboBox")!)
+                    && toolbar.Children.Contains((UIElement)window.FindName("SpeedProfileSourceText")!),
+                "速度曲線子分頁必須以「列車」標籤＋下拉＋來源文字組成精簡工具列。");
+            var speedViewer = (FrameworkElement)window.FindName("SpeedScrollViewer")!;
+            Require(speedViewer.Parent is Border { Style: var speedStyle } && ReferenceEquals(speedStyle, Application.Current.FindResource("ChartCard")),
+                "速度曲線必須放在 ChartCard 內。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 運行圖頁三列控制面板、模擬子分頁工具列與表格規則");
+    }
+
+    private static void VerifyNoHardCodedColors(string root)
+    {
+        var xaml = File.ReadAllText(System.IO.Path.Combine(root, "src", "MrtRouteSimulator.App", "MainWindow.xaml"));
+        var colors = Regex.Matches(xaml, "\"#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?\"").Select(match => match.Value).Distinct().ToArray();
+        Require(colors.Length == 0, $"MainWindow.xaml 不得含寫死色碼：{string.Join("、", colors)}");
+        Console.WriteLine("[通過] MainWindow.xaml 無寫死色碼");
     }
 }
