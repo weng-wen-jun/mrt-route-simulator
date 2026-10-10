@@ -49,6 +49,7 @@ public static class UiTheme
     public static readonly Color TooltipBackground = Color.FromRgb(0x1E, 0x29, 0x3B);
     public static readonly Color TableHeader = Color.FromRgb(0xF8, 0xFA, 0xFC);
     public static readonly Color GridLine = Color.FromRgb(0xF1, 0xF5, 0xF9);
+    public static readonly Color Caution = Color.FromRgb(0xD9, 0xA4, 0x00);
 
     // 每台車一色，跨配線圖、運行圖與速度曲線共用；色相避開上下行軌道與危險紅。
     public static readonly Color[] VehiclePalette =
@@ -111,6 +112,7 @@ public static class UiTheme
     public static readonly SolidColorBrush TooltipBackgroundBrush = Frozen(TooltipBackground);
     public static readonly SolidColorBrush TableHeaderBrush = Frozen(TableHeader);
     public static readonly SolidColorBrush GridLineBrush = Frozen(GridLine);
+    public static readonly SolidColorBrush CautionBrush = Frozen(Caution);
 
     public static readonly SolidColorBrush[] VehicleBrushes = VehiclePalette.Select(Frozen).ToArray();
     public static readonly SolidColorBrush[] LockedRouteBrushes = LockedRoutePalette.Select(Frozen).ToArray();
