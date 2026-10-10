@@ -426,8 +426,8 @@ internal static class ChartThemeTests
         var status = label.Text[(label.Text.LastIndexOf('｜') + 1)..];
         Require(label.Text.StartsWith("最低裕度", StringComparison.Ordinal)
                 && ReferenceEquals(dot.Fill, StatusTones.Brush(StatusTones.Classify(status)))
-                && ReferenceEquals(label.Foreground, dot.Fill),
-            $"最低裕度標籤「{label.Text}」的色點與文字必須依狀態「{status}」取 StatusTones 色。");
+                && ReferenceEquals(label.Foreground, ChartTheme.Title),
+            $"最低裕度標籤「{label.Text}」的色點必須依狀態「{status}」取 StatusTones 色，文字用深色（Title）以便閱讀。");
         Console.WriteLine("[通過] 相鄰列車距離圖主題、刻度與最低裕度色點");
     }
 

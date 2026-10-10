@@ -1830,7 +1830,7 @@ public partial class MainWindow
         double ToY(double value) => area.Bottom - Math.Clamp(value / maxDistance, 0, 1) * area.Height;
     }
 
-    // 最低安全裕度色點標籤；顏色與閉塞表狀態色點相同（StatusTones）。
+    // 最低安全裕度標籤：色點與閉塞表狀態色點同色（StatusTones），文字用深色以免黃色小字難讀。
     private static void AddSafetyMarginChip(Canvas canvas, SafetyObservation minimum, ChartPainter.ChartArea area)
     {
         var brush = SafetyStatusBrush(minimum.Status);
@@ -1838,7 +1838,7 @@ public partial class MainWindow
         content.Children.Add(ChartPainter.CreateDot(brush));
         content.Children.Add(ChartPainter.CreateLabel(
             $"最低裕度 {minimum.SafetyMarginMeters:0.0} m @ {minimum.SimulationTimeSeconds:0.0} s｜{SafetyStatusToChinese(minimum.Status)}",
-            brush, ChartTheme.LegendFontSize));
+            ChartTheme.Title, ChartTheme.LegendFontSize));
         ChartPainter.Place(canvas, new Border
         {
             Child = content,
