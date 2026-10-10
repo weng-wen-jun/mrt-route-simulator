@@ -39,10 +39,10 @@ internal static class ResultPageTests
         ("加速", StatusTone.Active), ("巡航", StatusTone.Active), ("惰行", StatusTone.Active), ("煞車", StatusTone.Active),
         ("進站平順煞車", StatusTone.Active), ("到站", StatusTone.Active), ("駛入尾軌", StatusTone.Active),
         ("尾軌返回", StatusTone.Active), ("駛入折返線", StatusTone.Active), ("折返線返回", StatusTone.Active),
-        ("折返", StatusTone.Active),
+        ("折返", StatusTone.Active), ("減速", StatusTone.Active),
         ("待發", StatusTone.Neutral), ("—", StatusTone.Neutral), ("V1 理論基準", StatusTone.Neutral),
         ("V2 尚未抵達", StatusTone.Neutral), ("跨站不比較", StatusTone.Neutral), ("折返節點不適用 V1", StatusTone.Neutral),
-        ("退出營運", StatusTone.Neutral)
+        ("退出營運", StatusTone.Neutral), ("未知狀態", StatusTone.Neutral)
     ];
 
     private static void VerifyStatusTones(string root)
@@ -50,7 +50,7 @@ internal static class ResultPageTests
         foreach (var (status, tone) in ExpectedTones)
             Require(StatusTones.Classify(status) == tone, $"狀態「{status}」應為 {tone}，實際 {StatusTones.Classify(status)}。");
         Require(StatusTones.Classify(" 已抵達 ") == StatusTone.Success, "狀態文字前後空白不得影響分類。");
-        foreach (var unknown in new string?[] { null, "", "未知狀態", "全新狀態文字" })
+        foreach (var unknown in new string?[] { null, "", "全新狀態文字" })
             Require(StatusTones.Classify(unknown) == StatusTone.Neutral, $"無法辨識的狀態「{unknown}」應為 Neutral。");
         Require(StatusTones.KnownStatuses.Count == ExpectedTones.Length,
             $"對照表應恰有 {ExpectedTones.Length} 筆，實際 {StatusTones.KnownStatuses.Count}。");
@@ -66,6 +66,7 @@ internal static class ResultPageTests
         var v2 = Source("MrtRouteSimulator.App", "MainWindow.V2.cs");
         var produced = Literals(v2, @"PhaseToChinese\(OperationalPhase phase\) => phase switch")
             .Concat(Literals(v2, @"SafetyStatusToChinese\(SafetyStatus status\) => status switch"))
+            .Concat(Literals(Source("MrtRouteSimulator.App", "MainWindow.xaml.cs"), @"StateToChinese\(TrainMotionState state\) => state switch"))
             .Concat(Regex.Matches(Source("MrtRouteSimulator.App", "IncrementalV1V2Comparison.cs"), "const string \\w+Status = \"([^\"]+)\"")
                 .Select(item => item.Groups[1].Value))
             .Concat(["已抵達", "停站中", "已發車", "待發", "完成", "運行中", "V1 理論基準", "—"]);
@@ -345,7 +346,8 @@ internal static class ResultPageTests
         foreach (var (width, height, scale, tab) in new[]
                  {
                      (800d, 700d, 1d, "SafetyTabItem"), (800d, 700d, 1d, "IntervalStatisticsTabItem"),
-                     (1280d, 800d, 1.25d, "IntervalStatisticsTabItem"), (1280d, 800d, 1.25d, "SafetyTabItem")
+                     (1280d, 800d, 1.25d, "IntervalStatisticsTabItem"), (1280d, 800d, 1.25d, "SafetyTabItem"),
+                     (800d, 700d, 1.25d, "SafetyTabItem"), (800d, 700d, 1.25d, "IntervalStatisticsTabItem")
                  })
         {
             var previousScale = ShellLayoutTests.SetInterfaceScale(scale);
@@ -373,6 +375,9 @@ internal static class ResultPageTests
                     Require(!filters.IntersectsWith(filterActions) && filterActions.Right <= page.ActualWidth + .5,
                         $"{context}：篩選與右側群組不可重疊或超出；filters={filters}, group={filterActions}, page={page.ActualWidth:0.0}。");
                 }
+                // 外框不重疊還不夠：控制項本身也不可因寬度不足被版面裁切。
+                foreach (var (slot, slotName) in new[] { (page.Filters, "Filters"), (page.FilterActions, "FilterActions"), (page.Actions, "Actions") })
+                    RequireNotClipped(slot, $"{context} {slotName}");
             }
             finally
             {
@@ -466,5 +471,14 @@ internal static class ResultPageTests
         if (node is T match && predicate(match)) found.Add(match);
         foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
             CollectLogical(child, found, predicate);
+    }
+
+    private static void RequireNotClipped(object? slot, string context)
+    {
+        var elements = new List<FrameworkElement>();
+        CollectLogical(slot, elements, _ => true);
+        foreach (var element in elements.Where(item => item.IsVisible))
+            Require(LayoutInformation.GetLayoutClip(element) is null,
+                $"{context}：{element.GetType().Name} {element.Name} 寬度不足被版面裁切；actual={element.ActualWidth:0.0}, desired={element.DesiredSize.Width:0.0}。");
     }
 }

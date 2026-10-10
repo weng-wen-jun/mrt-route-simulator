@@ -760,6 +760,9 @@ internal static class ShellLayoutTests
             Require(ReferenceEquals(dot.Fill, UiTheme.PrimaryBrush)
                     && ((TextBlock)window.FindName("PlaybackStatusText")!).Text.Contains("測試用畫面更新失敗"),
                 "畫面更新失敗而停止時狀態圓點必須為橘色。");
+            WpfTestWait.Invoke(window, "RunSimulation_Click", play, new RoutedEventArgs());
+            WpfTestWait.Wait(Task.Delay(300));
+            Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "V1 重新建立模擬後狀態圓點必須離開錯誤狀態（灰色）。");
             WpfTestWait.Invoke(window, "ClearResults");
             Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "清除結果後狀態圓點必須回到灰色。");
         }

@@ -978,11 +978,16 @@
                             <ContentPresenter Content="{TemplateBinding Summary}" />
                         </DockPanel>
                         <Border x:Name="FilterCard" DockPanel.Dock="Top" Style="{StaticResource FilterCard}" Margin="0,0,0,8">
-                            <Grid>
+                            <!-- 寬度不足時 ResultPage 會把 FilterActionsHost 移到第二列（見 ResultPage.UpdateFilterActionsPlacement）。 -->
+                            <Grid x:Name="PART_FilterGrid">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <ContentPresenter Content="{TemplateBinding Filters}" VerticalAlignment="Center" />
                                 <Border x:Name="FilterActionsHost" Grid.Column="1" BorderBrush="{x:Static app:UiTheme.BorderBrush}"
                                         BorderThickness="1,0,0,0" Padding="10,0,0,0" Margin="10,0,0,0">

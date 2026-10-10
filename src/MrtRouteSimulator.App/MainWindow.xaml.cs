@@ -339,6 +339,8 @@ public partial class MainWindow : Window
     {
         NativeAcceptanceAbortForLifecycle("simulation-rebuilt");
         PausePlayback();
+        // 重新建立模擬即離開「因錯誤停止」狀態（V1 路徑不會經過 ClearResults）。
+        _playbackStoppedByError = false;
         HideValidation();
         // 已有 Schema 8 document 時，重新建立／播放必須直接使用同一份 topology；不可
         // 回讀已鎖定的線性暫存欄位後把 branch、facility 或 route traversal 壓回線性草稿。

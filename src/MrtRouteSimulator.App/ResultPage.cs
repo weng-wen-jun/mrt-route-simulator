@@ -75,6 +75,61 @@ public sealed class ResultPage : ContentControl
         }
     }
 
+    // 右側群組並排時，與篩選之間的間距：外距 10 ＋分隔線 1 ＋內距 10。
+    private const double SideBySideGap = 21;
+
+    private Grid? _filterGrid;
+    private Border? _filterActionsHost;
+    private double _filterActionsWidth = double.NaN;
+    private double _widestFilterWidth = double.NaN;
+
+    public override void OnApplyTemplate()
+    {
+        if (_filterGrid is not null) _filterGrid.SizeChanged -= OnFilterGridSizeChanged;
+        base.OnApplyTemplate();
+        _filterGrid = GetTemplateChild("PART_FilterGrid") as Grid;
+        _filterActionsHost = GetTemplateChild("FilterActionsHost") as Border;
+        if (_filterGrid is not null) _filterGrid.SizeChanged += OnFilterGridSizeChanged;
+    }
+
+    private void OnFilterGridSizeChanged(object sender, SizeChangedEventArgs e) => UpdateFilterActionsPlacement();
+
+    // 篩選卡放不下「最寬一組篩選＋右側群組」時，右側群組改排到篩選下方，避免控制項被版面裁切。
+    private void UpdateFilterActionsPlacement()
+    {
+        if (_filterGrid is null || _filterActionsHost is null || FilterActions is not FrameworkElement actions) return;
+        if (double.IsNaN(_filterActionsWidth)) MeasureNaturalWidths(actions);
+        var stacked = _filterGrid.ActualWidth < _filterActionsWidth + SideBySideGap + _widestFilterWidth;
+        if (stacked == (Grid.GetRow(_filterActionsHost) == 1)) return;
+        Grid.SetRow(_filterActionsHost, stacked ? 1 : 0);
+        Grid.SetColumn(_filterActionsHost, stacked ? 0 : 1);
+        Grid.SetColumnSpan(_filterActionsHost, stacked ? 2 : 1);
+        _filterActionsHost.BorderThickness = stacked ? new Thickness(0, 1, 0, 0) : new Thickness(1, 0, 0, 0);
+        _filterActionsHost.Padding = stacked ? new Thickness(0, 4, 0, 0) : new Thickness(10, 0, 0, 0);
+        _filterActionsHost.Margin = stacked ? new Thickness(0, 4, 0, 0) : new Thickness(10, 0, 0, 0);
+    }
+
+    // 只量一次自然寬度（內容在載入後不變）；量完讓原本的父層依實際寬度重新量測。
+    private void MeasureNaturalWidths(FrameworkElement actions)
+    {
+        _filterActionsWidth = NaturalWidth(actions);
+        _widestFilterWidth = Filters switch
+        {
+            Panel panel => panel.Children.OfType<UIElement>().Select(NaturalWidth).DefaultIfEmpty(0).Max(),
+            UIElement element => NaturalWidth(element),
+            _ => 0
+        };
+        (Filters as UIElement)?.InvalidateMeasure();
+        actions.InvalidateMeasure();
+        (System.Windows.Media.VisualTreeHelper.GetParent(actions) as UIElement)?.InvalidateMeasure();
+    }
+
+    private static double NaturalWidth(UIElement element)
+    {
+        element.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return element.DesiredSize.Width;
+    }
+
     private static DependencyProperty RegisterSlot(string name) => DependencyProperty.Register(
         name, typeof(object), typeof(ResultPage), new FrameworkPropertyMetadata(null, OnSlotChanged));
 

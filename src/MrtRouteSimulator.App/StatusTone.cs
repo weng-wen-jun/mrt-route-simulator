@@ -45,13 +45,15 @@ public static class StatusTones
         ["駛入折返線"] = StatusTone.Active,
         ["折返線返回"] = StatusTone.Active,
         ["折返"] = StatusTone.Active,
+        ["減速"] = StatusTone.Active,
         ["待發"] = StatusTone.Neutral,
         ["—"] = StatusTone.Neutral,
         ["V1 理論基準"] = StatusTone.Neutral,
         ["V2 尚未抵達"] = StatusTone.Neutral,
         ["跨站不比較"] = StatusTone.Neutral,
         ["折返節點不適用 V1"] = StatusTone.Neutral,
-        ["退出營運"] = StatusTone.Neutral
+        ["退出營運"] = StatusTone.Neutral,
+        ["未知狀態"] = StatusTone.Neutral
     };
 
     public static IReadOnlyDictionary<string, StatusTone> KnownStatuses => Map;
