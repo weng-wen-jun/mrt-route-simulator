@@ -430,127 +430,131 @@
                     </TabItem>
 
                     <TabItem x:Name="ResultsTabItem" Header="進出站時刻表" app:ShellNav.ShortLabel="時刻表" app:ShellNav.Icon="&#xE787;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="進出站時刻（V1 理論／V2 實際）" FontWeight="SemiBold" FontSize="16" />
-                                <TextBlock x:Name="TimetableSourceText" Text="　V1 顯示解析基準；V2 寫實引擎顯示派車計畫與實際事件" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <DataGrid Grid.Row="1" x:Name="TimetableDataGrid" ItemsSource="{Binding TimetableRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="2">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding TrainId}" Width="100" />
-                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
-                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="62" />
-                                    <DataGridTextColumn Header="服務類型" Binding="{Binding ServiceType}" Width="90" />
-                                    <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="115" />
-                                    <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="68" />
-                                    <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="120" />
-                                    <DataGridTextColumn Header="計畫到站" Binding="{Binding PlannedArrivalTime}" Width="95" />
-                                    <DataGridTextColumn Header="計畫出站" Binding="{Binding PlannedDepartureTime}" Width="95" />
-                                    <DataGridTextColumn Header="實際到站" Binding="{Binding ArrivalTime}" Width="95" />
-                                    <DataGridTextColumn Header="實際出站" Binding="{Binding DepartureTime}" Width="95" />
-                                    <DataGridTextColumn Header="停站" Binding="{Binding DwellTime}" Width="72" />
-                                    <DataGridTextColumn Header="延誤" Binding="{Binding Delay}" Width="72" />
-                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="82" />
-                                    <DataGridTextColumn Header="累積 km" Binding="{Binding PositionKm}" Width="82" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                        <app:ResultPage Title="進出站時刻表">
+                            <app:ResultPage.Description>
+                                <TextBlock x:Name="TimetableSourceText" Text="V1 顯示解析基準；V2 寫實引擎顯示派車計畫與實際事件"
+                                           Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <Border Style="{StaticResource ResultCard}">
+                                <DataGrid x:Name="TimetableDataGrid" ItemsSource="{Binding TimetableRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                          FrozenColumnCount="2" BorderThickness="0" app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="車輛 ID" Binding="{Binding TrainId}" Width="100" />
+                                        <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="62" />
+                                        <DataGridTextColumn Header="服務類型" Binding="{Binding ServiceType}" Width="90" />
+                                        <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="115" />
+                                        <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="68" />
+                                        <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="120" />
+                                        <DataGridTextColumn Header="計畫到站" Binding="{Binding PlannedArrivalTime}" Width="95" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="計畫出站" Binding="{Binding PlannedDepartureTime}" Width="95" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="實際到站" Binding="{Binding ArrivalTime}" Width="95" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="實際出站" Binding="{Binding DepartureTime}" Width="95" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="停站" Binding="{Binding DwellTime}" Width="72" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="延誤" Binding="{Binding Delay}" Width="72" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="96" app:ResultTable.Kind="Status" />
+                                        <DataGridTextColumn Header="累積 km" Binding="{Binding PositionKm}" Width="82" app:ResultTable.Kind="Numeric" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="SegmentTabItem" Header="區間物理明細" app:ShellNav.ShortLabel="區間" app:ShellNav.Icon="&#xEA37;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                <TextBlock Text="V1 理論基準／V2 實際區間" FontWeight="SemiBold" FontSize="16" />
-                                <TextBlock x:Name="SegmentSourceText" Text="　V1 自動判斷解析曲線；V2 改讀實際模擬世界軌跡與事件" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <DataGrid Grid.Row="1" x:Name="SegmentDataGrid" ItemsSource="{Binding SegmentRows}" IsReadOnly="True" RowHeaderWidth="0">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="區間" Binding="{Binding Segment}" Width="*" MinWidth="160" />
-                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
-                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="120" />
-                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
-                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="78" />
-                                    <DataGridTextColumn Header="距離 km" Binding="{Binding DistanceKm}" Width="84" />
-                                    <DataGridTextColumn Header="曲線" Binding="{Binding Profile}" Width="74" />
-                                    <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeedKmh}" Width="94" />
-                                    <DataGridTextColumn Header="旅行時間" Binding="{Binding TravelTime}" Width="90" />
-                                    <DataGridTextColumn Header="加速" Binding="{Binding AccelerationTime}" Width="78" />
-                                    <DataGridTextColumn Header="巡航" Binding="{Binding CruisingTime}" Width="78" />
-                                    <DataGridTextColumn Header="惰行" Binding="{Binding CoastingTime}" Width="78" />
-                                    <DataGridTextColumn Header="減速" Binding="{Binding DecelerationTime}" Width="78" />
-                                    <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="140" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                            <Border Grid.Row="2" Background="#F4F6FA" CornerRadius="7" Padding="10" Margin="0,10,0,0">
-                                <TextBlock Text="基礎模式保留 V1.0 三角形／梯形解析結果；V2 是營運與號誌概念模擬，不代表真實 ATP／ATO／ATS 或鐵路安全認證。" Foreground="{StaticResource MutedBrush}" TextWrapping="Wrap" />
+                        <app:ResultPage Title="區間物理明細">
+                            <app:ResultPage.Description>
+                                <TextBlock x:Name="SegmentSourceText" Text="V1 自動判斷解析曲線；V2 改讀實際模擬世界軌跡與事件"
+                                           Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Footnote>
+                                <TextBlock Text="基礎模式保留 V1.0 三角形／梯形解析結果；V2 是營運與號誌概念模擬，不代表真實 ATP／ATO／ATS 或鐵路安全認證。"
+                                           Style="{StaticResource ResultPageFootnote}" />
+                            </app:ResultPage.Footnote>
+                            <Border Style="{StaticResource ResultCard}">
+                                <DataGrid x:Name="SegmentDataGrid" ItemsSource="{Binding SegmentRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                          BorderThickness="0" app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="區間" Binding="{Binding Segment}" Width="*" MinWidth="160" />
+                                        <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
+                                        <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="120" />
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
+                                        <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="92" app:ResultTable.Kind="Status" />
+                                        <DataGridTextColumn Header="距離 km" Binding="{Binding DistanceKm}" Width="84" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="曲線" Binding="{Binding Profile}" Width="74" />
+                                        <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeedKmh}" Width="94" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="旅行時間" Binding="{Binding TravelTime}" Width="90" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="加速" Binding="{Binding AccelerationTime}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="巡航" Binding="{Binding CruisingTime}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="惰行" Binding="{Binding CoastingTime}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="減速" Binding="{Binding DecelerationTime}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="140" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
                             </Border>
-                        </Grid>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="ComparisonTabItem" Header="V1／V2 同條件比較" app:ShellNav.ShortLabel="比較" app:ShellNav.Icon="&#xE8AB;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="同一車次、同一停站條件：V1 解析理論與 V2 寫實實際的比較" FontWeight="SemiBold" FontSize="16" />
-                            <TextBlock Grid.Row="1" Text="跨站不套用站停差異；折返節點明確標記為 V1 不適用，避免以不同模型硬湊數字。" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,10" />
-                            <DataGrid Grid.Row="2" ItemsSource="{Binding V1V2ComparisonRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="2">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
-                                    <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
-                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
-                                    <DataGridTextColumn Header="車型" Binding="{Binding VehicleType}" Width="85" />
-                                    <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="110" />
-                                    <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="65" />
-                                    <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="110" />
-                                    <DataGridTextColumn Header="V1 到站" Binding="{Binding TheoreticalArrival}" Width="88" />
-                                    <DataGridTextColumn Header="V1 出站" Binding="{Binding TheoreticalDeparture}" Width="88" />
-                                    <DataGridTextColumn Header="V1 停站" Binding="{Binding TheoreticalDwell}" Width="76" />
-                                    <DataGridTextColumn Header="V2 到站" Binding="{Binding ActualArrival}" Width="88" />
-                                    <DataGridTextColumn Header="V2 出站" Binding="{Binding ActualDeparture}" Width="88" />
-                                    <DataGridTextColumn Header="V2 停站" Binding="{Binding ActualDwell}" Width="76" />
-                                    <DataGridTextColumn Header="到站差" Binding="{Binding ArrivalDifference}" Width="75" />
-                                    <DataGridTextColumn Header="出站差" Binding="{Binding DepartureDifference}" Width="75" />
-                                    <DataGridTextColumn Header="出站差 %" Binding="{Binding DepartureDifferencePercent}" Width="82" />
-                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="125" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                        <app:ResultPage Title="V1／V2 同條件比較">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="同一車次、同一停站條件下的 V1 解析理論與 V2 寫實實際" Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Footnote>
+                                <TextBlock Text="跨站不套用站停差異；折返節點明確標記為 V1 不適用，避免以不同模型硬湊數字。"
+                                           Style="{StaticResource ResultPageFootnote}" />
+                            </app:ResultPage.Footnote>
+                            <Border Style="{StaticResource ResultCard}">
+                                <DataGrid x:Name="ComparisonDataGrid" ItemsSource="{Binding V1V2ComparisonRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                          FrozenColumnCount="2" BorderThickness="0" app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="車輛 ID" Binding="{Binding VehicleId}" Width="100" />
+                                        <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="58" />
+                                        <DataGridTextColumn Header="車型" Binding="{Binding VehicleType}" Width="85" />
+                                        <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="110" />
+                                        <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="65" />
+                                        <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="110" />
+                                        <DataGridTextColumn Header="V1 到站" Binding="{Binding TheoreticalArrival}" Width="88" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="V1 出站" Binding="{Binding TheoreticalDeparture}" Width="88" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="V1 停站" Binding="{Binding TheoreticalDwell}" Width="76" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="V2 到站" Binding="{Binding ActualArrival}" Width="88" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="V2 出站" Binding="{Binding ActualDeparture}" Width="88" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="V2 停站" Binding="{Binding ActualDwell}" Width="76" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="到站差" Binding="{Binding ArrivalDifference}" Width="75" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="出站差" Binding="{Binding DepartureDifference}" Width="75" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="出站差 %" Binding="{Binding DepartureDifferencePercent}" Width="82" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="139" app:ResultTable.Kind="Status" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="ResourceTabItem" Header="資源占用與觀測容量" app:ShellNav.ShortLabel="容量" app:ShellNav.Icon="&#xE8A9;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <StackPanel Margin="0,0,0,10">
-                                <TextBlock Text="月台／進路／衝突區／尾軌獨立占用時間軸" FontWeight="SemiBold" FontSize="16" />
-                                <Button Content="匯出資源占用 CSV" Style="{StaticResource SecondaryButton}" Click="ExportResourceOccupancyCsv_Click" Margin="0,7,0,2" HorizontalAlignment="Left" />
-                                <TextBlock x:Name="ResourceOccupancySummaryText" Text="建立並播放 V2 模擬後顯示。" Foreground="{StaticResource MutedBrush}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <DataGrid Grid.Row="1" ItemsSource="{Binding ResourceOccupancyRows}" IsReadOnly="True" RowHeaderWidth="0" FrozenColumnCount="1">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="資源 ID" Binding="{Binding ResourceId}" Width="*" MinWidth="180" />
-                                    <DataGridTextColumn Header="占用時間" Binding="{Binding OccupiedTime}" Width="95" />
-                                    <DataGridTextColumn Header="使用率" Binding="{Binding Utilization}" Width="85" />
-                                    <DataGridTextColumn Header="預約次數" Binding="{Binding ReservationCount}" Width="85" />
-                                    <DataGridTextColumn Header="觀測每小時次數" Binding="{Binding ObservedReservationsPerHour}" Width="115" />
-                                    <DataGridTextColumn Header="最短釋放間距" Binding="{Binding MinimumReleaseHeadway}" Width="110" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                        <app:ResultPage Title="資源占用與觀測容量">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="月台／進路／衝突區／尾軌獨立占用時間軸" Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Summary>
+                                <TextBlock x:Name="ResourceOccupancySummaryText" Text="建立並播放 V2 模擬後顯示。" Style="{StaticResource ResultPageSummary}" />
+                            </app:ResultPage.Summary>
+                            <app:ResultPage.Actions>
+                                <Button Content="匯出資源占用 CSV" Style="{StaticResource SecondaryButton}" Click="ExportResourceOccupancyCsv_Click" />
+                            </app:ResultPage.Actions>
+                            <Border Style="{StaticResource ResultCard}">
+                                <DataGrid x:Name="ResourceDataGrid" ItemsSource="{Binding ResourceOccupancyRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                          FrozenColumnCount="1" BorderThickness="0" app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="資源 ID" Binding="{Binding ResourceId}" Width="*" MinWidth="180" />
+                                        <DataGridTextColumn Header="占用時間" Binding="{Binding OccupiedTime}" Width="95" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="使用率" Binding="{Binding Utilization}" Width="85" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="預約次數" Binding="{Binding ReservationCount}" Width="85" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="觀測每小時次數" Binding="{Binding ObservedReservationsPerHour}" Width="115" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="最短釋放間距" Binding="{Binding MinimumReleaseHeadway}" Width="110" app:ResultTable.Kind="Numeric" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="SafetyTabItem" Header="移動閉塞與煞車" app:ShellNav.ShortLabel="閉塞" app:ShellNav.Icon="&#xEA18;">

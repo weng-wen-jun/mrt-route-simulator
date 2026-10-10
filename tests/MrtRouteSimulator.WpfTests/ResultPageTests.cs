@@ -16,6 +16,7 @@ internal static class ResultPageTests
         VerifyStatusTones(root);
         VerifyResultTableRules();
         VerifyResultPageControl();
+        VerifyBasicPages();
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -198,5 +199,96 @@ internal static class ResultPageTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] ResultPage 元件骨架");
+    }
+
+    internal static ResultPage Page(MainWindow window, string tabName)
+    {
+        var tab = (TabItem)window.FindName(tabName)!;
+        Require(tab.Content is ResultPage, $"{tabName} 的內容必須是 ResultPage。");
+        var page = (ResultPage)tab.Content;
+        Require(page.Title == (string)tab.Header, $"{tabName} 的標題應為「{tab.Header}」，實際「{page.Title}」。");
+        Require(page.Margin == new Thickness(0), $"{tabName} 不得再有頁面自己的外距。");
+        return page;
+    }
+
+    internal static bool InSlot(object? slot, DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = LogicalTreeHelper.GetParent(current))
+            if (ReferenceEquals(current, slot)) return true;
+        return false;
+    }
+
+    internal static void RequireIn(MainWindow window, object? slot, string slotName, params string[] names)
+    {
+        foreach (var name in names)
+            Require(window.FindName(name) is DependencyObject element && InSlot(slot, element), $"{name} 必須位於 {slotName}。");
+    }
+
+    internal static T? FindLogical<T>(object? root, Func<T, bool> predicate) where T : DependencyObject
+    {
+        if (root is not DependencyObject node) return null;
+        if (node is T match && predicate(match)) return match;
+        foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+            if (FindLogical(child, predicate) is { } found) return found;
+        return null;
+    }
+
+    internal static void VerifyTableColumns(MainWindow window, string gridName, string[] numeric, string[] status)
+    {
+        var grid = window.FindName(gridName) as DataGrid;
+        Require(grid is not null && ResultTable.GetEnabled(grid), $"{gridName} 必須存在並啟用 ResultTable。");
+        var headers = grid!.Columns.Select(column => column.Header?.ToString() ?? string.Empty).ToArray();
+        foreach (var header in numeric.Concat(status))
+            Require(headers.Contains(header), $"{gridName} 找不到欄位「{header}」。");
+        foreach (var column in grid.Columns)
+        {
+            var header = column.Header?.ToString() ?? string.Empty;
+            var expected = numeric.Contains(header) ? ResultColumnKind.Numeric
+                : status.Contains(header) ? ResultColumnKind.Status : ResultColumnKind.Text;
+            Require(ResultTable.GetKind(column) == expected, $"{gridName} 的「{header}」應為 {expected}，實際 {ResultTable.GetKind(column)}。");
+            Require(ReferenceEquals(((DataGridTextColumn)column).ElementStyle,
+                    Application.Current.FindResource(expected == ResultColumnKind.Numeric ? "NumericCell" : "TextCell")),
+                $"{gridName} 的「{header}」未套用 {expected} 樣式。");
+        }
+    }
+
+    private static void VerifyBasicPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var timetable = Page(window, "ResultsTabItem");
+            RequireIn(window, timetable.Description, "Description", "TimetableSourceText");
+            RequireIn(window, timetable.Content, "Content", "TimetableDataGrid");
+            Require(timetable.Filters is null && timetable.Summary is null && timetable.Actions is null, "時刻表頁不應有篩選、摘要或動作。");
+            VerifyTableColumns(window, "TimetableDataGrid",
+                ["計畫到站", "計畫出站", "實際到站", "實際出站", "停站", "延誤", "累積 km"], ["狀態"]);
+
+            var segment = Page(window, "SegmentTabItem");
+            RequireIn(window, segment.Description, "Description", "SegmentSourceText");
+            RequireIn(window, segment.Content, "Content", "SegmentDataGrid");
+            Require(segment.Footnote is TextBlock { Text: var segmentNote } && segmentNote.Contains("ATP"), "區間頁附註必須保留安全認證聲明。");
+            VerifyTableColumns(window, "SegmentDataGrid",
+                ["距離 km", "峰值 km/h", "旅行時間", "加速", "巡航", "惰行", "減速"], ["狀態"]);
+
+            var comparison = Page(window, "ComparisonTabItem");
+            RequireIn(window, comparison.Content, "Content", "ComparisonDataGrid");
+            Require(comparison.Footnote is TextBlock { Text: var compareNote } && compareNote.Contains("V1 不適用"),
+                "比較頁附註必須保留跨站與折返說明。");
+            VerifyTableColumns(window, "ComparisonDataGrid",
+                ["V1 到站", "V1 出站", "V1 停站", "V2 到站", "V2 出站", "V2 停站", "到站差", "出站差", "出站差 %"], ["狀態"]);
+
+            var resource = Page(window, "ResourceTabItem");
+            RequireIn(window, resource.Summary, "Summary", "ResourceOccupancySummaryText");
+            Require(FindLogical<Button>(resource.Actions, button => Equals(button.Content, "匯出資源占用 CSV")) is not null,
+                "容量頁的匯出鈕必須位於 Actions。");
+            RequireIn(window, resource.Content, "Content", "ResourceDataGrid");
+            VerifyTableColumns(window, "ResourceDataGrid",
+                ["占用時間", "使用率", "預約次數", "觀測每小時次數", "最短釋放間距"], []);
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 時刻表、區間、比較、容量頁套用 ResultPage 與表格規則");
     }
 }
