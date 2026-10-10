@@ -4,7 +4,7 @@
 - 分支：`claude/ui-design-improvement-0a0ca4`（D 已合併至本機 `main` 的 `31ee644`）
 - 範圍：全面 UI 翻新子專案 E：專案工作區（拓樸編輯器）視窗與它開出的對話框
 - 前置：`docs/superpowers/specs/2026-10-09-ui-theme-and-track-diagram-design.md`（`UiTheme`、配線圖軌道配色）、`docs/superpowers/specs/2026-10-10-main-window-shell-design.md`（`Themes/Controls.xaml` 按鈕與分段標籤）、`docs/superpowers/specs/2026-10-10-result-pages-design.md`（結果頁標題、卡片、`StatusTones`）
-- 狀態：設計已於對話中逐段確認，待使用者審閱本文件
+- 狀態：已實作（2026-10-10）；實作時的細化見第 10 節
 
 ## 1. 目標與範圍
 
@@ -128,3 +128,16 @@
 | 約 70 處按鈕與 20 多個頁面一起改，漏改或主次判斷不一 | 集中由 `EditorChrome` 建立；逐頁巡檢與寫死顏色掃描把關 |
 | 卡片與內距加大後，窄視窗內容被擠出 | 最小尺寸與 125% 縮放測試；必要時只調整內距 |
 | 既有編輯器測試依賴元件型別或結構（例如找 `TabControl`） | 只換樣式不換元件型別；名稱與文字保留；完整 runner 把關 |
+
+## 10. 實作細化（2026-10-10）
+
+1. 分段標籤、清單、群組框、進度條以「視窗範圍的隱含樣式」套用：`EditorChrome.ApplyWindowChrome` 在編輯器與其對話框的 `Resources` 登記 `EditorTabControl`、`EditorList`、`EditorGroupBox`、`ThinProgressBar`。因此不需要第 2 節的 `EditorChrome.Tabs`／`Tab`／`List`；`EditorTabItem` 直接顯示 `Header`，不依賴 `ShellNav.ShortLabel`（第 9 節第一項風險因此消失）。
+2. 右側面板切換鈕保留文字「收合／展開」（既有測試與「按鈕文字保留」規則），改套 `GhostButton`；不新增 `IconButton` 樣式。
+3. 頁面說明用可換行的 12 px 灰字（`EditorChrome.Hint`），不用會截成單行的 `ResultPageDescription`；選取車站標題 20→15 px；頁內小標題 13 px 半粗。
+4. `EditorChrome` 另加 `StyleOf`、`FieldLabel`、`ValidationSeverityBrush`、`ValidationSummaryBrush`；新增 `ValidationSeverityBrushConverter` 與 `ValidationMessageTemplate`。
+5. 「新增設施…」「查看設施」原以 `!readOnly` 決定主次（唯讀時變主要），一律改次要。
+6. 表格內搜尋框寬 150→180，容納提示字「搜尋名稱、ID 或關聯」。
+7. 遷移對話框的對照表原本沒有列定義，所有資料列疊在第一列；已補上每列列定義與表頭底色。
+8. 頁首與底部列新增名稱 `EditorHeader`、`EditorFooter`，供測試定位。
+9. 班表頁接續參照的提醒文字改 `WarningText`；示意圖連接線線寬沿用配線圖規則（依起點軌道種類 6／4）。
+10. 起始頁（總覽）在建立導覽時就會驗證，原本底部列建立後又把摘要改回「尚未驗證草稿」；現在保留那次驗證結果，文字與色點一致。
