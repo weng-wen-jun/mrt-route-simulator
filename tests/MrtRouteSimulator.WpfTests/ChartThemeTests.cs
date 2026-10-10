@@ -16,6 +16,7 @@ internal static class ChartThemeTests
     public static void Run(string root)
     {
         VerifyThemeTokens();
+        VerifyVehiclePaletteAvoidsGrays();
         VerifyNiceTicks();
         VerifyPainterElements();
         VerifyHeaderFitsNarrowCanvas();
@@ -76,6 +77,18 @@ internal static class ChartThemeTests
                 && ChartTheme.TimeTickFontSize == 9 && ChartTheme.TitleFontSize == 13 && ChartTheme.LegendFontSize == 11
                 && ChartTheme.MessageFontSize == 12, "圖表線寬與字級常數不符規格。");
         Console.WriteLine("[通過] ChartTheme 色票直接引用 UiTheme 且凍結");
+    }
+
+    // 車輛色用於速度線與運行圖列車線；不得是接近灰階的顏色，否則會和灰色速限線、
+    // 運行圖圖例線段、端點事件點混淆。以 RGB 最大與最小通道差（彩度）判斷。
+    private static void VerifyVehiclePaletteAvoidsGrays()
+    {
+        foreach (var color in UiTheme.VehiclePalette)
+        {
+            var chroma = Math.Max(color.R, Math.Max(color.G, color.B)) - Math.Min(color.R, Math.Min(color.G, color.B));
+            Require(chroma >= 64, $"車輛色 {color} 太接近灰色（彩度 {chroma}），會和圖表灰色線混淆。");
+        }
+        Console.WriteLine("[通過] 車輛色盤避開圖表灰色");
     }
 
     private static void VerifyNiceTicks()
