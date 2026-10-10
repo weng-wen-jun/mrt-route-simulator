@@ -4,7 +4,7 @@
 - 分支：`claude/ui-design-improvement-0a0ca4`（C2 已合併至本機 `main` 的 `f341102`）
 - 範圍：全面 UI 翻新子專案 D：結果圖表繪圖與 PNG／PDF 匯出外觀
 - 前置：`docs/superpowers/specs/2026-10-09-ui-theme-and-track-diagram-design.md`（`UiTheme`）、`docs/superpowers/specs/2026-10-10-result-pages-design.md`（`ResultPage`、`StatusTones`、`ChartCard`）
-- 狀態：設計已於對話中逐段確認，待使用者審閱本文件
+- 狀態：已實作（2026-10-10）；實作時的細化見第 8 節
 
 ## 1. 目標與範圍
 
@@ -58,6 +58,8 @@
 
 字型一律為 App 字型（`Microsoft JhengHei UI`），不再使用系統預設字型。
 
+實作另加（見第 8 節）：`NeutralSeries`（`RailNeutralStrong`，運行圖圖例「V2 實際／計畫／理論」線段樣本）、`MarkerOutline`（`Surface`，事件點與圖例色點白框）、`LimitZone`（`TextSubtle` 加 0x2A 透明度，線性路線圖速限區塊底色）；虛線樣式 `LongDash`（5,3）、`ShortDot`（2,3）、`TailDash`（4,3）、`PlannedDash`（6,4）；線寬與字級常數（格線 1、軸線 1.2、刻度 10 px、時間刻度 9 px、標題 13 px、圖例 11 px、提示 12 px）。
+
 **系列配色規則**：
 
 - 速度曲線：線色為該列車的車輛色（`UiTheme.VehicleBrush(index)`，與配線圖膠囊、運行圖線同色）；V1 單列車使用 `VehicleBrush(0)`。速限為 `LimitSeries` 灰色虛線，速限標籤用 `AxisLabel` 色。
@@ -82,6 +84,8 @@
 | `TextBlock CreateLabel(string text, Brush brush, double fontSize = 10)` | 圖內小標籤（速限、停站、換向） |
 
 原 `DrawAxes`、`CreateChartLine`、圖表用 `AddCanvasText` 呼叫改由 `ChartPainter` 取代；既有 `Tag`（`SpeedLimitLabel`、`StopStationLabel`）保留。
+
+實作另加：`DrawAxes(Canvas, ChartArea, string verticalLabel, string horizontalLabel)`（運行圖只畫軸線與軸名；`DrawValueAxis` 內部也用它）、`DrawHeader`（標題＋圖例排成一列，畫布放不下時省略標題、保留圖例）、`Place`。`ChartPainter` 為 `public`（測試專案沒有 `InternalsVisibleTo`），`DrawLegend` 回傳 `StackPanel`，讓呼叫端在圖例後方接狀態文字。
 
 ## 4. 各圖改動
 
@@ -149,3 +153,15 @@
 | 速度曲線、距離圖改以刻度最大值換算後，既有測試的座標或標籤位置數值改變 | 只調整與新刻度對應的數值並記錄理由，不放寬功能性檢查 |
 | PDF 分頁圖例補畫位置與裁切區重疊 | 圖例位於繪圖區上方標題列；以像素測試確認每頁都有圖例 |
 | 寫死顏色掃描誤傷非圖表程式 | 掃描範圍限定於第 1 節表列的檔案與方法 |
+
+## 8. 實作細化（2026-10-10）
+
+1. 時間刻度文字維持 9 px：運行圖時間刻度有固定寬 70 的版面規則；速度曲線時間刻度下方還有兩列停站標籤。數值刻度與單位為 10 px。
+2. 速度曲線標題為「{列車} 速度」；V1 標題「V1 理論速度」、圖例「理論速度」、時間刻度以秒標示（V1 沒有時鐘時間）。
+3. 距離圖標題取配對選單文字第一個「｜」之前（例「FULL-O04 → FULL-O13」），未選配對時為「全部配對」；最低裕度標籤文字後加「｜{狀態}」；繪圖區上緣由 20 改 30 以容納標題列；原「時間」軸名改為四等分時間刻度。
+4. 運行圖圖例不再顯示「（事件觸發點已隱藏）」：取消事件點時圖例只剩兩項；計畫線整理中／失敗的狀態文字接在圖例後方。
+5. 空白提示統一放在 (18, 18)、12 px。
+6. V1 路線圖的列車膠囊沿用 `MainWindow.TrainColors`（既有測試檢查它直接引用 `UiTheme.VehiclePalette`）；運行圖列車線改用 `UiTheme.VehicleBrush`（同色、共用凍結畫筆）。
+7. 線性路線圖：車站格線 `Hairline`、車站文字 `TextStrong`、軌道說明文字 `TextMuted`；速度曲線的停站與速限標籤用 `AxisLabel`；換向標記用 `Annotation`。
+8. `SafetyStatusColor` 改為 `SafetyStatusBrush`，回傳 `StatusTones` 畫筆。
+9. 已知限制：運行圖最上方的車次標籤可能與圖例同列重疊；改版前的文字圖例已有同樣情形，本輪未調整標籤位置。
