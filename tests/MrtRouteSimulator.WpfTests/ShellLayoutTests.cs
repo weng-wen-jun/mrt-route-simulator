@@ -490,7 +490,29 @@ internal static class ShellLayoutTests
                     ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
                     Save(window, System.IO.Path.Combine(output, $"main-{width}x{height}.png"));
                     tabs.SelectedItem = window.FindName("ResultsTabItem");
+                    WpfTestWait.Invoke(window, "UpdateV2PlaybackView", true);
                     Save(window, System.IO.Path.Combine(output, $"timetable-{width}x{height}.png"));
+                    if (width == 1280)
+                    {
+                        foreach (var (tab, file) in new[] { ("SegmentTabItem", "segment"), ("ComparisonTabItem", "comparison"),
+                                     ("ResourceTabItem", "resource"), ("SafetyTabItem", "safety"),
+                                     ("IntervalStatisticsTabItem", "statistics"), ("DiagramTabItem", "diagram") })
+                        {
+                            tabs.SelectedItem = window.FindName(tab);
+                            WpfTestWait.Invoke(window, "UpdateV2PlaybackView", true);
+                            WpfTestWait.Wait(Task.Delay(tab == "DiagramTabItem" ? 1500 : 200));
+                            Save(window, System.IO.Path.Combine(output, $"{file}-1280x800.png"));
+                        }
+                        tabs.SelectedItem = window.FindName("SimulationTabItem");
+                        var views = (TabControl)window.FindName("SimulationViewTabControl")!;
+                        foreach (var (index, file) in new[] { (1, "trains"), (2, "speed") })
+                        {
+                            views.SelectedIndex = index;
+                            WpfTestWait.Invoke(window, "UpdateV2PlaybackView", true);
+                            WpfTestWait.Wait(Task.Delay(200));
+                            Save(window, System.IO.Path.Combine(output, $"{file}-1280x800.png"));
+                        }
+                    }
                 }
                 finally { WpfTestWait.Close(window); }
             }

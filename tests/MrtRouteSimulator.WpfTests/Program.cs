@@ -114,6 +114,11 @@ internal static class Program
                 ShellLayoutTests.CaptureScreenshots(GetRoot(args));
                 return 0;
             }
+            if (args.Contains("--result-pages-only"))
+            {
+                ResultPageTests.Run(GetRoot(args));
+                return 0;
+            }
             if (args.Contains("--shell-layout-only"))
             {
                 ShellLayoutTests.Run(GetRoot(args));
@@ -315,6 +320,7 @@ internal static class Program
             VisualRulesTests.Run();
             TrackDiagramThemeTests.Run(GetRoot(args));
             ShellLayoutTests.Run(GetRoot(args));
+            ResultPageTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);
