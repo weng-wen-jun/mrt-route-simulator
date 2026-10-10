@@ -63,7 +63,7 @@
 **系列配色規則**：
 
 - 速度曲線：線色為該列車的車輛色（`UiTheme.VehicleBrush(index)`，與配線圖膠囊、運行圖線同色）；V1 單列車使用 `VehicleBrush(0)`。速限為 `LimitSeries` 灰色虛線，速限標籤用 `AxisLabel` 色。
-- 距離圖：實際淨距 `PrimarySeries`、動態安全距離 `ThresholdSeries`、障礙物煞車需求 `DangerSeries`。「最低裕度」改為色點標籤，色點與文字顏色依 `StatusTones.Classify(SafetyStatusToChinese(status))`；`SafetyStatusColor` 移除，線性路線圖的列車間安全線也改用同一對照，所以「需要制動」在圖表、路線圖與表格都是 `Caution` 黃。
+- 距離圖：實際淨距 `PrimarySeries`、動態安全距離 `ThresholdSeries`、障礙物煞車需求 `DangerSeries`。「最低裕度」改為色點標籤，色點顏色依 `StatusTones.Classify(SafetyStatusToChinese(status))`，文字用 `Title` 深色（黃色小字在白底上對比不足，2026-10-10 合併前改定）；`SafetyStatusColor` 移除，線性路線圖的列車間安全線也改用同一對照，所以「需要制動」在圖表、路線圖與表格都是 `Caution` 黃。
 - 運行圖：列車線維持車輛色盤（計畫線為較淡虛線），只換格線、標籤、事件點與圖例。
 
 ## 3. `ChartPainter` 共用繪圖工具
@@ -166,3 +166,10 @@
 8. `SafetyStatusColor` 改為 `SafetyStatusBrush`，回傳 `StatusTones` 畫筆。
 9. 已知限制：運行圖最上方的車次標籤可能與圖例同列重疊；改版前的文字圖例已有同樣情形，本輪未調整標籤位置。
 10. 距離圖的最低裕度色點標籤放在繪圖區左上角（繪圖區頂端下方 6 DIP、白底圓角框），不放在標題列：窄畫布時標題列連標題都放不下，標籤會被擠出。資料最高點離繪圖區頂端至少保留約 11% 高度，標籤可能遮住左側少量曲線峰值。
+11. 合併前的整理（2026-10-10，依最終審查）：
+    - 車輛色盤第 4 色由 `#4B5B6E`（石板灰）改為 `#6E1A3A`（酒紅）：原色與灰色速限線、運行圖圖例線段、端點事件點幾乎同色；新增「車輛色彩度（RGB 最大與最小通道差）≥ 64」的測試。
+    - `NiceTicks` 對極小（次正規）值或刻度過多時退回 0 與最大值兩格，不再拋例外。
+    - 圖例虛線與點線樣本改為 `ChartTheme.LegendDash`（3,2）、`LegendDot`（1,1.5）；新增 `ChartPainter.CreateDot`，圖例事件點與最低裕度標籤共用。
+    - `ChartTheme.Font` 第一次取得 App 字型後快取。
+    - 改名：`DrawSpeedTimeAxisTicks` → `DrawClockTimeAxis`（速度曲線與距離圖共用）、`DiagramExportService.DrawTextBlock` → `DrawElementSnapshot`（文字與圖例元件共用）。
+    - PDF 分頁回歸測試的固定圖例改用 `ChartPainter.DrawLegend`，並涵蓋圖例比頁面寬時的等比縮小。
