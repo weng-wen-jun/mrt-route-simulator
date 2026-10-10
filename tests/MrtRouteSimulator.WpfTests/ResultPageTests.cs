@@ -17,6 +17,8 @@ internal static class ResultPageTests
         VerifyResultTableRules();
         VerifyResultPageControl();
         VerifyBasicPages();
+        VerifySafetyAndStatisticsPages();
+        VerifyCrowdedHeaders();
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -290,5 +292,86 @@ internal static class ResultPageTests
         }
         finally { WpfTestWait.Close(window); }
         Console.WriteLine("[通過] 時刻表、區間、比較、容量頁套用 ResultPage 與表格規則");
+    }
+
+    private static void VerifySafetyAndStatisticsPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var safety = Page(window, "SafetyTabItem");
+            RequireIn(window, safety.Summary, "Summary", "SafetySummaryText");
+            RequireIn(window, safety.Filters, "Filters", "BrakingModeComboBox", "SafetyPairComboBox",
+                "SafetyDirectionComboBox", "SafetyStatusComboBox", "SafetyWindowComboBox");
+            foreach (var label in new[] { "煞車估算", "列車對", "方向", "狀態", "時間" })
+                Require(FindLogical<TextBlock>(safety.Filters, text => text.Text == label) is not null, $"閉塞頁篩選缺少標籤「{label}」。");
+            RequireIn(window, safety.FilterActions, "FilterActions", "ObstacleTrainComboBox", "ObstacleDelayTextBox");
+            Require(FindLogical<Button>(safety.FilterActions, button => Equals(button.Content, "觸發／排程急停")) is not null,
+                "障礙物急停鈕必須位於篩選卡右側群組。");
+            RequireIn(window, safety.Content, "Content", "SafetyDistanceCanvas", "SafetyDataGrid");
+            VerifyTableColumns(window, "SafetyDataGrid",
+                ["後車頭 km", "前車尾 km", "淨距 m", "安全距離 m", "煞車需求 m", "安全裕度 m"], ["狀態"]);
+
+            var statistics = Page(window, "IntervalStatisticsTabItem");
+            RequireIn(window, statistics.Summary, "Summary", "IntervalSummaryText");
+            RequireIn(window, statistics.Filters, "Filters", "IntervalDirectionComboBox", "IntervalVehicleComboBox",
+                "IntervalServiceRunComboBox", "IntervalVehicleTypeComboBox", "IntervalServiceTypeComboBox",
+                "IntervalStopPatternComboBox", "IntervalStartSecondTextBox", "IntervalEndSecondTextBox", "IncludeInProgressCheckBox");
+            foreach (var text in new[] { "重新整理", "匯出區間 CSV", "匯出彙總 CSV", "匯出全程平均 CSV" })
+                Require(FindLogical<Button>(statistics.Actions, button => Equals(button.Content, text)) is not null,
+                    $"統計頁「{text}」必須位於 Actions。");
+            RequireIn(window, statistics.Content, "Content", "JourneyStatisticsDataGrid", "IntervalStatisticsDataGrid");
+            VerifyTableColumns(window, "JourneyStatisticsDataGrid", ["起站離站", "終站抵達", "全程秒", "平均 km/h"], ["狀態"]);
+            VerifyTableColumns(window, "IntervalStatisticsDataGrid",
+                ["出發", "抵達", "旅行秒", "平均 km/h", "峰值 km/h", "閉塞受限 s"], ["狀態"]);
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 閉塞、統計頁套用 ResultPage 與表格規則");
+    }
+
+    // 審查重點：窄視窗與 125% 縮放時，頁首動作區與篩選卡右側群組不可壓住標題或篩選、不可超出頁面。
+    private static void VerifyCrowdedHeaders()
+    {
+        foreach (var (width, height, scale, tab) in new[]
+                 {
+                     (800d, 700d, 1d, "SafetyTabItem"), (800d, 700d, 1d, "IntervalStatisticsTabItem"),
+                     (1280d, 800d, 1.25d, "IntervalStatisticsTabItem"), (1280d, 800d, 1.25d, "SafetyTabItem")
+                 })
+        {
+            var previousScale = ShellLayoutTests.SetInterfaceScale(scale);
+            var window = new MainWindow { Width = width, Height = height };
+            try
+            {
+                window.Show();
+                ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName(tab);
+                ShellLayoutTests.PumpLayout(window);
+                var page = (ResultPage)((TabItem)window.FindName(tab)!).Content;
+                Rect Bounds(FrameworkElement element) =>
+                    new(element.TranslatePoint(new Point(0, 0), page), new Size(element.ActualWidth, element.ActualHeight));
+                var context = $"{tab} {width}×{height}@{scale:0.##}";
+                var title = Bounds((FrameworkElement)page.Template.FindName("PART_Title", page));
+                if (page.Actions is FrameworkElement actionsElement)
+                {
+                    var actions = Bounds(actionsElement);
+                    Require(!title.IntersectsWith(actions) && actions.Right <= page.ActualWidth + .5,
+                        $"{context}：標題與動作區不可重疊或超出；title={title}, actions={actions}, page={page.ActualWidth:0.0}。");
+                }
+                if (page.Filters is FrameworkElement filtersElement && page.FilterActions is FrameworkElement filterActionsElement)
+                {
+                    var filters = Bounds(filtersElement);
+                    var filterActions = Bounds(filterActionsElement);
+                    Require(!filters.IntersectsWith(filterActions) && filterActions.Right <= page.ActualWidth + .5,
+                        $"{context}：篩選與右側群組不可重疊或超出；filters={filters}, group={filterActions}, page={page.ActualWidth:0.0}。");
+                }
+            }
+            finally
+            {
+                WpfTestWait.Close(window);
+                ShellLayoutTests.SetInterfaceScale(previousScale);
+            }
+        }
+        Console.WriteLine("[通過] 窄視窗與 125% 縮放下頁首動作區與篩選卡不重疊");
     }
 }

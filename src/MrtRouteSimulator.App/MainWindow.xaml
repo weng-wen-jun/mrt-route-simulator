@@ -558,138 +558,178 @@
                     </TabItem>
 
                     <TabItem x:Name="SafetyTabItem" Header="移動閉塞與煞車" app:ShellNav.ShortLabel="閉塞" app:ShellNav.Icon="&#xEA18;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="250" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <WrapPanel>
-                                <TextBlock Text="煞車估算" VerticalAlignment="Center" FontWeight="SemiBold" Margin="0,0,8,8" />
-                                <ComboBox x:Name="BrakingModeComboBox" Width="120" SelectedIndex="0" SelectionChanged="BrakingMode_SelectionChanged" Margin="0,0,10,8">
-                                    <ComboBoxItem Content="營運煞車" Tag="Service" />
-                                    <ComboBoxItem Content="緊急煞車" Tag="Emergency" />
-                                </ComboBox>
-                                <ComboBox x:Name="SafetyPairComboBox" Width="180" SelectionChanged="SafetyPair_SelectionChanged" Margin="0,0,10,8" />
-                                <ComboBox x:Name="SafetyDirectionComboBox" Width="82" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,0,8,8">
-                                    <ComboBoxItem Content="全方向" Tag="All" />
-                                    <ComboBoxItem Content="下行" Tag="Outbound" />
-                                    <ComboBoxItem Content="上行" Tag="Inbound" />
-                                </ComboBox>
-                                <ComboBox x:Name="SafetyStatusComboBox" Width="110" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,0,8,8">
-                                    <ComboBoxItem Content="全狀態" Tag="All" />
-                                    <ComboBoxItem Content="安全" Tag="Safe" />
-                                    <ComboBoxItem Content="警戒" Tag="Caution" />
-                                    <ComboBoxItem Content="需制動" Tag="BrakingRequired" />
-                                    <ComboBoxItem Content="侵入" Tag="EnvelopeIntrusion" />
-                                </ComboBox>
-                                <ComboBox x:Name="SafetyWindowComboBox" Width="100" SelectedIndex="1" SelectionChanged="SafetyFilter_Changed" Margin="0,0,8,8">
-                                    <ComboBoxItem Content="最近 60 秒" Tag="60" />
-                                    <ComboBoxItem Content="最近 300 秒" Tag="300" />
-                                    <ComboBoxItem Content="全部時間" Tag="All" />
-                                </ComboBox>
-                                <TextBlock Text="障礙車" VerticalAlignment="Center" Margin="0,0,5,8" />
-                                <ComboBox x:Name="ObstacleTrainComboBox" Width="105" Margin="0,0,6,8" />
-                                <TextBlock Text="延遲秒數" VerticalAlignment="Center" Margin="0,0,5,8" />
-                                <TextBox x:Name="ObstacleDelayTextBox" Width="52" Text="0" Margin="0,0,6,8" />
-                                <Button Content="觸發／排程急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" Margin="0,0,10,8" />
-                                <TextBlock x:Name="SafetySummaryText" Text="建立 V2 模擬後顯示安全摘要。" Foreground="{StaticResource MutedBrush}" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,8" />
-                            </WrapPanel>
-                            <Border Grid.Row="1" Background="#FAFBFD" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="6">
-                                <Canvas x:Name="SafetyDistanceCanvas" SizeChanged="SafetyDistanceCanvas_SizeChanged" AutomationProperties.Name="相鄰列車距離時間圖" />
-                            </Border>
-                            <DataGrid Grid.Row="2" x:Name="SafetyDataGrid" ItemsSource="{Binding SafetyRows}" IsReadOnly="True" RowHeaderWidth="0" Margin="0,10,0,0">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="後車 → 前車" Binding="{Binding Pair}" Width="130" />
-                                    <DataGridTextColumn Header="軌道" Binding="{Binding Track}" Width="55" />
-                                    <DataGridTextColumn Header="後車頭 km" Binding="{Binding FollowerKm}" Width="82" />
-                                    <DataGridTextColumn Header="前車尾 km" Binding="{Binding LeaderRearKm}" Width="82" />
-                                    <DataGridTextColumn Header="淨距 m" Binding="{Binding GapMeters}" Width="72" />
-                                    <DataGridTextColumn Header="安全距離 m" Binding="{Binding SafetyMeters}" Width="86" />
-                                    <DataGridTextColumn Header="煞車需求 m" Binding="{Binding BrakeDemandMeters}" Width="86" />
-                                    <DataGridTextColumn Header="安全裕度 m" Binding="{Binding MarginMeters}" Width="82" />
-                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                        <app:ResultPage Title="移動閉塞與煞車">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="相鄰列車距離、安全裕度與煞車需求" Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Summary>
+                                <TextBlock x:Name="SafetySummaryText" Text="建立 V2 模擬後顯示安全摘要。" Style="{StaticResource ResultPageSummary}" />
+                            </app:ResultPage.Summary>
+                            <app:ResultPage.Filters>
+                                <WrapPanel>
+                                    <TextBlock Text="煞車估算" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="BrakingModeComboBox" Width="120" SelectedIndex="0" SelectionChanged="BrakingMode_SelectionChanged" Margin="0,3,12,3">
+                                        <ComboBoxItem Content="營運煞車" Tag="Service" />
+                                        <ComboBoxItem Content="緊急煞車" Tag="Emergency" />
+                                    </ComboBox>
+                                    <TextBlock Text="列車對" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="SafetyPairComboBox" Width="180" SelectionChanged="SafetyPair_SelectionChanged" Margin="0,3,12,3" />
+                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="SafetyDirectionComboBox" Width="82" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                        <ComboBoxItem Content="全方向" Tag="All" />
+                                        <ComboBoxItem Content="下行" Tag="Outbound" />
+                                        <ComboBoxItem Content="上行" Tag="Inbound" />
+                                    </ComboBox>
+                                    <TextBlock Text="狀態" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="SafetyStatusComboBox" Width="110" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                        <ComboBoxItem Content="全狀態" Tag="All" />
+                                        <ComboBoxItem Content="安全" Tag="Safe" />
+                                        <ComboBoxItem Content="警戒" Tag="Caution" />
+                                        <ComboBoxItem Content="需制動" Tag="BrakingRequired" />
+                                        <ComboBoxItem Content="侵入" Tag="EnvelopeIntrusion" />
+                                    </ComboBox>
+                                    <TextBlock Text="時間" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="SafetyWindowComboBox" Width="100" SelectedIndex="1" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                        <ComboBoxItem Content="最近 60 秒" Tag="60" />
+                                        <ComboBoxItem Content="最近 300 秒" Tag="300" />
+                                        <ComboBoxItem Content="全部時間" Tag="All" />
+                                    </ComboBox>
+                                </WrapPanel>
+                            </app:ResultPage.Filters>
+                            <app:ResultPage.FilterActions>
+                                <WrapPanel>
+                                    <TextBlock Text="障礙物急停" Style="{StaticResource FilterGroupLabel}" />
+                                    <TextBlock Text="障礙車" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="ObstacleTrainComboBox" Width="105" Margin="0,3,10,3" />
+                                    <TextBlock Text="延遲秒數" Style="{StaticResource FilterLabel}" />
+                                    <TextBox x:Name="ObstacleDelayTextBox" Width="52" Text="0" Margin="0,3,10,3" />
+                                    <Button Content="觸發／排程急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" Margin="0,3,0,3" />
+                                </WrapPanel>
+                            </app:ResultPage.FilterActions>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="250" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Border Style="{StaticResource ChartCard}">
+                                    <Canvas x:Name="SafetyDistanceCanvas" SizeChanged="SafetyDistanceCanvas_SizeChanged" AutomationProperties.Name="相鄰列車距離時間圖" />
+                                </Border>
+                                <Border Grid.Row="1" Style="{StaticResource ResultCard}" Margin="0,8,0,0">
+                                    <DataGrid x:Name="SafetyDataGrid" ItemsSource="{Binding SafetyRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                              BorderThickness="0" app:ResultTable.Enabled="True">
+                                        <DataGrid.Columns>
+                                            <DataGridTextColumn Header="後車 → 前車" Binding="{Binding Pair}" Width="130" />
+                                            <DataGridTextColumn Header="軌道" Binding="{Binding Track}" Width="55" />
+                                            <DataGridTextColumn Header="後車頭 km" Binding="{Binding FollowerKm}" Width="82" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="前車尾 km" Binding="{Binding LeaderRearKm}" Width="82" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="淨距 m" Binding="{Binding GapMeters}" Width="72" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="安全距離 m" Binding="{Binding SafetyMeters}" Width="86" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="煞車需求 m" Binding="{Binding BrakeDemandMeters}" Width="86" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="安全裕度 m" Binding="{Binding MarginMeters}" Width="82" app:ResultTable.Kind="Numeric" />
+                                            <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="*" app:ResultTable.Kind="Status" />
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </Border>
+                            </Grid>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="IntervalStatisticsTabItem" Header="V2 區間統計" app:ShellNav.ShortLabel="統計" app:ShellNav.Icon="&#xE8EF;">
-                        <Grid Margin="14">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="*" />
-                            </Grid.RowDefinitions>
-                            <WrapPanel Margin="0,0,0,8">
-                                <TextBlock Text="方向" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalDirectionComboBox" Width="92" SelectedIndex="0" SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6">
-                                    <ComboBoxItem Content="全部" Tag="All" />
-                                    <ComboBoxItem Content="下行" Tag="Outbound" />
-                                    <ComboBoxItem Content="上行" Tag="Inbound" />
-                                </ComboBox>
-                                <TextBlock Text="車輛" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalVehicleComboBox" Width="112" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="車次" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalServiceRunComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="車型" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="服務" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalServiceTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="停站模式" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <ComboBox x:Name="IntervalStopPatternComboBox" Width="130" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                          SelectionChanged="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="模擬秒起" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <TextBox x:Name="IntervalStartSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <TextBlock Text="迄" VerticalAlignment="Center" Margin="0,0,5,6" />
-                                <TextBox x:Name="IntervalEndSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,0,10,6" />
-                                <CheckBox x:Name="IncludeInProgressCheckBox" Content="包含運行中區間" IsChecked="True"
-                                          Checked="IntervalFilter_Changed" Unchecked="IntervalFilter_Changed" Margin="0,0,10,6" VerticalAlignment="Center" />
-                                <Button Content="重新整理" Style="{StaticResource SecondaryButton}" Click="RefreshIntervalStatistics_Click" Margin="0,0,8,6" />
-                                <Button Content="匯出區間 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalCsv_Click" Margin="0,0,8,6" />
-                                <Button Content="匯出彙總 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalSummaryCsv_Click" Margin="0,0,8,6" />
-                                <Button Content="匯出全程平均 CSV" Style="{StaticResource SecondaryButton}" Click="ExportJourneyCsv_Click" Margin="0,0,8,6" />
-                                <TextBlock x:Name="IntervalSummaryText" Text="建立並播放 V2 模擬後顯示。" Foreground="{StaticResource MutedBrush}"
-                                           VerticalAlignment="Center" Margin="0,0,0,6" />
-                            </WrapPanel>
-                            <StackPanel Grid.Row="1" Margin="0,0,0,10">
-                                <TextBlock Text="每車次起終站平均速率" Style="{StaticResource SectionTitle}" />
-                                <TextBlock Text="以起站實際發車至終站實際抵達計算，包含中間站停站時間。" Foreground="{StaticResource MutedBrush}" Margin="0,2,0,5" />
-                                <DataGrid ItemsSource="{Binding JourneyStatisticRows}" IsReadOnly="True" RowHeaderWidth="0" Height="155">
-                                    <DataGrid.Columns>
-                                        <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
-                                        <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
-                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
-                                        <DataGridTextColumn Header="起站 → 終站" Binding="{Binding Route}" Width="135" />
-                                        <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="60" />
-                                        <DataGridTextColumn Header="起站離站" Binding="{Binding Departure}" Width="88" />
-                                        <DataGridTextColumn Header="終站抵達" Binding="{Binding Arrival}" Width="88" />
-                                        <DataGridTextColumn Header="全程秒" Binding="{Binding TravelTime}" Width="72" />
-                                        <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </StackPanel>
-                            <DataGrid Grid.Row="2" ItemsSource="{Binding IntervalStatisticRows}" IsReadOnly="True" RowHeaderWidth="0">
-                                <DataGrid.Columns>
-                                    <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
-                                    <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
-                                    <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
-                                    <DataGridTextColumn Header="區間" Binding="{Binding Interval}" Width="135" />
-                                    <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="60" />
-                                    <DataGridTextColumn Header="出發" Binding="{Binding Departure}" Width="88" />
-                                    <DataGridTextColumn Header="抵達" Binding="{Binding Arrival}" Width="88" />
-                                    <DataGridTextColumn Header="旅行秒" Binding="{Binding TravelTime}" Width="72" />
-                                    <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" />
-                                    <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeed}" Width="85" />
-                                    <DataGridTextColumn Header="閉塞受限 s" Binding="{Binding ControlLimitedTime}" Width="85" />
-                                    <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="*" />
-                                </DataGrid.Columns>
-                            </DataGrid>
-                        </Grid>
+                        <app:ResultPage Title="V2 區間統計">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="完成與運行中區間的旅行時間與速率" Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Summary>
+                                <TextBlock x:Name="IntervalSummaryText" Text="建立並播放 V2 模擬後顯示。" Style="{StaticResource ResultPageSummary}" />
+                            </app:ResultPage.Summary>
+                            <app:ResultPage.Actions>
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="重新整理" Style="{StaticResource SecondaryButton}" Click="RefreshIntervalStatistics_Click" Margin="0,0,6,0" />
+                                    <Button Content="匯出區間 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalCsv_Click" Margin="0,0,6,0" />
+                                    <Button Content="匯出彙總 CSV" Style="{StaticResource SecondaryButton}" Click="ExportIntervalSummaryCsv_Click" Margin="0,0,6,0" />
+                                    <Button Content="匯出全程平均 CSV" Style="{StaticResource SecondaryButton}" Click="ExportJourneyCsv_Click" />
+                                </StackPanel>
+                            </app:ResultPage.Actions>
+                            <app:ResultPage.Filters>
+                                <WrapPanel>
+                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalDirectionComboBox" Width="92" SelectedIndex="0" SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3">
+                                        <ComboBoxItem Content="全部" Tag="All" />
+                                        <ComboBoxItem Content="下行" Tag="Outbound" />
+                                        <ComboBoxItem Content="上行" Tag="Inbound" />
+                                    </ComboBox>
+                                    <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalVehicleComboBox" Width="112" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <TextBlock Text="車次" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalServiceRunComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <TextBlock Text="車型" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <TextBlock Text="服務" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalServiceTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <TextBlock Text="停站模式" Style="{StaticResource FilterLabel}" />
+                                    <ComboBox x:Name="IntervalStopPatternComboBox" Width="130" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <TextBlock Text="模擬秒起" Style="{StaticResource FilterLabel}" />
+                                    <TextBox x:Name="IntervalStartSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,8,3" />
+                                    <TextBlock Text="迄" Style="{StaticResource FilterLabel}" />
+                                    <TextBox x:Name="IntervalEndSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <CheckBox x:Name="IncludeInProgressCheckBox" Content="包含運行中區間" IsChecked="True"
+                                              Checked="IntervalFilter_Changed" Unchecked="IntervalFilter_Changed" Margin="0,3,0,3" VerticalAlignment="Center" />
+                                </WrapPanel>
+                            </app:ResultPage.Filters>
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Border Style="{StaticResource ResultCard}">
+                                    <StackPanel>
+                                        <TextBlock Text="每車次起終站平均速率" Style="{StaticResource ResultCardTitle}" />
+                                        <TextBlock Text="以起站實際發車至終站實際抵達計算，包含中間站停站時間。" Style="{StaticResource ResultPageFootnote}" Margin="6,0,6,4" />
+                                        <DataGrid x:Name="JourneyStatisticsDataGrid" ItemsSource="{Binding JourneyStatisticRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                                  Height="155" BorderThickness="0" app:ResultTable.Enabled="True">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
+                                                <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
+                                                <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
+                                                <DataGridTextColumn Header="起站 → 終站" Binding="{Binding Route}" Width="135" />
+                                                <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="74" app:ResultTable.Kind="Status" />
+                                                <DataGridTextColumn Header="起站離站" Binding="{Binding Departure}" Width="88" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="終站抵達" Binding="{Binding Arrival}" Width="88" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="全程秒" Binding="{Binding TravelTime}" Width="72" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" app:ResultTable.Kind="Numeric" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Row="1" Style="{StaticResource ResultCard}" Margin="0,8,0,0">
+                                    <DockPanel>
+                                        <TextBlock DockPanel.Dock="Top" Text="區間明細" Style="{StaticResource ResultCardTitle}" />
+                                        <DataGrid x:Name="IntervalStatisticsDataGrid" ItemsSource="{Binding IntervalStatisticRows}" IsReadOnly="True" RowHeaderWidth="0"
+                                                  BorderThickness="0" app:ResultTable.Enabled="True">
+                                            <DataGrid.Columns>
+                                                <DataGridTextColumn Header="車輛" Binding="{Binding Vehicle}" Width="95" />
+                                                <DataGridTextColumn Header="車次" Binding="{Binding ServiceRun}" Width="105" />
+                                                <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="55" />
+                                                <DataGridTextColumn Header="區間" Binding="{Binding Interval}" Width="135" />
+                                                <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="74" app:ResultTable.Kind="Status" />
+                                                <DataGridTextColumn Header="出發" Binding="{Binding Departure}" Width="88" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="抵達" Binding="{Binding Arrival}" Width="88" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="旅行秒" Binding="{Binding TravelTime}" Width="72" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="平均 km/h" Binding="{Binding AverageSpeed}" Width="85" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="峰值 km/h" Binding="{Binding PeakSpeed}" Width="85" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="閉塞受限 s" Binding="{Binding ControlLimitedTime}" Width="85" app:ResultTable.Kind="Numeric" />
+                                                <DataGridTextColumn Header="控制事件" Binding="{Binding ControlEvents}" Width="*" />
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </DockPanel>
+                                </Border>
+                            </Grid>
+                        </app:ResultPage>
                     </TabItem>
 
                     <TabItem x:Name="DiagramTabItem" Header="列車運行圖／匯出" app:ShellNav.ShortLabel="運行圖" app:ShellNav.Icon="&#xE9D2;">
