@@ -124,6 +124,7 @@ internal static class DiagramExportService
         RequireSameRenderSize(bitmap, graphBitmap);
         var textBlocks = FindTextBlocks(element);
         var stationLeaders = FindStationLeaders(element);
+        var legends = FindChartLegends(element);
         var logicalScale = bitmap.DpiX / 96d;
         var axisWidth = Math.Clamp((int)Math.Round(92 * logicalScale), 1, bitmap.PixelWidth / 3);
         var left = Math.Clamp((int)Math.Round(82 * logicalScale), 1, axisWidth);
@@ -148,6 +149,7 @@ internal static class DiagramExportService
                 graphBitmap,
                 textBlocks,
                 stationLeaders,
+                legends,
                 trainAnchors.Where(pair => Array.FindIndex(sliceStarts, sliceStart =>
                     pair.Value.X * logicalScale >= sliceStart - .5
                     && pair.Value.X * logicalScale <= Math.Min(bitmap.PixelWidth, sliceStart + sliceCapacity) + .5) == index)
@@ -264,7 +266,7 @@ internal static class DiagramExportService
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
-            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            context.DrawRectangle(ChartTheme.ExportPage, null, new Rect(0, 0, logicalWidth, logicalHeight));
             context.DrawImage(graphBitmap, new Rect(0, 0, logicalWidth, originalLogicalHeight));
             foreach (var (block, train) in trainLabels)
             {
@@ -296,6 +298,7 @@ internal static class DiagramExportService
         RenderTargetBitmap graphBitmap,
         IReadOnlyList<TextBlock> textBlocks,
         IReadOnlyList<Line> stationLeaders,
+        IReadOnlyList<FrameworkElement> legends,
         IReadOnlyDictionary<TextBlock, Point> pageTrainAnchors,
         IReadOnlyDictionary<TextBlock, Point> allTrainAnchors,
         int start,
@@ -364,7 +367,7 @@ internal static class DiagramExportService
         {
             // Keep the established white page background and draw only the graph
             // area.  Axis/header text is deliberately drawn separately below.
-            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            context.DrawRectangle(ChartTheme.ExportPage, null, new Rect(0, 0, logicalWidth, logicalHeight));
             var source = new CroppedBitmap(
                 graphBitmap,
                 new Int32Rect(start, plotTop, sliceWidth, plotHeight));
@@ -372,7 +375,7 @@ internal static class DiagramExportService
                 source,
                 new Rect(logicalAxisWidth, logicalPlotTop, logicalSliceWidth, plotHeight / logicalScale));
 
-            var pen = new Pen(Brushes.SlateGray, 1.1);
+            var pen = new Pen(ChartTheme.Axis, ChartTheme.AxisThickness);
             context.DrawLine(
                 pen,
                 new Point(logicalAxisWidth, logicalPlotTop),
@@ -475,6 +478,17 @@ internal static class DiagramExportService
                     }
                 }
             }
+
+            // 圖例含線段樣本與色點，不在裁切的繪圖區內；與標題一樣在每頁原位補畫，頁面太窄時等比縮小。
+            foreach (var legend in legends)
+            {
+                var legendX = Canvas.GetLeft(legend);
+                var legendY = Canvas.GetTop(legend);
+                var legendWidth = Math.Max(1, legend.ActualWidth);
+                var legendHeight = Math.Max(1, legend.ActualHeight);
+                var fit = Math.Min(1, Math.Max(1, logicalWidth - legendX - 4) / legendWidth);
+                DrawTextBlock(context, legend, legendX, legendY, legendWidth * fit, legendHeight * fit);
+            }
         }
 
         var page = new RenderTargetBitmap(
@@ -567,7 +581,7 @@ internal static class DiagramExportService
 
     private static void DrawTextBlock(
         DrawingContext context,
-        TextBlock source,
+        FrameworkElement source,
         double x,
         double y,
         double width,
@@ -600,6 +614,26 @@ internal static class DiagramExportService
         {
             if (node is Line { Tag: TimeDistanceStationLeaderTag, Visibility: Visibility.Visible } line)
                 result.Add(line);
+            for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
+                Visit(VisualTreeHelper.GetChild(node, index));
+        }
+    }
+
+    private static IReadOnlyList<FrameworkElement> FindChartLegends(DependencyObject root)
+    {
+        var result = new List<FrameworkElement>();
+        Visit(root);
+        return result;
+
+        void Visit(DependencyObject node)
+        {
+            if (node is FrameworkElement { Tag: ChartPainter.LegendTag, Visibility: Visibility.Visible } legend
+                && !double.IsNaN(Canvas.GetLeft(legend)) && !double.IsNaN(Canvas.GetTop(legend)))
+            {
+                result.Add(legend);
+                return;
+            }
+
             for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
                 Visit(VisualTreeHelper.GetChild(node, index));
         }
@@ -675,7 +709,7 @@ internal static class DiagramExportService
             using (var context = visual.RenderOpen())
             {
                 // Canvas 的透明背景在 JPEG/PDF 會變成黑底；父容器的配置偏移也不屬於輸出。
-                context.DrawRectangle(Brushes.White, null, bounds);
+                context.DrawRectangle(ChartTheme.ExportPage, null, bounds);
                 context.DrawRectangle(new VisualBrush(element)
                 {
                     ViewboxUnits = BrushMappingMode.Absolute,

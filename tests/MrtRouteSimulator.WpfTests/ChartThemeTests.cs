@@ -195,7 +195,8 @@ internal static class ChartThemeTests
             "DrawSafetyDistanceChart", "AddSafetyMarginChip", "DrawTimeDistanceDiagramFull"]),
         ("MainWindow.xaml.cs", ["DrawSpeedProfile"]),
         ("MainWindow.TimeDistance.cs", []),
-        ("TimeDistanceStationLabelLayout.cs", [])
+        ("TimeDistanceStationLabelLayout.cs", []),
+        ("DiagramExportService.cs", [])
     ];
 
     private static readonly Regex HardCodedColor = new(
@@ -263,6 +264,7 @@ internal static class ChartThemeTests
             VerifySpeedChart(window, "實際速度");
             VerifySafetyChart(window);
             VerifyTimeDistanceCharts(window);
+            VerifyPdfPagesKeepLegend(window);
         }
         finally { WpfTestWait.Close(window); }
     }
@@ -432,6 +434,63 @@ internal static class ChartThemeTests
         }
         finally { showEvents.IsChecked = true; }
         Console.WriteLine("[通過] 運行圖兩條繪製路徑的標題、圖例、事件點、格線與標籤主題一致");
+    }
+
+    private static void VerifyPdfPagesKeepLegend(MainWindow window)
+    {
+        ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("DiagramTabItem");
+        var zoom = (Slider)window.FindName("DiagramZoomSlider")!;
+        var previousZoom = zoom.Value;
+        try
+        {
+            zoom.Value = 3;
+            ShellLayoutTests.PumpLayout(window);
+            WpfTestWait.Invoke(window, "DrawTimeDistanceDiagramFull");
+            var canvas = (Canvas)window.FindName("TimeDistanceCanvas")!;
+            canvas.UpdateLayout();
+            var legend = canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, ChartPainter.LegendTag));
+            var exportType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.DiagramExportService")!;
+            var render = exportType.GetMethod("Render", BindingFlags.Static | BindingFlags.NonPublic, binder: null,
+                types: [typeof(FrameworkElement), typeof(double), typeof(bool)], modifiers: null)!;
+            var createPages = exportType.GetMethod("CreatePdfPages", BindingFlags.Static | BindingFlags.NonPublic)!;
+            var bitmap = (RenderTargetBitmap)render.Invoke(null, [canvas, 1.6d, true])!;
+            var pages = (IReadOnlyList<BitmapSource>)createPages.Invoke(null, [bitmap, 794, 547, true, canvas, 1.6d])!;
+            Require(pages.Count >= 2, $"放大 3 倍的運行圖應分成多頁，實際 {pages.Count} 頁。");
+            var legendBounds = new Rect(Canvas.GetLeft(legend), Canvas.GetTop(legend), legend.ActualWidth, legend.ActualHeight);
+            for (var index = 0; index < pages.Count; index++)
+            {
+                var pixels = CountPixels(pages[index], legendBounds, 1.6, ChartTheme.NeutralSeries.Color);
+                Require(pixels > 10, $"PDF 第 {index + 1} 頁缺少圖例線段（圖例範圍內只有 {pixels} 個圖例色像素）。");
+            }
+            Console.WriteLine($"[通過] PDF 分頁每頁保留圖例（{pages.Count} 頁）");
+        }
+        finally
+        {
+            zoom.Value = previousZoom;
+            typeof(MainWindow).GetField("_diagramLayoutKey", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, null);
+        }
+    }
+
+    // 在頁面點陣圖的指定邏輯範圍內，計算與 color 相差不超過 4 的像素數。
+    private static int CountPixels(BitmapSource page, Rect logical, double scale, Color color)
+    {
+        var bgra = new FormatConvertedBitmap(page, PixelFormats.Bgra32, null, 0);
+        var x0 = Math.Max(0, (int)Math.Floor(logical.Left * scale));
+        var y0 = Math.Max(0, (int)Math.Floor(logical.Top * scale));
+        var x1 = Math.Min(bgra.PixelWidth, (int)Math.Ceiling(logical.Right * scale));
+        var y1 = Math.Min(bgra.PixelHeight, (int)Math.Ceiling(logical.Bottom * scale));
+        if (x1 <= x0 || y1 <= y0) return 0;
+        var stride = (x1 - x0) * 4;
+        var pixels = new byte[stride * (y1 - y0)];
+        bgra.CopyPixels(new Int32Rect(x0, y0, x1 - x0, y1 - y0), pixels, stride, 0);
+        var count = 0;
+        for (var offset = 0; offset < pixels.Length; offset += 4)
+        {
+            if (Math.Abs(pixels[offset] - color.B) <= 4 && Math.Abs(pixels[offset + 1] - color.G) <= 4
+                && Math.Abs(pixels[offset + 2] - color.R) <= 4)
+                count++;
+        }
+        return count;
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>
