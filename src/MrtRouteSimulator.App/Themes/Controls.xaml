@@ -844,6 +844,7 @@
     <app:StatusToneBrushConverter x:Key="StatusToneBrush" />
 
     <Style x:Key="TextCell" TargetType="TextBlock" BasedOn="{x:Static DataGridTextColumn.DefaultElementStyle}">
+        <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
     </Style>
@@ -851,7 +852,8 @@
     <Style x:Key="NumericCell" TargetType="TextBlock" BasedOn="{StaticResource TextCell}">
         <Setter Property="TextAlignment" Value="Right" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
-        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <!-- 表格數字用筆畫較細的 Consolas；Cascadia Mono 在 12～13 px 顯得偏粗。 -->
+        <Setter Property="FontFamily" Value="Consolas, Cascadia Mono" />
         <Setter Property="Margin" Value="2,0,8,0" />
     </Style>
 

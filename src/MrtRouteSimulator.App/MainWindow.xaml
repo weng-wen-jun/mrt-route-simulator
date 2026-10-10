@@ -416,42 +416,56 @@
                             </app:ResultPage.Summary>
                             <app:ResultPage.Filters>
                                 <WrapPanel>
-                                    <TextBlock Text="煞車估算" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="BrakingModeComboBox" Width="120" SelectedIndex="0" SelectionChanged="BrakingMode_SelectionChanged" Margin="0,3,12,3">
-                                        <ComboBoxItem Content="營運煞車" Tag="Service" />
-                                        <ComboBoxItem Content="緊急煞車" Tag="Emergency" />
-                                    </ComboBox>
-                                    <TextBlock Text="列車對" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="SafetyPairComboBox" Width="180" SelectionChanged="SafetyPair_SelectionChanged" Margin="0,3,12,3" />
-                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="SafetyDirectionComboBox" Width="82" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
-                                        <ComboBoxItem Content="全方向" Tag="All" />
-                                        <ComboBoxItem Content="下行" Tag="Outbound" />
-                                        <ComboBoxItem Content="上行" Tag="Inbound" />
-                                    </ComboBox>
-                                    <TextBlock Text="狀態" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="SafetyStatusComboBox" Width="110" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
-                                        <ComboBoxItem Content="全狀態" Tag="All" />
-                                        <ComboBoxItem Content="安全" Tag="Safe" />
-                                        <ComboBoxItem Content="警戒" Tag="Caution" />
-                                        <ComboBoxItem Content="需制動" Tag="BrakingRequired" />
-                                        <ComboBoxItem Content="侵入" Tag="EnvelopeIntrusion" />
-                                    </ComboBox>
-                                    <TextBlock Text="時間" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="SafetyWindowComboBox" Width="100" SelectedIndex="1" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
-                                        <ComboBoxItem Content="最近 60 秒" Tag="60" />
-                                        <ComboBoxItem Content="最近 300 秒" Tag="300" />
-                                        <ComboBoxItem Content="全部時間" Tag="All" />
-                                    </ComboBox>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="煞車估算" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="BrakingModeComboBox" Width="120" SelectedIndex="0" SelectionChanged="BrakingMode_SelectionChanged" Margin="0,3,12,3">
+                                            <ComboBoxItem Content="營運煞車" Tag="Service" />
+                                            <ComboBoxItem Content="緊急煞車" Tag="Emergency" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="列車對" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="SafetyPairComboBox" Width="180" SelectionChanged="SafetyPair_SelectionChanged" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="SafetyDirectionComboBox" Width="82" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                            <ComboBoxItem Content="全方向" Tag="All" />
+                                            <ComboBoxItem Content="下行" Tag="Outbound" />
+                                            <ComboBoxItem Content="上行" Tag="Inbound" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="狀態" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="SafetyStatusComboBox" Width="110" SelectedIndex="0" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                            <ComboBoxItem Content="全狀態" Tag="All" />
+                                            <ComboBoxItem Content="安全" Tag="Safe" />
+                                            <ComboBoxItem Content="警戒" Tag="Caution" />
+                                            <ComboBoxItem Content="需制動" Tag="BrakingRequired" />
+                                            <ComboBoxItem Content="侵入" Tag="EnvelopeIntrusion" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="時間" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="SafetyWindowComboBox" Width="100" SelectedIndex="1" SelectionChanged="SafetyFilter_Changed" Margin="0,3,12,3">
+                                            <ComboBoxItem Content="最近 60 秒" Tag="60" />
+                                            <ComboBoxItem Content="最近 300 秒" Tag="300" />
+                                            <ComboBoxItem Content="全部時間" Tag="All" />
+                                        </ComboBox>
+                                    </StackPanel>
                                 </WrapPanel>
                             </app:ResultPage.Filters>
                             <app:ResultPage.FilterActions>
                                 <WrapPanel>
                                     <TextBlock Text="障礙物急停" Style="{StaticResource FilterGroupLabel}" />
-                                    <TextBlock Text="障礙車" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="ObstacleTrainComboBox" Width="105" Margin="0,3,10,3" />
-                                    <TextBlock Text="延遲秒數" Style="{StaticResource FilterLabel}" />
-                                    <TextBox x:Name="ObstacleDelayTextBox" Width="52" Text="0" Margin="0,3,10,3" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="障礙車" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="ObstacleTrainComboBox" Width="105" Margin="0,3,10,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="延遲秒數" Style="{StaticResource FilterLabel}" />
+                                        <TextBox x:Name="ObstacleDelayTextBox" Width="52" Text="0" Margin="0,3,10,3" />
+                                    </StackPanel>
                                     <Button Content="觸發／排程急停" Style="{StaticResource SecondaryButton}" Click="ObstacleStop_Click" Margin="0,3,0,3" />
                                 </WrapPanel>
                             </app:ResultPage.FilterActions>
@@ -501,31 +515,47 @@
                             </app:ResultPage.Actions>
                             <app:ResultPage.Filters>
                                 <WrapPanel>
-                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalDirectionComboBox" Width="92" SelectedIndex="0" SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3">
-                                        <ComboBoxItem Content="全部" Tag="All" />
-                                        <ComboBoxItem Content="下行" Tag="Outbound" />
-                                        <ComboBoxItem Content="上行" Tag="Inbound" />
-                                    </ComboBox>
-                                    <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalVehicleComboBox" Width="112" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
-                                    <TextBlock Text="車次" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalServiceRunComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
-                                    <TextBlock Text="車型" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
-                                    <TextBlock Text="服務" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalServiceTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
-                                    <TextBlock Text="停站模式" Style="{StaticResource FilterLabel}" />
-                                    <ComboBox x:Name="IntervalStopPatternComboBox" Width="130" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
-                                              SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
-                                    <TextBlock Text="模擬秒起" Style="{StaticResource FilterLabel}" />
-                                    <TextBox x:Name="IntervalStartSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,8,3" />
-                                    <TextBlock Text="迄" Style="{StaticResource FilterLabel}" />
-                                    <TextBox x:Name="IntervalEndSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalDirectionComboBox" Width="92" SelectedIndex="0" SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3">
+                                            <ComboBoxItem Content="全部" Tag="All" />
+                                            <ComboBoxItem Content="下行" Tag="Outbound" />
+                                            <ComboBoxItem Content="上行" Tag="Inbound" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalVehicleComboBox" Width="112" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="車次" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalServiceRunComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="車型" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="服務" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalServiceTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="停站模式" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalStopPatternComboBox" Width="130" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="模擬秒起" Style="{StaticResource FilterLabel}" />
+                                        <TextBox x:Name="IntervalStartSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,8,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="迄" Style="{StaticResource FilterLabel}" />
+                                        <TextBox x:Name="IntervalEndSecondTextBox" Width="72" LostFocus="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
                                     <CheckBox x:Name="IncludeInProgressCheckBox" Content="包含運行中區間" IsChecked="True"
                                               Checked="IntervalFilter_Changed" Unchecked="IntervalFilter_Changed" Margin="0,3,0,3" VerticalAlignment="Center" />
                                 </WrapPanel>
@@ -603,14 +633,18 @@
                                             <DockPanel>
                                                 <TextBlock Text="篩選" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
                                                 <WrapPanel>
-                                                    <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
-                                                    <ComboBox x:Name="DiagramDirectionComboBox" Width="108" SelectedIndex="0" SelectionChanged="DiagramFilter_Changed" ToolTip="選擇顯示上下行、僅下行或僅上行；計畫線、實際線與事件觸發點一起篩選，PNG／PDF 亦跟隨。" Margin="0,3,12,3">
-                                                        <ComboBoxItem Content="上下行皆顯示" Tag="All" />
-                                                        <ComboBoxItem Content="僅下行" Tag="Outbound" />
-                                                        <ComboBoxItem Content="僅上行" Tag="Inbound" />
-                                                    </ComboBox>
-                                                    <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
-                                                    <ComboBox x:Name="DiagramVehicleComboBox" Width="125" SelectionChanged="DiagramFilter_Changed" Margin="0,3,12,3" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="方向" Style="{StaticResource FilterLabel}" />
+                                                        <ComboBox x:Name="DiagramDirectionComboBox" Width="108" SelectedIndex="0" SelectionChanged="DiagramFilter_Changed" ToolTip="選擇顯示上下行、僅下行或僅上行；計畫線、實際線與事件觸發點一起篩選，PNG／PDF 亦跟隨。" Margin="0,3,12,3">
+                                                            <ComboBoxItem Content="上下行皆顯示" Tag="All" />
+                                                            <ComboBoxItem Content="僅下行" Tag="Outbound" />
+                                                            <ComboBoxItem Content="僅上行" Tag="Inbound" />
+                                                        </ComboBox>
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
+                                                        <ComboBox x:Name="DiagramVehicleComboBox" Width="125" SelectionChanged="DiagramFilter_Changed" Margin="0,3,12,3" />
+                                                    </StackPanel>
                                                     <CheckBox x:Name="ShowPlannedCheckBox" Content="計畫／理論" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
                                                     <CheckBox x:Name="ShowActualCheckBox" Content="模擬實際" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
                                                     <CheckBox x:Name="ShowEventsCheckBox" Content="顯示事件觸發點" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="顯示或隱藏運行圖的事件圓點；不影響列車軌跡、事件表及實際全量 CSV。" Margin="0,3,12,3" VerticalAlignment="Center" />
@@ -619,25 +653,35 @@
                                             <DockPanel Margin="0,2,0,0">
                                                 <TextBlock Text="檢視" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
                                                 <WrapPanel>
-                                                    <TextBlock Text="左右縮放" Style="{StaticResource FilterLabel}" />
-                                                    <Slider x:Name="DiagramZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
-                                                    <TextBlock Text="上下縮放" Style="{StaticResource FilterLabel}" />
-                                                    <Slider x:Name="DiagramVerticalZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" ToolTip="只調整里程軸高度，不改變時間軸寬度。" Margin="0,3,12,3" VerticalAlignment="Center" />
-                                                    <TextBlock Text="起始分鐘" Style="{StaticResource FilterLabel}" />
-                                                    <TextBox x:Name="DiagramStartMinuteTextBox" Width="48" Text="0" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,8,3" />
-                                                    <TextBlock Text="結束分鐘" Style="{StaticResource FilterLabel}" />
-                                                    <TextBox x:Name="DiagramEndMinuteTextBox" Width="55" Text="" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,12,3" />
-                                                    <TextBlock Text="時間刻度（分）" Style="{StaticResource FilterLabel}" />
-                                                    <ComboBox x:Name="DiagramTimeTickComboBox" Width="80" IsEditable="True" SelectedIndex="0" ToolTip="選擇或輸入每格分鐘數，再按套用刻度。自動為六等分；可輸入1～1440分鐘，最多2000格，過密時保留原設定。" Margin="0,3,6,3">
-                                                        <ComboBoxItem Content="自動" />
-                                                        <ComboBoxItem Content="1" />
-                                                        <ComboBoxItem Content="2" />
-                                                        <ComboBoxItem Content="5" />
-                                                        <ComboBoxItem Content="10" />
-                                                        <ComboBoxItem Content="15" />
-                                                        <ComboBoxItem Content="30" />
-                                                        <ComboBoxItem Content="60" />
-                                                    </ComboBox>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="左右縮放" Style="{StaticResource FilterLabel}" />
+                                                        <Slider x:Name="DiagramZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="上下縮放" Style="{StaticResource FilterLabel}" />
+                                                        <Slider x:Name="DiagramVerticalZoomSlider" Minimum="1" Maximum="4" Value="1" Width="100" ValueChanged="DiagramZoom_Changed" ToolTip="只調整里程軸高度，不改變時間軸寬度。" Margin="0,3,12,3" VerticalAlignment="Center" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="起始分鐘" Style="{StaticResource FilterLabel}" />
+                                                        <TextBox x:Name="DiagramStartMinuteTextBox" Width="48" Text="0" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,8,3" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="結束分鐘" Style="{StaticResource FilterLabel}" />
+                                                        <TextBox x:Name="DiagramEndMinuteTextBox" Width="55" Text="" TextChanged="DiagramTimeFilter_TextChanged" Margin="0,3,12,3" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="時間刻度（分）" Style="{StaticResource FilterLabel}" />
+                                                        <ComboBox x:Name="DiagramTimeTickComboBox" Width="80" IsEditable="True" SelectedIndex="0" ToolTip="選擇或輸入每格分鐘數，再按套用刻度。自動為六等分；可輸入1～1440分鐘，最多2000格，過密時保留原設定。" Margin="0,3,6,3">
+                                                            <ComboBoxItem Content="自動" />
+                                                            <ComboBoxItem Content="1" />
+                                                            <ComboBoxItem Content="2" />
+                                                            <ComboBoxItem Content="5" />
+                                                            <ComboBoxItem Content="10" />
+                                                            <ComboBoxItem Content="15" />
+                                                            <ComboBoxItem Content="30" />
+                                                            <ComboBoxItem Content="60" />
+                                                        </ComboBox>
+                                                    </StackPanel>
                                                     <Button Content="套用刻度" Style="{StaticResource SecondaryButton}" Click="DiagramTimeTicksApply_Click" Margin="0,3,12,3" />
                                                     <CheckBox x:Name="DiagramShowEndTimeCheckBox" Content="顯示終點時間" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" ToolTip="在固定間隔刻度之外補上目前圖表右端時間；有設定結束分鐘時顯示該篩選終點，並非尚未完成模擬的實際完成時間。PNG／PDF亦跟隨。" Margin="0,3,0,3" VerticalAlignment="Center" />
                                                 </WrapPanel>
@@ -646,11 +690,13 @@
                                                 <TextBlock Text="匯出" DockPanel.Dock="Left" Style="{StaticResource FilterGroupLabel}" VerticalAlignment="Top" Margin="0,11,10,0" />
                                                 <WrapPanel>
                                                     <CheckBox x:Name="HighResolutionCheckBox" Content="高解析 PNG" Margin="0,3,12,3" VerticalAlignment="Center" />
-                                                    <TextBlock Text="PDF 紙張" Style="{StaticResource FilterLabel}" />
-                                                    <ComboBox x:Name="PdfPageSizeComboBox" Width="68" SelectedIndex="0" Margin="0,3,8,3">
-                                                        <ComboBoxItem Content="A4" Tag="A4" />
-                                                        <ComboBoxItem Content="A3" Tag="A3" />
-                                                    </ComboBox>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="PDF 紙張" Style="{StaticResource FilterLabel}" />
+                                                        <ComboBox x:Name="PdfPageSizeComboBox" Width="68" SelectedIndex="0" Margin="0,3,8,3">
+                                                            <ComboBoxItem Content="A4" Tag="A4" />
+                                                            <ComboBoxItem Content="A3" Tag="A3" />
+                                                        </ComboBox>
+                                                    </StackPanel>
                                                     <CheckBox x:Name="PdfSplitPagesCheckBox" Content="PDF 分頁" IsChecked="True" Margin="0,3,12,3" VerticalAlignment="Center" />
                                                     <Button Content="匯出 PNG" Style="{StaticResource SecondaryButton}" Click="ExportPng_Click" Margin="0,3,6,3" />
                                                     <Button Content="匯出 PDF" Style="{StaticResource SecondaryButton}" Click="ExportPdf_Click" Margin="0,3,6,3" />

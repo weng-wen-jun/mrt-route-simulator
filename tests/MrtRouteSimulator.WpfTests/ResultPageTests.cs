@@ -21,6 +21,7 @@ internal static class ResultPageTests
         VerifyCrowdedHeaders();
         VerifyDiagramAndSimulationPages();
         VerifyNoHardCodedColors(root);
+        VerifyFilterLabelsStayWithControls();
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -139,6 +140,11 @@ internal static class ResultPageTests
                 $"結果表數字欄必須靠右並用等寬字型；alignment={number.TextAlignment}, font={number.FontFamily}。");
             var header = ShellLayoutTests.FindDescendant<DataGridColumnHeader>(enabledGrid, item => Equals(item.Content, "距離 km"));
             Require(header?.HorizontalContentAlignment == HorizontalAlignment.Right, "數字欄的欄名必須靠右。");
+            // 文字畫在 TextBlock 頂端；比較頂端位置才反映實際字的高度是否一致。
+            double TextTop(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), enabledGrid).Y;
+            var statusText = (TextBlock)Cell(enabledGrid, 0, 2).Content;
+            Require(Math.Abs(TextTop(statusText) - TextTop(longName)) < 1 && Math.Abs(TextTop(number) - TextTop(longName)) < 1,
+                $"同一列的文字、數字與狀態欄必須垂直對齊；text={TextTop(longName):0.0}, number={TextTop(number):0.0}, status={TextTop(statusText):0.0}。");
             var dangerCell = Cell(enabledGrid, 1, 2);
             Require(ShellLayoutTests.FindDescendant<Ellipse>(dangerCell)?.Fill is var dangerFill && ReferenceEquals(dangerFill, UiTheme.DangerBrush),
                 "狀態欄必須以色點標示，「侵入安全距離」為 Danger。");
@@ -427,5 +433,38 @@ internal static class ResultPageTests
         var colors = Regex.Matches(xaml, "\"#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?\"").Select(match => match.Value).Distinct().ToArray();
         Require(colors.Length == 0, $"MainWindow.xaml 不得含寫死色碼：{string.Join("、", colors)}");
         Console.WriteLine("[通過] MainWindow.xaml 無寫死色碼");
+    }
+
+    // 篩選列換行時，標籤必須和它的控制項一起移動，不能留在上一行行尾。
+    private static void VerifyFilterLabelsStayWithControls()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var labelStyle = Application.Current.FindResource("FilterLabel");
+            foreach (var tab in new[] { "SafetyTabItem", "IntervalStatisticsTabItem", "DiagramTabItem" })
+            {
+                var page = (ResultPage)((TabItem)window.FindName(tab)!).Content;
+                var labels = new List<TextBlock>();
+                foreach (var slot in new[] { page.Filters, page.FilterActions, page.Content })
+                    CollectLogical(slot, labels, text => ReferenceEquals(text.Style, labelStyle));
+                Require(labels.Count > 0, $"{tab} 找不到篩選標籤。");
+                foreach (var label in labels)
+                    Require(LogicalTreeHelper.GetParent(label) is StackPanel { Orientation: Orientation.Horizontal } pair && pair.Children.Count == 2,
+                        $"{tab} 的標籤「{label.Text}」必須和控制項包成一組，換行時才不會被拆開。");
+            }
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 篩選標籤與控制項成組換行");
+    }
+
+    private static void CollectLogical<T>(object? root, List<T> found, Func<T, bool> predicate) where T : DependencyObject
+    {
+        if (root is not DependencyObject node) return;
+        if (node is T match && predicate(match)) found.Add(match);
+        foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+            CollectLogical(child, found, predicate);
     }
 }
