@@ -79,6 +79,12 @@
                           Click="RouteLockVisibility_Changed"
                           ToolTip="僅標示模擬中已成功預約的實體進路；未取得進路的待避列車不標示。"
                           AutomationProperties.Name="顯示已鎖定進路" />
+                <MenuItem x:Name="ShowTrackOccupancyMenuItem"
+                          Header="顯示區段占用亮燈"
+                          IsCheckable="True"
+                          Click="TrackOccupancyVisibility_Changed"
+                          ToolTip="以黃色光帶標示列車目前占用的整條軌道區段；資料直接取自模擬核心。"
+                          AutomationProperties.Name="顯示區段占用亮燈" />
             </MenuItem>
             <MenuItem Header="_分析結果" Click="OpenResults_Click" AutomationProperties.Name="分析結果" />
             <MenuItem Header="_原生驗收量測" AutomationProperties.Name="原生驗收量測">

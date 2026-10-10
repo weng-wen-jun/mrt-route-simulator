@@ -104,6 +104,19 @@ internal static class Program
                 Console.WriteLine("PASS WPF validation warning dismissal");
                 return 0;
             }
+            if (args.Contains("--track-theme-only"))
+            {
+                TrackDiagramThemeTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--visual-rules-only"))
+            {
+                // 全範例配線圖版面規則；不含需要互動桌面的像素匯出測試。
+                VisualRulesTests.Run();
+                TrackDiagramThemeTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF visual rules only");
+                return 0;
+            }
             if (args.Contains("--synchronous-export-only"))
             {
                 SynchronousDiagramExportTests.Run(GetRoot(args));
@@ -285,6 +298,7 @@ internal static class Program
             DiagramCompactLayoutTests.Run(regressionRoot);
             TimeDistancePreparationTests.Run(regressionRoot);
             VisualRulesTests.Run();
+            TrackDiagramThemeTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);

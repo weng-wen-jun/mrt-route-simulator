@@ -15,17 +15,7 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow : Window
 {
-    private static readonly Color[] TrainColors =
-    [
-        Color.FromRgb(232, 109, 45),
-        Color.FromRgb(34, 126, 173),
-        Color.FromRgb(22, 134, 107),
-        Color.FromRgb(126, 87, 194),
-        Color.FromRgb(205, 75, 112),
-        Color.FromRgb(56, 163, 165),
-        Color.FromRgb(231, 165, 48),
-        Color.FromRgb(82, 102, 159)
-    ];
+    private static readonly Color[] TrainColors = UiTheme.VehiclePalette;
 
     private readonly DispatcherTimer _playbackTimer;
     private EngineRoute? _route;
@@ -50,10 +40,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        RouteCanvas.Background = UiTheme.CanvasBackgroundBrush;
         InterfaceScaleService.ApplyToWindow(this);
         UpdateInterfaceScaleMenu();
-        ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
-        _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
+        var displaySettings = AppDisplayPreferences.LoadAll();
+        ShowLockedRoutesMenuItem.IsChecked = displaySettings.ShowLockedRoutes;
+        ShowTrackOccupancyMenuItem.IsChecked = displaySettings.ShowTrackOccupancy;
+        _routeMapHorizontalZoom = displaySettings.RouteMapHorizontalZoom;
         SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
         _initializingRouteDisplayPreferences = false;
         UpdateRouteFollowUi();

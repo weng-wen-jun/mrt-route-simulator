@@ -2208,8 +2208,8 @@ internal sealed partial class TopologyEditorWindow : Window
         }
 
         var stationChainage = StationChainageProjection.TryCreate(state.Draft);
-        StationSchematicPresentation.DrawStationNames(canvas, stationVisuals.Select(s => (s.Station.StationId,
-            s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
+        StationSchematicPresentation.DrawStationNames(canvas, stationVisuals.Select(s => (s.Station.StationId, s.Station.Name,
+            stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? km : (double?)null)), width);
         StationSchematicPresentation.DrawChainageReference(canvas, stationChainage, 29);
         var facilityLegendTop = Math.Max(380, canvas.Children.OfType<FrameworkElement>()
             .Where(item => item.Tag is StationSchematicPresentation.StationLabelAnchor)

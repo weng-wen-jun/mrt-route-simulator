@@ -454,7 +454,7 @@ internal static class StationSchematicPresentation
     {
         if (projection is null) return;
         var label = new TextBlock { Text = $"起始站中心 0.000K · 配線里程 {projection.MinimumChainageMeters / 1000:0.000}K ～ {projection.MaximumChainageMeters / 1000:0.000}K",
-            FontSize = 10, Foreground = Brushes.SlateGray };
+            FontSize = 10, Foreground = UiTheme.TextMutedBrush };
         Canvas.SetLeft(label, 12); Canvas.SetTop(label, top); canvas.Children.Add(label);
     }
     // 標籤只能縮窄，不得為了避開邊界而移動月臺中心線。
@@ -472,7 +472,8 @@ internal static class StationSchematicPresentation
     internal sealed record PlatformLayoutIssue(string Message);
     internal sealed record PlatformNumberAnchor(string StationId, string PlatformId);
 
-    public static void DrawStationNames(Canvas canvas, IEnumerable<(string Id, string Name)> stations, double width)
+    public static void DrawStationNames(Canvas canvas,
+        IEnumerable<(string Id, string Name, double? ChainageMeters)> stations, double width)
     {
         var bodies = canvas.Children.OfType<Rectangle>().Where(r => r.Tag is PlatformBodyAnchor).ToArray();
         if (bodies.Length == 0) return;
@@ -498,10 +499,7 @@ internal static class StationSchematicPresentation
             // 在總覽圖中交錯上下放置，可讓相鄰站名保有可讀間距；若真的衝突，
             // 仍沿同側垂直避讓，且不會改寫月臺／軌道位置。
             var above = stationIndex++ % 2 == 0;
-            var label = new TextBlock { Text = $"{station.Id}\n{station.Name}", FontSize = 11,
-                TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
-                FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromRgb(30, 46, 64)),
-                Background = Brushes.White, ToolTip = $"{station.Id} · {station.Name}" };
+            var label = CreateStationLabel(station.Id, station.Name, station.ChainageMeters);
             PlaceStationLabel(label, station.Id, center, above ? upper : lower, width);
             label.Width = Math.Min(label.Width, 110);
             Canvas.SetLeft(label, center - label.Width / 2);
@@ -519,10 +517,49 @@ internal static class StationSchematicPresentation
             canvas.Children.Add(new Line { X1 = center, X2 = center,
                 Y1 = above ? box.Bottom + 2 : box.Top - 2,
                 Y2 = above ? stationBounds.Top - 3 : stationBounds.Bottom + 3,
-                Stroke = Brushes.SlateGray, StrokeThickness = .7, IsHitTestVisible = false });
+                Stroke = UiTheme.HairlineBrush, StrokeThickness = 1, IsHitTestVisible = false });
             canvas.Children.Add(label);
             canvas.Height = Math.Max(canvas.Height, box.Bottom + 28);
         }
+    }
+
+    // 站名已含 ID（例如「O03 站」）時不再重複 ID；否則把 ID 移到次要資訊。
+    public static (string Primary, string Secondary) StationLabelLines(string id, string name, double? chainageMeters)
+    {
+        var primary = string.IsNullOrWhiteSpace(name) ? id : name.Trim();
+        var parts = new List<string>();
+        if (!ContainsAsWord(primary, id)) parts.Add(id);
+        if (chainageMeters is { } meters && double.IsFinite(meters)) parts.Add($"{meters / 1000:0.000}K");
+        return (primary, string.Join(" · ", parts));
+    }
+
+    // ID 必須以完整詞出現：前後不可緊接英數字（中文、空白與符號都算邊界），避免 E／East 誤判。
+    private static bool ContainsAsWord(string text, string word)
+    {
+        if (word.Length == 0) return true;
+        for (var index = text.IndexOf(word, StringComparison.OrdinalIgnoreCase); index >= 0;
+             index = text.IndexOf(word, index + 1, StringComparison.OrdinalIgnoreCase))
+        {
+            var end = index + word.Length;
+            if ((index == 0 || !char.IsAsciiLetterOrDigit(text[index - 1]))
+                && (end >= text.Length || !char.IsAsciiLetterOrDigit(text[end]))) return true;
+        }
+        return false;
+    }
+
+    private static Border CreateStationLabel(string id, string name, double? chainageMeters)
+    {
+        var (primary, secondary) = StationLabelLines(id, name, chainageMeters);
+        var text = new TextBlock { TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap,
+            Foreground = UiTheme.TextStrongBrush };
+        text.Inlines.Add(new System.Windows.Documents.Run(primary) { FontSize = 12, FontWeight = FontWeights.SemiBold });
+        if (secondary.Length > 0)
+        {
+            text.Inlines.Add(new System.Windows.Documents.LineBreak());
+            text.Inlines.Add(new System.Windows.Documents.Run(secondary) { FontSize = 11, Foreground = UiTheme.TextMutedBrush });
+        }
+        return new Border { Background = UiTheme.StationBadgeFillBrush, CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(6, 3, 6, 3), Child = text, ToolTip = $"{id} · {name}" };
     }
 
     // 示意圖警告不改寫 topology 或模擬位置；亦供 WPF 回歸測試使用。
@@ -672,10 +709,40 @@ internal static class StationSchematicPresentation
         }
     }
 
-    public static void DrawLegend(Canvas canvas)
+    public static void DrawLegend(Canvas canvas, bool showOccupancy = false, bool showLockedRoutes = false)
     {
-        var legend = new TextBlock { Text = "← 上行　　下行 →　　靠右行駛・里程向右增加", FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(25, 96, 125)) };
+        var legend = new StackPanel { Orientation = Orientation.Horizontal, Tag = "RouteLegend" };
+        void AddText(string text, Brush brush, double leftMargin) => legend.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontSize = 12,
+            Foreground = brush,
+            Margin = new Thickness(leftMargin, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        void AddSwatch(Brush brush, double height) => legend.Children.Add(new Border
+        {
+            Width = 18,
+            Height = height,
+            CornerRadius = new CornerRadius(height / 2),
+            Background = brush,
+            Margin = new Thickness(16, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        AddText("← 上行", UiTheme.RailUpBrush, 0);
+        AddText("下行 →", UiTheme.RailDownBrush, 12);
+        AddText("靠右行駛・里程向右增加", UiTheme.TextSubtleBrush, 12);
+        if (showOccupancy)
+        {
+            AddSwatch(UiTheme.OccupancyGlowBrush, 10);
+            AddText("區段占用", UiTheme.TextMutedBrush, 5);
+        }
+        if (showLockedRoutes)
+        {
+            AddSwatch(UiTheme.LockedRouteBrushes[0], 3);
+            AddText("已鎖定進路", UiTheme.TextMutedBrush, 5);
+        }
         Canvas.SetLeft(legend, 18); Canvas.SetTop(legend, 12); canvas.Children.Add(legend);
     }
     public static void ApplyNodeLayout(Dictionary<string, (Point From, Point To)> points,
@@ -977,7 +1044,11 @@ internal static class StationSchematicPresentation
             var markerOnly = group.All(f => throughMarkerIds.Contains(f.Platform.PlatformId));
             var body = new Rectangle { Width = rect.Width, Height = rect.Height,
                 Tag = new PlatformBodyAnchor(group.Key.StationId, group.Key.Body),
-                Fill = new SolidColorBrush(Color.FromRgb(25, 96, 125)),
+                Fill = UiTheme.PlatformFillBrush,
+                Stroke = UiTheme.HairlineBrush,
+                StrokeThickness = 1,
+                RadiusX = 3,
+                RadiusY = 3,
                 Opacity = markerOnly ? 0 : 1,
                 IsHitTestVisible = !markerOnly,
                 ToolTip = string.Join("\n", group.Select(f => $"{f.Platform.Name} · {f.Platform.TrackEdgeId}")) };
@@ -988,31 +1059,48 @@ internal static class StationSchematicPresentation
                 var number = string.IsNullOrWhiteSpace(face.Platform.PlatformNumber)
                     ? face.Platform.AllowedDirection == TrackDirection.Outbound ? "1" : face.Platform.AllowedDirection == TrackDirection.Inbound ? "2" : "•"
                     : face.Platform.PlatformNumber;
-                var label = new TextBlock { Text = number, FontSize = 10, Foreground = Brushes.Black,
+                var tone = PlatformNumberBrush(face.Platform.AllowedDirection);
+                // 非載客的通過正線只是營運標記，以空心圓點與載客月台區分。
+                var hollow = throughMarkerIds.Contains(face.Platform.PlatformId);
+                var label = new TextBlock { Text = number, FontSize = 10, FontWeight = FontWeights.SemiBold,
+                    Foreground = hollow ? tone : Brushes.White,
                     Tag = new PlatformNumberAnchor(face.Platform.StationId, face.Platform.PlatformId),
-                    Background = Brushes.White, Padding = new Thickness(2, 0, 2, 0), IsHitTestVisible = false };
-                Panel.SetZIndex(label, 2);
+                    IsHitTestVisible = false };
+                Panel.SetZIndex(label, 3);
                 label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                var left = face.Box.Left + face.Box.Width / 2 - label.DesiredSize.Width / 2;
-                var top = face.Box.Top;
-                var step = label.DesiredSize.Height + 2;
-                var direction = face.Box.Top + face.Box.Height / 2 <= middle ? -1 : 1;
-                var numberBounds = new Rect(left, top, label.DesiredSize.Width, label.DesiredSize.Height);
-                // A dense full-line overview can place adjacent platform centres
-                // only a few pixels apart.  Preserve every platform marker, but
-                // stagger its small number tag rather than rendering two tags on
-                // top of one another.
-                for (var attempt = 0; placedPlatformNumberBounds.Any(previous => previous.IntersectsWith(numberBounds)); attempt++)
+                var diameter = Math.Max(Math.Max(13, Math.Ceiling(label.DesiredSize.Height)), Math.Ceiling(label.DesiredSize.Width) + 4);
+                var centerX = face.Box.Left + face.Box.Width / 2;
+                var centerY = face.Box.Top + face.Box.Height / 2;
+                var step = diameter + 2;
+                var direction = centerY <= middle ? -1 : 1;
+                var badgeBounds = new Rect(centerX - diameter / 2, centerY - diameter / 2, diameter, diameter);
+                // 密集總覽中相鄰月台中心可能只差幾個像素；保留每個編號，但錯開圓點。
+                for (var attempt = 0; placedPlatformNumberBounds.Any(previous => previous.IntersectsWith(badgeBounds)); attempt++)
                 {
                     var offset = (attempt / 2 + 1) * step;
-                    top = face.Box.Top + (attempt % 2 == 0 ? direction : -direction) * offset;
-                    numberBounds.Y = top;
+                    badgeBounds.Y = centerY - diameter / 2 + (attempt % 2 == 0 ? direction : -direction) * offset;
                 }
-                placedPlatformNumberBounds.Add(numberBounds);
-                Canvas.SetLeft(label, left); Canvas.SetTop(label, top); canvas.Children.Add(label);
+                placedPlatformNumberBounds.Add(badgeBounds);
+                var badge = new Ellipse { Width = diameter, Height = diameter,
+                    Fill = hollow ? UiTheme.PlatformFillBrush : tone,
+                    Stroke = hollow ? tone : null,
+                    StrokeThickness = hollow ? 1.2 : 0,
+                    IsHitTestVisible = false };
+                Panel.SetZIndex(badge, 2);
+                Canvas.SetLeft(badge, badgeBounds.Left); Canvas.SetTop(badge, badgeBounds.Top); canvas.Children.Add(badge);
+                Canvas.SetLeft(label, badgeBounds.Left + (diameter - label.DesiredSize.Width) / 2);
+                Canvas.SetTop(label, badgeBounds.Top + (diameter - label.DesiredSize.Height) / 2);
+                canvas.Children.Add(label);
             }
         }
         return stationBounds.ToDictionary(p => p.Key, p => p.Value.Left + p.Value.Width / 2,
             StringComparer.OrdinalIgnoreCase);
     }
+
+    private static SolidColorBrush PlatformNumberBrush(TrackDirection direction) => direction switch
+    {
+        TrackDirection.Outbound => UiTheme.RailDownBrush,
+        TrackDirection.Inbound => UiTheme.RailUpBrush,
+        _ => UiTheme.PlatformBidirectionalBrush
+    };
 }
