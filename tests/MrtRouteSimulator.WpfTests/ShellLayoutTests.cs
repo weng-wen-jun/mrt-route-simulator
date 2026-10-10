@@ -520,10 +520,30 @@ internal static class ShellLayoutTests
                             WpfTestWait.Wait(Task.Delay(200));
                             Save(window, System.IO.Path.Combine(output, $"{file}-1280x800.png"));
                         }
+                        tabs.SelectedItem = window.FindName("DiagramTabItem");
+                        PumpLayout(window);
+                        SaveDiagramExports(window, output);
                     }
                 }
                 finally { WpfTestWait.Close(window); }
             }
+            var v1Window = new MainWindow { Width = 1280, Height = 800 };
+            try
+            {
+                v1Window.Show();
+                PumpLayout(v1Window);
+                ChartThemeTests.BuildV1Simulation(v1Window);
+                ((TabControl)v1Window.FindName("WorkspaceTabControl")!).SelectedItem = v1Window.FindName("SimulationTabItem");
+                var v1Views = (TabControl)v1Window.FindName("SimulationViewTabControl")!;
+                foreach (var (index, file, draw) in new[] { (0, "v1-route", "DrawRoute"), (2, "v1-speed", "DrawSpeedProfile") })
+                {
+                    v1Views.SelectedIndex = index;
+                    PumpLayout(v1Window);
+                    WpfTestWait.Invoke(v1Window, draw);
+                    Save(v1Window, System.IO.Path.Combine(output, $"{file}-1280x800.png"));
+                }
+            }
+            finally { WpfTestWait.Close(v1Window); }
             var drawerWindow = new MainWindow { Width = 1280, Height = 800 };
             try
             {
@@ -563,6 +583,25 @@ internal static class ShellLayoutTests
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);
+        encoder.Save(stream);
+    }
+
+    // 匯出 PNG 與 PDF 第一頁（以分頁模式組頁），供改版前後對照匯出外觀。
+    private static void SaveDiagramExports(MainWindow window, string output)
+    {
+        var exportType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.DiagramExportService")!;
+        var canvas = (Canvas)window.FindName("TimeDistanceCanvas")!;
+        WpfTestWait.Invoke(window, "DrawTimeDistanceDiagramFull");
+        PumpLayout(window);
+        exportType.GetMethod("ExportPng")!.Invoke(null, [canvas, System.IO.Path.Combine(output, "export-diagram.png"), 1d]);
+        var render = exportType.GetMethod("Render", BindingFlags.Static | BindingFlags.NonPublic, binder: null,
+            types: [typeof(FrameworkElement), typeof(double), typeof(bool)], modifiers: null)!;
+        var createPages = exportType.GetMethod("CreatePdfPages", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var bitmap = (RenderTargetBitmap)render.Invoke(null, [canvas, 1.6d, true])!;
+        var pages = (IReadOnlyList<BitmapSource>)createPages.Invoke(null, [bitmap, 794, 547, true, canvas, 1.6d])!;
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(pages[0]));
+        using var stream = File.Create(System.IO.Path.Combine(output, "export-pdf-page1.png"));
         encoder.Save(stream);
     }
 
