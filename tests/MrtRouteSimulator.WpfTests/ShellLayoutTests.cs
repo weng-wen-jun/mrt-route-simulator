@@ -583,7 +583,20 @@ internal static class ShellLayoutTests
         // 只拍視窗內容（不含系統標題列）；內容已套用介面縮放。
         var content = (FrameworkElement)window.Content;
         var bitmap = new RenderTargetBitmap((int)Math.Ceiling(content.ActualWidth), (int)Math.Ceiling(content.ActualHeight), 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(content);
+        // 先畫視窗底色再畫內容：編輯器只在視窗本身設底色，內容透明時截圖才會與實際畫面一致。
+        var bounds = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+        {
+            context.DrawRectangle(window.Background, null, bounds);
+            context.DrawRectangle(new VisualBrush(content)
+            {
+                ViewboxUnits = BrushMappingMode.Absolute,
+                Viewbox = new Rect((Point)VisualTreeHelper.GetOffset(content), bounds.Size),
+                Stretch = Stretch.Fill
+            }, null, bounds);
+        }
+        bitmap.Render(visual);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = File.Create(path);

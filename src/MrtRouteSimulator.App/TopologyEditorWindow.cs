@@ -213,7 +213,8 @@ internal sealed partial class TopologyEditorWindow : Window
         root.Children.Add(right);
 
         var footer = new DockPanel { Name = "EditorFooter", Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
-        validationSummary.Text = "尚未驗證草稿";
+        // 起始頁（例如總覽）在建立導覽時就已驗證；保留那次結果，避免文字與色點不一致。
+        if (string.IsNullOrEmpty(validationSummary.Text)) validationSummary.Text = "尚未驗證草稿";
         validationSummary.Foreground = UiTheme.TextMutedBrush;
         validationSummary.VerticalAlignment = VerticalAlignment.Center;
         var summaryRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };

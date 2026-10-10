@@ -19,6 +19,7 @@ internal static class EditorThemeTests
     {
         VerifyEditorStyles();
         VerifyShell(root);
+        VerifyInitialValidationSummary(root);
         VerifyPages(root);
         VerifySchematic(root);
         VerifyDialogs(root);
@@ -229,6 +230,25 @@ internal static class EditorThemeTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 編輯器外殼：導覽、頁首、右側卡片、驗證色點與底部按鈕");
+    }
+
+    // 開啟時就驗證的頁面（總覽）：底部摘要文字與色點必須一致，不能文字寫未驗證、色點卻是結果色。
+    private static void VerifyInitialValidationSummary(string root)
+    {
+        foreach (var page in new[] { "Project", "Tracks" })
+        {
+            var window = OpenEditor(root, page);
+            try
+            {
+                var text = ((TextBlock)Field(window, "validationSummary")!).Text;
+                var dot = (Ellipse)Field(window, "validationSummaryDot")!;
+                var unvalidated = text.StartsWith("尚未驗證", StringComparison.Ordinal);
+                Require(unvalidated == ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush),
+                    $"「{page}」開啟時底部摘要「{text}」與色點顏色不一致。");
+            }
+            finally { window.Close(); }
+        }
+        Console.WriteLine("[通過] 開啟編輯器時底部驗證摘要文字與色點一致");
     }
 
     // 守門測試：最小視窗與 125% 縮放下，頁首與底部操作不可被裁切（可能在改動前就通過）。
