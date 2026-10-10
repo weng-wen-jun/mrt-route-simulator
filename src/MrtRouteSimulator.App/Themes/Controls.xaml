@@ -860,4 +860,148 @@
             </Setter.Value>
         </Setter>
     </Style>
+
+    <!-- 結果頁（ResultPage） -->
+    <Style x:Key="ResultPageTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="15" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ResultPageDescription" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="ResultPageSummary" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style x:Key="ResultPageFootnote" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="FilterLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,5,0" />
+    </Style>
+
+    <Style x:Key="FilterGroupLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextSubtleBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,10,0" />
+        <Setter Property="MinWidth" Value="28" />
+    </Style>
+
+    <Style x:Key="FilterCard" TargetType="Border">
+        <Setter Property="Background" Value="{x:Static app:UiTheme.SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static app:UiTheme.BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="10,4" />
+    </Style>
+
+    <Style x:Key="ResultCard" TargetType="Border">
+        <Setter Property="Background" Value="{x:Static app:UiTheme.SurfaceBrush}" />
+        <Setter Property="BorderBrush" Value="{x:Static app:UiTheme.BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="4" />
+    </Style>
+
+    <Style x:Key="ChartCard" TargetType="Border" BasedOn="{StaticResource ResultCard}">
+        <Setter Property="Background" Value="{x:Static app:UiTheme.CanvasBackgroundBrush}" />
+        <Setter Property="Padding" Value="6" />
+    </Style>
+
+    <Style x:Key="ResultCardTitle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
+        <Setter Property="Margin" Value="6,4,6,4" />
+    </Style>
+
+    <Style TargetType="app:ResultPage">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="IsTabStop" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="app:ResultPage">
+                    <DockPanel>
+                        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <DockPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock x:Name="PART_Title" DockPanel.Dock="Left" Text="{TemplateBinding Title}"
+                                           Style="{StaticResource ResultPageTitle}" />
+                                <ContentPresenter x:Name="PART_Description" Content="{TemplateBinding Description}"
+                                                  Margin="10,0,0,0" VerticalAlignment="Center" />
+                            </DockPanel>
+                            <ContentPresenter x:Name="ActionsHost" Grid.Column="1" Content="{TemplateBinding Actions}"
+                                              VerticalAlignment="Center" />
+                        </Grid>
+                        <DockPanel x:Name="SummaryRow" DockPanel.Dock="Top" Margin="0,0,0,8">
+                            <TextBlock DockPanel.Dock="Left" Text="&#xE946;" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                       Foreground="{x:Static app:UiTheme.AccentBrush}" VerticalAlignment="Top" Margin="0,2,6,0" />
+                            <ContentPresenter Content="{TemplateBinding Summary}" />
+                        </DockPanel>
+                        <Border x:Name="FilterCard" DockPanel.Dock="Top" Style="{StaticResource FilterCard}" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <ContentPresenter Content="{TemplateBinding Filters}" VerticalAlignment="Center" />
+                                <Border x:Name="FilterActionsHost" Grid.Column="1" BorderBrush="{x:Static app:UiTheme.BorderBrush}"
+                                        BorderThickness="1,0,0,0" Padding="10,0,0,0" Margin="10,0,0,0">
+                                    <ContentPresenter Content="{TemplateBinding FilterActions}" VerticalAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <ContentPresenter x:Name="FootnoteHost" DockPanel.Dock="Bottom" Content="{TemplateBinding Footnote}" Margin="2,8,0,0" />
+                        <ContentPresenter x:Name="PART_Content" Content="{TemplateBinding Content}" />
+                    </DockPanel>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Description" Value="{x:Null}">
+                            <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Actions" Value="{x:Null}">
+                            <Setter TargetName="ActionsHost" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Summary" Value="{x:Null}">
+                            <Setter TargetName="SummaryRow" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="FilterActions" Value="{x:Null}">
+                            <Setter TargetName="FilterActionsHost" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Filters" Value="{x:Null}" />
+                                <Condition Property="FilterActions" Value="{x:Null}" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="FilterCard" Property="Visibility" Value="Collapsed" />
+                        </MultiTrigger>
+                        <Trigger Property="Footnote" Value="{x:Null}">
+                            <Setter TargetName="FootnoteHost" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

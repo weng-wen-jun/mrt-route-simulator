@@ -15,6 +15,7 @@ internal static class ResultPageTests
     {
         VerifyStatusTones(root);
         VerifyResultTableRules();
+        VerifyResultPageControl();
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -149,5 +150,53 @@ internal static class ResultPageTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] ResultTable 欄位規則：文字截斷、數字靠右、狀態色點");
+    }
+
+    private static void VerifyResultPageControl()
+    {
+        TextBlock Text(string value) => new() { Text = value };
+        var description = Text("說明");
+        var summary = Text("摘要");
+        var filter = Text("篩選");
+        var filterAction = new Button { Content = "篩選動作" };
+        var action = new Button { Content = "匯出" };
+        var footnote = Text("附註");
+        var body = new Border { Height = 120 };
+        var full = new ResultPage
+        {
+            Title = "完整頁", Description = description, Summary = summary, Filters = filter,
+            FilterActions = filterAction, Actions = action, Footnote = footnote, Content = body
+        };
+        var minimal = new ResultPage { Title = "精簡頁", Content = new Border { Height = 80 } };
+        var filtersOnly = new ResultPage { Title = "只有篩選", Filters = Text("篩選"), Content = new Border { Height = 80 } };
+        var host = new UniformGrid { Columns = 3 };
+        host.Children.Add(full);
+        host.Children.Add(minimal);
+        host.Children.Add(filtersOnly);
+        var window = new Window { Width = 1200, Height = 520, Content = host };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            double Top(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), full).Y;
+            double Left(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), full).X;
+            FrameworkElement Part(ResultPage page, string name) => (FrameworkElement)page.Template.FindName(name, page);
+            var title = Part(full, "PART_Title");
+            Require(title is TextBlock { Text: "完整頁" }, "ResultPage 必須顯示標題。");
+            Require(Top(title) < Top(summary) && Top(summary) < Top(filter) && Top(filter) < Top(body) && Top(body) < Top(footnote),
+                "ResultPage 由上而下應為頁首、摘要、篩選卡、內容、附註。");
+            Require(Left(action) > Left(description) && Math.Abs(Top(action) - Top(title)) < 12, "動作鈕必須在頁首右側。");
+            Require(Left(filterAction) > Left(filter) && Math.Abs(Top(filterAction) - Top(filter)) < 12, "篩選卡的動作群組必須在篩選右側。");
+            foreach (var slot in new FrameworkElement[] { description, summary, filter, filterAction, action, footnote, body })
+                Require(LogicalTreeHelper.GetParent(slot) == full, $"{slot.GetType().Name} 必須是 ResultPage 的邏輯子元素。");
+            foreach (var part in new[] { "PART_Description", "ActionsHost", "SummaryRow", "FilterCard", "FootnoteHost" })
+                Require(Part(minimal, part).Visibility == Visibility.Collapsed, $"未設定內容時 {part} 必須隱藏。");
+            Require(Part(filtersOnly, "FilterCard").Visibility == Visibility.Visible
+                    && Part(filtersOnly, "FilterActionsHost").Visibility == Visibility.Collapsed,
+                "只有篩選時顯示篩選卡、隱藏右側動作群組。");
+            Require(!full.Focusable && !full.IsTabStop, "ResultPage 本身不應成為 Tab 停駐點。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] ResultPage 元件骨架");
     }
 }
