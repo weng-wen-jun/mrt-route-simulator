@@ -45,6 +45,12 @@ public static class ChartTheme
     /// <summary>運行圖計畫／理論線。</summary>
     public static readonly DoubleCollection PlannedDash = FrozenDash(6, 4);
 
+    /// <summary>圖例的虛線樣本（線寬 2，短樣本上要看得出虛線）。</summary>
+    public static readonly DoubleCollection LegendDash = FrozenDash(3, 2);
+
+    /// <summary>圖例的點線樣本。</summary>
+    public static readonly DoubleCollection LegendDot = FrozenDash(1, 1.5);
+
     public const double GridThickness = 1;
     public const double AxisThickness = 1.2;
     public const double AxisLabelFontSize = 10;
@@ -54,10 +60,21 @@ public static class ChartTheme
     public const double MessageFontSize = 12;
 
     private static readonly FontFamily FallbackFont = new("Microsoft JhengHei UI, Segoe UI");
+    private static FontFamily? _appFont;
 
-    /// <summary>App 字型（Themes/Controls.xaml 的 AppFont）；匯出與尚未掛上視窗的畫布也用同一字型。</summary>
-    public static FontFamily Font =>
-        Application.Current?.TryFindResource("AppFont") as FontFamily ?? FallbackFont;
+    /// <summary>
+    /// App 字型（Themes/Controls.xaml 的 AppFont）；匯出與尚未掛上視窗的畫布也用同一字型。
+    /// 第一次取得資源後快取，車站標籤量測會反覆呼叫；尚無 Application 時回傳備用字型且不快取。
+    /// </summary>
+    public static FontFamily Font
+    {
+        get
+        {
+            if (_appFont is not null) return _appFont;
+            if (Application.Current?.TryFindResource("AppFont") is FontFamily appFont) return _appFont = appFont;
+            return FallbackFont;
+        }
+    }
 
     private static SolidColorBrush Translucent(Color color, byte alpha)
     {

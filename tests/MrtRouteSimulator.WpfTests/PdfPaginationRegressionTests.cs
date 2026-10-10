@@ -137,7 +137,7 @@ internal static class PdfPaginationRegressionTests
         Require(gapNext.Y > gapFirst.Y,
             "相鄰文字框雖不重疊，但間距小於4DIP仍須分列保留可讀空隙。");
 
-        var drawText = exportType.GetMethod("DrawTextBlock", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var drawText = exportType.GetMethod("DrawElementSnapshot", BindingFlags.Static | BindingFlags.NonPublic)!;
         var textCanvas = new Canvas { Width = 300, Height = 30, Background = Brushes.White };
         var paddedText = AddText(textCanvas, "00:00:00.0", 20, 4, 9);
         paddedText.Width = 160;

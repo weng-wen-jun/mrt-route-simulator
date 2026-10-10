@@ -274,12 +274,12 @@ internal static class DiagramExportService
                     Math.Clamp(train.Anchor.X, train.Bounds.Left, train.Bounds.Right),
                     Math.Clamp(train.Anchor.Y, train.Bounds.Top, train.Bounds.Bottom));
                 context.DrawLine(new Pen(block.Foreground, .6), train.Anchor, connection);
-                DrawTextBlock(context, block, train.Bounds.X, train.Bounds.Y,
+                DrawElementSnapshot(context, block, train.Bounds.X, train.Bounds.Y,
                     train.Bounds.Width, train.Bounds.Height);
             }
             foreach (var (block, bounds) in captionLabels)
             {
-                DrawTextBlock(context, block, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+                DrawElementSnapshot(context, block, bounds.X, bounds.Y, bounds.Width, bounds.Height);
             }
         }
 
@@ -412,7 +412,7 @@ internal static class DiagramExportService
                         var connection = new Point(Math.Clamp(train.Anchor.X, train.Bounds.Left, train.Bounds.Right),
                             Math.Clamp(train.Anchor.Y, train.Bounds.Top, train.Bounds.Bottom));
                         context.DrawLine(new Pen(textBlock.Foreground, .6), train.Anchor, connection);
-                        DrawTextBlock(context, textBlock, train.Bounds.X, train.Bounds.Y, train.Bounds.Width, train.Bounds.Height);
+                        DrawElementSnapshot(context, textBlock, train.Bounds.X, train.Bounds.Y, train.Bounds.Width, train.Bounds.Height);
                     }
                     continue;
                 }
@@ -424,7 +424,7 @@ internal static class DiagramExportService
                     // The chart title and legend are page-local.  Shrink them as
                     // needed so a long route name is never clipped at page right.
                     var fit = Math.Min(1, Math.Max(1, logicalWidth - x - 4) / width);
-                    DrawTextBlock(context, textBlock, x, y, width * fit, height * fit);
+                    DrawElementSnapshot(context, textBlock, x, y, width * fit, height * fit);
                     continue;
                 }
 
@@ -434,7 +434,7 @@ internal static class DiagramExportService
                     // its left-axis identity takes precedence over the time row.
                     // A centered first time tick starts left of the axis, but its
                     // center is on the axis and must not repeat on every page.
-                    DrawTextBlock(context, textBlock, x, y, width, height);
+                    DrawElementSnapshot(context, textBlock, x, y, width, height);
                     continue;
                 }
 
@@ -449,7 +449,7 @@ internal static class DiagramExportService
                         // Leave the final time tick readable; the original canvas
                         // places this axis caption on the same baseline as the last
                         // tick, which is too tight after a page is narrowed.
-                        DrawTextBlock(
+                        DrawElementSnapshot(
                             context,
                             textBlock,
                             Math.Max(logicalAxisWidth, logicalWidth - 48),
@@ -459,7 +459,7 @@ internal static class DiagramExportService
                     }
                     else if (timeLabels.TryGetValue(textBlock, out var placement))
                     {
-                        DrawTextBlock(context, textBlock, placement.X, placement.Y, placement.Width, placement.Height);
+                        DrawElementSnapshot(context, textBlock, placement.X, placement.Y, placement.Width, placement.Height);
                     }
 
                     continue;
@@ -474,7 +474,7 @@ internal static class DiagramExportService
                     {
                         var destinationX = logicalAxisWidth + x - logicalStart;
                         destinationX = Math.Clamp(destinationX, logicalAxisWidth, Math.Max(logicalAxisWidth, logicalWidth - width));
-                        DrawTextBlock(context, textBlock, destinationX, y, width, height);
+                        DrawElementSnapshot(context, textBlock, destinationX, y, width, height);
                     }
                 }
             }
@@ -487,7 +487,7 @@ internal static class DiagramExportService
                 var legendWidth = Math.Max(1, legend.ActualWidth);
                 var legendHeight = Math.Max(1, legend.ActualHeight);
                 var fit = Math.Min(1, Math.Max(1, logicalWidth - legendX - 4) / legendWidth);
-                DrawTextBlock(context, legend, legendX, legendY, legendWidth * fit, legendHeight * fit);
+                DrawElementSnapshot(context, legend, legendX, legendY, legendWidth * fit, legendHeight * fit);
             }
         }
 
@@ -579,7 +579,7 @@ internal static class DiagramExportService
         return result;
     }
 
-    private static void DrawTextBlock(
+    private static void DrawElementSnapshot(
         DrawingContext context,
         FrameworkElement source,
         double x,

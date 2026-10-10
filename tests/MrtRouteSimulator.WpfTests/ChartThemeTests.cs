@@ -69,7 +69,9 @@ internal static class ChartThemeTests
                      ("LongDash", ChartTheme.LongDash, new double[] { 5, 3 }),
                      ("ShortDot", ChartTheme.ShortDot, new double[] { 2, 3 }),
                      ("TailDash", ChartTheme.TailDash, new double[] { 4, 3 }),
-                     ("PlannedDash", ChartTheme.PlannedDash, new double[] { 6, 4 })
+                     ("PlannedDash", ChartTheme.PlannedDash, new double[] { 6, 4 }),
+                     ("LegendDash", ChartTheme.LegendDash, new double[] { 3, 2 }),
+                     ("LegendDot", ChartTheme.LegendDot, new double[] { 1, 1.5 })
                  })
             Require(dash.IsFrozen && dash.SequenceEqual(expected), $"ChartTheme.{name} 應為凍結的 {string.Join(",", expected)}。");
         Require(ReferenceEquals(ChartTheme.Font, Application.Current.TryFindResource("AppFont")), "圖表字型必須是 App 字型（AppFont）。");
@@ -159,13 +161,17 @@ internal static class ChartThemeTests
         var markers = legend.Children.OfType<Shape>().ToArray();
         Require(markers.Length == 4
                 && markers[0] is Line { StrokeDashArray: var solid } && (solid?.Count ?? 0) == 0
-                && markers[1] is Line { StrokeDashArray: { } dash } && dash.SequenceEqual(new double[] { 3, 2 })
-                && markers[2] is Line { StrokeDashArray: { } dot } && dot.SequenceEqual(new double[] { 1, 1.5 })
+                && markers[1] is Line { StrokeDashArray: var dash } && ReferenceEquals(dash, ChartTheme.LegendDash)
+                && markers[2] is Line { StrokeDashArray: var dot } && ReferenceEquals(dot, ChartTheme.LegendDot)
                 && markers[3] is Ellipse { Fill: var pointFill, Stroke: var pointStroke }
                 && ReferenceEquals(pointFill, ChartTheme.EventStation) && ReferenceEquals(pointStroke, ChartTheme.MarkerOutline)
                 && ReferenceEquals(markers[0].Stroke, ChartTheme.PrimarySeries),
             "圖例樣本必須依線型為實線／虛線／點線／白框色點，顏色與項目一致。");
 
+        var statusDot = ChartPainter.CreateDot(ChartTheme.EventSafety);
+        Require(statusDot.Width == 8 && statusDot.Height == 8 && ReferenceEquals(statusDot.Fill, ChartTheme.EventSafety)
+                && ReferenceEquals(statusDot.Stroke, ChartTheme.MarkerOutline),
+            "CreateDot 必須產生 8 DIP、白框的色點（圖例與最低裕度標籤共用）。");
         var title = ChartPainter.DrawTitle(canvas, "測試標題", 42, 4);
         Require(Equals(title.Tag, ChartPainter.TitleTag) && title.FontSize == 13 && title.FontWeight == FontWeights.SemiBold
                 && ReferenceEquals(title.Foreground, ChartTheme.Title), "標題必須 13 px 半粗體、Title 色、Tag=ChartTitle。");
@@ -211,7 +217,7 @@ internal static class ChartThemeTests
     [
         ("ChartTheme.cs", []),
         ("ChartPainter.cs", []),
-        ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks",
+        ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawClockTimeAxis",
             "DrawSafetyDistanceChart", "AddSafetyMarginChip", "DrawTimeDistanceDiagramFull", "DrawV2Route"]),
         ("MainWindow.xaml.cs", ["DrawSpeedProfile", "DrawRoute"]),
         ("MainWindow.TimeDistance.cs", []),

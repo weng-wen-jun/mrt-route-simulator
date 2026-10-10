@@ -196,6 +196,18 @@ public static class ChartPainter
         FontFamily = ChartTheme.Font
     };
 
+    /// <summary>8 DIP 白框色點；圖例的事件點與最低裕度標籤共用。</summary>
+    public static Ellipse CreateDot(Brush fill) => new()
+    {
+        Width = 8,
+        Height = 8,
+        Fill = fill,
+        Stroke = ChartTheme.MarkerOutline,
+        StrokeThickness = 1,
+        Margin = new Thickness(0, 0, 5, 0),
+        VerticalAlignment = VerticalAlignment.Center
+    };
+
     public static void Place(Canvas canvas, UIElement element, double left, double top)
     {
         Canvas.SetLeft(element, left);
@@ -228,19 +240,7 @@ public static class ChartPainter
 
     private static FrameworkElement CreateLegendMarker(ChartLegendItem item)
     {
-        if (item.Marker == ChartLegendMarker.Point)
-        {
-            return new Ellipse
-            {
-                Width = 8,
-                Height = 8,
-                Fill = item.Brush,
-                Stroke = ChartTheme.MarkerOutline,
-                StrokeThickness = 1,
-                Margin = new Thickness(0, 0, 5, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-        }
+        if (item.Marker == ChartLegendMarker.Point) return CreateDot(item.Brush);
 
         return new Line
         {
@@ -254,8 +254,8 @@ public static class ChartPainter
             StrokeThickness = 2,
             StrokeDashArray = item.Marker switch
             {
-                ChartLegendMarker.Dash => [3, 2],
-                ChartLegendMarker.Dot => [1, 1.5],
+                ChartLegendMarker.Dash => ChartTheme.LegendDash,
+                ChartLegendMarker.Dot => ChartTheme.LegendDot,
                 _ => null
             },
             Margin = new Thickness(0, 0, 5, 0),

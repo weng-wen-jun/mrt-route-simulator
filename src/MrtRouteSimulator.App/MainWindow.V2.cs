@@ -1584,7 +1584,7 @@ public partial class MainWindow
         var maxSpeed = ChartPainter.DrawValueAxis(canvas, area, Math.Max(_parameters.MaxSpeedMetersPerSecond,
             samples.Max(sample => Math.Max(sample.SpeedMetersPerSecond, GetDisplaySpeedLimitMetersPerSecond(sample)))) * 3.6 * 1.1,
             "km/h");
-        DrawSpeedTimeAxisTicks(canvas, area, minTime, maxTime);
+        DrawClockTimeAxis(canvas, area, minTime, maxTime);
 
         var speedLine = ChartPainter.CreateSeries(vehicleBrush, 2.4);
         var limitLine = ChartPainter.CreateSeries(ChartTheme.LimitSeries, 1.4, ChartTheme.LongDash);
@@ -1716,7 +1716,7 @@ public partial class MainWindow
     }
 
     // 速度曲線與距離圖共用：四等分時間刻度，以時鐘時間標示。
-    private void DrawSpeedTimeAxisTicks(Canvas canvas, ChartPainter.ChartArea area, double minTime, double maxTime)
+    private void DrawClockTimeAxis(Canvas canvas, ChartPainter.ChartArea area, double minTime, double maxTime)
     {
         const int tickCount = 4;
         var ticks = new List<(double X, string Label)>(tickCount + 1);
@@ -1810,7 +1810,7 @@ public partial class MainWindow
         var maxDistance = ChartPainter.DrawValueAxis(SafetyDistanceCanvas, area, Math.Max(50, history.Max(item => Math.Max(
             Math.Max(item.ActualGapMeters, item.DynamicSafetyDistanceMeters),
             item.ObstacleBrakingDemandMeters)) * 1.12), "m");
-        DrawSpeedTimeAxisTicks(SafetyDistanceCanvas, area, minTime, maxTime);
+        DrawClockTimeAxis(SafetyDistanceCanvas, area, minTime, maxTime);
         var gapLine = ChartPainter.CreateSeries(ChartTheme.PrimarySeries, 2.4);
         var safetyLine = ChartPainter.CreateSeries(ChartTheme.ThresholdSeries, 1.6, ChartTheme.LongDash);
         var obstacleLine = ChartPainter.CreateSeries(ChartTheme.DangerSeries, 1.8, ChartTheme.ShortDot);
@@ -1835,14 +1835,7 @@ public partial class MainWindow
     {
         var brush = SafetyStatusBrush(minimum.Status);
         var content = new StackPanel { Orientation = Orientation.Horizontal };
-        content.Children.Add(new Ellipse
-        {
-            Width = 8,
-            Height = 8,
-            Fill = brush,
-            Margin = new Thickness(0, 0, 5, 0),
-            VerticalAlignment = VerticalAlignment.Center
-        });
+        content.Children.Add(ChartPainter.CreateDot(brush));
         content.Children.Add(ChartPainter.CreateLabel(
             $"最低裕度 {minimum.SafetyMarginMeters:0.0} m @ {minimum.SimulationTimeSeconds:0.0} s｜{SafetyStatusToChinese(minimum.Status)}",
             brush, ChartTheme.LegendFontSize));
