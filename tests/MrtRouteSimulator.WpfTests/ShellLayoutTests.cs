@@ -17,6 +17,7 @@ internal static class ShellLayoutTests
     public static void Run(string root)
     {
         VerifyShellTokens();
+        VerifyImplicitStyles();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -98,5 +99,85 @@ internal static class ShellLayoutTests
     internal static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private static void VerifyImplicitStyles()
+    {
+        var resources = Application.Current.Resources;
+        foreach (var type in new[] { typeof(Button), typeof(TextBox), typeof(ComboBox), typeof(ComboBoxItem), typeof(ScrollBar),
+                     typeof(Menu), typeof(MenuItem), typeof(ContextMenu), typeof(ToolTip), typeof(Expander), typeof(DataGrid), typeof(DataGridRow) })
+            Require(AppDefines(type), $"缺少 {type.Name} 的隱含樣式。");
+        foreach (var key in new[] { "PrimaryButton", "SecondaryButton", "GhostButton", "AppBarButton", "AppBarPrimaryButton",
+                     "SectionTitle", "FieldLabel", "FocusRingVisual", "IconFont", "MonoFont", "AppFont" })
+            Require(Application.Current.TryFindResource(key) is not null, $"缺少資源 {key}。");
+        foreach (var type in new[] { typeof(Button), typeof(TextBox), typeof(ComboBox), typeof(DataGrid) })
+            Require(ReferenceEquals(SetterValue((Style)Application.Current.FindResource(type), Control.BackgroundProperty), UiTheme.SurfaceBrush),
+                $"{type.Name} 底色必須取自 UiTheme.SurfaceBrush。");
+        Require(ReferenceEquals(SetterValue((Style)Application.Current.FindResource(typeof(ToolTip)), Control.ForegroundProperty), UiTheme.AppBarTextBrush),
+            "提示框文字必須取自 UiTheme.AppBarTextBrush。");
+        Require(SetterValue((Style)Application.Current.FindResource(typeof(MenuItem)), Control.TemplateProperty) is ControlTemplate
+                && Application.Current.TryFindResource(MenuItem.SeparatorStyleKey) is Style,
+            "MenuItem 必須使用自訂範本與分隔線樣式。");
+        Require(ReferenceEquals(SetterValue((Style)Application.Current.FindResource("PrimaryButton"), Control.BackgroundProperty), UiTheme.PrimaryBrush),
+            "主要按鈕必須使用 UiTheme.PrimaryBrush。");
+        Require(ReferenceEquals(SetterValue((Style)Application.Current.FindResource(typeof(DataGrid)), DataGrid.HorizontalGridLinesBrushProperty), UiTheme.GridLineBrush),
+            "DataGrid 格線必須取自 UiTheme.GridLineBrush。");
+
+        var editable = new ComboBox { IsEditable = true, ItemsSource = new[] { "1", "2" } };
+        var readOnly = new ComboBox { ItemsSource = new[] { "A", "B" }, SelectedIndex = 0 };
+        var text = new TextBox { Text = "x" };
+        var scroll = new ScrollViewer { Height = 60, VerticalScrollBarVisibility = ScrollBarVisibility.Visible, Content = new Border { Height = 200 } };
+        var panel = new StackPanel();
+        foreach (var child in new UIElement[] { editable, readOnly, text, scroll }) panel.Children.Add(child);
+        var window = new Window { Width = 400, Height = 320, Content = panel };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            Require(editable.Template.FindName("PART_EditableTextBox", editable) is TextBox, "可編輯 ComboBox 範本必須提供 PART_EditableTextBox。");
+            Require(readOnly.Template.FindName("PART_Popup", readOnly) is Popup, "ComboBox 範本必須提供 PART_Popup。");
+            editable.Text = "15";
+            PumpLayout(window);
+            Require(((TextBox)editable.Template.FindName("PART_EditableTextBox", editable)).Text == "15"
+                    && ((TextBox)editable.Template.FindName("PART_EditableTextBox", editable)).IsVisible,
+                "可編輯 ComboBox 的文字必須顯示在可見的 PART_EditableTextBox。");
+            readOnly.IsDropDownOpen = true;
+            PumpLayout(window);
+            Require(readOnly.IsDropDownOpen, "ComboBox 必須能展開下拉清單。");
+            readOnly.IsDropDownOpen = false;
+            Require(text.Template.FindName("PART_ContentHost", text) is ScrollViewer, "TextBox 範本必須提供 PART_ContentHost。");
+            var bar = FindDescendant<ScrollBar>(scroll, item => item.Orientation == Orientation.Vertical);
+            Require(bar is not null && bar.ActualWidth <= 10.5, $"垂直捲軸寬度應為 10，實際 {bar?.ActualWidth:0.0}。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 共用控制項隱含樣式");
+    }
+
+    // 只認 App 自己的資源字典；TryFindResource(typeof(X)) 會退回 WPF 系統佈景樣式，無法證明樣式存在。
+    private static bool AppDefines(object key)
+    {
+        var resources = Application.Current.Resources;
+        return resources.Contains(key) || resources.MergedDictionaries.Any(dictionary => dictionary.Contains(key));
+    }
+
+    private static object? SetterValue(Style style, DependencyProperty property)
+    {
+        for (var current = style; current is not null; current = current.BasedOn)
+        {
+            if (current.Setters.OfType<Setter>().FirstOrDefault(setter => setter.Property == property) is { } setter)
+                return setter.Value;
+        }
+        return null;
+    }
+
+    internal static T? FindDescendant<T>(DependencyObject root, Func<T, bool>? predicate = null) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match && (predicate is null || predicate(match))) return match;
+            if (FindDescendant(child, predicate) is { } nested) return nested;
+        }
+        return null;
     }
 }
