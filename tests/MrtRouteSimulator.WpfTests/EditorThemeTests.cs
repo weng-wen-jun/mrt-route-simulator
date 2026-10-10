@@ -20,6 +20,7 @@ internal static class EditorThemeTests
         VerifyEditorStyles();
         VerifyShell(root);
         VerifyPages(root);
+        VerifySchematic(root);
         VerifyMinimumSizeAndScale(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
@@ -133,7 +134,7 @@ internal static class EditorThemeTests
 
     // 掃描清單：整個檔案不得寫死顏色；後續 Task 逐步加入。
     private static readonly string[] ScannedFiles =
-        ["EditorChrome.cs", "TopologyEditorWindow.Stations.cs", "TopologyEditorWindow.Operations.cs", "TopologyEditorWindow.Settings.cs"];
+        ["EditorChrome.cs", "TopologyEditorWindow.cs", "TopologyEditorWindow.Stations.cs", "TopologyEditorWindow.Operations.cs", "TopologyEditorWindow.Settings.cs"];
 
     private static readonly Regex HardCodedColor = new(
         @"\bColor\.From(Rgb|Argb)\b|\bBrushes\.(?!Transparent\b)[A-Z]\w*|\bColors\.(?!Transparent\b)[A-Z]\w*",
@@ -374,6 +375,35 @@ internal static class EditorThemeTests
                     break;
             }
         }
+    }
+
+    private static void VerifySchematic(string root)
+    {
+        var document = Sample(root);
+        var window = (Window)Activator.CreateInstance(EditorType, document, Enum.Parse(PageType, "Tracks"))!;
+        try
+        {
+            var canvas = new Canvas { Width = 1370, Height = 520 };
+            canvas.Measure(new Size(1370, 520));
+            canvas.Arrange(new Rect(0, 0, 1370, 520));
+            EditorType.GetMethod("DrawSchematic", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [canvas]);
+            var allowed = new Brush[] { UiTheme.RailUpBrush, UiTheme.RailDownBrush, UiTheme.RailUpSoftBrush, UiTheme.RailDownSoftBrush, UiTheme.RailNeutralBrush };
+            var rails = canvas.Children.OfType<Polyline>()
+                .Where(line => line.ToolTip is string tip && document.Topology.Edges.Any(edge => tip.StartsWith(edge.TrackEdgeId + "\n", StringComparison.Ordinal)))
+                .ToArray();
+            Require(rails.Length > 0 && rails.All(line => allowed.Contains(line.Stroke) && line.StrokeThickness is 6d or 4d),
+                "示意圖軌道只能使用配線圖的軌道畫筆與線寬（正線 6、側線 4）。");
+            Require(rails.Any(line => ReferenceEquals(line.Stroke, UiTheme.RailUpBrush)) && rails.Any(line => ReferenceEquals(line.Stroke, UiTheme.RailDownBrush)),
+                "示意圖必須同時出現上行藍與下行橘。");
+            var arrows = canvas.Children.OfType<Polygon>().ToArray();
+            Require(arrows.Length > 0 && arrows.All(arrow => allowed.Contains(arrow.Fill) && ReferenceEquals(arrow.Stroke, UiTheme.SurfaceBrush)),
+                "方向箭頭必須跟隨軌道色並有白色描邊。");
+            var markers = canvas.Children.OfType<Rectangle>().Where(item => item.Width == 9 && item.Height == 9).ToArray();
+            Require(markers.Length > 0 && markers.All(item => ReferenceEquals(item.Fill, UiTheme.RailNeutralStrongBrush)),
+                "設施清單前的小方塊必須是深灰色。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 路線示意圖使用配線圖的軌道配色與線寬");
     }
 
     internal static void Require(bool condition, string message)

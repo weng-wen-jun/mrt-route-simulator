@@ -681,7 +681,7 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         CommitTableDrafts();
         var panel = NewPage("路線示意圖", "自動排版僅是介面中繼資料：正線水平、支線自動偏移；不會進入列車物理運算。 ");
-        var canvas = new Canvas { Background = new SolidColorBrush(Color.FromRgb(248, 250, 253)), Height = 520, ClipToBounds = true };
+        var canvas = new Canvas { Background = UiTheme.CanvasBackgroundBrush, Height = 520, ClipToBounds = true };
         DrawSchematic(canvas);
         canvas.SizeChanged += (_, _) => DrawSchematic(canvas);
         panel.Children.Add(new ScrollViewer { Content = canvas, MaxHeight = 520,
@@ -1988,7 +1988,6 @@ internal sealed partial class TopologyEditorWindow : Window
         double MapX(double x) => 60 + (x - layoutMinX) / Math.Max(1, layoutMaxX - layoutMinX) * Math.Max(1, width - 120);
         const double mainlineY = 210;
         const double laneSpacing = 46;
-        var railColor = Color.FromRgb(25, 96, 125);
         StationSchematicPresentation.DrawLegend(canvas);
         var outboundRouteId = state.Draft.DirectionRouteBindings
             .FirstOrDefault(binding => binding.Direction == TrainDirection.Outbound)?.ServiceRouteId;
@@ -2002,6 +2001,9 @@ internal sealed partial class TopologyEditorWindow : Window
             .FirstOrDefault(route => route.ServiceRouteId.Equals(inboundRouteId, StringComparison.OrdinalIgnoreCase))?
             .Traversals.Select(traversal => traversal.TrackEdgeId).ToHashSet(StringComparer.OrdinalIgnoreCase)
             ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 與主視窗配線圖相同的軌道配色：下行橘、上行藍、側線淡色、其他中性灰。
+        var railTones = TrackRailStyle.Classify(state.Draft.Topology.Edges, outboundEdgeIds, inboundEdgeIds);
+        RailTone ToneOf(string? edgeId) => edgeId is not null && railTones.TryGetValue(edgeId, out var tone) ? tone : RailTone.Neutral;
         var rawEdgePoints = new Dictionary<string, (Point From, Point To)>(StringComparer.OrdinalIgnoreCase);
         foreach (var edge in state.Draft.Topology.Edges
                      .Where(edge => layout.ContainsKey(edge.FromNodeId) && layout.ContainsKey(edge.ToNodeId)))
@@ -2128,9 +2130,11 @@ internal sealed partial class TopologyEditorWindow : Window
             var allowLaneTurn = fromEdge is not null && toEdge is not null
                 && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
                     || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
-            StationSchematicPresentation.DrawConnection(canvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
+            var fromTone = ToneOf(connection.FromTrackEdgeId);
+            StationSchematicPresentation.DrawConnection(canvas, from, to, incoming, outgoing,
+                TrackRailStyle.Brush(fromTone == ToneOf(connection.ToTrackEdgeId) ? fromTone : RailTone.Neutral),
                 $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
-                allowLaneTurn);
+                allowLaneTurn, fromEdge is null ? TrackRailStyle.SideThickness : TrackRailStyle.Thickness(fromEdge));
         }
 
         foreach (var edge in state.Draft.Topology.Edges)
@@ -2143,7 +2147,7 @@ internal sealed partial class TopologyEditorWindow : Window
                 canvas.Children.Add(new Polyline
                 {
                     Points = new PointCollection(geometry.Points),
-                    Stroke = Brushes.White,
+                    Stroke = UiTheme.SurfaceBrush,
                     StrokeThickness = 7,
                     StrokeLineJoin = PenLineJoin.Round,
                     IsHitTestVisible = false
@@ -2152,8 +2156,8 @@ internal sealed partial class TopologyEditorWindow : Window
             var line = new Polyline
             {
                 Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
-                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
+                Stroke = TrackRailStyle.Brush(ToneOf(edge.TrackEdgeId)),
+                StrokeThickness = TrackRailStyle.Thickness(edge),
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)}\n{edge.LengthMeters:0.#} m"
             };
@@ -2192,7 +2196,7 @@ internal sealed partial class TopologyEditorWindow : Window
                 Y1 = point.Y - normal.Y,
                 X2 = point.X + normal.X,
                 Y2 = point.Y + normal.Y,
-                Stroke = new SolidColorBrush(railColor),
+                Stroke = TrackRailStyle.Brush(ToneOf(edge.TrackEdgeId)),
                 StrokeThickness = 5,
                 ToolTip = $"{node.NodeId} · {node.Name} · 止衝"
             });
@@ -2218,10 +2222,10 @@ internal sealed partial class TopologyEditorWindow : Window
             var edge = state.Draft.Topology.Edges.FirstOrDefault(item => item.TrackEdgeId.Equals(edgeId, StringComparison.OrdinalIgnoreCase));
             if (edge is null || !edgeGeometries.TryGetValue(edge.TrackEdgeId, out var geometry)) continue;
             var x = 22d; var y = facilityLegendNextY;
-            var marker = new Rectangle { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(244, 173, 70)), ToolTip = $"{kind}：{name}" };
+            var marker = new Rectangle { Width = 9, Height = 9, Fill = UiTheme.RailNeutralStrongBrush, ToolTip = $"{kind}：{name}" };
             marker.MouseLeftButtonUp += (_, _) => selectionDetails.Text = $"設施\n{kind}\n{name}\n{edgeId}";
             Canvas.SetLeft(marker, x - 4.5); Canvas.SetTop(marker, y); canvas.Children.Add(marker);
-            var label = new TextBlock { Text = name, Width = Math.Max(1, width - 60), TextWrapping = TextWrapping.Wrap, ToolTip = $"{kind}：{name}\n{edgeId}", FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(153, 75, 17)) };
+            var label = new TextBlock { Text = name, Width = Math.Max(1, width - 60), TextWrapping = TextWrapping.Wrap, ToolTip = $"{kind}：{name}\n{edgeId}", FontSize = 10, Foreground = UiTheme.TextMutedBrush };
             label.Measure(new Size(label.Width, double.PositiveInfinity));
             facilityLegendNextY += Math.Max(22, label.DesiredSize.Height + 8);
             Canvas.SetLeft(label, x + 8); Canvas.SetTop(label, y - 3); canvas.Children.Add(label);
@@ -2248,8 +2252,8 @@ internal sealed partial class TopologyEditorWindow : Window
                     center - tangent * 5 + normal * 4.5,
                     center - tangent * 5 - normal * 4.5
                 },
-                Fill = new SolidColorBrush(railColor),
-                Stroke = Brushes.White,
+                Fill = TrackRailStyle.Brush(ToneOf(edgeId)),
+                Stroke = UiTheme.SurfaceBrush,
                 StrokeThickness = 1,
                 IsHitTestVisible = false,
                 ToolTip = $"{edgeId} · {(forward ? "正向" : "反向")}"
