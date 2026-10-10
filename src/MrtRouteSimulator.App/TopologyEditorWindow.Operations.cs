@@ -59,7 +59,7 @@ internal sealed partial class TopologyEditorWindow
         var content = new StackPanel();
         var vehicleReferencePanel = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
         AutomationProperties.SetName(vehicleReferencePanel, "車型常用參照");
-        var search = new TextBox { Width = 220, Margin = new Thickness(0, 0, 0, 8), ToolTip = "依車型名稱、ID 或相容服務搜尋" };
+        var search = EditorChrome.SearchBox("搜尋車型", new TextBox { Width = 220, Margin = new Thickness(0, 0, 0, 8), ToolTip = "依車型名稱、ID 或相容服務搜尋" });
         AutomationProperties.SetName(search, "車型搜尋");
         content.Children.Add(search);
         var view = CollectionViewSource.GetDefaultView(serviceNetwork.VehicleTypes);
@@ -147,7 +147,7 @@ internal sealed partial class TopologyEditorWindow
             Text = "服務表的預設停站模式／預設車型仍保存原始 ID；使用下方名稱選單查看與套用參照，避免直接編輯編號。",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 8, 0, 0),
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106))
+            Foreground = UiTheme.TextMutedBrush
         });
         tabs.Items.Add(new TabItem { Header = "服務類型", Content = servicePanel });
         if (serviceGrid.Items.Count > 0) serviceGrid.SelectedIndex = 0;
@@ -223,8 +223,7 @@ internal sealed partial class TopologyEditorWindow
             AutoGenerateColumns = false, CanUserAddRows = false, CanUserDeleteRows = false,
             IsReadOnly = true, SelectionUnit = DataGridSelectionUnit.CellOrRowHeader,
             HeadersVisibility = DataGridHeadersVisibility.All, RowHeaderWidth = 0, MinHeight = 238,
-            Height = 340,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1)
+            Height = 340
         };
         ScrollViewer.SetVerticalScrollBarVisibility(stopPatternMatrix, ScrollBarVisibility.Auto);
         AutomationProperties.SetName(stopPatternMatrix, "停站模式矩陣");
@@ -244,7 +243,7 @@ internal sealed partial class TopologyEditorWindow
         stopPatternDwellEditor = AddLabeledTextBox(detail, 1, "停站秒數（可留空）", "停站模式停站秒數");
         stopPatternPassingSpeedEditor = AddLabeledTextBox(detail, 2, "通過速限（km/h，可留空）", "停站模式通過速限");
         AddLabeledCombo(detail, 3, "指定待避車次", Array.Empty<object>(), out stopPatternWaitEditor, "停站模式待避車次");
-        stopPatternAffectedRuns = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95)) };
+        stopPatternAffectedRuns = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = UiTheme.TextMutedBrush };
         AutomationProperties.SetName(stopPatternAffectedRuns, "停站模式受影響班次");
         Grid.SetRow(stopPatternAffectedRuns, 4); Grid.SetColumn(stopPatternAffectedRuns, 1); detail.Children.Add(stopPatternAffectedRuns);
         content.Children.Add(detail);
@@ -330,7 +329,7 @@ internal sealed partial class TopologyEditorWindow
         dispatchAssignmentEditor = CreateReferenceCombo("車輛分配模式", Enum.GetValues<VehicleAssignmentMode>().Distinct().Select(item => new OperationReferenceChoice(item.ToString(), UiDisplayText.Enum(item))), state.Draft.Dispatch.VehicleAssignmentMode.ToString());
         Grid.SetColumn(dispatchAssignmentEditor, 3); modes.Children.Add(dispatchAssignmentEditor);
         content.Children.Add(modes);
-        content.Children.Add(CreateNamedButton("套用班表設定", "套用班表啟用模式與車輛分配", (_, _) => CommitDispatchModes(), false));
+        content.Children.Add(CreateNamedButton("套用班表設定", "套用班表啟用模式與車輛分配", (_, _) => CommitDispatchModes(), true));
 
         var tabs = new TabControl { MinHeight = 365, Margin = new Thickness(0, 8, 0, 0) };
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.HeadwayPlan, "班距計畫", dispatch.HeadwayPlans,
@@ -605,8 +604,7 @@ internal sealed partial class TopologyEditorWindow
         var grid = new DataGrid
         {
             ItemsSource = dispatch.ManualRows, AutoGenerateColumns = false, IsReadOnly = true,
-            CanUserAddRows = false, RowHeaderWidth = 0, Height = 185,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1)
+            CanUserAddRows = false, RowHeaderWidth = 0, Height = 185
         };
         AutomationProperties.SetName(grid, "手動班表常用欄位");
         AddColumn(nameof(ManualTimetableEditorViewModel.DepartureSeconds), "發車秒數");
@@ -675,7 +673,7 @@ internal sealed partial class TopologyEditorWindow
         Grid.SetRow(continuationLabel, 9); Grid.SetColumn(continuationLabel, 0); panel.Children.Add(continuationLabel);
         dispatchContinuationEditor = CreateReferenceCombo("班表接續車次", Array.Empty<OperationReferenceChoice>(), null);
         Grid.SetRow(dispatchContinuationEditor, 9); Grid.SetColumn(dispatchContinuationEditor, 1); panel.Children.Add(dispatchContinuationEditor);
-        dispatchReferences = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = new SolidColorBrush(Color.FromRgb(154, 59, 49)) };
+        dispatchReferences = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = UiTheme.WarningTextBrush };
         AutomationProperties.SetName(dispatchReferences, "班表既有引用鏈與缺漏");
         Grid.SetRow(dispatchReferences, 10); Grid.SetColumn(dispatchReferences, 1); panel.Children.Add(dispatchReferences);
         dispatchDepartureEditor.LostFocus += (_, _) => CommitDispatchDetail();

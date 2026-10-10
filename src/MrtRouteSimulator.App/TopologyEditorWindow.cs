@@ -335,11 +335,11 @@ internal sealed partial class TopologyEditorWindow : Window
         {
             Text = "從這裡開始編輯大型存檔。快速建立只用於一次性起稿；載入既有拓撲後，請由車站、軌道、營運與班表頁直接修改同一份 Schema 8 草稿。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)),
+            Foreground = UiTheme.TextMutedBrush,
             Margin = new Thickness(0, 12, 0, 8)
         });
         panel.Children.Add(CreateButton("快速建立／重新起稿…", (_, _) => Navigate(ProjectWorkspacePage.QuickBuilder), true));
-        panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), false));
+        panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), true));
         workspace.Content = panel;
         RefreshValidation();
     }
@@ -376,7 +376,7 @@ internal sealed partial class TopologyEditorWindow : Window
         actions.Children.Add(CreateButton("刪除車站", (_, _) => { if (grid.SelectedItem is QuickStationEditorViewModel row) quickStations.Remove(row); }, true));
         actions.Children.Add(CreateButton("建立格式版本 8 拓撲", (_, _) => BuildQuickTopology(), false));
         panel.Children.Add(actions);
-        panel.Children.Add(new TextBlock { Text = "依參考圖建立站場", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 20, 0, 6) });
+        panel.Children.Add(EditorChrome.SectionTitle("依參考圖建立站場"));
         panel.Children.Add(new TextBlock { Text = "選擇站型後重新建立三站示範草稿，包含月台、實體進路與派車。會取代工作區目前草稿；按取消可保留原專案。尺寸、車型、停站及派車時間可在其他分頁調整。", TextWrapping = TextWrapping.Wrap });
         var stationKind = new ComboBox { ItemsSource = Enum.GetValues<StationLayoutTemplateKind>().Select(StationLayoutTemplateService.Name).ToArray(), SelectedIndex = 0, Margin = new Thickness(0, 8, 0, 4), MinWidth = 280, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(stationKind);
@@ -447,7 +447,7 @@ internal sealed partial class TopologyEditorWindow : Window
         Grid.SetRow(top, 0);
         root.Children.Add(top);
         var detail = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        detail.Children.Add(new TextBlock { Text = "依序通過的軌道區段／路線停靠站", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        detail.Children.Add(EditorChrome.SectionTitle("依序通過的軌道區段／路線停靠站"));
         traversalGrid = CreateGrid(new ObservableCollection<TraversalEditorViewModel>());
         traversalGrid.Height = 180;
         detail.Children.Add(traversalGrid);
@@ -456,7 +456,7 @@ internal sealed partial class TopologyEditorWindow : Window
         traversalActions.Children.Add(CreateButton("刪除", (_, _) => RemoveTraversal(), true));
         traversalActions.Children.Add(CreateButton("上移", (_, _) => MoveTraversal(-1), true));
         traversalActions.Children.Add(CreateButton("下移", (_, _) => MoveTraversal(1), true));
-        traversalActions.Children.Add(CreateButton("自動建立路徑", (_, _) => BuildRoutePath(), false));
+        traversalActions.Children.Add(CreateButton("自動建立路徑", (_, _) => BuildRoutePath(), true));
         detail.Children.Add(traversalActions);
         detail.Children.Add(new TextBlock { Text = "路線停靠站（候選月台只會列出這條路線通過區段上的實體月台）", Margin = new Thickness(0, 4, 0, 4), FontWeight = FontWeights.SemiBold });
         routeStopGrid = CreateGrid(new ObservableCollection<ServiceRouteStopEditorViewModel>());
@@ -507,7 +507,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var panel = NewPage("發車計畫", "起點只能指定服務路徑上的實體月台。每筆班距或手動班表可選停站模式、車型與續行設定，不使用全線里程。 ");
         panel.Children.Add(SummaryGrid(("啟用模式", UiDisplayText.Enum(state.Draft.Dispatch.ActiveMode)),
             ("車輛分配", UiDisplayText.Enum(state.Draft.Dispatch.VehicleAssignmentMode))));
-        panel.Children.Add(CreateButton("設定啟用模式與車輛分配…", (_, _) => EditDispatchModes(), false));
+        panel.Children.Add(CreateButton("設定啟用模式與車輛分配…", (_, _) => EditDispatchModes(), true));
         var tabs = new TabControl();
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.HeadwayPlan, "班距計畫", dispatch.HeadwayPlans, AddHeadwayPlan, EditSelectedHeadwayPlan, DeleteSelectedHeadwayPlan));
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.ManualTimetable, "手動班表", dispatch.ManualRows, AddManualTimetableRow, EditSelectedManualRow, DeleteSelectedManualRow));
@@ -545,9 +545,9 @@ internal sealed partial class TopologyEditorWindow : Window
             ("移動閉塞", UiDisplayText.Enum(state.Draft.Simulation.MovingBlockMode)), ("起始時鐘", TimeSpan.FromSeconds(state.Draft.Simulation.StartClockSeconds).ToString("hh\\:mm\\:ss")),
             ("存檔列車數摘要", state.Draft.Simulation.TrainCount.ToString(CultureInfo.InvariantCulture)),
             ("指定班距", state.Draft.Simulation.HeadwaySeconds is { } headway ? $"{headway:0.###} 秒" : "未指定")));
-        panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), false));
-        panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), false));
-        panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), false));
+        panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), true));
+        panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), true));
+        panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), true));
         workspace.Content = panel;
     }
 
@@ -707,7 +707,7 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         CommitTableDrafts();
         var panel = NewPage("驗證", "編輯期間允許暫時無效；但儲存與執行模擬前必須沒有錯誤。按一下驗證訊息或使用 Enter／空白鍵可前往目標。 ");
-        var list = new ListBox { ItemsSource = validationMessages, Height = 480, DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage) };
+        var list = new ListBox { ItemsSource = validationMessages, Height = 480, ItemTemplate = (DataTemplate)Application.Current.FindResource(EditorChrome.ValidationMessageTemplateKey) };
         AttachValidationActivation(list);
         panel.Children.Add(list);
         workspace.Content = panel;
@@ -969,10 +969,10 @@ internal sealed partial class TopologyEditorWindow : Window
         grid.SelectionChanged += (_, _) => selectionDetails.Text = DescribeSelection(grid.SelectedItem);
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        actions.Children.Add(CreateButton(readOnly ? "新增設施…" : "新增", (_, _) => add(), !readOnly));
+        actions.Children.Add(CreateButton(readOnly ? "新增設施…" : "新增", (_, _) => add(), true));
         if (edit is not null) actions.Children.Add(CreateButton("編輯選取項目…", (_, _) => edit(), true));
         if (delete is not null) actions.Children.Add(CreateButton("刪除", (_, _) => delete(), true));
-        var search = new TextBox { Width = 150, Margin = new Thickness(6, 0, 0, 0), ToolTip = "依名稱、ID、類型或關聯搜尋" };
+        var search = EditorChrome.SearchBox("搜尋名稱、ID 或關聯", new TextBox { Width = 180, Margin = new Thickness(6, 0, 0, 0), ToolTip = "依名稱、ID、類型或關聯搜尋" });
         search.TextChanged += (_, _) =>
         {
             var query = search.Text.Trim();
@@ -995,7 +995,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         actions.Children.Add(CreateButton("新增月台", (_, _) => AddPlatform(), true));
-        actions.Children.Add(CreateButton("新增車站到軌道…", (_, _) => AddStationOnTracks(), false));
+        actions.Children.Add(CreateButton("新增車站到軌道…", (_, _) => AddStationOnTracks(), true));
         actions.Children.Add(CreateButton("刪除", (_, _) => DeleteSelectedPlatform(), true));
         DockPanel.SetDock(actions, Dock.Top); panel.Children.Add(actions); panel.Children.Add(grid);
         var tab = new TabItem { Header = "車站與月台", Content = panel };
@@ -1025,7 +1025,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var grid = CreateGrid(view, readOnly);
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        actions.Children.Add(CreateButton(readOnly ? "查看設施" : "新增", (_, _) => add(), !readOnly));
+        actions.Children.Add(CreateButton(readOnly ? "查看設施" : "新增", (_, _) => add(), true));
         actions.Children.Add(CreateButton("刪除", (_, _) => delete(), true));
         DockPanel.SetDock(actions, Dock.Top); panel.Children.Add(actions); panel.Children.Add(grid);
         return (new TabItem { Header = title, Content = panel }, grid);
@@ -1049,8 +1049,7 @@ internal sealed partial class TopologyEditorWindow : Window
     private static StackPanel NewPage(string title, string description)
     {
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = title, FontSize = 22, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)), Margin = new Thickness(0, 6, 0, 14) });
+        panel.Children.Add(EditorChrome.PageHeader(title, description));
         return panel;
     }
 
@@ -1060,8 +1059,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var grid = new DataGrid
         {
             ItemsSource = items, AutoGenerateColumns = true, CanUserAddRows = false, CanUserDeleteRows = false,
-            IsReadOnly = readOnly, RowHeaderWidth = 0, Margin = new Thickness(0),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1)
+            IsReadOnly = readOnly, RowHeaderWidth = 0, Margin = new Thickness(0)
         };
         grid.AutoGeneratingColumn += (_, args) =>
         {
@@ -1116,8 +1114,8 @@ internal sealed partial class TopologyEditorWindow : Window
         for (var index = 0; index < values.Length; index++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var label = new TextBlock { Text = values[index].Label, Margin = new Thickness(0, 5, 12, 5), Foreground = new SolidColorBrush(Color.FromRgb(90, 101, 122)) };
-            var value = new TextBlock { Text = values[index].Value, Margin = new Thickness(0, 5, 0, 5), FontWeight = FontWeights.SemiBold };
+            var label = new TextBlock { Text = values[index].Label, Margin = new Thickness(0, 5, 12, 5), Foreground = UiTheme.TextMutedBrush };
+            var value = new TextBlock { Text = values[index].Value, Margin = new Thickness(0, 5, 0, 5), FontWeight = FontWeights.SemiBold, Foreground = UiTheme.TextStrongBrush };
             Grid.SetRow(label, index); Grid.SetRow(value, index); Grid.SetColumn(value, 1);
             grid.Children.Add(label); grid.Children.Add(value);
         }

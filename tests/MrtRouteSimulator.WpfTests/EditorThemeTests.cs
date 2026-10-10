@@ -19,6 +19,7 @@ internal static class EditorThemeTests
     {
         VerifyEditorStyles();
         VerifyShell(root);
+        VerifyPages(root);
         VerifyMinimumSizeAndScale(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
@@ -131,7 +132,8 @@ internal static class EditorThemeTests
     }
 
     // 掃描清單：整個檔案不得寫死顏色；後續 Task 逐步加入。
-    private static readonly string[] ScannedFiles = ["EditorChrome.cs"];
+    private static readonly string[] ScannedFiles =
+        ["EditorChrome.cs", "TopologyEditorWindow.Stations.cs", "TopologyEditorWindow.Operations.cs", "TopologyEditorWindow.Settings.cs"];
 
     private static readonly Regex HardCodedColor = new(
         @"\bColor\.From(Rgb|Argb)\b|\bBrushes\.(?!Transparent\b)[A-Z]\w*|\bColors\.(?!Transparent\b)[A-Z]\w*",
@@ -255,6 +257,123 @@ internal static class EditorThemeTests
             }
         }
         Console.WriteLine("[通過] 編輯器在 980×640 與 125% 縮放下頁首與底部操作完整可見");
+    }
+
+    internal static readonly HashSet<string> AllowedPrimary = new(StringComparer.Ordinal)
+        { "套用", "建立格式版本 8 拓撲", "以此站型重新起稿", "建立", "選取", "套用明確側別" };
+
+    private static readonly HashSet<Brush> ThemeBrushes = typeof(UiTheme).GetFields(BindingFlags.Public | BindingFlags.Static)
+        .SelectMany(field => field.GetValue(null) switch
+        {
+            SolidColorBrush brush => new[] { brush },
+            SolidColorBrush[] brushes => brushes,
+            _ => Array.Empty<SolidColorBrush>()
+        })
+        .Cast<Brush>().ToHashSet();
+
+    private static bool LocalBrushOk(DependencyObject element, DependencyProperty property) =>
+        element.ReadLocalValue(property) is var value
+        && (value == DependencyProperty.UnsetValue || value is Brush brush && ThemeBrushes.Contains(brush));
+
+    private static bool InsideCanvas(DependencyObject element)
+    {
+        for (var parent = VisualTreeHelper.GetParent(element); parent is not null; parent = VisualTreeHelper.GetParent(parent))
+            if (parent is Canvas) return true;
+        return false;
+    }
+
+    private static void VerifyPages(string root)
+    {
+        var window = OpenEditor(root, "Project");
+        try
+        {
+            foreach (var page in NavigationPages.Concat(["QuickBuilder", "Schematic", "Results"]))
+            {
+                Navigate(window, page);
+                InspectTree(window, (DependencyObject)window.Content, page, []);
+            }
+            // 由設施建立等操作回到的舊頁仍可開啟，一併巡檢。
+            foreach (var legacy in new[] { "ShowInfrastructure", "ShowOperations", "ShowDispatch", "ShowSimulation" })
+            {
+                EditorType.GetMethod(legacy, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+                window.UpdateLayout();
+                InspectTree(window, (DependencyObject)window.Content, legacy, []);
+            }
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 編輯器各頁按鈕、分段標籤、清單、表格與文字顏色一致");
+    }
+
+    // 逐一切換每個分頁，讓未顯示的分頁內容也被檢查。
+    private static void InspectTree(Window window, DependencyObject root, string context, HashSet<TabControl> visited)
+    {
+        InspectElements(root, context);
+        foreach (var tabs in Descendants(root).OfType<TabControl>().Where(item => item.TemplatedParent is null && visited.Add(item)).ToArray())
+        {
+            Require(ReferenceEquals(tabs.Style, EditorChrome.StyleOf("EditorTabControl")), $"{context}：分頁必須使用膠囊式分段樣式。");
+            var original = tabs.SelectedIndex;
+            for (var index = 0; index < tabs.Items.Count; index++)
+            {
+                var item = (TabItem)tabs.Items[index]!;
+                Require(ReferenceEquals(item.Style, EditorChrome.StyleOf("EditorTabItem")) && item.Header is string { Length: > 0 },
+                    $"{context}：分頁標籤「{item.Header}」必須使用分段標籤樣式且有文字。");
+                tabs.SelectedIndex = index;
+                window.UpdateLayout();
+                if (item.Content is DependencyObject content) InspectTree(window, content, $"{context}／{item.Header}", visited);
+            }
+            tabs.SelectedIndex = original;
+            window.UpdateLayout();
+        }
+    }
+
+    internal static void InspectElements(DependencyObject root, string context)
+    {
+        var primary = EditorChrome.StyleOf("PrimaryButton");
+        var secondary = EditorChrome.StyleOf("SecondaryButton");
+        var ghost = EditorChrome.StyleOf("GhostButton");
+        foreach (var element in Descendants(root).OfType<FrameworkElement>().Where(item => item.TemplatedParent is null))
+        {
+            if (InsideCanvas(element)) continue; // 路線示意圖由 Task 4 另外檢查
+            switch (element)
+            {
+                case Button button:
+                    Require(ReferenceEquals(button.Style, primary) || ReferenceEquals(button.Style, secondary) || ReferenceEquals(button.Style, ghost),
+                        $"{context}：按鈕「{button.Content}」必須使用共用按鈕樣式。");
+                    Require(button.ReadLocalValue(Control.BackgroundProperty) == DependencyProperty.UnsetValue
+                            && button.ReadLocalValue(Control.ForegroundProperty) == DependencyProperty.UnsetValue
+                            && button.ReadLocalValue(Control.BorderBrushProperty) == DependencyProperty.UnsetValue,
+                        $"{context}：按鈕「{button.Content}」不得自己設定顏色。");
+                    if (ReferenceEquals(button.Style, primary))
+                        Require(AllowedPrimary.Contains(button.Content as string ?? ""), $"{context}：「{button.Content}」不應是主要按鈕。");
+                    break;
+                case ListBox list:
+                    Require(ReferenceEquals(list.Style, EditorChrome.StyleOf("EditorList")) || ReferenceEquals(list.Style, EditorChrome.StyleOf("EditorNavList")),
+                        $"{context}：清單「{AutomationProperties.GetName(list)}」必須使用編輯器清單樣式。");
+                    Require(LocalBrushOk(list, Control.BorderBrushProperty) && LocalBrushOk(list, Control.BackgroundProperty),
+                        $"{context}：清單「{AutomationProperties.GetName(list)}」不得自己設定框色或底色。");
+                    break;
+                case GroupBox group:
+                    Require(ReferenceEquals(group.Style, EditorChrome.StyleOf("EditorGroupBox")), $"{context}：群組框「{group.Header}」必須使用卡片樣式。");
+                    break;
+                case DataGrid grid:
+                    Require(grid.ReadLocalValue(Control.BorderBrushProperty) == DependencyProperty.UnsetValue,
+                        $"{context}：表格「{AutomationProperties.GetName(grid)}」不得自己設定框色。");
+                    break;
+                case TextBlock text:
+                    Require(LocalBrushOk(text, TextBlock.ForegroundProperty),
+                        $"{context}：文字「{(text.Text.Length > 20 ? text.Text[..20] : text.Text)}」的顏色必須取自 UiTheme。");
+                    break;
+                case Border border:
+                    Require(LocalBrushOk(border, Border.BorderBrushProperty) && LocalBrushOk(border, Border.BackgroundProperty),
+                        $"{context}：區塊外框與底色必須取自 UiTheme。");
+                    break;
+                case Control control:
+                    Require(LocalBrushOk(control, Control.BackgroundProperty) && LocalBrushOk(control, Control.ForegroundProperty)
+                            && LocalBrushOk(control, Control.BorderBrushProperty),
+                        $"{context}：控制項「{AutomationProperties.GetName(control)}」的顏色必須取自 UiTheme。");
+                    break;
+            }
+        }
     }
 
     internal static void Require(bool condition, string message)
