@@ -18,6 +18,7 @@ internal static class ShellLayoutTests
     {
         VerifyShellTokens();
         VerifyImplicitStyles();
+        VerifyShellControls();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -179,5 +180,71 @@ internal static class ShellLayoutTests
             if (FindDescendant(child, predicate) is { } nested) return nested;
         }
         return null;
+    }
+
+    private static void VerifyShellControls()
+    {
+        var tabs = new ShellTabControl { Style = (Style)Application.Current.FindResource("NavRailTabControl") };
+        var header = new TextBlock { Text = "頁首" };
+        var footer = new Button { Content = "起稿", Style = (Style)Application.Current.FindResource("NavRailFooterButton") };
+        tabs.PageHeader = header;
+        tabs.NavFooter = footer;
+        for (var index = 0; index < 3; index++)
+        {
+            var item = new TabItem { Header = $"完整頁名{index}", Content = new TextBlock { Text = $"內容{index}" } };
+            ShellNav.SetShortLabel(item, $"頁{index}");
+            ShellNav.SetIcon(item, "");
+            tabs.Items.Add(item);
+        }
+        var segmented = new TabControl { Style = (Style)Application.Current.FindResource("SegmentedTabControl") };
+        foreach (var label in new[] { "配線圖", "列車狀態", "速度曲線" })
+        {
+            var item = new TabItem { Header = label + "完整名", Content = new TextBlock { Text = label } };
+            ShellNav.SetShortLabel(item, label);
+            segmented.Items.Add(item);
+        }
+        var strip = new Expander { Style = (Style)Application.Current.FindResource("KpiStripExpander"), IsExpanded = true,
+            Content = new TextBlock { Text = "摘要" } };
+        var host = new DockPanel();
+        DockPanel.SetDock(strip, Dock.Top);
+        DockPanel.SetDock(segmented, Dock.Top);
+        host.Children.Add(strip);
+        host.Children.Add(segmented);
+        host.Children.Add(tabs);
+        var window = new Window { Width = 700, Height = 520, Content = host };
+        try
+        {
+            window.Show();
+            window.Activate(); // TabItem 以滑鼠選取時需要取得焦點。
+            PumpLayout(window);
+            var items = tabs.Items.OfType<TabItem>().ToArray();
+            var positions = items.Select(item => item.TranslatePoint(new Point(0, 0), tabs)).ToArray();
+            Require(positions.All(point => point.X < 64) && positions.Zip(positions.Skip(1)).All(pair => pair.Second.Y > pair.First.Y),
+                "導覽列項目必須在左側 64 px 內由上而下排列。");
+            Require(header.TranslatePoint(new Point(0, 0), tabs).X >= 64
+                    && header.TranslatePoint(new Point(0, 0), tabs).Y < ((FrameworkElement)items[0].Content).TranslatePoint(new Point(0, 0), tabs).Y,
+                "PageHeader 必須顯示在內容區上方。");
+            Require(footer.TranslatePoint(new Point(0, 0), tabs).X < 64
+                    && footer.TranslatePoint(new Point(0, 0), tabs).Y > positions[^1].Y, "NavFooter 必須在導覽列底部。");
+            Require(LogicalTreeHelper.GetParent(header) == tabs && LogicalTreeHelper.GetParent(footer) == tabs,
+                "PageHeader／NavFooter 必須是 ShellTabControl 的邏輯子元素。");
+            Require(items.All(item => Equals(item.ToolTip, item.Header) && AutomationProperties.GetName(item) == (string)item.Header),
+                "導覽項目的提示框與自動化名稱必須是完整頁名。");
+            items[2].RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+            PumpLayout(window);
+            Require(tabs.SelectedIndex == 2, "點選導覽列項目必須切換頁面。");
+            Require(items.All(item => item.Focusable && ReferenceEquals(item.FocusVisualStyle, Application.Current.FindResource("FocusRingVisual"))),
+                "導覽項目必須可取得鍵盤焦點並使用 FocusRingVisual。");
+            var pills = segmented.Items.OfType<TabItem>().Select(item => item.TranslatePoint(new Point(0, 0), segmented)).ToArray();
+            Require(pills.Select(point => point.Y).Distinct().Count() == 1 && pills.Zip(pills.Skip(1)).All(pair => pair.Second.X > pair.First.X),
+                "膠囊切換鈕必須水平排列。");
+            Require(Math.Abs(strip.ActualHeight - 26) < 1, $"KPI 細條展開時高 26，實際 {strip.ActualHeight:0.0}。");
+            strip.IsExpanded = false;
+            PumpLayout(window);
+            Require(strip.ActualHeight <= 12.5, $"KPI 細條收合時最多 12，實際 {strip.ActualHeight:0.0}。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] ShellTabControl、導覽列、膠囊切換與 KPI 細條範本");
     }
 }

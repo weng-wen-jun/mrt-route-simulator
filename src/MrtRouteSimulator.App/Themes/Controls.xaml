@@ -630,4 +630,202 @@
             </Trigger>
         </Style.Triggers>
     </Style>
+
+    <!-- 外殼：左側導覽列 -->
+    <Style x:Key="NavRailItem" TargetType="TabItem">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisual}" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="Width" Value="50" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTip" Value="{Binding Header, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="AutomationProperties.Name" Value="{Binding Header, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Grid Background="Transparent">
+                        <Border x:Name="Chrome" CornerRadius="8" Background="Transparent" />
+                        <Border x:Name="Indicator" Width="3" HorizontalAlignment="Left" Margin="0,7" CornerRadius="1.5"
+                                Background="{x:Static app:UiTheme.AccentBrush}" Visibility="Collapsed" />
+                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                            <TextBlock Text="{Binding (app:ShellNav.Icon), RelativeSource={RelativeSource TemplatedParent}}"
+                                       FontFamily="{StaticResource IconFont}" FontSize="16" HorizontalAlignment="Center" />
+                            <TextBlock Text="{Binding (app:ShellNav.ShortLabel), RelativeSource={RelativeSource TemplatedParent}}"
+                                       FontSize="11" HorizontalAlignment="Center" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.NavHoverBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.NavSelectedBrush}" />
+                            <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                            <Setter Property="Foreground" Value="{x:Static app:UiTheme.AccentBrush}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="NavRailTabControl" TargetType="app:ShellTabControl">
+        <Setter Property="TabStripPlacement" Value="Left" />
+        <Setter Property="Padding" Value="12,8,12,10" />
+        <Setter Property="ItemContainerStyle" Value="{StaticResource NavRailItem}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="app:ShellTabControl">
+                    <Grid KeyboardNavigation.TabNavigation="Local">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="64" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Background="{x:Static app:UiTheme.SurfaceBrush}" BorderBrush="{x:Static app:UiTheme.BorderBrush}" BorderThickness="0,0,1,0">
+                            <DockPanel LastChildFill="False">
+                                <ContentPresenter DockPanel.Dock="Bottom" Content="{TemplateBinding NavFooter}" Margin="7,0,7,8" />
+                                <TabPanel x:Name="HeaderPanel" DockPanel.Dock="Top" IsItemsHost="True" Margin="7,8,7,0"
+                                          KeyboardNavigation.TabIndex="1" />
+                            </DockPanel>
+                        </Border>
+                        <DockPanel Grid.Column="1" Background="{x:Static app:UiTheme.WindowBackgroundBrush}">
+                            <ContentPresenter DockPanel.Dock="Top" Content="{TemplateBinding PageHeader}" Margin="12,8,12,0" />
+                            <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="{TemplateBinding Padding}" />
+                        </DockPanel>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="NavRailFooterButton" TargetType="Button" BasedOn="{StaticResource ButtonChrome}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="Width" Value="50" />
+        <Setter Property="Height" Value="40" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="ContentTemplate">
+            <Setter.Value>
+                <DataTemplate>
+                    <StackPanel>
+                        <TextBlock Text="&#xE70F;" FontFamily="{StaticResource IconFont}" FontSize="16" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding}" FontSize="11" HorizontalAlignment="Center" Margin="0,3,0,0" />
+                    </StackPanel>
+                </DataTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 外殼：膠囊切換鈕（子分頁） -->
+    <Style x:Key="SegmentedItem" TargetType="TabItem">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisual}" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTip" Value="{Binding Header, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="AutomationProperties.Name" Value="{Binding Header, RelativeSource={RelativeSource Self}}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="Chrome" CornerRadius="10" Background="Transparent" Padding="14,3" MinHeight="22">
+                        <TextBlock Text="{Binding (app:ShellNav.ShortLabel), RelativeSource={RelativeSource TemplatedParent}}"
+                                   FontSize="12" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="{x:Static app:UiTheme.SurfaceBrush}" />
+                            <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
+                            <Setter Property="FontWeight" Value="SemiBold" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="SegmentedTabControl" TargetType="TabControl">
+        <Setter Property="ItemContainerStyle" Value="{StaticResource SegmentedItem}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabControl">
+                    <DockPanel KeyboardNavigation.TabNavigation="Local">
+                        <Border DockPanel.Dock="Top" HorizontalAlignment="Left" Background="{x:Static app:UiTheme.BorderBrush}"
+                                CornerRadius="12" Padding="2" Margin="0,0,0,8">
+                            <TabPanel x:Name="HeaderPanel" IsItemsHost="True" KeyboardNavigation.TabIndex="1" />
+                        </Border>
+                        <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" />
+                    </DockPanel>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 外殼：KPI 細條 -->
+    <Style x:Key="KpiStripToggle" TargetType="ToggleButton">
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisual}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToggleButton">
+                    <Border Background="Transparent" Width="24">
+                        <TextBlock x:Name="Glyph" Text="&#xE70E;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                                   Foreground="{x:Static app:UiTheme.TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="False">
+                            <Setter TargetName="Glyph" Property="Text" Value="&#xE70D;" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="KpiStripExpander" TargetType="Expander">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Expander">
+                    <Border x:Name="Strip" Background="{x:Static app:UiTheme.SurfaceBrush}" BorderBrush="{x:Static app:UiTheme.BorderBrush}"
+                            BorderThickness="1" CornerRadius="6" Height="26">
+                        <DockPanel>
+                            <ToggleButton DockPanel.Dock="Right" Style="{StaticResource KpiStripToggle}"
+                                          IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                                          ToolTip="收合或展開路線摘要" AutomationProperties.Name="收合或展開路線摘要" />
+                            <ContentPresenter x:Name="ExpandSite" Margin="12,0,0,0" VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="False">
+                            <Setter TargetName="ExpandSite" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="Strip" Property="Height" Value="12" />
+                            <Setter TargetName="Strip" Property="BorderThickness" Value="0" />
+                            <Setter TargetName="Strip" Property="Background" Value="Transparent" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="KpiLabel" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextMutedBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+    </Style>
+
+    <Style x:Key="KpiValue" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,18,0" />
+        <Setter Property="MaxWidth" Value="220" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
 </ResourceDictionary>
