@@ -824,4 +824,40 @@
         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
         <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
     </Style>
+
+    <!-- 結果表欄位（ResultTable） -->
+    <app:StatusToneBrushConverter x:Key="StatusToneBrush" />
+
+    <Style x:Key="TextCell" TargetType="TextBlock" BasedOn="{x:Static DataGridTextColumn.DefaultElementStyle}">
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        <Setter Property="ToolTip" Value="{Binding Text, RelativeSource={RelativeSource Self}}" />
+    </Style>
+
+    <Style x:Key="NumericCell" TargetType="TextBlock" BasedOn="{StaticResource TextCell}">
+        <Setter Property="TextAlignment" Value="Right" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}" />
+        <Setter Property="Margin" Value="2,0,8,0" />
+    </Style>
+
+    <Style x:Key="NumericHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+
+    <Style x:Key="StatusCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="DataGridCell">
+                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" SnapsToDevicePixels="True">
+                        <DockPanel>
+                            <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
+                                     Fill="{Binding Content.Text, RelativeSource={RelativeSource TemplatedParent}, Converter={StaticResource StatusToneBrush}}" />
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </DockPanel>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
 </ResourceDictionary>

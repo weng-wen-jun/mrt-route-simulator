@@ -14,6 +14,7 @@ internal static class ResultPageTests
     public static void Run(string root)
     {
         VerifyStatusTones(root);
+        VerifyResultTableRules();
         Console.WriteLine("PASS WPF result pages");
     }
 
@@ -77,5 +78,76 @@ internal static class ResultPageTests
         var converted = new StatusToneBrushConverter().Convert("需要制動", typeof(Brush), null!, System.Globalization.CultureInfo.InvariantCulture);
         Require(ReferenceEquals(converted, UiTheme.CautionBrush), "轉換器必須依狀態文字回傳色點畫筆。");
         Console.WriteLine("[通過] StatusTone 狀態色點對照");
+    }
+
+    private sealed record SampleRow(string Name, string Distance, string Status);
+
+    private static void VerifyResultTableRules()
+    {
+        DataGrid CreateGrid(bool enabled)
+        {
+            var grid = new DataGrid
+            {
+                Width = 420,
+                Height = 160,
+                ItemsSource = new[]
+                {
+                    new SampleRow("很長很長很長很長很長很長的停站模式名稱", "12.345", "已抵達"),
+                    new SampleRow("短", "1.2", "侵入安全距離")
+                }
+            };
+            if (enabled) ResultTable.SetEnabled(grid, true);
+            var name = new DataGridTextColumn { Header = "名稱", Binding = new Binding(nameof(SampleRow.Name)), Width = 90 };
+            var distance = new DataGridTextColumn { Header = "距離 km", Binding = new Binding(nameof(SampleRow.Distance)), Width = 90 };
+            var status = new DataGridTextColumn { Header = "狀態", Binding = new Binding(nameof(SampleRow.Status)), Width = 140 };
+            ResultTable.SetKind(distance, ResultColumnKind.Numeric);
+            ResultTable.SetKind(status, ResultColumnKind.Status);
+            grid.Columns.Add(name);
+            grid.Columns.Add(distance);
+            grid.Columns.Add(status);
+            return grid;
+        }
+
+        DataGridCell Cell(DataGrid grid, int row, int column)
+        {
+            var container = (DataGridRow)grid.ItemContainerGenerator.ContainerFromIndex(row);
+            var presenter = ShellLayoutTests.FindDescendant<DataGridCellsPresenter>(container)!;
+            return (DataGridCell)presenter.ItemContainerGenerator.ContainerFromIndex(column);
+        }
+
+        var enabledGrid = CreateGrid(true);
+        var plainGrid = CreateGrid(false);
+        var panel = new StackPanel();
+        panel.Children.Add(enabledGrid);
+        panel.Children.Add(plainGrid);
+        var window = new Window { Width = 520, Height = 420, Content = panel };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var longName = (TextBlock)Cell(enabledGrid, 0, 0).Content;
+            Require(longName.TextTrimming == TextTrimming.CharacterEllipsis && Equals(longName.ToolTip, longName.Text),
+                "結果表文字欄必須截斷顯示「…」並以提示框顯示完整文字。");
+            var number = (TextBlock)Cell(enabledGrid, 0, 1).Content;
+            Require(number.TextAlignment == TextAlignment.Right && number.FontFamily.Source.Contains("Consolas"),
+                $"結果表數字欄必須靠右並用等寬字型；alignment={number.TextAlignment}, font={number.FontFamily}。");
+            var header = ShellLayoutTests.FindDescendant<DataGridColumnHeader>(enabledGrid, item => Equals(item.Content, "距離 km"));
+            Require(header?.HorizontalContentAlignment == HorizontalAlignment.Right, "數字欄的欄名必須靠右。");
+            var dangerCell = Cell(enabledGrid, 1, 2);
+            Require(ShellLayoutTests.FindDescendant<Ellipse>(dangerCell)?.Fill is var dangerFill && ReferenceEquals(dangerFill, UiTheme.DangerBrush),
+                "狀態欄必須以色點標示，「侵入安全距離」為 Danger。");
+            Require(ReferenceEquals(ShellLayoutTests.FindDescendant<Ellipse>(Cell(enabledGrid, 0, 2))?.Fill, UiTheme.SuccessBrush),
+                "「已抵達」的色點必須為 Success。");
+            enabledGrid.SelectedIndex = 1;
+            ShellLayoutTests.PumpLayout(window);
+            Require(dangerCell.IsSelected && ReferenceEquals(dangerCell.Background, UiTheme.NavSelectedBrush),
+                "狀態欄的選取格仍需 NavSelected 底色（沿用 C1 儲存格樣式）。");
+            var plainName = (TextBlock)Cell(plainGrid, 0, 0).Content;
+            Require(plainName.TextTrimming == TextTrimming.None && ShellLayoutTests.FindDescendant<Ellipse>(Cell(plainGrid, 1, 2)) is null,
+                "未啟用 ResultTable 的表格不得被改動。");
+            Require(enabledGrid.EnableRowVirtualization, "結果表必須維持列虛擬化。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] ResultTable 欄位規則：文字截斷、數字靠右、狀態色點");
     }
 }
