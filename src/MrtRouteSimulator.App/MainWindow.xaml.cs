@@ -565,7 +565,7 @@ public partial class MainWindow : Window
                         NativeAcceptancePhaseEnd(inputToken, "play.workerAwait");
                     }
 
-                    _isV2PlaybackPlaying = true;
+                    SetV2PlaybackPlaying(true);
                     NativeAcceptancePhaseStart(inputToken, "play.afterAcknowledged");
                     try
                     {
@@ -743,7 +743,7 @@ public partial class MainWindow : Window
         {
             if (_playbackWorker.Completion.IsFaulted)
             {
-                _isV2PlaybackPlaying = false;
+                SetV2PlaybackPlaying(false);
                 _playbackTimer.Stop();
                 NativeAcceptanceAbortForLifecycle("playback-worker-fault");
                 PlaybackStatusText.Text = $"實際模擬已停止：{_playbackWorker.Completion.Exception?.GetBaseException().Message}";
@@ -755,7 +755,7 @@ public partial class MainWindow : Window
             ApplyCompletedPlannedTimeline();
             if (_latestPlaybackFrame is { IsComplete: true } completedFrame)
             {
-                _isV2PlaybackPlaying = false;
+                SetV2PlaybackPlaying(false);
                 PausePlayback();
                 NativeAcceptanceObserveCompletedFrame(completedFrame);
                 PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
@@ -1278,7 +1278,7 @@ public partial class MainWindow : Window
         }
         if (_v2Enabled && _playbackWorker is { } worker)
         {
-            _isV2PlaybackPlaying = false;
+            SetV2PlaybackPlaying(false);
             _playbackTimer.Stop();
             await PauseWorkerSafelyAsync(worker, inputToken);
             return;
@@ -1399,6 +1399,7 @@ public partial class MainWindow : Window
     {
         ValidationTextBlock.Text = string.Join(Environment.NewLine, messages.Select(message => $"• {message}"));
         ValidationBorder.Visibility = Visibility.Visible;
+        UpdateStatusIndicator();
         Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
             new Action(() => ValidationBorder.BringIntoView()));
@@ -1413,6 +1414,7 @@ public partial class MainWindow : Window
     {
         ValidationTextBlock.Text = string.Empty;
         ValidationBorder.Visibility = Visibility.Collapsed;
+        UpdateStatusIndicator();
     }
 
     private static string ProfileToChinese(SpeedProfileType profile) => profile switch

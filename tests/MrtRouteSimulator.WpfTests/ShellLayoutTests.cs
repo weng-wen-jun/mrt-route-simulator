@@ -24,6 +24,9 @@ internal static class ShellLayoutTests
         VerifyShellControls();
         VerifyShellSkeleton(root);
         VerifyQuickBuilderDrawer();
+        VerifyStatusIndicator(root);
+        VerifyAppBarFits();
+        VerifyValidationBanner(root);
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -370,5 +373,92 @@ internal static class ShellLayoutTests
             SetInterfaceScale(previousScale);
         }
         Console.WriteLine("[通過] 快速起稿抽屜：預設收起、選單／起稿鈕開啟、關閉鈕／Esc／再按關閉");
+    }
+
+    private static void VerifyStatusIndicator(string root)
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var dot = (System.Windows.Shapes.Ellipse)window.FindName("StatusIndicatorDot")!;
+            // (object) 讓 string[] 以單一參數傳入，而不是被展開成 params 陣列。
+            WpfTestWait.Invoke(window, "ShowValidation", (object)new[] { "測試警告" });
+            Require(ReferenceEquals(dot.Fill, UiTheme.PrimaryBrush), "有驗證警告時狀態圓點必須為橘色。");
+            WpfTestWait.Invoke(window, "HideValidation");
+            Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "未播放且無警告時狀態圓點必須為灰色。");
+            WpfTestWait.Invoke(window, "SetV2PlaybackPlaying", true);
+            Require(WpfTestWait.Field(window, "_isV2PlaybackPlaying") is true && ReferenceEquals(dot.Fill, UiTheme.SuccessBrush),
+                "播放中狀態圓點必須為綠色。");
+            WpfTestWait.Invoke(window, "SetV2PlaybackPlaying", false);
+            Require(WpfTestWait.Field(window, "_isV2PlaybackPlaying") is false && ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush),
+                "暫停後狀態圓點必須回到灰色。");
+            var source = string.Join('\n', new[] { "MainWindow.xaml.cs", "MainWindow.V2.cs" }
+                .Select(file => File.ReadAllText(System.IO.Path.Combine(root, "src", "MrtRouteSimulator.App", file))));
+            Require(!source.Contains("_isV2PlaybackPlaying = "), "播放旗標必須一律經由 SetV2PlaybackPlaying 設定，圓點才會同步。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 狀態列圓點");
+    }
+
+    private static void VerifyAppBarFits()
+    {
+        foreach (var (width, height, scale) in new[] { (800d, 520d, 1d), (1280d, 800d, 1.25d) })
+        {
+            var previousScale = SetInterfaceScale(scale);
+            var window = new MainWindow { Width = width, Height = height };
+            try
+            {
+                window.Show();
+                PumpLayout(window);
+                ((TextBlock)window.FindName("CurrentProjectFileTextBlock")!).Text =
+                    "目前存檔：" + string.Concat(Enumerable.Repeat("很長很長的專案檔名", 12)) + ".mrtsim.json";
+                PumpLayout(window);
+                var content = (FrameworkElement)window.Content;
+                Rect Bounds(string name)
+                {
+                    var element = (FrameworkElement)window.FindName(name)!;
+                    return new Rect(element.TranslatePoint(new Point(0, 0), content), new Size(element.ActualWidth, element.ActualHeight));
+                }
+                var title = Bounds("AppTitlePanel");
+                var menu = Bounds("MainMenu");
+                var bar = Bounds("PlaybackControlBar");
+                Require(title.Right <= menu.Left + .5 && menu.Right <= bar.Left + .5,
+                    $"{width}×{height}@{scale:0.##}：標題、選單、播放列不可重疊；title={title}, menu={menu}, bar={bar}。");
+                Require(bar.Right <= content.ActualWidth + .5, $"{width}×{height}@{scale:0.##}：播放列不可超出視窗；bar={bar}, content={content.ActualWidth:0.0}。");
+            }
+            finally
+            {
+                WpfTestWait.Close(window);
+                SetInterfaceScale(previousScale);
+            }
+        }
+        Console.WriteLine("[通過] 標題列在 800 DIP 與 125% 介面縮放下不重疊、不超出");
+    }
+
+    private static void VerifyValidationBanner(string root)
+    {
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            window.Show();
+            ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
+            ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
+            WpfTestWait.Invoke(window, "ShowValidation", (object)Enumerable.Range(1, 30).Select(index => $"第 {index} 則驗證訊息").ToArray());
+            PumpLayout(window);
+            var banner = (Border)window.FindName("ValidationBorder")!;
+            var route = (ScrollViewer)window.FindName("RouteScrollViewer")!;
+            Require(banner.ActualHeight <= 160, $"驗證橫幅應在 140 px 內捲動，實際高 {banner.ActualHeight:0.0}。");
+            Require(route.ActualHeight >= 200, $"大量驗證訊息時配線圖仍需保有可視高度，實際 {route.ActualHeight:0.0}。");
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 大量驗證訊息時橫幅自行捲動，配線圖保有高度");
     }
 }

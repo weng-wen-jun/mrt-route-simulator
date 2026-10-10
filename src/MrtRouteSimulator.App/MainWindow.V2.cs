@@ -175,7 +175,7 @@ public partial class MainWindow
         // restoring the world.  Keep the timer/UI state stopped while awaiting that command;
         // callers must not enqueue a separate Pause first (which would publish an unnecessary
         // intermediate frame and refresh the UI twice).
-        _isV2PlaybackPlaying = false;
+        SetV2PlaybackPlaying(false);
         _playbackTimer.Stop();
 
         try
@@ -253,7 +253,7 @@ public partial class MainWindow
     private void ClearV2Results()
     {
         _playbackTimer.Stop();
-        _isV2PlaybackPlaying = false;
+        SetV2PlaybackPlaying(false);
         // 結束 topology 執行狀態後，使用者必須能重新編輯表單或切換引擎。
         SetQuickBuilderState(locked: false, collapsed: false);
         var worker = _playbackWorker;
@@ -331,7 +331,7 @@ public partial class MainWindow
         _resultAccumulator.ClearComparison();
         _lastRenderedEventCount = 0;
         _plannedTimetableEvents = [];
-        _isV2PlaybackPlaying = false;
+        SetV2PlaybackPlaying(false);
 
         plannedCancellation?.Cancel();
         var stopWorker = worker is null ? Task.CompletedTask : DisposePlaybackWorkerSafelyAsync(worker);
