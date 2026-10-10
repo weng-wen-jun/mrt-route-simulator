@@ -4,7 +4,7 @@
 - 分支：`claude/ui-design-improvement-0a0ca4`（C1 已合併至本機 `main` 的 `f48b41e`）
 - 範圍：全面 UI 翻新子專案 C 的第二部分 C2，另含 C1 最終審查留下的 9 個小問題
 - 前置：`docs/superpowers/specs/2026-10-09-ui-theme-and-track-diagram-design.md`（`UiTheme`、配線圖）、`docs/superpowers/specs/2026-10-10-main-window-shell-design.md`（主視窗外殼、`Themes/Controls.xaml`）
-- 狀態：設計已於對話中逐段確認，待使用者審閱本文件
+- 狀態：已實作（2026-10-10）；實作中確定的細節已回寫於各節並標示「實作細化」
 
 ## 1. 目標與範圍
 
@@ -41,7 +41,7 @@
 
 - 拿掉各頁 `Grid Margin="14"`；外距只由外殼 `ShellTabControl` 的內距（12）提供。
 - 圖表底色改用 `UiTheme.CanvasBackground`；`MainWindow.xaml` 不再出現 `#RRGGBB` 色碼。
-- 篩選卡內的標籤＋控制項使用共用樣式 `FilterLabel`（12 px `TextMuted`、右邊距 5）。
+- 篩選卡內的標籤＋控制項使用共用樣式 `FilterLabel`（12 px `TextMuted`、右邊距 5）；實作細化：每組標籤＋控制項包成水平 StackPanel，篩選列換行時不會把標籤留在上一行。
 
 ## 3. 各頁對應
 
@@ -56,6 +56,13 @@
 | 移動閉塞與煞車 | 「相鄰列車距離、安全裕度與煞車需求」 | `SafetySummaryText` | 煞車、列車對（新增標籤）、方向（新增標籤）、狀態（新增標籤）、時間（新增標籤） | 「障礙物急停」：障礙車、延遲秒數、觸發／排程急停 | — | 距離圖卡（高 250）＋ `SafetyDataGrid` |
 | V2 區間統計 | 「完成與運行中區間的旅行時間與速率」 | `IntervalSummaryText` | 方向、車輛、車次、車型、服務、停站模式、模擬秒起訖、包含運行中 | — | 重新整理｜匯出：區間 CSV、彙總 CSV、全程平均 CSV | 卡 1「每車次起終站平均速率」（說明＋全程表）；卡 2「區間明細」（區間表） |
 | 列車運行圖／匯出 | 「時間－里程運行圖；篩選同時套用到 PNG／PDF」 | — | — | — | — | 見下方 |
+
+實作細化：
+
+- 匯出與重新整理按鈕沿用原按鈕文字（「匯出區間 CSV」「匯出彙總 CSV」「匯出全程平均 CSV」「匯出資源占用 CSV」），因為沒有明確自動化名稱的按鈕，其自動化名稱就是按鈕文字。
+- 表格放進 `ResultCard`（Padding 4）並取消 DataGrid 自身外框；事件表與即時列車狀態表維持原本有框的 DataGrid。
+- 新增 `x:Name`：`ComparisonDataGrid`、`ResourceDataGrid`、`JourneyStatisticsDataGrid`、`IntervalStatisticsDataGrid`、`SpeedProfileToolbar`。
+- 速度曲線子分頁移除與膠囊重複的「列車完整行程速度曲線」標題。
 
 **運行圖頁**：篩選留在既有可收合面板 `DiagramControlsExpander` 內，作為 `Content`（`DiagramWorkspaceGrid`）的第一列，因為 `UpdateShellContentHeight`／`GetDiagramWorkspaceDesiredHeight` 與運行圖測試依賴它。面板內約 20 個控制項分成三行，每行開頭有小組名：
 
@@ -77,18 +84,21 @@
 適用於結果表：7 頁的表格、全程平均表、事件表、即時列車狀態表。以 DataGrid 上的附加屬性 `ResultTable.Enabled="True"` 啟用，拓樸編輯器等其他表格不受影響。
 
 1. **欄位種類**：附加屬性 `ResultTable.Kind` 標在欄位上，預設 `Text`。
-   - `Numeric`：時刻、km、km/h、秒、m、%、次數。內容與欄名靠右，內容用 `MonoFont`。
+   - `Numeric`：時刻、km、km/h、秒、m、%、次數。內容與欄名靠右，內容用等寬字型（實作細化：用 `Consolas, Cascadia Mono`，Cascadia Mono 在 12～13 px 筆畫偏粗）。
+   - 實作細化：結果表儲存格文字一律垂直置中，狀態欄與一般欄同高。
    - `Text`：長文字截斷顯示「…」，提示框顯示完整文字（例如停站模式欄）。
    - `Status`：狀態文字前加 8 px 色點，文字不變。
 2. **色點**：`StatusTone` 依狀態文字分類，顏色取自 `UiTheme`；不重新計算任何數值。
 
    | Tone | 色票 | 代表的狀態文字 |
    |---|---|---|
-   | Danger | `Danger` | 侵入、碰撞停止、障礙急停、違規類 |
-   | Caution | 新增 `Caution`（`#D9A400`） | 警戒、需制動 |
-   | Success | `Success` | 已抵達、完成、安全 |
-   | Active | `Accent` | 已發車、停站中、運行中、加速、巡航、惰行、煞車、進站平順煞車、到站、折返、駛入／返回尾軌與折返線 |
-   | Neutral | `TextSubtle` | 待發、—、V1 理論基準、V1 不適用類、無法辨識的文字 |
+   | Danger | `Danger` | 侵入安全距離、碰撞停止、障礙急停 |
+   | Caution | 新增 `Caution`（`#D9A400`） | 接近警戒、需要制動 |
+   | Success | `Success` | 已抵達、完成、安全、可比較 |
+   | Active | `Accent` | 已發車、停站中、運行中、停站、加速、巡航、惰行、煞車、進站平順煞車、到站、駛入尾軌、尾軌返回、駛入折返線、折返線返回、折返 |
+   | Neutral | `TextSubtle` | 待發、—、V1 理論基準、V2 尚未抵達、跨站不比較、折返節點不適用 V1、退出營運、無法辨識的文字 |
+
+   實作細化：上表為程式實際輸出的狀態字串（測試會讀原始碼確認全部在對照表內）；原設計列的「違規類」目前沒有對應的狀態字串，「停車超限」只出現在事件表的事件欄。
 
    對應以「完整字串對照表」為主，實作時逐一列出各表實際會出現的狀態字串並以單元測試釘住；新的狀態文字只需補這張表。
 3. **欄寬**：沿用現有寬度與 `FrozenColumnCount`；只修會被硬切的欄位。欄位類型（`DataGridTextColumn`）不變，排序、自動化名稱與以 TextBlock 讀取儲存格的既有測試照舊。
@@ -97,7 +107,7 @@
 
 | # | 問題 | 修法 |
 |---|---|---|
-| 1 | 狀態圓點：V1 播放時不變綠；工作者出錯後清除結果仍為橘色；畫面更新例外停止後顯示灰色 | V1 播放開始／暫停／重設時刷新圓點，播放中為綠；`ClearV2Results` 在清掉 `_playbackWorker` 後再刷新；畫面更新例外停止時設「因錯誤停止」旗標（橘色），重設或建立新模擬時清除 |
+| 1 | 狀態圓點：V1 播放時不變綠；工作者出錯後清除結果仍為橘色；畫面更新例外停止後顯示灰色 | V1 播放開始／暫停／重設時刷新圓點，播放中為綠；`ClearV2Results` 在清掉 `_playbackWorker` 後再刷新；畫面更新例外停止時設「因錯誤停止」旗標（橘色），重設或建立新模擬時清除；實作細化：停止流程集中於 `StopPlaybackAfterUiFailure(Exception)` |
 | 2 | 配線圖固定水平捲軸在抽屜開著時蓋在抽屜上 | 抽屜開啟時捲軸改從抽屜右緣開始，仍可拖曳 |
 | 3 | 窄視窗 KPI 細條直接被切掉 | `RouteSummaryScrollViewer` 水平捲動由 Hidden 改為 Disabled，內容改成五格等寬，數值截斷顯示「…」並有提示框；名稱與 `UpdateCompactSummaryHeight` 邏輯不變 |
 | 4 | 停用中的圖示鈕沒有提示 | `AppBarButton` 樣式加 `ToolTipService.ShowOnDisabled="True"` |

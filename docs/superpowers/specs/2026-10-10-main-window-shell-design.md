@@ -141,7 +141,7 @@
 
 ### 4.2 共用樣式檔
 
-新增 `src/MrtRouteSimulator.App/Themes/Controls.xaml`（`ResourceDictionary`），在 `App.xaml` 以 `MergedDictionaries` 合併。內容：第 3 節所有隱含樣式與鍵名樣式（`PrimaryButton`、`SecondaryButton`、`GhostButton`、`AppBarButton`、`SummaryCard`、`SectionTitle`、`FieldLabel`、`NavRailTabControl`、`SegmentedTabControl`、`KpiStripExpander`）。既有鍵名維持，避免其他視窗的 XAML 修改。
+新增 `src/MrtRouteSimulator.App/Themes/Controls.xaml`（`ResourceDictionary`），在 `App.xaml` 以 `MergedDictionaries` 合併。內容：第 3 節所有隱含樣式與鍵名樣式（`PrimaryButton`、`SecondaryButton`、`GhostButton`、`AppBarButton`、`SectionTitle`、`FieldLabel`、`NavRailTabControl`、`SegmentedTabControl`、`KpiStripExpander`）。既有鍵名維持，避免其他視窗的 XAML 修改。
 
 ### 4.3 `ShellTabControl` 與導覽附加屬性
 

@@ -1,5 +1,14 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 介面翻新子專案 C2：結果分頁版面統一（2026-10-10）
+
+- Release build：`MrtRouteSimulator.slnx` 全部專案 0 warning／0 error。
+- Engine runner：198/198 通過（與改動前基準相同）。
+- WPF runner（互動桌面）：完整 runner `PASS WPF visual rules`，124 項 `[通過]`，91 秒（改動前基準 107 項、86 秒）；新增 `ResultPageTests`（狀態色點對照與來源字串守門、結果表欄位規則與同列垂直對齊、`ResultPage` 骨架、7 頁與模擬子分頁結構、窄視窗與 125% 頁首不重疊、篩選標籤與控制項成組、無寫死色碼）與 C1 遺留修正 8 項回歸測試全部通過。
+- 大型 28 站播放診斷：`PASS WPF large playback diagnostics`（58.5×、最大 UI 輸入間隔 70 ms）。
+- 人工截圖檢查（範例 14 推進 5 分鐘，7 頁與 2 個子分頁，1280×800，與改版前對照）：頁首、摘要、篩選卡、表格卡、數字靠右、狀態色點、運行圖三列面板與速度曲線工具列正常。檢查時發現並修正三處：篩選列換行把標籤與控制項拆開、狀態欄文字比同列低 5 px、表格數字字型偏粗；皆先以測試重現再修正。
+- 未涵蓋：圖表 Canvas 內的繪圖（子專案 D）、拓樸編輯器版面（子專案 E）；原生桌面 DPI 與實體滑鼠操作未重跑。
+
 ## 介面翻新子專案 C1：主視窗外殼（2026-10-10）
 
 - Release build：`MrtRouteSimulator.slnx` 全部專案 0 warning／0 error。
