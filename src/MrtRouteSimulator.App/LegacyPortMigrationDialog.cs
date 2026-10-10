@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using MrtRouteSimulator.Engine;
 
 namespace MrtRouteSimulator.App;
@@ -28,6 +27,8 @@ internal sealed class LegacyPortMigrationDialog : Window
         MinWidth = 680;
         MinHeight = 360;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        EditorChrome.ApplyWindowChrome(this);
+        Background = UiTheme.SurfaceBrush;
         Content = BuildContent();
     }
 
@@ -37,7 +38,7 @@ internal sealed class LegacyPortMigrationDialog : Window
 
     private UIElement BuildContent()
     {
-        var root = new Grid { Margin = new Thickness(18), Background = Brushes.White };
+        var root = new Grid { Margin = new Thickness(20) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -46,7 +47,7 @@ internal sealed class LegacyPortMigrationDialog : Window
         {
             Text = "此 Schema 8 舊檔有軌道兩端皆未指定實體接軌側別。A/B 只能由實體資料確認，程式不會從示意位置或里程猜測。請逐一填寫，或選擇保留相容讀取。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(60, 70, 90)),
+            Foreground = UiTheme.TextMutedBrush,
             Margin = new Thickness(0, 0, 0, 14)
         });
 
@@ -56,6 +57,15 @@ internal sealed class LegacyPortMigrationDialog : Window
         table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
         table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        // 每列都要有自己的列定義；原本缺少列定義，所有資料列都疊在第一列。
+        for (var row = 0; row <= items.Count; row++) table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        var headerBand = new Border
+        {
+            Background = UiTheme.TableHeaderBrush, BorderBrush = UiTheme.BorderBrush,
+            BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = new CornerRadius(6, 6, 0, 0)
+        };
+        Grid.SetColumnSpan(headerBand, 4);
+        table.Children.Add(headerBand);
         AddCell(table, "軌道區段", 0, 0, true);
         AddCell(table, "端點", 1, 0, true);
         AddCell(table, "起點側", 2, 0, true);
@@ -135,15 +145,9 @@ internal sealed class LegacyPortMigrationDialog : Window
 
     private static Button Button(string text, RoutedEventHandler handler, bool secondary)
     {
-        var button = new Button
-        {
-            Content = text,
-            Padding = new Thickness(14, 6, 14, 6),
-            Margin = new Thickness(6, 0, 0, 0),
-            MinWidth = 118
-        };
-        if (secondary) button.Background = new SolidColorBrush(Color.FromRgb(238, 242, 248));
-        button.Click += handler;
+        var button = EditorChrome.Button(text, handler, primary: !secondary);
+        button.Margin = new Thickness(6, 0, 0, 0);
+        button.MinWidth = 118;
         return button;
     }
 

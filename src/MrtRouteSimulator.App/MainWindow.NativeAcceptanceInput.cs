@@ -626,7 +626,11 @@ public partial class MainWindow
         if (button is not null)
         {
             var name = button.Name;
-            var content = button.Content?.ToString() ?? AutomationProperties.GetName(button);
+            // 標題列播放控制是圖示鈕，Content 只是字形；語意以自動化名稱為準。
+            var automationName = AutomationProperties.GetName(button);
+            var content = string.IsNullOrWhiteSpace(automationName)
+                ? button.Content?.ToString() ?? string.Empty
+                : automationName;
             if (string.Equals(name, "PlayButton", StringComparison.Ordinal)
                 || content.Contains("播放", StringComparison.Ordinal))
             {

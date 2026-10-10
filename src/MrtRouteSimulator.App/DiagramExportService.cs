@@ -121,8 +121,10 @@ internal static class DiagramExportService
         // complete, page-local text layer below instead of a bitmap fragment that can
         // cut a title, tick label, or train marker in half.
         var graphBitmap = Render(element, renderScale, includeText: false);
+        RequireSameRenderSize(bitmap, graphBitmap);
         var textBlocks = FindTextBlocks(element);
         var stationLeaders = FindStationLeaders(element);
+        var legends = FindChartLegends(element);
         var logicalScale = bitmap.DpiX / 96d;
         var axisWidth = Math.Clamp((int)Math.Round(92 * logicalScale), 1, bitmap.PixelWidth / 3);
         var left = Math.Clamp((int)Math.Round(82 * logicalScale), 1, axisWidth);
@@ -147,6 +149,7 @@ internal static class DiagramExportService
                 graphBitmap,
                 textBlocks,
                 stationLeaders,
+                legends,
                 trainAnchors.Where(pair => Array.FindIndex(sliceStarts, sliceStart =>
                     pair.Value.X * logicalScale >= sliceStart - .5
                     && pair.Value.X * logicalScale <= Math.Min(bitmap.PixelWidth, sliceStart + sliceCapacity) + .5) == index)
@@ -200,6 +203,8 @@ internal static class DiagramExportService
                 block.Visibility = visibility;
             }
         }
+
+        RequireSameRenderSize(bitmap, graphBitmap);
 
         var logicalScale = bitmap.DpiX / 96d;
         var logicalWidth = bitmap.PixelWidth / logicalScale;
@@ -261,7 +266,7 @@ internal static class DiagramExportService
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())
         {
-            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            context.DrawRectangle(ChartTheme.ExportPage, null, new Rect(0, 0, logicalWidth, logicalHeight));
             context.DrawImage(graphBitmap, new Rect(0, 0, logicalWidth, originalLogicalHeight));
             foreach (var (block, train) in trainLabels)
             {
@@ -269,12 +274,12 @@ internal static class DiagramExportService
                     Math.Clamp(train.Anchor.X, train.Bounds.Left, train.Bounds.Right),
                     Math.Clamp(train.Anchor.Y, train.Bounds.Top, train.Bounds.Bottom));
                 context.DrawLine(new Pen(block.Foreground, .6), train.Anchor, connection);
-                DrawTextBlock(context, block, train.Bounds.X, train.Bounds.Y,
+                DrawElementSnapshot(context, block, train.Bounds.X, train.Bounds.Y,
                     train.Bounds.Width, train.Bounds.Height);
             }
             foreach (var (block, bounds) in captionLabels)
             {
-                DrawTextBlock(context, block, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+                DrawElementSnapshot(context, block, bounds.X, bounds.Y, bounds.Width, bounds.Height);
             }
         }
 
@@ -293,6 +298,7 @@ internal static class DiagramExportService
         RenderTargetBitmap graphBitmap,
         IReadOnlyList<TextBlock> textBlocks,
         IReadOnlyList<Line> stationLeaders,
+        IReadOnlyList<FrameworkElement> legends,
         IReadOnlyDictionary<TextBlock, Point> pageTrainAnchors,
         IReadOnlyDictionary<TextBlock, Point> allTrainAnchors,
         int start,
@@ -361,7 +367,7 @@ internal static class DiagramExportService
         {
             // Keep the established white page background and draw only the graph
             // area.  Axis/header text is deliberately drawn separately below.
-            context.DrawRectangle(Brushes.White, null, new Rect(0, 0, logicalWidth, logicalHeight));
+            context.DrawRectangle(ChartTheme.ExportPage, null, new Rect(0, 0, logicalWidth, logicalHeight));
             var source = new CroppedBitmap(
                 graphBitmap,
                 new Int32Rect(start, plotTop, sliceWidth, plotHeight));
@@ -369,7 +375,7 @@ internal static class DiagramExportService
                 source,
                 new Rect(logicalAxisWidth, logicalPlotTop, logicalSliceWidth, plotHeight / logicalScale));
 
-            var pen = new Pen(Brushes.SlateGray, 1.1);
+            var pen = new Pen(ChartTheme.Axis, ChartTheme.AxisThickness);
             context.DrawLine(
                 pen,
                 new Point(logicalAxisWidth, logicalPlotTop),
@@ -406,7 +412,7 @@ internal static class DiagramExportService
                         var connection = new Point(Math.Clamp(train.Anchor.X, train.Bounds.Left, train.Bounds.Right),
                             Math.Clamp(train.Anchor.Y, train.Bounds.Top, train.Bounds.Bottom));
                         context.DrawLine(new Pen(textBlock.Foreground, .6), train.Anchor, connection);
-                        DrawTextBlock(context, textBlock, train.Bounds.X, train.Bounds.Y, train.Bounds.Width, train.Bounds.Height);
+                        DrawElementSnapshot(context, textBlock, train.Bounds.X, train.Bounds.Y, train.Bounds.Width, train.Bounds.Height);
                     }
                     continue;
                 }
@@ -418,7 +424,7 @@ internal static class DiagramExportService
                     // The chart title and legend are page-local.  Shrink them as
                     // needed so a long route name is never clipped at page right.
                     var fit = Math.Min(1, Math.Max(1, logicalWidth - x - 4) / width);
-                    DrawTextBlock(context, textBlock, x, y, width * fit, height * fit);
+                    DrawElementSnapshot(context, textBlock, x, y, width * fit, height * fit);
                     continue;
                 }
 
@@ -428,7 +434,7 @@ internal static class DiagramExportService
                     // its left-axis identity takes precedence over the time row.
                     // A centered first time tick starts left of the axis, but its
                     // center is on the axis and must not repeat on every page.
-                    DrawTextBlock(context, textBlock, x, y, width, height);
+                    DrawElementSnapshot(context, textBlock, x, y, width, height);
                     continue;
                 }
 
@@ -443,7 +449,7 @@ internal static class DiagramExportService
                         // Leave the final time tick readable; the original canvas
                         // places this axis caption on the same baseline as the last
                         // tick, which is too tight after a page is narrowed.
-                        DrawTextBlock(
+                        DrawElementSnapshot(
                             context,
                             textBlock,
                             Math.Max(logicalAxisWidth, logicalWidth - 48),
@@ -453,7 +459,7 @@ internal static class DiagramExportService
                     }
                     else if (timeLabels.TryGetValue(textBlock, out var placement))
                     {
-                        DrawTextBlock(context, textBlock, placement.X, placement.Y, placement.Width, placement.Height);
+                        DrawElementSnapshot(context, textBlock, placement.X, placement.Y, placement.Width, placement.Height);
                     }
 
                     continue;
@@ -468,9 +474,20 @@ internal static class DiagramExportService
                     {
                         var destinationX = logicalAxisWidth + x - logicalStart;
                         destinationX = Math.Clamp(destinationX, logicalAxisWidth, Math.Max(logicalAxisWidth, logicalWidth - width));
-                        DrawTextBlock(context, textBlock, destinationX, y, width, height);
+                        DrawElementSnapshot(context, textBlock, destinationX, y, width, height);
                     }
                 }
+            }
+
+            // 圖例含線段樣本與色點，不在裁切的繪圖區內；與標題一樣在每頁原位補畫，頁面太窄時等比縮小。
+            foreach (var legend in legends)
+            {
+                var legendX = Canvas.GetLeft(legend);
+                var legendY = Canvas.GetTop(legend);
+                var legendWidth = Math.Max(1, legend.ActualWidth);
+                var legendHeight = Math.Max(1, legend.ActualHeight);
+                var fit = Math.Min(1, Math.Max(1, logicalWidth - legendX - 4) / legendWidth);
+                DrawElementSnapshot(context, legend, legendX, legendY, legendWidth * fit, legendHeight * fit);
             }
         }
 
@@ -483,6 +500,17 @@ internal static class DiagramExportService
         page.Render(visual);
         page.Freeze();
         return page;
+    }
+
+    // Overlay layers are cropped/placed with the base bitmap's coordinates.
+    // Report a size change explicitly instead of a WIC "value out of range"
+    // from CroppedBitmap or a silently stretched layer.
+    private static void RequireSameRenderSize(BitmapSource expected, BitmapSource actual)
+    {
+        if (expected.PixelWidth != actual.PixelWidth || expected.PixelHeight != actual.PixelHeight)
+            throw new InvalidOperationException(
+                $"運行圖在匯出期間改變尺寸：主圖 {expected.PixelWidth}x{expected.PixelHeight} px，"
+                + $"圖層 {actual.PixelWidth}x{actual.PixelHeight} px。");
     }
 
     private static Rect PlacePdfTrainLabel(Rect desired, Rect bounds, List<Rect> occupied)
@@ -551,9 +579,9 @@ internal static class DiagramExportService
         return result;
     }
 
-    private static void DrawTextBlock(
+    private static void DrawElementSnapshot(
         DrawingContext context,
-        TextBlock source,
+        FrameworkElement source,
         double x,
         double y,
         double width,
@@ -586,6 +614,26 @@ internal static class DiagramExportService
         {
             if (node is Line { Tag: TimeDistanceStationLeaderTag, Visibility: Visibility.Visible } line)
                 result.Add(line);
+            for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
+                Visit(VisualTreeHelper.GetChild(node, index));
+        }
+    }
+
+    private static IReadOnlyList<FrameworkElement> FindChartLegends(DependencyObject root)
+    {
+        var result = new List<FrameworkElement>();
+        Visit(root);
+        return result;
+
+        void Visit(DependencyObject node)
+        {
+            if (node is FrameworkElement { Tag: ChartPainter.LegendTag, Visibility: Visibility.Visible } legend
+                && !double.IsNaN(Canvas.GetLeft(legend)) && !double.IsNaN(Canvas.GetTop(legend)))
+            {
+                result.Add(legend);
+                return;
+            }
+
             for (var index = 0; index < VisualTreeHelper.GetChildrenCount(node); index++)
                 Visit(VisualTreeHelper.GetChild(node, index));
         }
@@ -626,6 +674,18 @@ internal static class DiagramExportService
         // new children must be arranged before VisualBrush captures the tree;
         // otherwise a valid PNG/PDF can contain only the white background.
         element.UpdateLayout();
+        if (VisualTreeHelper.GetParent(element) is null && (!element.IsMeasureValid || !element.IsArrangeValid))
+        {
+            // A canvas outside any laid-out tree (an unshown window never applies
+            // its ScrollViewer template) is a visual root. VisualBrush would only
+            // lay it out lazily inside bitmap.Render, after its stale ActualWidth
+            // already sized this bitmap, so a second render of the same export
+            // would get another size. Lay it out now, and raise SizeChanged
+            // before any pixels are captured.
+            element.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            element.Arrange(new Rect(element.DesiredSize));
+            element.UpdateLayout();
+        }
         var width = Math.Max(1, element.ActualWidth);
         var height = Math.Max(1, element.ActualHeight);
         var pixelWidth = Math.Max(1, (int)Math.Ceiling(width * scale));
@@ -649,7 +709,7 @@ internal static class DiagramExportService
             using (var context = visual.RenderOpen())
             {
                 // Canvas 的透明背景在 JPEG/PDF 會變成黑底；父容器的配置偏移也不屬於輸出。
-                context.DrawRectangle(Brushes.White, null, bounds);
+                context.DrawRectangle(ChartTheme.ExportPage, null, bounds);
                 context.DrawRectangle(new VisualBrush(element)
                 {
                     ViewboxUnits = BrushMappingMode.Absolute,

@@ -35,7 +35,7 @@ internal sealed partial class TopologyEditorWindow
             ("更新頻率", "每 0.1 秒更新一次"),
             ("套用狀態", "目前為工作區草稿，按套用後才送入主視窗")));
 
-        var basic = new GroupBox { Header = "常用設定", Margin = new Thickness(0, 12, 0, 8), Padding = new Thickness(10) };
+        var basic = new GroupBox { Header = "常用設定", Margin = new Thickness(0, 12, 0, 8) };
         var basicGrid = CreateSettingsGrid();
         AddSettingField(basicGrid, "起始時鐘（秒）", "StartClockSeconds", settings.StartClockSeconds);
         AddSettingField(basicGrid, "播放速度", "PlaybackSpeed", settings.PlaybackSpeed);
@@ -97,17 +97,12 @@ internal sealed partial class TopologyEditorWindow
         {
             Text = "車型頁是每種車輛性能的主要入口；這裡的車輛欄位是全域基準／相容預設值，未經確認不會自動覆寫車型或班次。列車數與班距摘要也保留在此，但不會取代班表頁的實際發車安排。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)),
+            Foreground = UiTheme.TextMutedBrush,
             Margin = new Thickness(0, 4, 0, 0)
         });
 
         RegisterPageCommitHook("simulation-settings", CommitSimulationSettingsForm);
-        workspace.Content = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = panel
-        };
+        ShowWorkspacePage(panel);
     }
 
     private Grid CreateSettingsGrid()

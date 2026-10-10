@@ -16,9 +16,14 @@ internal static class AppDisplayPreferences
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "MrtRouteSimulator", "display-settings.json");
 
-    public static bool LoadShowLockedRoutes() => Load().ShowLockedRoutes;
+    // 主視窗啟動時一次讀取全部畫面偏好，避免同一個設定檔被重複讀取。
+    internal static DisplaySettings LoadAll() => Load();
 
-    public static double LoadRouteMapHorizontalZoom() => Load().RouteMapHorizontalZoom;
+    public static void SaveShowTrackOccupancy(bool show)
+    {
+        var settings = Load();
+        Save(settings with { ShowTrackOccupancy = show });
+    }
 
     public static double LoadInterfaceScale() => Load().InterfaceScale;
 
@@ -65,7 +70,13 @@ internal static class AppDisplayPreferences
                 && scaleValue.TryGetDouble(out var scale)
                     ? NormalizeInterfaceScale(scale)
                     : DefaultInterfaceScale;
-            return new DisplaySettings(showLockedRoutes, routeMapHorizontalZoom, interfaceScale);
+            // 只有明確的 false 才關閉；缺欄位或格式錯誤一律維持預設開啟。
+            var showTrackOccupancy = !document.RootElement.TryGetProperty("ShowTrackOccupancy", out var occupancyValue)
+                || occupancyValue.ValueKind != JsonValueKind.False;
+            return new DisplaySettings(showLockedRoutes, routeMapHorizontalZoom, interfaceScale)
+            {
+                ShowTrackOccupancy = showTrackOccupancy
+            };
         }
         catch (IOException)
         {
@@ -125,5 +136,9 @@ internal static class AppDisplayPreferences
     internal sealed record DisplaySettings(
         bool ShowLockedRoutes = false,
         double RouteMapHorizontalZoom = DefaultRouteMapHorizontalZoom,
-        double InterfaceScale = DefaultInterfaceScale);
+        double InterfaceScale = DefaultInterfaceScale)
+    {
+        // 不放進主建構子：既有偏好測試以 (bool, double, double) 建構子為契約。
+        public bool ShowTrackOccupancy { get; init; } = true;
+    }
 }

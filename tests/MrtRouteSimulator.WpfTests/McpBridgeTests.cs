@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
 using System.Windows;
@@ -91,8 +92,35 @@ internal static class McpBridgeTests
                 "完成後 Play 須沿用正常按鈕重設再播放，不得同時回報完成與播放中。");
             Call("pause");
             Call("reset");
+
+            // 第二段：設施與營運最完整的 28 站範例。大型路線的 PDF 匯出與完整播放會長時間占用
+            // 互動桌面的 UI 執行緒，因此只驗證載入、推進、儲存、查詢、切頁與 CSV 匯出。
+            Call("load", new { path = "samples/14-大型-二十八站完整營運範例.mrtsim.json" });
+            WpfTestWait.WaitForPlannedTimeline(window);
+            var large = Call("status");
+            Require(large.GetProperty("simulationTimeSeconds").GetDouble() == 0
+                && large.GetProperty("projectId").GetString() != before.GetProperty("projectId").GetString(),
+                "範例 14 須取代三站範例並從時間 0 開始。");
+            var largeAdvanced = Call("advance", new { targetSeconds = 30.05 });
+            Require(Math.Abs(largeAdvanced.GetProperty("simulationTimeSeconds").GetDouble() - 30) < 1e-8,
+                "範例 14 也只能完成完整 0.1 秒 tick。");
+            Require(largeAdvanced.GetProperty("trains").GetArrayLength() > 0, "範例 14 推進後須有列車狀態。");
+            var largeSaved = Path.Combine(output, "copy-large.mrtsim.json");
+            Call("save", new { path = largeSaved });
+            Require(File.Exists(largeSaved), "範例 14 須可儲存。");
+            Require(Call("events", new { offset = 0, limit = 5 }).GetProperty("items").GetArrayLength() > 0, "範例 14 推進後須有事件。");
+            Call("timetable", new { limit = 5 });
+            Call("select_page", new { page = "trains" });
+            Require(Call("status").GetProperty("simulationView").GetInt32() == 1, "範例 14 須能切換列車狀態子頁。");
+            Call("select_page", new { page = "diagram" });
+            // 完整 2 小時、28 站運行圖的 PNG／PDF 匯出目前超過影像編碼器尺寸上限（既有問題，另案處理），
+            // 此段只驗證大型路線的 CSV 軌跡匯出。
+            var largeCsv = Path.Combine(output, "diagram-large.csv");
+            Call("export", new { path = largeCsv, format = "csv" });
+            Require(new FileInfo(largeCsv).Length > 0, "範例 14 CSV 不可空白。");
+            Reject("export", new { path = largeCsv, format = "csv" }, "範例 14 匯出不可默默覆寫。");
             Reject("unknown", new { }, "未知命令必須拒絕。");
-            Console.WriteLine("[通過] MCP named pipe：PID、載入、固定 tick、失敗不污染、分頁、儲存、播放確認、切頁、縮放及 CSV/PNG/PDF");
+            Console.WriteLine("[通過] MCP named pipe：範例 10 PID、載入、固定 tick、失敗不污染、分頁、儲存、播放確認、切頁、縮放及 CSV/PNG/PDF；範例 14 載入、推進、儲存、查詢、切頁及 CSV");
         }
         finally
         {
@@ -126,12 +154,36 @@ internal static class McpBridgeTests
 
     private static void RunTransportRecovery()
     {
-        var server = new DesktopBridgeServer((request, _) => Task.FromResult<object>(
-            request.Command == "oversize" ? new string('x', DesktopBridge.MaximumMessageBytes)
-                : new { ok = true }));
+        var server = new DesktopBridgeServer((request, _) => request.Command switch
+        {
+            "oversize" => Task.FromResult<object>(new string('x', DesktopBridge.MaximumMessageBytes)),
+            "fail" => throw new InvalidOperationException("外層失敗", new ArgumentException("內層細節")),
+            _ => Task.FromResult<object>(new { ok = true })
+        });
         try
         {
             var args = JsonSerializer.SerializeToElement(new { });
+            var log = new StringWriter();
+            var listener = new TextWriterTraceListener(log);
+            Trace.Listeners.Add(listener);
+            try
+            {
+                var failed = Task.Run(() => DesktopBridge.CallAsync(Environment.ProcessId,
+                    new DesktopRequest("fail", args), CancellationToken.None));
+                string? clientError = null;
+                try { WpfTestWait.Wait(failed); }
+                catch (InvalidOperationException exception) { clientError = exception.Message; }
+                listener.Flush();
+                var logged = log.ToString();
+                Require(clientError == "外層失敗", "client 仍只收到例外訊息。實際：" + clientError);
+                Require(logged.Contains("command 'fail'", StringComparison.Ordinal)
+                    && logged.Contains(typeof(InvalidOperationException).FullName!, StringComparison.Ordinal)
+                    && logged.Contains("內層細節", StringComparison.Ordinal)
+                    && logged.Contains(nameof(RunTransportRecovery), StringComparison.Ordinal),
+                    "橋接失敗須記錄命令、例外型別、內層例外與堆疊。實際：" + logged);
+            }
+            finally { Trace.Listeners.Remove(listener); }
+
             var oversized = Task.Run(() => DesktopBridge.CallAsync(Environment.ProcessId,
                 new DesktopRequest("oversize", args), CancellationToken.None));
             var rejected = false;
@@ -154,7 +206,7 @@ internal static class McpBridgeTests
                 new DesktopRequest("status", args), CancellationToken.None));
             WpfTestWait.Wait(recovered);
             Require(recovered.Result.GetProperty("ok").GetBoolean(), "錯誤後橋接仍須可供下一次呼叫。");
-            Console.WriteLine("[通過] MCP transport：超大回應與無效 framing 後可繼續服務");
+            Console.WriteLine("[通過] MCP transport：失敗記錄完整例外，超大回應與無效 framing 後可繼續服務");
         }
         finally { WpfTestWait.Wait(server.DisposeAsync().AsTask()); }
     }

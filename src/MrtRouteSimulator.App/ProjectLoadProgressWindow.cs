@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 
 namespace MrtRouteSimulator.App;
 
@@ -19,9 +18,11 @@ internal sealed class ProjectLoadProgressWindow : Window
         WindowStyle = WindowStyle.ToolWindow;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
+        EditorChrome.ApplyWindowChrome(this);
+        Background = UiTheme.SurfaceBrush;
 
-        _message = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        _progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Height = 18, Margin = new Thickness(0, 14, 0, 0) };
+        _message = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = UiTheme.TextMutedBrush, Margin = new Thickness(0, 6, 0, 0) };
+        _progressBar = new ProgressBar { Minimum = 0, Maximum = 100, Margin = new Thickness(0, 14, 0, 0) };
         Content = new Border
         {
             Padding = new Thickness(20),
@@ -29,7 +30,7 @@ internal sealed class ProjectLoadProgressWindow : Window
             {
                 Children =
                 {
-                    new TextBlock { Text = "正在讀取存檔，請稍候", FontWeight = FontWeights.SemiBold, FontSize = 16 },
+                    new TextBlock { Text = "正在讀取存檔，請稍候", Style = EditorChrome.StyleOf("ResultPageTitle") },
                     _message,
                     _progressBar
                 }

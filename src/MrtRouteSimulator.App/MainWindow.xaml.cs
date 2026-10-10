@@ -15,17 +15,7 @@ namespace MrtRouteSimulator.App;
 
 public partial class MainWindow : Window
 {
-    private static readonly Color[] TrainColors =
-    [
-        Color.FromRgb(232, 109, 45),
-        Color.FromRgb(34, 126, 173),
-        Color.FromRgb(22, 134, 107),
-        Color.FromRgb(126, 87, 194),
-        Color.FromRgb(205, 75, 112),
-        Color.FromRgb(56, 163, 165),
-        Color.FromRgb(231, 165, 48),
-        Color.FromRgb(82, 102, 159)
-    ];
+    private static readonly Color[] TrainColors = UiTheme.VehiclePalette;
 
     private readonly DispatcherTimer _playbackTimer;
     private EngineRoute? _route;
@@ -50,10 +40,13 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        RouteCanvas.Background = UiTheme.CanvasBackgroundBrush;
         InterfaceScaleService.ApplyToWindow(this);
         UpdateInterfaceScaleMenu();
-        ShowLockedRoutesMenuItem.IsChecked = AppDisplayPreferences.LoadShowLockedRoutes();
-        _routeMapHorizontalZoom = AppDisplayPreferences.LoadRouteMapHorizontalZoom();
+        var displaySettings = AppDisplayPreferences.LoadAll();
+        ShowLockedRoutesMenuItem.IsChecked = displaySettings.ShowLockedRoutes;
+        ShowTrackOccupancyMenuItem.IsChecked = displaySettings.ShowTrackOccupancy;
+        _routeMapHorizontalZoom = displaySettings.RouteMapHorizontalZoom;
         SelectRouteHorizontalZoom(_routeMapHorizontalZoom);
         _initializingRouteDisplayPreferences = false;
         UpdateRouteFollowUi();
@@ -193,6 +186,7 @@ public partial class MainWindow : Window
         }
 
         SetQuickBuilderState(locked: false, collapsed: false);
+        SetQuickBuilderDrawerOpen(true);
         V2SettingsHeading.BringIntoView();
         V2SettingsHeading.Focus();
     }
@@ -345,6 +339,8 @@ public partial class MainWindow : Window
     {
         NativeAcceptanceAbortForLifecycle("simulation-rebuilt");
         PausePlayback();
+        // 重新建立模擬即離開「因錯誤停止」狀態（V1 路徑不會經過 ClearResults）。
+        _playbackStoppedByError = false;
         HideValidation();
         // 已有 Schema 8 document 時，重新建立／播放必須直接使用同一份 topology；不可
         // 回讀已鎖定的線性暫存欄位後把 branch、facility 或 route traversal 壓回線性草稿。
@@ -449,12 +445,12 @@ public partial class MainWindow : Window
         catch (SimulationValidationException exception)
         {
             ShowValidation(exception.Errors);
-            StatusTextBlock.Text = "資料驗證未通過；請依左側訊息修正。";
+            StatusTextBlock.Text = "資料驗證未通過；請依上方訊息修正。";
         }
         catch (InvalidOperationException exception)
         {
             ShowValidation([exception.Message]);
-            StatusTextBlock.Text = "資料驗證未通過；請依左側訊息修正。";
+            StatusTextBlock.Text = "資料驗證未通過；請依上方訊息修正。";
         }
         catch (Exception exception)
         {
@@ -571,7 +567,7 @@ public partial class MainWindow : Window
                         NativeAcceptancePhaseEnd(inputToken, "play.workerAwait");
                     }
 
-                    _isV2PlaybackPlaying = true;
+                    SetV2PlaybackPlaying(true);
                     NativeAcceptancePhaseStart(inputToken, "play.afterAcknowledged");
                     try
                     {
@@ -602,6 +598,7 @@ public partial class MainWindow : Window
             }
 
             _playbackTimer.Start();
+            UpdateStatusIndicator();
             PlaybackStatusText.Text = "播放中；倍率只影響畫面，不改變物理結果。";
             StatusTextBlock.Text = "正在播放模擬。";
         }
@@ -651,6 +648,8 @@ public partial class MainWindow : Window
 
     private async Task ResetPlaybackAsync()
     {
+        _playbackStoppedByError = false;
+        UpdateStatusIndicator();
         var inputToken = NativeAcceptanceBeginInputAction("reset");
         NativeAcceptanceInputHandlerStarted(inputToken);
         try
@@ -735,11 +734,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            NativeAcceptanceAbortForLifecycle("ui-update-failed");
-            PausePlayback();
-            Trace.WriteLine($"Playback stopped after an unexpected UI update failure: {exception}");
-            PlaybackStatusText.Text = $"播放已停止：{exception.Message}";
-            StatusTextBlock.Text = "播放更新失敗；模擬已暫停，專案資料仍保留。";
+            StopPlaybackAfterUiFailure(exception);
         }
     }
 
@@ -749,7 +744,7 @@ public partial class MainWindow : Window
         {
             if (_playbackWorker.Completion.IsFaulted)
             {
-                _isV2PlaybackPlaying = false;
+                SetV2PlaybackPlaying(false);
                 _playbackTimer.Stop();
                 NativeAcceptanceAbortForLifecycle("playback-worker-fault");
                 PlaybackStatusText.Text = $"實際模擬已停止：{_playbackWorker.Completion.Exception?.GetBaseException().Message}";
@@ -761,7 +756,7 @@ public partial class MainWindow : Window
             ApplyCompletedPlannedTimeline();
             if (_latestPlaybackFrame is { IsComplete: true } completedFrame)
             {
-                _isV2PlaybackPlaying = false;
+                SetV2PlaybackPlaying(false);
                 PausePlayback();
                 NativeAcceptanceObserveCompletedFrame(completedFrame);
                 PlaybackStatusText.Text = "所有列車均已完成最後車次並退出路線，模擬已自動停止。";
@@ -868,7 +863,7 @@ public partial class MainWindow : Window
 
         if (_route is null)
         {
-            AddCanvasText(RouteCanvas, "建立模擬後，這裡會顯示多列車往返動畫。", 26, 28, 14, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(RouteCanvas, "建立模擬後，這裡會顯示多列車往返動畫。");
             return;
         }
 
@@ -883,7 +878,7 @@ public partial class MainWindow : Window
             X2 = left + trackWidth,
             Y1 = trackY,
             Y2 = trackY,
-            Stroke = new SolidColorBrush(Color.FromRgb(70, 83, 105)),
+            Stroke = UiTheme.RailNeutralStrongBrush,
             StrokeThickness = 5,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round
@@ -896,8 +891,8 @@ public partial class MainWindow : Window
             {
                 Width = 16,
                 Height = 16,
-                Fill = Brushes.White,
-                Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
+                Fill = UiTheme.SurfaceBrush,
+                Stroke = UiTheme.RailNeutralStrongBrush,
                 StrokeThickness = 4,
                 ToolTip = $"{station.StationId} {station.StationName}\n{station.PositionMeters / 1000:0.###} km"
             };
@@ -910,7 +905,7 @@ public partial class MainWindow : Window
                 Text = $"{station.StationId}\n{station.StationName}",
                 TextAlignment = TextAlignment.Center,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(42, 52, 70)),
+                Foreground = UiTheme.TextStrongBrush,
                 Width = 82
             };
             Canvas.SetLeft(label, Math.Clamp(x - 41, 0, width - 82));
@@ -918,8 +913,8 @@ public partial class MainWindow : Window
             RouteCanvas.Children.Add(label);
         }
 
-        AddCanvasText(RouteCanvas, "下行 →", left, 24, 12, Color.FromRgb(102, 112, 133));
-        AddCanvasText(RouteCanvas, "← 上行", left, height - 34, 12, Color.FromRgb(102, 112, 133));
+        AddCanvasText(RouteCanvas, "下行 →", left, 24, 12, UiTheme.TextMuted);
+        AddCanvasText(RouteCanvas, "← 上行", left, height - 34, 12, UiTheme.TextMuted);
 
         states ??= _simulationEngine?.GetTrainStates(_playbackTimeSeconds);
         if (states is null)
@@ -948,12 +943,12 @@ public partial class MainWindow : Window
                 Height = 22,
                 CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(color),
-                BorderBrush = Brushes.White,
+                BorderBrush = UiTheme.SurfaceBrush,
                 BorderThickness = new Thickness(2),
                 Child = new TextBlock
                 {
                     Text = $"{index + 1:00}",
-                    Foreground = Brushes.White,
+                    Foreground = UiTheme.SurfaceBrush,
                     FontSize = 11,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -987,49 +982,25 @@ public partial class MainWindow : Window
 
         if (_cycle is null || _parameters is null)
         {
-            AddCanvasText(SpeedCanvas, "建立模擬後顯示速度－時間曲線。", 22, 24, 12, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(SpeedCanvas, "建立模擬後顯示速度－時間曲線。");
             return;
         }
 
-        var left = 42d;
-        var right = 16d;
-        var top = 16d;
-        var bottom = 32d;
-        var plotWidth = width - left - right;
-        var plotHeight = height - top - bottom;
+        var area = new ChartPainter.ChartArea(42, 26, width - 42 - 16, height - 26 - 32);
         var totalTime = _cycle.OutboundTrip.TotalRunTimeSeconds;
-        var maxSpeed = _parameters.MaxSpeedMetersPerSecond * 1.08;
-
-        for (var index = 0; index <= 4; index++)
-        {
-            var y = top + plotHeight * index / 4;
-            SpeedCanvas.Children.Add(new Line
-            {
-                X1 = left,
-                X2 = left + plotWidth,
-                Y1 = y,
-                Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(226, 230, 237)),
-                StrokeThickness = 1
-            });
-        }
-
-        SpeedCanvas.Children.Add(new Line { X1 = left, X2 = left, Y1 = top, Y2 = top + plotHeight, Stroke = Brushes.SlateGray, StrokeThickness = 1.2 });
-        SpeedCanvas.Children.Add(new Line { X1 = left, X2 = left + plotWidth, Y1 = top + plotHeight, Y2 = top + plotHeight, Stroke = Brushes.SlateGray, StrokeThickness = 1.2 });
-        AddCanvasText(SpeedCanvas, "km/h", 3, 2, 10, Color.FromRgb(102, 112, 133));
-        AddCanvasText(SpeedCanvas, "時間", width - 42, height - 22, 10, Color.FromRgb(102, 112, 133));
-
-        var polyline = new Polyline
-        {
-            Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
-            StrokeThickness = 2.5,
-            StrokeLineJoin = PenLineJoin.Round
-        };
+        var vehicleBrush = UiTheme.VehicleBrush(0);
+        ChartPainter.DrawHeader(SpeedCanvas, "V1 理論速度",
+            [new ChartLegendItem("理論速度", vehicleBrush, ChartLegendMarker.Line)], area.Left, 4);
+        var maxSpeed = ChartPainter.DrawValueAxis(SpeedCanvas, area, _parameters.MaxSpeedMetersPerSecond * 3.6 * 1.08, "km/h");
+        ChartPainter.DrawTimeAxis(SpeedCanvas, area, Enumerable.Range(0, 5)
+            .Select(index => (area.Left + area.Width * index / 4, $"{totalTime * index / 4:0} s"))
+            .ToArray());
+        var polyline = ChartPainter.CreateSeries(vehicleBrush, 2.4);
 
         void AddPoint(double time, double speed)
         {
-            var x = left + Math.Clamp(time / totalTime, 0, 1) * plotWidth;
-            var y = top + plotHeight - Math.Clamp(speed / maxSpeed, 0, 1) * plotHeight;
+            var x = area.Left + Math.Clamp(time / totalTime, 0, 1) * area.Width;
+            var y = area.Bottom - Math.Clamp(speed * 3.6 / maxSpeed, 0, 1) * area.Height;
             polyline.Points.Add(new Point(x, y));
         }
 
@@ -1284,13 +1255,14 @@ public partial class MainWindow : Window
         }
         if (_v2Enabled && _playbackWorker is { } worker)
         {
-            _isV2PlaybackPlaying = false;
+            SetV2PlaybackPlaying(false);
             _playbackTimer.Stop();
             await PauseWorkerSafelyAsync(worker, inputToken);
             return;
         }
 
         _playbackTimer.Stop();
+        UpdateStatusIndicator();
     }
 
     private async Task PauseWorkerSafelyAsync(SimulationPlaybackWorker worker, long inputToken = 0)
@@ -1405,6 +1377,7 @@ public partial class MainWindow : Window
     {
         ValidationTextBlock.Text = string.Join(Environment.NewLine, messages.Select(message => $"• {message}"));
         ValidationBorder.Visibility = Visibility.Visible;
+        UpdateStatusIndicator();
         Dispatcher.BeginInvoke(
             DispatcherPriority.Background,
             new Action(() => ValidationBorder.BringIntoView()));
@@ -1419,6 +1392,7 @@ public partial class MainWindow : Window
     {
         ValidationTextBlock.Text = string.Empty;
         ValidationBorder.Visibility = Visibility.Collapsed;
+        UpdateStatusIndicator();
     }
 
     private static string ProfileToChinese(SpeedProfileType profile) => profile switch

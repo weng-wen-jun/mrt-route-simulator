@@ -151,6 +151,16 @@ public partial class MainWindow
                 var routeBounds = RouteViewportHost.TransformToAncestor(ShellOverlayRoot)
                     .TransformBounds(new Rect(0, 0, RouteViewportHost.ActualWidth, RouteViewportHost.ActualHeight));
                 var intersection = Rect.Intersect(routeBounds, viewportBounds);
+                // 快速起稿抽屜開著時，捲軸從抽屜右緣開始，不蓋住抽屜也不攔截抽屜的點擊。
+                if (!intersection.IsEmpty && QuickBuilderSidebar is { IsVisible: true } drawer)
+                {
+                    var drawerRight = drawer.TransformToAncestor(ShellOverlayRoot)
+                        .TransformBounds(new Rect(0, 0, drawer.ActualWidth, drawer.ActualHeight)).Right;
+                    if (drawerRight > intersection.Left)
+                        intersection = intersection.Right > drawerRight
+                            ? new Rect(drawerRight, intersection.Top, intersection.Right - drawerRight, intersection.Height)
+                            : Rect.Empty;
+                }
                 visible = !intersection.IsEmpty && intersection.Width > 0 && intersection.Height > 0;
                 if (visible)
                 {

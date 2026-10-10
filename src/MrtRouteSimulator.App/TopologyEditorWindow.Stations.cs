@@ -65,8 +65,7 @@ internal sealed partial class TopologyEditorWindow
 
         var left = new DockPanel { Margin = new Thickness(0, 0, 12, 0), LastChildFill = true };
         var searchPanel = new StackPanel();
-        searchPanel.Children.Add(new TextBlock { Text = "搜尋車站", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) });
-        stationPageSearchTextBox = new TextBox { Name = "StationSearchTextBox", Height = 28, ToolTip = "輸入車站編號或名稱" };
+        stationPageSearchTextBox = EditorChrome.SearchBox("搜尋車站", new TextBox { Name = "StationSearchTextBox", ToolTip = "輸入車站編號或名稱" });
         AutomationProperties.SetName(stationPageSearchTextBox, "車站搜尋");
         stationPageSearchTextBox.TextChanged += (_, _) =>
         {
@@ -93,7 +92,7 @@ internal sealed partial class TopologyEditorWindow
         stationPageStationList = new ListBox
         {
             Name = "StationListBox", ItemsSource = stationPageStationsView, DisplayMemberPath = nameof(StationEditorViewModel.Name),
-            MinHeight = 120, Margin = new Thickness(0, 8, 0, 0), BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1),
+            MinHeight = 120, Margin = new Thickness(0, 8, 0, 0),
             VerticalContentAlignment = VerticalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch
         };
         AutomationProperties.SetName(stationPageStationList, "車站清單");
@@ -112,24 +111,8 @@ internal sealed partial class TopologyEditorWindow
         Grid.SetColumn(scroll, 1);
         root.Children.Add(scroll);
         panel.Children.Add(root);
-        workspace.Content = panel;
-
-        // NewPage uses a StackPanel, so its child would otherwise be measured
-        // with unlimited height. Give the station list and detail scroll the
-        // remaining workspace height, including after a narrow-window resize.
-        void SizeStationPage()
-        {
-            var headerHeight = ((FrameworkElement)panel.Children[0]).ActualHeight
-                + ((FrameworkElement)panel.Children[1]).ActualHeight;
-            // Reserve room for the list's margin and the page's lower inset;
-            // DockPanel's fill child can otherwise push the bottom actions
-            // slightly past the visible workspace at both tested sizes.
-            root.Height = Math.Max(220, workspace.ActualHeight - headerHeight - 24);
-        }
-        SizeChangedEventHandler resize = (_, _) => SizeStationPage();
-        workspace.SizeChanged += resize;
-        root.Loaded += (_, _) => SizeStationPage();
-        root.Unloaded += (_, _) => workspace.SizeChanged -= resize;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, root);
 
         // A newly constructed ListBox can adopt its collection view's current
         // item before SelectionChanged is attached. Rebuild the detail explicitly
@@ -188,7 +171,7 @@ internal sealed partial class TopologyEditorWindow
         CommitTableDrafts();
 
         var panel = NewPage("軌道與設施", "軌道區段、設施與區段內資料維持 topology-native 權威。接軌側 A/B 只顯示既有值；本頁不從示意座標猜測 port-side。");
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "TracksPageScrollViewer", MinHeight = 420, MaxHeight = 500 };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "TracksPageScrollViewer" };
         AutomationProperties.SetName(scroll, "軌道與設施捲動區");
         var content = new StackPanel();
         content.Children.Add(TrackPageGroup("軌道區段", "edge 的端點、長度、方向、種類、速限、接軌側與衝突資源。", NamedEditorTabContent("TrackEdgeGrid", "軌道區段編輯表", ProjectValidationTargetKind.Edge, "軌道區段", infrastructure.Edges, AddEdge, DeleteSelectedEdge)));
@@ -203,7 +186,8 @@ internal sealed partial class TopologyEditorWindow
 
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, scroll);
     }
 
     /// <summary>保留低頻與完整 Schema 8 欄位的入口，避免一般頁面整理時遺漏資料。</summary>
@@ -213,7 +197,7 @@ internal sealed partial class TopologyEditorWindow
 
         var panel = NewPage("進階資料", "低頻 topology 欄位集中於此；每張表仍編輯既有 draft VM。節點、連接與示意位置不代表可由 UI 推導的實體接軌側。");
         var content = new StackPanel();
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "AdvancedDataPageScrollViewer", MinHeight = 420, MaxHeight = 500 };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "AdvancedDataPageScrollViewer" };
         AutomationProperties.SetName(scroll, "進階資料捲動區");
 
         content.Children.Add(TrackPageGroup("節點", "節點種類與示意位置／lane；不從示意位置推導 port-side。", NamedEditorTabContent("AdvancedNodeGrid", "節點進階資料表", ProjectValidationTargetKind.Node, "軌道節點", infrastructure.Nodes, AddNode, DeleteSelectedNode)));
@@ -223,13 +207,15 @@ internal sealed partial class TopologyEditorWindow
             NamedEditorTabContent("TrackCurveGrid", "曲線進階資料表", ProjectValidationTargetKind.Edge, "曲線", curves, AddCurve, DeleteSelectedCurve),
             NamedEditorTabContent("TrackGradientGrid", "坡度進階資料表", ProjectValidationTargetKind.Gradient, "坡度", infrastructure.Gradients, AddGradient, DeleteSelectedGradient))));
 
-        var schematicBox = new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1), Padding = new Thickness(10), Margin = new Thickness(0, 10, 0, 0)
-        };
+        var schematicBox = EditorChrome.Card();
+        schematicBox.Margin = new Thickness(0, 10, 0, 0);
         var schematicPanel = new StackPanel();
-        schematicPanel.Children.Add(new TextBlock { Text = "圖面配置", FontSize = 16, FontWeight = FontWeights.SemiBold });
-        schematicPanel.Children.Add(new TextBlock { Text = "完整配線預覽沿用既有 StationSchematicPresentation；X/Y 與 lane 僅供呈現，實體 edge-local position、port-side 與 directed connection 仍由上方資料表維持。", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 5, 0, 8) });
+        var schematicTitle = EditorChrome.SectionTitle("圖面配置");
+        schematicTitle.Margin = new Thickness(0, 0, 0, 4);
+        schematicPanel.Children.Add(schematicTitle);
+        var schematicHint = EditorChrome.Hint("完整配線預覽沿用既有 StationSchematicPresentation；X/Y 與 lane 僅供呈現，實體 edge-local position、port-side 與 directed connection 仍由上方資料表維持。");
+        schematicHint.Margin = new Thickness(0, 0, 0, 8);
+        schematicPanel.Children.Add(schematicHint);
         var openSchematic = CreateButton("開啟完整配線預覽", (_, _) => ShowSchematic(), true);
         openSchematic.Name = "OpenSchematicPreviewButton";
         AutomationProperties.SetName(openSchematic, "開啟完整配線預覽");
@@ -238,12 +224,13 @@ internal sealed partial class TopologyEditorWindow
         content.Children.Add(schematicBox);
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, scroll);
     }
 
     private static TextBlock SectionHeading(string title, string description) => new()
     {
-        Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 14, 0, 4), ToolTip = description
+        Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold, Foreground = UiTheme.TextStrongBrush, Margin = new Thickness(0, 14, 0, 4), ToolTip = description
     };
 
     private static Expander TrackPageGroup(string title, string description, object? content)
@@ -427,7 +414,7 @@ internal sealed partial class TopologyEditorWindow
         stationPageRawFields.TryAdd(StationFieldKey(station, "Name"), station.Name);
         stationPageRawFields.TryAdd(StationFieldKey(station, "Dwell"), station.DefaultDwellSeconds.ToString(CultureInfo.InvariantCulture));
 
-        var heading = new TextBlock { Text = $"{station.Name} 〔{station.Id}〕", FontSize = 20, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8), Name = "SelectedStationHeading" };
+        var heading = new TextBlock { Text = $"{station.Name} 〔{station.Id}〕", FontSize = 15, FontWeight = FontWeights.SemiBold, Foreground = UiTheme.TextStrongBrush, Margin = new Thickness(0, 0, 0, 8), Name = "SelectedStationHeading" };
         AutomationProperties.SetName(heading, $"目前車站 {station.Id}");
         stationPageDetail.Children.Add(heading);
         stationPageDetail.Children.Add(BuildStationBasicEditor(station));
@@ -470,7 +457,7 @@ internal sealed partial class TopologyEditorWindow
         stationPagePlatformDetail = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         stationPageDetail.Children.Add(stationPagePlatformDetail);
         BuildPlatformDetail(selectedStationPagePlatform);
-        stationPageDetail.Children.Add(new TextBlock { Text = "月台編號、PlatformBodyId、本站與附著區段保留為參照欄位；名稱、顯示側、停車位置、edge-local 起訖偏移、允許方向、有效長度、乘客服務及車型／服務集合可在下方詳細編輯。", TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)), Margin = new Thickness(0, 5, 0, 0) });
+        stationPageDetail.Children.Add(new TextBlock { Text = "月台編號、PlatformBodyId、本站與附著區段保留為參照欄位；名稱、顯示側、停車位置、edge-local 起訖偏移、允許方向、有效長度、乘客服務及車型／服務集合可在下方詳細編輯。", TextWrapping = TextWrapping.Wrap, Foreground = UiTheme.TextMutedBrush, Margin = new Thickness(0, 5, 0, 0) });
 
         stationPageDetail.Children.Add(SectionHeading("本站車站作業", "同一 station operation VM 的 StationId、月台集合、折返／待避 operation 集合與預設停站秒數。"));
         stationPageStationOperationsView = new ListCollectionView(stationOperations);
@@ -541,7 +528,7 @@ internal sealed partial class TopologyEditorWindow
 
     private UIElement BuildStationBasicEditor(StationEditorViewModel station)
     {
-        var box = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1), Padding = new Thickness(10) };
+        var box = EditorChrome.Card();
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(180) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -584,7 +571,7 @@ internal sealed partial class TopologyEditorWindow
         stationPagePlatformDetail.Children.Clear();
         if (platform is null)
         {
-            stationPagePlatformDetail.Children.Add(new TextBlock { Text = "請先選取本站月台。", Foreground = new SolidColorBrush(Color.FromRgb(90, 101, 122)) });
+            stationPagePlatformDetail.Children.Add(new TextBlock { Text = "請先選取本站月台。", Foreground = UiTheme.TextMutedBrush });
             return stationPagePlatformDetail;
         }
 
@@ -593,7 +580,7 @@ internal sealed partial class TopologyEditorWindow
         stationPageRawFields.TryAdd(PlatformFieldKey(platform, "Stop"), platform.StopOffsetMeters.ToString(CultureInfo.InvariantCulture));
         stationPageRawFields.TryAdd(PlatformFieldKey(platform, "End"), platform.EndOffsetMeters.ToString(CultureInfo.InvariantCulture));
         stationPageRawFields.TryAdd(PlatformFieldKey(platform, "Length"), platform.EffectiveLengthMeters.ToString(CultureInfo.InvariantCulture));
-        var box = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(225, 230, 238)), BorderThickness = new Thickness(1), Padding = new Thickness(10) };
+        var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"月台：{platform.Name}（{platform.Id}）", FontWeight = FontWeights.SemiBold });
         var id = TextField(content, "月台編號", platform.Id, "StationPlatformIdTextBox", "月台編號", _ => { });
@@ -675,10 +662,10 @@ internal sealed partial class TopologyEditorWindow
         stationPageStationOperationDetail.Children.Clear();
         if (operation is null)
         {
-            stationPageStationOperationDetail.Children.Add(new TextBlock { Text = "請先選取本站作業。", Foreground = new SolidColorBrush(Color.FromRgb(90, 101, 122)) });
+            stationPageStationOperationDetail.Children.Add(new TextBlock { Text = "請先選取本站作業。", Foreground = UiTheme.TextMutedBrush });
             return stationPageStationOperationDetail;
         }
-        var box = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(225, 230, 238)), BorderThickness = new Thickness(1), Padding = new Thickness(10) };
+        var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"本站作業：{operation.Id}", FontWeight = FontWeights.SemiBold });
         var id = TextField(content, "作業編號", operation.Id, "StationOperationIdTextBox", "本站作業編號", value => { if (!string.IsNullOrWhiteSpace(value)) operation.Id = value.Trim(); });
@@ -703,8 +690,8 @@ internal sealed partial class TopologyEditorWindow
     {
         stationPageTurnbackOperationDetail ??= new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         stationPageTurnbackOperationDetail.Children.Clear();
-        if (operation is null) { stationPageTurnbackOperationDetail.Children.Add(new TextBlock { Text = "本站沒有被引用的折返作業，或尚未選取。" }); return stationPageTurnbackOperationDetail; }
-        var box = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(225, 230, 238)), BorderThickness = new Thickness(1), Padding = new Thickness(10) };
+        if (operation is null) { stationPageTurnbackOperationDetail.Children.Add(EditorChrome.Hint("本站沒有被引用的折返作業，或尚未選取。")); return stationPageTurnbackOperationDetail; }
+        var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"折返作業：{operation.Id}", FontWeight = FontWeights.SemiBold });
         stationPageTurnbackIdTextBox = TextField(content, "作業編號", operation.Id, "TurnbackOperationIdTextBox", "折返作業編號", value => { if (!string.IsNullOrWhiteSpace(value)) operation.Id = value.Trim(); });
@@ -720,8 +707,8 @@ internal sealed partial class TopologyEditorWindow
     {
         stationPagePassingOperationDetail ??= new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         stationPagePassingOperationDetail.Children.Clear();
-        if (operation is null) { stationPagePassingOperationDetail.Children.Add(new TextBlock { Text = "本站沒有被引用的待避作業，或尚未選取。" }); return stationPagePassingOperationDetail; }
-        var box = new Border { BorderBrush = new SolidColorBrush(Color.FromRgb(225, 230, 238)), BorderThickness = new Thickness(1), Padding = new Thickness(10) };
+        if (operation is null) { stationPagePassingOperationDetail.Children.Add(EditorChrome.Hint("本站沒有被引用的待避作業，或尚未選取。")); return stationPagePassingOperationDetail; }
+        var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"待避作業：{operation.Id}", FontWeight = FontWeights.SemiBold });
         stationPagePassingIdTextBox = TextField(content, "作業編號", operation.Id, "PassingOperationIdTextBox", "待避作業編號", value => { if (!string.IsNullOrWhiteSpace(value)) operation.Id = value.Trim(); });
@@ -734,7 +721,7 @@ internal sealed partial class TopologyEditorWindow
 
     private ListBox CreateOperationList(ICollectionView view, string name, string automationName, Action<object?> selected)
     {
-        var list = new ListBox { Name = name, ItemsSource = view, DisplayMemberPath = "Id", Height = 100, BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1) };
+        var list = new ListBox { Name = name, ItemsSource = view, DisplayMemberPath = "Id", Height = 130 };
         AutomationProperties.SetName(list, automationName);
         list.SelectionChanged += (_, _) => selected(list.SelectedItem);
         return list;
@@ -780,7 +767,8 @@ internal sealed partial class TopologyEditorWindow
         var options = values.Select(item => new ReferenceOption(item.Id, item.Label)).ToList();
         var selected = SplitIds(current);
         foreach (var id in selected.Where(id => options.All(item => !IdEquals(item.Id, id)))) options.Add(new ReferenceOption(id, $"缺少參照：{id}"));
-        var list = new ListBox { Name = name, ItemsSource = options, DisplayMemberPath = nameof(ReferenceOption.Label), SelectionMode = SelectionMode.Multiple, Height = Math.Min(130, Math.Max(42, options.Count * 24)) };
+        // Size to the rows (EditorListItem is 28 px tall) and scroll only past five options.
+        var list = new ListBox { Name = name, ItemsSource = options, DisplayMemberPath = nameof(ReferenceOption.Label), SelectionMode = SelectionMode.Multiple, MinHeight = 42, MaxHeight = 150 };
         AutomationProperties.SetName(list, automationName);
         stationPageUpdating = true;
         foreach (var item in options.Where(item => selected.Contains(item.Id, StringComparer.OrdinalIgnoreCase))) list.SelectedItems.Add(item);
