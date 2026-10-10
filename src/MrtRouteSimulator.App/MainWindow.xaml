@@ -119,163 +119,6 @@
         </Border>
 
         <Grid Grid.Row="1">
-            <Border x:Name="QuickBuilderSidebar" Panel.ZIndex="20" HorizontalAlignment="Left" Width="360" Margin="64,0,0,0"
-                    Visibility="Collapsed" Background="{x:Static app:UiTheme.SurfaceBrush}"
-                    BorderBrush="{x:Static app:UiTheme.HairlineBrush}" BorderThickness="0,0,1,0"
-                    KeyDown="QuickBuilderSidebar_KeyDown" AutomationProperties.Name="快速起稿抽屜">
-                <DockPanel>
-                    <Grid DockPanel.Dock="Top" Height="40" Margin="16,0,8,0">
-                        <TextBlock Text="快速建立線性路線" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
-                                   Foreground="{x:Static app:UiTheme.TextStrongBrush}" />
-                        <Button x:Name="QuickBuilderCloseButton" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
-                                Width="28" Height="28" MinHeight="0" Padding="0" FontFamily="{StaticResource IconFont}" FontSize="12"
-                                Content="&#xE711;" Click="QuickBuilderClose_Click" ToolTip="關閉快速起稿" AutomationProperties.Name="關閉快速起稿" />
-                    </Grid>
-                <ScrollViewer x:Name="ConfigurationScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel x:Name="QuickBuilderInputPanel" Margin="18,4,18,22">
-                        <TextBlock Text="快速建立線性路線（一次性起稿）" Style="{StaticResource SectionTitle}" TextWrapping="Wrap" />
-                        <TextBlock Text="建立後請改由專案工作區編輯實體軌道、月台、營運與發車；本頁不保存第二份路線資料。"
-                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,7" />
-                        <Button Content="開啟專案工作區…" Style="{StaticResource SecondaryButton}" Click="EditTopology_Click" Margin="0,0,0,10" />
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="95" />
-                                <ColumnDefinition Width="12" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel>
-                                <TextBlock Text="路線編號" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="RouteIdTextBox" Text="O" AutomationProperties.Name="路線編號" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2">
-                                <TextBlock Text="路線名稱" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="RouteNameTextBox" Text="橘色示範線" AutomationProperties.Name="路線名稱" />
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="車站與站間距離" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
-                        <DataGrid x:Name="StationDataGrid" Height="228" ItemsSource="{Binding StationRows}" RowHeaderWidth="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="車站編輯表">
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="編號" Binding="{Binding StationId, UpdateSourceTrigger=PropertyChanged}" Width="64" />
-                                <DataGridTextColumn Header="站名" Binding="{Binding StationName, UpdateSourceTrigger=PropertyChanged}" Width="SizeToCells" MinWidth="80" />
-                                <DataGridTextColumn Header="前站距離（km）" Binding="{Binding DistanceFromPreviousKm, UpdateSourceTrigger=PropertyChanged, StringFormat=0.###}" Width="94" />
-                                <DataGridTextColumn Header="停站（秒）" Binding="{Binding DwellTimeSeconds, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="78" />
-                            </DataGrid.Columns>
-                        </DataGrid>
-                        <WrapPanel Margin="0,8,0,0">
-                            <Button Content="新增" Style="{StaticResource SecondaryButton}" Click="AddStation_Click" Margin="0,0,6,6" />
-                            <Button Content="刪除" Style="{StaticResource SecondaryButton}" Click="RemoveStation_Click" Margin="0,0,6,6" />
-                            <Button Content="上移" Style="{StaticResource SecondaryButton}" Click="MoveStationUp_Click" Margin="0,0,6,6" />
-                            <Button Content="下移" Style="{StaticResource SecondaryButton}" Click="MoveStationDown_Click" Margin="0,0,6,6" />
-                            <Button Content="載入示範" Style="{StaticResource SecondaryButton}" Click="LoadSample_Click" Margin="0,0,6,6" />
-                        </WrapPanel>
-
-                        <TextBlock Text="快速起稿預設" Style="{StaticResource FieldLabel}" Margin="0,12,0,5" />
-                        <UniformGrid Columns="2">
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="預設停站（秒）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="DefaultDwellTextBox" Text="30" AutomationProperties.Name="預設停站時間" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="起點折返（分鐘）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="OriginTurnaroundTextBox" Text="3" AutomationProperties.Name="起點折返時間" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="終點折返（分鐘）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="TerminalTurnaroundTextBox" Text="6" AutomationProperties.Name="終點折返時間" />
-                            </StackPanel>
-                        </UniformGrid>
-
-                        <StackPanel x:Name="V1TrainPerformancePanel">
-                            <Separator Margin="0,12" Background="{StaticResource BorderBrush}" />
-                            <TextBlock x:Name="LegacyTrainPerformanceHeading" Text="V1 基礎列車性能" Style="{StaticResource SectionTitle}" />
-                            <UniformGrid Columns="2">
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="最高速度（km/h）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="MaxSpeedTextBox" Text="80" AutomationProperties.Name="最高速度" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="加速度（m/s²）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="AccelerationTextBox" Text="1.0" AutomationProperties.Name="加速度" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="減速度（m/s²）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="DecelerationTextBox" Text="1.0" AutomationProperties.Name="減速度" />
-                            </StackPanel>
-                            </UniformGrid>
-                        </StackPanel>
-
-                        <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
-                        <TextBlock x:Name="V2SettingsHeading" Text="V2 營運物理" Style="{StaticResource SectionTitle}"
-                                   Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="V2 營運參數" />
-                        <UniformGrid Columns="2">
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="模擬引擎" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="EngineModeComboBox" SelectedIndex="1" SelectionChanged="EngineMode_SelectionChanged" AutomationProperties.Name="模擬引擎">
-                                    <ComboBoxItem Content="V1 基礎物理" Tag="V1BasicPhysics" />
-                                    <ComboBoxItem Content="V2 實際營運" Tag="V2RealisticOperations" />
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="V2 軌跡曲線" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="OperationModeComboBox" SelectedIndex="1" AutomationProperties.Name="V2 軌跡曲線">
-                                    <ComboBoxItem Content="理想基準曲線" Tag="Basic" />
-                                    <ComboBoxItem Content="平順營運曲線" Tag="Realistic" />
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="移動閉塞" Style="{StaticResource FieldLabel}" />
-                                <ComboBox x:Name="MovingBlockModeComboBox" SelectedIndex="2" SelectionChanged="MovingBlockMode_SelectionChanged" AutomationProperties.Name="移動閉塞模式">
-                                    <ComboBoxItem Content="獨立運行" Tag="Independent" />
-                                    <ComboBoxItem Content="監視（只告警）" Tag="Monitoring" />
-                                    <ComboBoxItem Content="控制（防追撞）" Tag="Control" />
-                                </ComboBox>
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="惰行比例（0～1）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="CoastingRatioTextBox" Text="0.15" />
-                            </StackPanel>
-                            <StackPanel Margin="0,0,7,10">
-                                <TextBlock Text="進站控制距離（m）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="ApproachDistanceTextBox" Text="180" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="停站進站上限（km/h，0=自動）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="ApproachSpeedTextBox" Text="0" />
-                            </StackPanel>
-                            <StackPanel Margin="7,0,0,10">
-                                <TextBlock Text="反應時間（s）" Style="{StaticResource FieldLabel}" />
-                                <TextBox x:Name="ReactionTimeTextBox" Text="1.5" />
-                            </StackPanel>
-                        </UniformGrid>
-
-                        <TextBlock Text="車型、服務、停站模式、發車與區段內速限，請由上方「營運設定」與「路網編輯」管理。"
-                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,4" />
-                        <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
-                        <StackPanel x:Name="V1ScheduleSettingsPanel">
-                            <TextBlock Text="V1 基礎物理排程（僅 V1 使用）" Style="{StaticResource SectionTitle}" />
-                            <UniformGrid Columns="2">
-                                <StackPanel Margin="0,0,7,10">
-                                    <TextBlock Text="列車數量" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="TrainCountTextBox" Text="6" AutomationProperties.Name="列車數量" />
-                                </StackPanel>
-                                <StackPanel Margin="7,0,0,10">
-                                    <TextBlock Text="指定班距（分鐘，可空白）" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="HeadwayTextBox" Text="" AutomationProperties.Name="指定班距" />
-                                </StackPanel>
-                                <StackPanel Margin="0,0,7,10">
-                                    <TextBlock Text="首班發車時間" Style="{StaticResource FieldLabel}" />
-                                    <TextBox x:Name="StartTimeTextBox" Text="06:00:00" AutomationProperties.Name="首班發車時間" />
-                                </StackPanel>
-                            </UniformGrid>
-                        </StackPanel>
-                        <Button x:Name="RunButton" Content="建立專案並模擬" Style="{StaticResource PrimaryButton}" Click="RunSimulation_Click" Margin="0,4,0,0" AutomationProperties.Name="建立專案並模擬" />
-
-                    </StackPanel>
-                </ScrollViewer>
-                </DockPanel>
-            </Border>
-
             <app:ShellTabControl x:Name="WorkspaceTabControl" Style="{StaticResource NavRailTabControl}"
                                  SelectionChanged="WorkspaceTabControl_SelectionChanged" AutomationProperties.Name="工作區頁面">
                 <app:ShellTabControl.NavFooter>
@@ -290,19 +133,29 @@
                     <StackPanel x:Name="PageHeaderPanel" SizeChanged="PageHeaderPanel_SizeChanged">
                         <Expander x:Name="RouteSummaryExpander" Style="{StaticResource KpiStripExpander}" Header="路線摘要（可收合）" IsExpanded="True">
                             <ScrollViewer x:Name="RouteSummaryScrollViewer" MaxHeight="100"
-                                          VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Hidden">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="車站" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock x:Name="RouteSummaryText" Text="—" Style="{StaticResource KpiValue}" />
-                                    <TextBlock Text="單程" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock x:Name="OneWaySummaryText" Text="—" Style="{StaticResource KpiValue}" />
-                                    <TextBlock Text="全程" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock x:Name="CycleSummaryText" Text="—" Style="{StaticResource KpiValue}" />
-                                    <TextBlock Text="班距" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock x:Name="HeadwaySummaryText" Text="—" Style="{StaticResource KpiValue}" />
-                                    <TextBlock Text="峰值" Style="{StaticResource KpiLabel}" />
-                                    <TextBlock x:Name="SpeedSummaryText" Text="—" Style="{StaticResource KpiValue}" />
-                                </StackPanel>
+                                          VerticalScrollBarVisibility="Disabled" HorizontalScrollBarVisibility="Disabled">
+                                <UniformGrid Rows="1" Columns="5">
+                                    <DockPanel>
+                                        <TextBlock Text="車站" Style="{StaticResource KpiLabel}" />
+                                        <TextBlock x:Name="RouteSummaryText" Text="—" Style="{StaticResource KpiValue}" />
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="單程" Style="{StaticResource KpiLabel}" />
+                                        <TextBlock x:Name="OneWaySummaryText" Text="—" Style="{StaticResource KpiValue}" />
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="全程" Style="{StaticResource KpiLabel}" />
+                                        <TextBlock x:Name="CycleSummaryText" Text="—" Style="{StaticResource KpiValue}" />
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="班距" Style="{StaticResource KpiLabel}" />
+                                        <TextBlock x:Name="HeadwaySummaryText" Text="—" Style="{StaticResource KpiValue}" />
+                                    </DockPanel>
+                                    <DockPanel>
+                                        <TextBlock Text="峰值" Style="{StaticResource KpiLabel}" />
+                                        <TextBlock x:Name="SpeedSummaryText" Text="—" Style="{StaticResource KpiValue}" />
+                                    </DockPanel>
+                                </UniformGrid>
                             </ScrollViewer>
                         </Expander>
                         <Border x:Name="ValidationBorder" Visibility="Collapsed" Margin="0,8,0,0"
@@ -841,6 +694,163 @@
                         </app:ResultPage>
                     </TabItem>
                 </app:ShellTabControl>
+
+            <Border x:Name="QuickBuilderSidebar" Panel.ZIndex="20" HorizontalAlignment="Left" Width="360" Margin="64,0,0,0"
+                    Visibility="Collapsed" Background="{x:Static app:UiTheme.SurfaceBrush}"
+                    BorderBrush="{x:Static app:UiTheme.HairlineBrush}" BorderThickness="0,0,1,0"
+                    KeyDown="QuickBuilderSidebar_KeyDown" AutomationProperties.Name="快速起稿抽屜">
+                <DockPanel>
+                    <Grid DockPanel.Dock="Top" Height="40" Margin="16,0,8,0">
+                        <TextBlock Text="快速建立線性路線" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{x:Static app:UiTheme.TextStrongBrush}" />
+                        <Button x:Name="QuickBuilderCloseButton" Style="{StaticResource GhostButton}" HorizontalAlignment="Right"
+                                Width="28" Height="28" MinHeight="0" Padding="0" FontFamily="{StaticResource IconFont}" FontSize="12"
+                                Content="&#xE711;" Click="QuickBuilderClose_Click" ToolTip="關閉快速起稿" AutomationProperties.Name="關閉快速起稿" />
+                    </Grid>
+                <ScrollViewer x:Name="ConfigurationScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="QuickBuilderInputPanel" Margin="18,4,18,22">
+                        <TextBlock Text="快速建立線性路線（一次性起稿）" Style="{StaticResource SectionTitle}" TextWrapping="Wrap" />
+                        <TextBlock Text="建立後請改由專案工作區編輯實體軌道、月台、營運與發車；本頁不保存第二份路線資料。"
+                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,7" />
+                        <Button Content="開啟專案工作區…" Style="{StaticResource SecondaryButton}" Click="EditTopology_Click" Margin="0,0,0,10" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="95" />
+                                <ColumnDefinition Width="12" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="路線編號" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="RouteIdTextBox" Text="O" AutomationProperties.Name="路線編號" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="路線名稱" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="RouteNameTextBox" Text="橘色示範線" AutomationProperties.Name="路線名稱" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="車站與站間距離" Style="{StaticResource FieldLabel}" Margin="0,14,0,5" />
+                        <DataGrid x:Name="StationDataGrid" Height="228" ItemsSource="{Binding StationRows}" RowHeaderWidth="0" ScrollViewer.HorizontalScrollBarVisibility="Auto" AutomationProperties.Name="車站編輯表">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="編號" Binding="{Binding StationId, UpdateSourceTrigger=PropertyChanged}" Width="64" />
+                                <DataGridTextColumn Header="站名" Binding="{Binding StationName, UpdateSourceTrigger=PropertyChanged}" Width="SizeToCells" MinWidth="80" />
+                                <DataGridTextColumn Header="前站距離（km）" Binding="{Binding DistanceFromPreviousKm, UpdateSourceTrigger=PropertyChanged, StringFormat=0.###}" Width="94" />
+                                <DataGridTextColumn Header="停站（秒）" Binding="{Binding DwellTimeSeconds, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Width="78" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <WrapPanel Margin="0,8,0,0">
+                            <Button Content="新增" Style="{StaticResource SecondaryButton}" Click="AddStation_Click" Margin="0,0,6,6" />
+                            <Button Content="刪除" Style="{StaticResource SecondaryButton}" Click="RemoveStation_Click" Margin="0,0,6,6" />
+                            <Button Content="上移" Style="{StaticResource SecondaryButton}" Click="MoveStationUp_Click" Margin="0,0,6,6" />
+                            <Button Content="下移" Style="{StaticResource SecondaryButton}" Click="MoveStationDown_Click" Margin="0,0,6,6" />
+                            <Button Content="載入示範" Style="{StaticResource SecondaryButton}" Click="LoadSample_Click" Margin="0,0,6,6" />
+                        </WrapPanel>
+
+                        <TextBlock Text="快速起稿預設" Style="{StaticResource FieldLabel}" Margin="0,12,0,5" />
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="預設停站（秒）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="DefaultDwellTextBox" Text="30" AutomationProperties.Name="預設停站時間" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="起點折返（分鐘）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="OriginTurnaroundTextBox" Text="3" AutomationProperties.Name="起點折返時間" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="終點折返（分鐘）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="TerminalTurnaroundTextBox" Text="6" AutomationProperties.Name="終點折返時間" />
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <StackPanel x:Name="V1TrainPerformancePanel">
+                            <Separator Margin="0,12" Background="{StaticResource BorderBrush}" />
+                            <TextBlock x:Name="LegacyTrainPerformanceHeading" Text="V1 基礎列車性能" Style="{StaticResource SectionTitle}" />
+                            <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="最高速度（km/h）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="MaxSpeedTextBox" Text="80" AutomationProperties.Name="最高速度" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="加速度（m/s²）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="AccelerationTextBox" Text="1.0" AutomationProperties.Name="加速度" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="減速度（m/s²）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="DecelerationTextBox" Text="1.0" AutomationProperties.Name="減速度" />
+                            </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+
+                        <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
+                        <TextBlock x:Name="V2SettingsHeading" Text="V2 營運物理" Style="{StaticResource SectionTitle}"
+                                   Focusable="True" KeyboardNavigation.IsTabStop="True" AutomationProperties.Name="V2 營運參數" />
+                        <UniformGrid Columns="2">
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="模擬引擎" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="EngineModeComboBox" SelectedIndex="1" SelectionChanged="EngineMode_SelectionChanged" AutomationProperties.Name="模擬引擎">
+                                    <ComboBoxItem Content="V1 基礎物理" Tag="V1BasicPhysics" />
+                                    <ComboBoxItem Content="V2 實際營運" Tag="V2RealisticOperations" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="V2 軌跡曲線" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="OperationModeComboBox" SelectedIndex="1" AutomationProperties.Name="V2 軌跡曲線">
+                                    <ComboBoxItem Content="理想基準曲線" Tag="Basic" />
+                                    <ComboBoxItem Content="平順營運曲線" Tag="Realistic" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="移動閉塞" Style="{StaticResource FieldLabel}" />
+                                <ComboBox x:Name="MovingBlockModeComboBox" SelectedIndex="2" SelectionChanged="MovingBlockMode_SelectionChanged" AutomationProperties.Name="移動閉塞模式">
+                                    <ComboBoxItem Content="獨立運行" Tag="Independent" />
+                                    <ComboBoxItem Content="監視（只告警）" Tag="Monitoring" />
+                                    <ComboBoxItem Content="控制（防追撞）" Tag="Control" />
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="惰行比例（0～1）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="CoastingRatioTextBox" Text="0.15" />
+                            </StackPanel>
+                            <StackPanel Margin="0,0,7,10">
+                                <TextBlock Text="進站控制距離（m）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="ApproachDistanceTextBox" Text="180" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="停站進站上限（km/h，0=自動）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="ApproachSpeedTextBox" Text="0" />
+                            </StackPanel>
+                            <StackPanel Margin="7,0,0,10">
+                                <TextBlock Text="反應時間（s）" Style="{StaticResource FieldLabel}" />
+                                <TextBox x:Name="ReactionTimeTextBox" Text="1.5" />
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <TextBlock Text="車型、服務、停站模式、發車與區段內速限，請由上方「營運設定」與「路網編輯」管理。"
+                                   Foreground="{StaticResource MutedBrush}" FontSize="11" TextWrapping="Wrap" Margin="0,10,0,4" />
+                        <Separator Margin="0,8,0,12" Background="{StaticResource BorderBrush}" />
+                        <StackPanel x:Name="V1ScheduleSettingsPanel">
+                            <TextBlock Text="V1 基礎物理排程（僅 V1 使用）" Style="{StaticResource SectionTitle}" />
+                            <UniformGrid Columns="2">
+                                <StackPanel Margin="0,0,7,10">
+                                    <TextBlock Text="列車數量" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="TrainCountTextBox" Text="6" AutomationProperties.Name="列車數量" />
+                                </StackPanel>
+                                <StackPanel Margin="7,0,0,10">
+                                    <TextBlock Text="指定班距（分鐘，可空白）" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="HeadwayTextBox" Text="" AutomationProperties.Name="指定班距" />
+                                </StackPanel>
+                                <StackPanel Margin="0,0,7,10">
+                                    <TextBlock Text="首班發車時間" Style="{StaticResource FieldLabel}" />
+                                    <TextBox x:Name="StartTimeTextBox" Text="06:00:00" AutomationProperties.Name="首班發車時間" />
+                                </StackPanel>
+                            </UniformGrid>
+                        </StackPanel>
+                        <Button x:Name="RunButton" Content="建立專案並模擬" Style="{StaticResource PrimaryButton}" Click="RunSimulation_Click" Margin="0,4,0,0" AutomationProperties.Name="建立專案並模擬" />
+
+                    </StackPanel>
+                </ScrollViewer>
+                </DockPanel>
+            </Border>
         </Grid>
 
         <Border Grid.Row="2" Background="{x:Static app:UiTheme.StatusBarBrush}" BorderBrush="{x:Static app:UiTheme.BorderBrush}" BorderThickness="0,1,0,0">

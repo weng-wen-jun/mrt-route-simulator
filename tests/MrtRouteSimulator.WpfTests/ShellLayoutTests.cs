@@ -34,6 +34,10 @@ internal static class ShellLayoutTests
         VerifyMenuStyles();
         VerifyComboFocusFrame();
         VerifyStatusIndicatorStates();
+        VerifyRouteScrollbarAvoidsDrawer(root);
+        VerifyKpiStripTruncates();
+        VerifyDrawerFocusReturn();
+        VerifyQuickBuilderToggleText(root);
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -765,5 +769,128 @@ internal static class ShellLayoutTests
             WpfTestWait.Close(window);
         }
         Console.WriteLine("[通過] 狀態圓點：V1 播放、畫面更新失敗與清除結果");
+    }
+
+    private static void VerifyRouteScrollbarAvoidsDrawer(string root)
+    {
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            window.Show();
+            WpfTestWait.Wait(Task.Delay(200));
+            ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
+            ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
+            PumpLayout(window);
+            var viewer = (ScrollViewer)window.FindName("RouteScrollViewer")!;
+            var canvas = (Canvas)window.FindName("RouteCanvas")!;
+            canvas.MinWidth = viewer.ViewportWidth + 600;
+            PumpLayout(window);
+            WpfTestWait.Invoke(window, "SetQuickBuilderDrawerOpen", true);
+            PumpLayout(window);
+            WpfTestWait.Invoke(window, "UpdateShellRouteScrollbar");
+            var proxy = (ScrollBar)window.FindName("ShellRouteHorizontalScrollBar")!;
+            var overlay = (FrameworkElement)window.FindName("ShellOverlayRoot")!;
+            var drawer = (FrameworkElement)window.FindName("QuickBuilderSidebar")!;
+            var drawerRight = drawer.TransformToAncestor(overlay)
+                .TransformBounds(new Rect(0, 0, drawer.ActualWidth, drawer.ActualHeight)).Right;
+            Require(proxy.Visibility == Visibility.Visible && Canvas.GetLeft(proxy) >= drawerRight - .5,
+                $"抽屜開啟時固定水平捲軸必須從抽屜右緣開始；proxyLeft={Canvas.GetLeft(proxy):0.0}, drawerRight={drawerRight:0.0}。");
+            WpfTestWait.Invoke(window, "SetQuickBuilderDrawerOpen", false);
+            PumpLayout(window);
+            WpfTestWait.Invoke(window, "UpdateShellRouteScrollbar");
+            Require(proxy.Visibility == Visibility.Visible && Canvas.GetLeft(proxy) < drawerRight - 100,
+                $"抽屜關閉後捲軸應回到配線圖左緣；proxyLeft={Canvas.GetLeft(proxy):0.0}。");
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 抽屜開啟時固定水平捲軸避開抽屜");
+    }
+
+    private static void VerifyKpiStripTruncates()
+    {
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 800, Height = 700 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var names = new[] { "RouteSummaryText", "OneWaySummaryText", "CycleSummaryText", "HeadwaySummaryText", "SpeedSummaryText" };
+            foreach (var name in names)
+                ((TextBlock)window.FindName(name)!).Text = "36 個節點 · 65 個軌道區段（超長測試文字）";
+            PumpLayout(window);
+            var strip = (FrameworkElement)window.FindName("RouteSummaryExpander")!;
+            var stripRight = strip.TranslatePoint(new Point(strip.ActualWidth, 0), window).X;
+            foreach (var name in names)
+            {
+                var value = (TextBlock)window.FindName(name)!;
+                var right = value.TranslatePoint(new Point(value.ActualWidth, 0), window).X;
+                Require(value.IsVisible && right <= stripRight + .5 && value.TextTrimming == TextTrimming.CharacterEllipsis
+                        && Equals(value.ToolTip, value.Text),
+                    $"{name} 在 800 DIP 應截斷於細條內並有提示框；right={right:0.0}, strip={stripRight:0.0}。");
+            }
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 窄視窗 KPI 細條五項皆截斷於細條內");
+    }
+
+    private static void VerifyDrawerFocusReturn()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            window.Activate();
+            PumpLayout(window);
+            var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
+            var close = (Button)window.FindName("QuickBuilderCloseButton")!;
+            var input = (TextBox)window.FindName("RouteIdTextBox")!;
+            foreach (var closer in new[] { close, toggle })
+            {
+                toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                PumpLayout(window);
+                Keyboard.Focus(input);
+                Require(input.IsKeyboardFocused, "測試前置：焦點應在抽屜內的輸入框。");
+                closer.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                PumpLayout(window);
+                Require(toggle.IsKeyboardFocused, $"以{(ReferenceEquals(closer, close) ? "關閉鈕" : "起稿鈕")}關閉抽屜後，焦點必須回到「起稿」鈕。");
+            }
+            var drawer = (FrameworkElement)window.FindName("QuickBuilderSidebar")!;
+            var tabs = (UIElement)window.FindName("WorkspaceTabControl")!;
+            var body = (Panel)drawer.Parent;
+            Require(body.Children.IndexOf(drawer) > body.Children.IndexOf(tabs),
+                "抽屜在 XAML 中必須排在導覽區之後，Tab 鍵才會先經過導覽列。");
+            Require(Panel.GetZIndex(drawer) > Panel.GetZIndex(tabs), "抽屜仍須顯示在最上層。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 關閉抽屜後焦點回到起稿鈕，Tab 順序先經過導覽列");
+    }
+
+    private static void VerifyQuickBuilderToggleText(string root)
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
+            Require(AutomationProperties.GetName(toggle) == "快速起稿抽屜開關" && Equals(toggle.ToolTip, "快速建立線性路線（一次性起稿）"),
+                "未讀入專案時起稿鈕應描述快速起稿抽屜。");
+            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            Require(AutomationProperties.GetName(toggle) == "開啟專案工作區（快速起稿）" && Equals(toggle.ToolTip, "開啟專案工作區（快速起稿）"),
+                "已讀入專案時起稿鈕應描述為開啟專案工作區。");
+            WpfTestWait.Invoke(window, "ClearResults");
+            Require(AutomationProperties.GetName(toggle) == "快速起稿抽屜開關", "清除專案後起稿鈕應恢復為快速起稿抽屜。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 起稿鈕文字跟隨是否已讀入專案");
     }
 }

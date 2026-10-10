@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Input;
 using MrtRouteSimulator.Engine;
 
@@ -59,9 +60,13 @@ public partial class MainWindow
 
     private void SetQuickBuilderDrawerOpen(bool open)
     {
+        // 關閉時若焦點在抽屜內，把焦點還給「起稿」鈕，避免停在已隱藏的元件上。
+        var returnFocus = !open && QuickBuilderSidebar.IsKeyboardFocusWithin;
         QuickBuilderSidebar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         UpdateQuickBuilderWidth();
         UpdateQuickBuilderDrawerTop();
+        UpdateShellRouteScrollbar();
+        if (returnFocus) QuickBuilderToggleButton.Focus();
     }
 
     private void PageHeaderPanel_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateQuickBuilderDrawerTop();
@@ -88,7 +93,6 @@ public partial class MainWindow
     {
         if (e.Key != Key.Escape) return;
         SetQuickBuilderDrawerOpen(false);
-        QuickBuilderToggleButton.Focus();
         e.Handled = true;
     }
 
@@ -99,5 +103,15 @@ public partial class MainWindow
         var width = ShellContentGrid.ActualWidth - NavRailWidth;
         if (!IsFiniteLayoutDimension(width)) return;
         QuickBuilderSidebar.Width = Math.Clamp(width * .38, QuickBuilderMinimumWidth, QuickBuilderExpandedWidth);
+    }
+
+    // 已讀入拓樸專案時「起稿」會開啟專案工作區的快速起稿頁；提示與自動化名稱跟著行為走。
+    private void UpdateQuickBuilderToggleText()
+    {
+        if (QuickBuilderToggleButton is null) return;
+        var opensWorkspace = _activeTopologyProjectDocument is not null;
+        var name = opensWorkspace ? "開啟專案工作區（快速起稿）" : "快速起稿抽屜開關";
+        QuickBuilderToggleButton.ToolTip = opensWorkspace ? name : "快速建立線性路線（一次性起稿）";
+        AutomationProperties.SetName(QuickBuilderToggleButton, name);
     }
 }

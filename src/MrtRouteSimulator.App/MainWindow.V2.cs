@@ -295,6 +295,7 @@ public partial class MainWindow
         _v2DispatchPlan = null;
         _activeSimulationProjectDocument = null;
         _activeTopologyProjectDocument = null;
+        UpdateQuickBuilderToggleText();
         _plannedTimetableEvents = [];
         _v2Enabled = false;
         _v2PlannedMinimumIntervalSeconds = null;
