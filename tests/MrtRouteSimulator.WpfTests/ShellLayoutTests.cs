@@ -33,6 +33,7 @@ internal static class ShellLayoutTests
         VerifyDisabledAppBarTooltips();
         VerifyMenuStyles();
         VerifyComboFocusFrame();
+        VerifyStatusIndicatorStates();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -728,5 +729,41 @@ internal static class ShellLayoutTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 下拉選單取得焦點時顯示 Accent 框");
+    }
+
+    private static void VerifyStatusIndicatorStates()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        var previousContext = SynchronizationContext.Current;
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var dot = (System.Windows.Shapes.Ellipse)window.FindName("StatusIndicatorDot")!;
+            ((ComboBox)window.FindName("EngineModeComboBox")!).SelectedIndex = 0; // V1 基礎物理
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            var play = (Button)window.FindName("PlayButton")!;
+            WpfTestWait.Invoke(window, "RunSimulation_Click", play, new RoutedEventArgs());
+            for (var attempt = 0; attempt < 100 && !play.IsEnabled; attempt++) WpfTestWait.Wait(Task.Delay(50));
+            Require(play.IsEnabled && WpfTestWait.Field(window, "_simulationEngine") is not null, "V1 模擬必須建立完成。");
+            WpfTestWait.Invoke(window, "Play_Click", play, new RoutedEventArgs());
+            WpfTestWait.Wait(Task.Delay(50));
+            Require(ReferenceEquals(dot.Fill, UiTheme.SuccessBrush), "V1 播放中狀態圓點必須為綠色。");
+            WpfTestWait.Invoke(window, "Pause_Click", play, new RoutedEventArgs());
+            WpfTestWait.Wait(Task.Delay(50));
+            Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "V1 暫停後狀態圓點必須為灰色。");
+            WpfTestWait.Invoke(window, "StopPlaybackAfterUiFailure", new InvalidOperationException("測試用畫面更新失敗"));
+            Require(ReferenceEquals(dot.Fill, UiTheme.PrimaryBrush)
+                    && ((TextBlock)window.FindName("PlaybackStatusText")!).Text.Contains("測試用畫面更新失敗"),
+                "畫面更新失敗而停止時狀態圓點必須為橘色。");
+            WpfTestWait.Invoke(window, "ClearResults");
+            Require(ReferenceEquals(dot.Fill, UiTheme.TextSubtleBrush), "清除結果後狀態圓點必須回到灰色。");
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+            WpfTestWait.Close(window);
+        }
+        Console.WriteLine("[通過] 狀態圓點：V1 播放、畫面更新失敗與清除結果");
     }
 }

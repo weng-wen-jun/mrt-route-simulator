@@ -596,6 +596,7 @@ public partial class MainWindow : Window
             }
 
             _playbackTimer.Start();
+            UpdateStatusIndicator();
             PlaybackStatusText.Text = "播放中；倍率只影響畫面，不改變物理結果。";
             StatusTextBlock.Text = "正在播放模擬。";
         }
@@ -645,6 +646,8 @@ public partial class MainWindow : Window
 
     private async Task ResetPlaybackAsync()
     {
+        _playbackStoppedByError = false;
+        UpdateStatusIndicator();
         var inputToken = NativeAcceptanceBeginInputAction("reset");
         NativeAcceptanceInputHandlerStarted(inputToken);
         try
@@ -729,11 +732,7 @@ public partial class MainWindow : Window
         }
         catch (Exception exception)
         {
-            NativeAcceptanceAbortForLifecycle("ui-update-failed");
-            PausePlayback();
-            Trace.WriteLine($"Playback stopped after an unexpected UI update failure: {exception}");
-            PlaybackStatusText.Text = $"播放已停止：{exception.Message}";
-            StatusTextBlock.Text = "播放更新失敗；模擬已暫停，專案資料仍保留。";
+            StopPlaybackAfterUiFailure(exception);
         }
     }
 
@@ -1285,6 +1284,7 @@ public partial class MainWindow : Window
         }
 
         _playbackTimer.Stop();
+        UpdateStatusIndicator();
     }
 
     private async Task PauseWorkerSafelyAsync(SimulationPlaybackWorker worker, long inputToken = 0)

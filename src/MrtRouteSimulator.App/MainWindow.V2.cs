@@ -263,6 +263,9 @@ public partial class MainWindow
             _ = DisposePlaybackWorkerSafelyAsync(worker);
         }
 
+        _playbackStoppedByError = false;
+        UpdateStatusIndicator();
+
         var plannedTask = _plannedTimelineTask;
         var plannedCancellation = _plannedTimelineCancellation;
         _plannedTimelineTask = null;
