@@ -119,6 +119,11 @@ internal static class Program
                 ResultPageTests.Run(GetRoot(args));
                 return 0;
             }
+            if (args.Contains("--editor-theme-only"))
+            {
+                EditorThemeTests.Run(GetRoot(args));
+                return 0;
+            }
             if (args.Contains("--chart-theme-only"))
             {
                 ChartThemeTests.Run(GetRoot(args));
@@ -327,6 +332,7 @@ internal static class Program
             ShellLayoutTests.Run(GetRoot(args));
             ResultPageTests.Run(GetRoot(args));
             ChartThemeTests.Run(GetRoot(args));
+            EditorThemeTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);

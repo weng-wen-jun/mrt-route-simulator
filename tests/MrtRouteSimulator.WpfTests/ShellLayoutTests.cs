@@ -556,18 +556,22 @@ internal static class ShellLayoutTests
             var pageType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
                 System.IO.Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
-            foreach (var page in new[] { "Tracks", "Services" })
+            foreach (var page in new[] { "Project", "Stations", "Tracks", "Services", "DispatchPlanning", "Schematic" })
             {
-                var editor = (Window)Activator.CreateInstance(editorType, document, Enum.Parse(pageType, page))!;
+                // 路線示意圖不是導覽頁，先開軌道頁再導覽過去。
+                var editor = (Window)Activator.CreateInstance(editorType, document, Enum.Parse(pageType, page == "Schematic" ? "Tracks" : page))!;
                 editor.Width = 1280;
                 editor.Height = 800;
                 try
                 {
                     editor.Show();
+                    if (page == "Schematic")
+                        editorType.GetMethod("Navigate", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(editor, [Enum.Parse(pageType, "Schematic")]);
                     Save(editor, System.IO.Path.Combine(output, $"editor-{page}-1280x800.png"));
                 }
                 finally { editor.Close(); }
             }
+            SaveEditorDialogs(output);
             Console.WriteLine($"shellScreenshots={output}");
         }
         finally { SetInterfaceScale(previousScale); }
@@ -603,6 +607,34 @@ internal static class ShellLayoutTests
         encoder.Frames.Add(BitmapFrame.Create(pages[0]));
         using var stream = File.Create(System.IO.Path.Combine(output, "export-pdf-page1.png"));
         encoder.Save(stream);
+    }
+
+    // 遷移對話框與讀檔進度視窗的外觀截圖；遷移對話框以 3 段缺接軌側別的軌道建立。
+    private static void SaveEditorDialogs(string output)
+    {
+        var source = StationLayoutTemplateService.Build(StationLayoutTemplateKind.IslandTwoTracks);
+        var legacy = source with
+        {
+            Topology = source.Topology with
+            {
+                Edges = source.Topology.Edges.Select((edge, index) => index < 3 ? edge with { FromPortSide = null, ToPortSide = null } : edge).ToArray()
+            }
+        };
+        var assembly = typeof(MainWindow).Assembly;
+        var windows = new (Window Window, string File)[]
+        {
+            ((Window)Activator.CreateInstance(assembly.GetType("MrtRouteSimulator.App.LegacyPortMigrationDialog")!, legacy)!, "dialog-migration"),
+            ((Window)Activator.CreateInstance(assembly.GetType("MrtRouteSimulator.App.ProjectLoadProgressWindow")!)!, "dialog-progress")
+        };
+        foreach (var (window, file) in windows)
+        {
+            try
+            {
+                window.Show();
+                Save(window, System.IO.Path.Combine(output, $"{file}.png"));
+            }
+            finally { window.Close(); }
+        }
     }
 
     // 原生驗收以按鈕文字分類點擊；標題列改為圖示鈕後必須改讀自動化名稱。
