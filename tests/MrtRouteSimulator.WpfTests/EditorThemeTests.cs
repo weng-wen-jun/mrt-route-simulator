@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Threading;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using MrtRouteSimulator.App;
@@ -24,6 +26,8 @@ internal static class EditorThemeTests
         VerifySchematic(root);
         VerifyDialogs(root);
         VerifyMinimumSizeAndScale(root);
+        VerifyStationPageFillsWorkspace(root);
+        VerifyEditorListsShowOptions(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
     }
@@ -282,6 +286,99 @@ internal static class EditorThemeTests
             }
         }
         Console.WriteLine("[通過] 編輯器在 980×640 與 125% 縮放下頁首與底部操作完整可見");
+    }
+
+    // 回歸測試：車站與月台頁的清單與詳細區要填滿頁首以下的工作區，改變視窗大小後高度也要穩定。
+    private static void VerifyStationPageFillsWorkspace(string root)
+    {
+        var window = OpenEditor(root, "Project");
+        try
+        {
+            Navigate(window, "Stations");
+            double Measure(string phase)
+            {
+                PumpDispatcher(window.Dispatcher);
+                window.UpdateLayout();
+                var workspace = (ContentControl)Field(window, "workspace")!;
+                var header = (FrameworkElement)((StackPanel)workspace.Content).Children[0];
+                var body = (FrameworkElement)Named(window, "StationDetailScrollViewer").Parent;
+                var expected = workspace.ActualHeight - header.ActualHeight - header.Margin.Bottom - 40;
+                Require(body.ActualHeight >= expected,
+                    $"{phase}：車站與月台頁內容高 {body.ActualHeight:0}，應填滿工作區（至少 {expected:0}）。");
+                return body.ActualHeight;
+            }
+
+            var first = Measure("從總覽切換到車站與月台");
+            window.Height = 700;
+            Measure("視窗縮小到 1280×700");
+            window.Height = 800;
+            var again = Measure("視窗回到 1280×800");
+            Require(Math.Abs(first - again) < 1, $"視窗大小還原後車站頁高度由 {first:0} 變成 {again:0}，必須穩定。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 車站與月台頁填滿工作區且改變視窗大小後高度穩定");
+    }
+
+    // 回歸測試：多選參照清單在 5 個以內的選項不需捲動就看得到每一項及選取底色；作業清單至少看得到 4 列。
+    private static void VerifyEditorListsShowOptions(string root)
+    {
+        var editor = OpenEditor(root, "Stations");
+        var host = new Window { Width = 420, Height = 760, FontSize = editor.FontSize };
+        EditorChrome.ApplyWindowChrome(host);
+        var panel = new StackPanel();
+        host.Content = panel;
+        try
+        {
+            var references = new List<ListBox>();
+            for (var count = 1; count <= 5; count++)
+            {
+                var options = Enumerable.Range(1, count).Select(index => ($"P{index}", $"P{index} · 第 {index} 月台")).ToArray();
+                var list = (ListBox)EditorType.GetMethod("ReferenceMultiSelect", BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .Invoke(editor, [$"Reference{count}", $"參照 {count}", (IEnumerable<(string Id, string Label)>)options,
+                        string.Join(", ", options.Select(option => option.Item1)), (Action<string[]>)(_ => { })])!;
+                panel.Children.Add(list);
+                references.Add(list);
+            }
+
+            var operations = CollectionViewSource.GetDefaultView(Enumerable.Range(1, 6).Select(index => new { Id = $"OP{index}" }).ToList());
+            var operationList = (ListBox)EditorType.GetMethod("CreateOperationList", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(editor, [operations, "OperationList", "作業清單", (Action<object?>)(_ => { })])!;
+            panel.Children.Add(operationList);
+            ShowOffscreen(host);
+            PumpDispatcher(host.Dispatcher);
+
+            foreach (var list in references)
+            {
+                var viewer = Descendants(list).OfType<ScrollViewer>().First();
+                Require(viewer.ExtentHeight <= viewer.ViewportHeight + 0.5,
+                    $"{list.Items.Count} 個選項的參照清單需要捲動（捲動範圍 {viewer.ExtentHeight:0.#}、可視 {viewer.ViewportHeight:0.#}）。");
+                foreach (var item in list.Items)
+                {
+                    var container = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(item);
+                    var chrome = (Border)container.Template.FindName("Chrome", container);
+                    Require(ReferenceEquals(chrome.Background, UiTheme.NavSelectedBrush),
+                        $"{list.Items.Count} 個選項的參照清單中，已選項目沒有顯示選取底色。");
+                }
+            }
+
+            // 清單以項目為捲動單位，改量捲動內容區的像素高度。
+            var rows = Descendants(operationList).OfType<ListBoxItem>().First().ActualHeight;
+            var visible = Descendants(operationList).OfType<ScrollContentPresenter>().First().ActualHeight;
+            Require(visible >= 4 * rows - 0.5, $"作業清單只看得到 {visible / rows:0.0} 列，至少要 4 列。");
+        }
+        finally
+        {
+            host.Close();
+            editor.Close();
+        }
+        Console.WriteLine("[通過] 參照清單不需捲動即可看到所有選項，作業清單至少 4 列");
+    }
+
+    private static void PumpDispatcher(Dispatcher dispatcher)
+    {
+        var frame = new DispatcherFrame();
+        dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(() => frame.Continue = false));
+        Dispatcher.PushFrame(frame);
     }
 
     internal static readonly HashSet<string> AllowedPrimary = new(StringComparer.Ordinal)

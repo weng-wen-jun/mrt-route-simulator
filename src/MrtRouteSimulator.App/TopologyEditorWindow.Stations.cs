@@ -119,8 +119,10 @@ internal sealed partial class TopologyEditorWindow
         // remaining workspace height, including after a narrow-window resize.
         void SizeStationPage()
         {
-            var headerHeight = ((FrameworkElement)panel.Children[0]).ActualHeight
-                + ((FrameworkElement)panel.Children[1]).ActualHeight;
+            // panel.Children[0] is NewPage's header (title + description);
+            // root is the next child and must not count toward the header.
+            var header = (FrameworkElement)panel.Children[0];
+            var headerHeight = header.ActualHeight + header.Margin.Top + header.Margin.Bottom;
             // Reserve room for the list's margin and the page's lower inset;
             // DockPanel's fill child can otherwise push the bottom actions
             // slightly past the visible workspace at both tested sizes.
@@ -736,7 +738,7 @@ internal sealed partial class TopologyEditorWindow
 
     private ListBox CreateOperationList(ICollectionView view, string name, string automationName, Action<object?> selected)
     {
-        var list = new ListBox { Name = name, ItemsSource = view, DisplayMemberPath = "Id", Height = 100 };
+        var list = new ListBox { Name = name, ItemsSource = view, DisplayMemberPath = "Id", Height = 130 };
         AutomationProperties.SetName(list, automationName);
         list.SelectionChanged += (_, _) => selected(list.SelectedItem);
         return list;
@@ -782,7 +784,8 @@ internal sealed partial class TopologyEditorWindow
         var options = values.Select(item => new ReferenceOption(item.Id, item.Label)).ToList();
         var selected = SplitIds(current);
         foreach (var id in selected.Where(id => options.All(item => !IdEquals(item.Id, id)))) options.Add(new ReferenceOption(id, $"缺少參照：{id}"));
-        var list = new ListBox { Name = name, ItemsSource = options, DisplayMemberPath = nameof(ReferenceOption.Label), SelectionMode = SelectionMode.Multiple, Height = Math.Min(130, Math.Max(42, options.Count * 24)) };
+        // Size to the rows (EditorListItem is 28 px tall) and scroll only past five options.
+        var list = new ListBox { Name = name, ItemsSource = options, DisplayMemberPath = nameof(ReferenceOption.Label), SelectionMode = SelectionMode.Multiple, MinHeight = 42, MaxHeight = 150 };
         AutomationProperties.SetName(list, automationName);
         stationPageUpdating = true;
         foreach (var item in options.Where(item => selected.Contains(item.Id, StringComparer.OrdinalIgnoreCase))) list.SelectedItems.Add(item);
