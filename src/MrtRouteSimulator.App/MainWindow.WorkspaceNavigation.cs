@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using MrtRouteSimulator.Engine;
 
 namespace MrtRouteSimulator.App;
@@ -6,6 +7,8 @@ namespace MrtRouteSimulator.App;
 public partial class MainWindow
 {
     private const double QuickBuilderExpandedWidth = 450;
+    private const double QuickBuilderMinimumWidth = 320;
+    private const double NavRailWidth = 64;
 
     private void OpenInfrastructureWorkspace_Click(object sender, RoutedEventArgs e) =>
         OpenTopologyWorkspace(ProjectWorkspacePage.Tracks);
@@ -15,13 +18,6 @@ public partial class MainWindow
 
     private void OpenSimulationWorkspace_Click(object sender, RoutedEventArgs e) =>
         OpenTopologyWorkspace(ProjectWorkspacePage.Simulation);
-
-    private void OpenResults_Click(object sender, RoutedEventArgs e)
-    {
-        WorkspaceTabControl.SelectedItem = ResultsTabItem;
-        ResultsTabItem.BringIntoView();
-        StatusTextBlock.Text = "已切換至分析結果。";
-    }
 
     private async void OpenTopologyWorkspace(ProjectWorkspacePage initialPage)
     {
@@ -52,25 +48,43 @@ public partial class MainWindow
         }
     }
 
+    // locked：停用快速起稿輸入；collapsed：關閉抽屜。抽屜只在使用者明確要求時開啟
+    // （起稿鈕、選單「快速起稿」、前往 V2 設定），避免啟動或清除結果時自動彈出。
     private void SetQuickBuilderState(bool locked, bool collapsed)
     {
         ConfigurationScrollViewer.IsEnabled = true;
         QuickBuilderInputPanel.IsEnabled = !locked;
-        QuickBuilderSidebar.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
-        QuickBuilderColumn.Width = collapsed
-            ? new GridLength(0)
-            : new GridLength(QuickBuilderExpandedWidth);
+        if (collapsed) SetQuickBuilderDrawerOpen(false);
+    }
+
+    private void SetQuickBuilderDrawerOpen(bool open)
+    {
+        QuickBuilderSidebar.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         UpdateQuickBuilderWidth();
+    }
+
+    private void QuickBuilderToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (QuickBuilderSidebar.Visibility == Visibility.Visible) SetQuickBuilderDrawerOpen(false);
+        else FocusRouteInput_Click(sender, e);
+    }
+
+    private void QuickBuilderClose_Click(object sender, RoutedEventArgs e) => SetQuickBuilderDrawerOpen(false);
+
+    private void QuickBuilderSidebar_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape) return;
+        SetQuickBuilderDrawerOpen(false);
+        QuickBuilderToggleButton.Focus();
+        e.Handled = true;
     }
 
     private void UpdateQuickBuilderWidth()
     {
-        if (QuickBuilderColumn is null || QuickBuilderSidebar is null
-            || QuickBuilderSidebar.Visibility == Visibility.Collapsed) return;
+        if (QuickBuilderSidebar is null || QuickBuilderSidebar.Visibility == Visibility.Collapsed) return;
         // Use the measured, interface-scaled content width, not physical pixels.
-        // Keep the editor usable while reserving most of a compact window for results.
-        var width = ShellContentGrid.ActualWidth;
+        var width = ShellContentGrid.ActualWidth - NavRailWidth;
         if (!IsFiniteLayoutDimension(width)) return;
-        QuickBuilderColumn.Width = new GridLength(Math.Clamp(width * .38, 280, QuickBuilderExpandedWidth));
+        QuickBuilderSidebar.Width = Math.Clamp(width * .38, QuickBuilderMinimumWidth, QuickBuilderExpandedWidth);
     }
 }

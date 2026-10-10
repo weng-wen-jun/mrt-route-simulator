@@ -186,6 +186,7 @@ public partial class MainWindow : Window
         }
 
         SetQuickBuilderState(locked: false, collapsed: false);
+        SetQuickBuilderDrawerOpen(true);
         V2SettingsHeading.BringIntoView();
         V2SettingsHeading.Focus();
     }

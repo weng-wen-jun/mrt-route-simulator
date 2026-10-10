@@ -14,11 +14,16 @@ using MrtRouteSimulator.Engine;
 /// <summary>主視窗外殼（子專案 C1）的版面與樣式回歸測試。</summary>
 internal static class ShellLayoutTests
 {
+    // 改版前（c103ab3 + main 同步後）在 1280×800、100% 介面縮放下量得的配線圖可視高度。
+    private const double BaselineRouteViewportHeight = 163.8;
+
     public static void Run(string root)
     {
         VerifyShellTokens();
         VerifyImplicitStyles();
         VerifyShellControls();
+        VerifyShellSkeleton(root);
+        VerifyQuickBuilderDrawer();
         Console.WriteLine("PASS WPF shell layout");
     }
 
@@ -246,5 +251,124 @@ internal static class ShellLayoutTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] ShellTabControl、導覽列、膠囊切換與 KPI 細條範本");
+    }
+
+    private static readonly (string Name, string Label)[] NavPages =
+    [
+        ("SimulationTabItem", "模擬"), ("ResultsTabItem", "時刻表"), ("SegmentTabItem", "區間"), ("ComparisonTabItem", "比較"),
+        ("ResourceTabItem", "容量"), ("SafetyTabItem", "閉塞"), ("IntervalStatisticsTabItem", "統計"), ("DiagramTabItem", "運行圖")
+    ];
+
+    private static void VerifyShellSkeleton(string root)
+    {
+        var routeHeight = MeasureRouteViewportHeight(root);
+        Require(BaselineRouteViewportHeight > 0 && routeHeight >= BaselineRouteViewportHeight + 120,
+            $"配線圖可視高度應比改版前（{BaselineRouteViewportHeight:0.0}）多 120 px 以上，實際 {routeHeight:0.0}。");
+
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            window.Show();
+            window.Activate(); // TabItem 以滑鼠選取時需要取得焦點。
+            PumpLayout(window);
+            var shellGrid = (Grid)window.FindName("ShellContentGrid")!;
+            Require(shellGrid.RowDefinitions.Count == 3
+                    && Math.Abs(shellGrid.RowDefinitions[0].ActualHeight - 48) < .5
+                    && Math.Abs(shellGrid.RowDefinitions[2].ActualHeight - 24) < .5,
+                "外殼必須是標題列 48、主體、狀態列 24 三列。");
+
+            var tabs = (TabControl)window.FindName("WorkspaceTabControl")!;
+            Require(tabs is ShellTabControl, "WorkspaceTabControl 必須是 ShellTabControl。");
+            var items = tabs.Items.OfType<TabItem>().ToArray();
+            Require(items.Select(item => item.Name).SequenceEqual(NavPages.Select(page => page.Name)), "導覽列必須依序有 8 個頁面。");
+            var appBar = (Visual)window.FindName("AppBar")!;
+            var play = (Button)window.FindName("PlayButton")!;
+            foreach (var (item, page) in items.Zip(NavPages))
+            {
+                Require(ShellNav.GetShortLabel(item) == page.Label && ShellNav.GetIcon(item).Length == 1, $"{page.Name} 缺少導覽短標籤或圖示。");
+                Require(item.TranslatePoint(new Point(0, 0), window).X < 64, $"{page.Name} 必須位於左側導覽列。");
+                item.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice, Environment.TickCount, MouseButton.Left)
+                    { RoutedEvent = UIElement.MouseLeftButtonDownEvent });
+                PumpLayout(window);
+                Require(ReferenceEquals(tabs.SelectedItem, item), $"點選導覽列 {page.Name} 必須切換頁面。");
+                Require(play.IsVisible && play.IsDescendantOf(appBar), $"切到 {page.Name} 時播放控制必須仍在標題列中可見。");
+            }
+
+            tabs.SelectedItem = window.FindName("SimulationTabItem");
+            var viewTabs = (TabControl)window.FindName("SimulationViewTabControl")!;
+            viewTabs.SelectedIndex = 0;
+            PumpLayout(window);
+            Require(viewTabs.Items.OfType<TabItem>().Select(ShellNav.GetShortLabel).SequenceEqual(["配線圖", "列車狀態", "速度曲線"]),
+                "子分頁膠囊必須顯示配線圖／列車狀態／速度曲線。");
+            var summary = (Expander)window.FindName("RouteSummaryExpander")!;
+            Require(summary.IsExpanded && Math.Abs(summary.ActualHeight - 26) < 1, $"KPI 細條預設展開且高 26，實際 {summary.ActualHeight:0.0}。");
+            var rows = new[] { "RouteSummaryText", "OneWaySummaryText", "CycleSummaryText", "HeadwaySummaryText", "SpeedSummaryText" }
+                .Select(name => ((FrameworkElement)window.FindName(name)!).TranslatePoint(new Point(0, 0), window).Y).ToArray();
+            Require(rows.Max() - rows.Min() < 1, "五項摘要必須排在同一行。");
+
+            var menu = (Menu)window.FindName("MainMenu")!;
+            Require(menu.IsDescendantOf(appBar), "主選單必須在標題列中。");
+            var headers = menu.Items.OfType<MenuItem>().Select(item => (string)item.Header).ToArray();
+            Require(headers.SequenceEqual(["_檔案", "_編輯", "_顯示設定", "_原生驗收量測"]),
+                $"頂層選單應為檔案／編輯／顯示設定／原生驗收量測，實際：{string.Join("、", headers)}");
+            var edit = menu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "_編輯");
+            Require(edit.Items.OfType<MenuItem>().Select(AutomationProperties.GetName).SequenceEqual(["快速起稿", "軌道與設施工作區", "服務與路徑工作區", "模擬設定"]),
+                "編輯選單必須依序有快速起稿、軌道與設施、服務與路徑、模擬設定。");
+            foreach (var name in new[] { "ExportFixedTimetableArchiveMenuItem", "InterfaceScaleMenuItem", "ShowLockedRoutesMenuItem",
+                         "ShowTrackOccupancyMenuItem", "StartNativeAcceptanceMeasurementMenuItem", "StopNativeAcceptanceMeasurementMenuItem" })
+                Require(window.FindName(name) is MenuItem, $"選單項目 {name} 必須保留。");
+            Require(!menu.Items.OfType<MenuItem>().Any(item => AutomationProperties.GetName(item) == "分析結果"), "頂層「分析結果」應已移除。");
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 外殼骨架：標題列、導覽列、播放列、KPI 細條、選單與配線圖高度");
+    }
+
+    private static void VerifyQuickBuilderDrawer()
+    {
+        var previousScale = SetInterfaceScale(1);
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            PumpLayout(window);
+            var drawer = (Border)window.FindName("QuickBuilderSidebar")!;
+            var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
+            var close = (Button)window.FindName("QuickBuilderCloseButton")!;
+            var input = (FrameworkElement)window.FindName("QuickBuilderInputPanel")!;
+            Require(drawer.Visibility == Visibility.Collapsed, "快速起稿抽屜預設必須收起。");
+            WpfTestWait.Invoke(window, "FocusRouteInput_Click", window, new RoutedEventArgs());
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Visible, "選單「快速起稿」必須開啟抽屜。");
+            close.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Collapsed, "關閉鈕必須關閉抽屜。");
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Visible, "「起稿」鈕必須開啟抽屜。");
+            drawer.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(drawer)!, 0, Key.Escape)
+                { RoutedEvent = Keyboard.KeyDownEvent });
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Collapsed, "抽屜內按 Esc 必須關閉抽屜。");
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Collapsed, "再按一次「起稿」必須關閉抽屜。");
+            WpfTestWait.Invoke(window, "SetQuickBuilderState", true, false);
+            Require(!input.IsEnabled && drawer.Visibility == Visibility.Collapsed, "locked 只停用輸入，不得自動開啟抽屜。");
+            WpfTestWait.Invoke(window, "SetQuickBuilderState", false, false);
+            Require(input.IsEnabled && drawer.Visibility == Visibility.Collapsed, "解鎖不得自動開啟抽屜。");
+        }
+        finally
+        {
+            WpfTestWait.Close(window);
+            SetInterfaceScale(previousScale);
+        }
+        Console.WriteLine("[通過] 快速起稿抽屜：預設收起、選單／起稿鈕開啟、關閉鈕／Esc／再按關閉");
     }
 }
