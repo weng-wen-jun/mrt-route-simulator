@@ -21,6 +21,7 @@ internal static class EditorThemeTests
         VerifyShell(root);
         VerifyPages(root);
         VerifySchematic(root);
+        VerifyDialogs(root);
         VerifyMinimumSizeAndScale(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
@@ -134,7 +135,10 @@ internal static class EditorThemeTests
 
     // 掃描清單：整個檔案不得寫死顏色；後續 Task 逐步加入。
     private static readonly string[] ScannedFiles =
-        ["EditorChrome.cs", "TopologyEditorWindow.cs", "TopologyEditorWindow.Stations.cs", "TopologyEditorWindow.Operations.cs", "TopologyEditorWindow.Settings.cs"];
+    [
+        "EditorChrome.cs", "TopologyEditorWindow.cs", "TopologyEditorWindow.Stations.cs", "TopologyEditorWindow.Operations.cs",
+        "TopologyEditorWindow.Settings.cs", "LegacyPortMigrationDialog.cs", "ProjectLoadProgressWindow.cs"
+    ];
 
     private static readonly Regex HardCodedColor = new(
         @"\bColor\.From(Rgb|Argb)\b|\bBrushes\.(?!Transparent\b)[A-Z]\w*|\bColors\.(?!Transparent\b)[A-Z]\w*",
@@ -404,6 +408,105 @@ internal static class EditorThemeTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 路線示意圖使用配線圖的軌道配色與線寬");
+    }
+
+    private static void ShowOffscreen(Window window)
+    {
+        window.Left = -10000;
+        window.Top = -10000;
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.ShowInTaskbar = false;
+        window.Show();
+        window.UpdateLayout();
+    }
+
+    private static void RequireDialogChrome(Window dialog, string context, string confirm)
+    {
+        Require(ReferenceEquals(dialog.FontFamily, Application.Current.FindResource("AppFont")) && ReferenceEquals(dialog.Background, UiTheme.SurfaceBrush),
+            $"{context}必須套用 App 字型與白底。");
+        var buttons = Descendants(dialog).OfType<Button>().Where(button => button.TemplatedParent is null).ToArray();
+        Require(buttons.Where(button => ReferenceEquals(button.Style, EditorChrome.StyleOf("PrimaryButton"))).Select(button => button.Content as string).SequenceEqual([confirm])
+                && buttons.Where(button => !Equals(button.Content, confirm)).All(button => ReferenceEquals(button.Style, EditorChrome.StyleOf("SecondaryButton"))),
+            $"{context}：只有「{confirm}」是主要按鈕，其餘為次要按鈕。");
+        InspectElements(dialog, context);
+    }
+
+    private static Window Item1(object tuple) => (Window)tuple.GetType().GetField("Item1")!.GetValue(tuple)!;
+
+    private static void VerifyDialogs(string root)
+    {
+        var editor = OpenEditor(root, "Project");
+        try
+        {
+            var askMethod = EditorType.GetMethod("CreateAskDialog", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("找不到 CreateAskDialog。");
+            var ask = Item1(askMethod.Invoke(editor, ["編輯專案識別資料", new (string, string)[] { ("專案編號", "P1"), ("專案名稱", "測試") }])!);
+            try
+            {
+                ShowOffscreen(ask);
+                RequireDialogChrome(ask, "新增／編輯對話框", "建立");
+                var panel = (StackPanel)((ScrollViewer)ask.Content).Content;
+                Require(panel.Margin == new Thickness(20) && panel.Children.OfType<TextBox>().Count() == 2
+                        && panel.Children.OfType<TextBlock>().All(label => ReferenceEquals(label.Style, EditorChrome.StyleOf("FieldLabel")))
+                        && panel.Children[^1] is StackPanel,
+                    "新增／編輯對話框需保留結構（文字框為直接子元素、最後一列按鈕），欄位名稱用欄位標籤樣式、內距 20。");
+            }
+            finally { ask.Close(); }
+            var chooseMethod = EditorType.GetMethod("CreateChooseDialog", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? throw new InvalidOperationException("找不到 CreateChooseDialog。");
+            var choose = Item1(chooseMethod.Invoke(editor, ["選擇方向", "方向", new[] { "下行", "上行" }, "上行"])!);
+            try
+            {
+                ShowOffscreen(choose);
+                RequireDialogChrome(choose, "選取對話框", "選取");
+                var panel = (StackPanel)choose.Content;
+                Require(panel.Children.OfType<ComboBox>().Single().SelectedItem as string == "上行" && panel.Children[^1] is StackPanel,
+                    "選取對話框需保留結構並預選目前值。");
+            }
+            finally { choose.Close(); }
+        }
+        finally { editor.Close(); }
+
+        var source = StationLayoutTemplateService.Build(StationLayoutTemplateKind.IslandTwoTracks);
+        var legacy = source with
+        {
+            Topology = source.Topology with
+            {
+                Edges = source.Topology.Edges.Select((edge, index) => index < 3 ? edge with { FromPortSide = null, ToPortSide = null } : edge).ToArray()
+            }
+        };
+        var migration = (Window)Activator.CreateInstance(AppType("LegacyPortMigrationDialog"), legacy)!;
+        try
+        {
+            ShowOffscreen(migration);
+            RequireDialogChrome(migration, "遷移對話框", "套用明確側別");
+            var table = Descendants(migration).OfType<Grid>().Single(grid => grid.ColumnDefinitions.Count == 4);
+            Require(table.RowDefinitions.Count == 4, $"遷移對照表必須每列一個列定義（表頭＋3 段軌道），實際 {table.RowDefinitions.Count}。");
+            var rows = legacy.Topology.Edges.Take(3)
+                .Select(edge => Grid.GetRow(table.Children.OfType<TextBlock>().Single(text => text.Text == edge.TrackEdgeId))).ToArray();
+            Require(rows.SequenceEqual([1, 2, 3]), "每段軌道必須在自己的列，不能疊在一起。");
+            Require(table.Children.OfType<Border>().Any(border => ReferenceEquals(border.Background, UiTheme.TableHeaderBrush)
+                    && Grid.GetRow(border) == 0 && Grid.GetColumnSpan(border) == 4), "對照表表頭列必須有淺色底。");
+            Require(ReferenceEquals(Descendants(migration).OfType<TextBlock>()
+                    .Single(text => text.Text.StartsWith("此 Schema 8 舊檔", StringComparison.Ordinal)).Foreground, UiTheme.TextMutedBrush),
+                "遷移說明文字必須是灰色。");
+        }
+        finally { migration.Close(); }
+
+        var progress = (Window)Activator.CreateInstance(AppType("ProjectLoadProgressWindow"))!;
+        try
+        {
+            ShowOffscreen(progress);
+            Require(ReferenceEquals(progress.FontFamily, Application.Current.FindResource("AppFont")) && ReferenceEquals(progress.Background, UiTheme.SurfaceBrush),
+                "讀檔進度視窗必須套用 App 字型與白底。");
+            var bar = Descendants(progress).OfType<ProgressBar>().Single();
+            Require(ReferenceEquals(bar.Style, EditorChrome.StyleOf("ThinProgressBar")) && bar.ActualHeight <= 6.5, "讀檔進度條必須是細長樣式。");
+            Require(Descendants(progress).OfType<TextBlock>().Any(text => text.Text == "正在讀取存檔，請稍候"
+                    && ReferenceEquals(text.Style, EditorChrome.StyleOf("ResultPageTitle"))), "讀檔進度標題必須使用頁面標題樣式。");
+            InspectElements(progress, "讀檔進度視窗");
+        }
+        finally { progress.Close(); }
+        Console.WriteLine("[通過] 新增／選取、遷移與讀檔進度對話框套用編輯器樣式");
     }
 
     internal static void Require(bool condition, string message)

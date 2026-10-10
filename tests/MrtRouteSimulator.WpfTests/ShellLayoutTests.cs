@@ -635,6 +635,22 @@ internal static class ShellLayoutTests
             }
             finally { window.Close(); }
         }
+        var editorType = assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
+        var editor = (Window)Activator.CreateInstance(editorType, source, Enum.Parse(assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!, "Project"))!;
+        try
+        {
+            editor.Show();
+            var created = editorType.GetMethod("CreateAskDialog", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(editor, ["編輯專案識別資料", new (string, string)[] { ("專案編號", source.ProjectId), ("專案名稱", source.ProjectName) }])!;
+            var ask = (Window)created.GetType().GetField("Item1")!.GetValue(created)!;
+            try
+            {
+                ask.Show();
+                Save(ask, System.IO.Path.Combine(output, "dialog-ask.png"));
+            }
+            finally { ask.Close(); }
+        }
+        finally { editor.Close(); }
     }
 
     // 原生驗收以按鈕文字分類點擊；標題列改為圖示鈕後必須改讀自動化名稱。

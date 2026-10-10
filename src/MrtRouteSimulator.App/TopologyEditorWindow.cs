@@ -2352,34 +2352,65 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private Dictionary<string, string>? Ask(string title, params (string Label, string Initial)[] fields)
     {
-        var dialog = new Window { Title = title, Owner = this, Width = 500, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var (dialog, inputs) = CreateAskDialog(title, fields);
+        return dialog.ShowDialog() == true ? inputs.ToDictionary(item => item.Key, item => item.Value.Text, StringComparer.Ordinal) : null;
+    }
+
+    // 建立「新增／編輯」對話框但不顯示，讓測試能直接檢查外觀。結構（ScrollViewer → StackPanel，
+    // 文字框為直接子元素、最後一個子元素是按鈕列）是既有自動化測試的依據，不得改變。
+    private (Window Dialog, Dictionary<string, TextBox> Inputs) CreateAskDialog(string title, (string Label, string Initial)[] fields)
+    {
+        var dialog = CreateDialogWindow(title, 500);
+        var panel = new StackPanel { Margin = new Thickness(20) };
         var inputs = new Dictionary<string, TextBox>(StringComparer.Ordinal);
         foreach (var field in fields)
         {
-            panel.Children.Add(new TextBlock { Text = field.Label, Margin = new Thickness(0, 5, 0, 3) });
+            var label = EditorChrome.FieldLabel(field.Label);
+            label.Margin = new Thickness(0, 8, 0, 4);
+            panel.Children.Add(label);
             var input = new TextBox { Text = field.Initial }; inputs.Add(field.Label, input); panel.Children.Add(input);
         }
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
-        buttons.Children.Add(CreateButton("建立", (_, _) => dialog.DialogResult = true, false));
-        buttons.Children.Add(CreateButton("取消", (_, _) => dialog.DialogResult = false, true));
-        panel.Children.Add(buttons);
+        panel.Children.Add(DialogButtons(dialog, "建立"));
         dialog.Content = new ScrollViewer { Content = panel, MaxHeight = 660, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        return dialog.ShowDialog() == true ? inputs.ToDictionary(item => item.Key, item => item.Value.Text, StringComparer.Ordinal) : null;
+        return (dialog, inputs);
     }
 
     private string? Choose(string title, string label, IReadOnlyList<string> values, string? current)
     {
-        var dialog = new Window { Title = title, Owner = this, Width = 440, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
-        var panel = new StackPanel { Margin = new Thickness(16) };
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        var (dialog, choices) = CreateChooseDialog(title, label, values, current);
+        return dialog.ShowDialog() == true ? choices.SelectedItem as string : null;
+    }
+
+    // 結構（StackPanel 直接含下拉選單、最後一個子元素是按鈕列）是既有自動化測試的依據，不得改變。
+    private (Window Dialog, ComboBox Choices) CreateChooseDialog(string title, string label, IReadOnlyList<string> values, string? current)
+    {
+        var dialog = CreateDialogWindow(title, 440);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(EditorChrome.FieldLabel(label));
         var choices = new ComboBox { ItemsSource = values, SelectedItem = values.FirstOrDefault(value => value.Equals(current, StringComparison.OrdinalIgnoreCase)) ?? values.FirstOrDefault() };
         panel.Children.Add(choices);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
-        buttons.Children.Add(CreateButton("選取", (_, _) => dialog.DialogResult = true, false));
-        buttons.Children.Add(CreateButton("取消", (_, _) => dialog.DialogResult = false, true));
-        panel.Children.Add(buttons); dialog.Content = panel;
-        return dialog.ShowDialog() == true ? choices.SelectedItem as string : null;
+        panel.Children.Add(DialogButtons(dialog, "選取"));
+        dialog.Content = panel;
+        return (dialog, choices);
+    }
+
+    private Window CreateDialogWindow(string title, double width)
+    {
+        var dialog = new Window { Title = title, Owner = this, Width = width, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
+        EditorChrome.ApplyWindowChrome(dialog);
+        dialog.Background = UiTheme.SurfaceBrush;
+        return dialog;
+    }
+
+    // 確認鈕（主要）在前、取消（次要）在後，靠右排列。
+    private static StackPanel DialogButtons(Window dialog, string confirm)
+    {
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        buttons.Children.Add(CreateButton(confirm, (_, _) => dialog.DialogResult = true, false));
+        var cancel = CreateButton("取消", (_, _) => dialog.DialogResult = false, true);
+        cancel.Margin = new Thickness(0);
+        buttons.Children.Add(cancel);
+        return buttons;
     }
 
     private sealed record NavItem(ProjectWorkspacePage Page, string Label, Action Open);
