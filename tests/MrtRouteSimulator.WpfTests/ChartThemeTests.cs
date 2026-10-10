@@ -22,6 +22,7 @@ internal static class ChartThemeTests
         VerifySafetyStatusBrush();
         VerifyV2Charts(root);
         VerifyV1Charts();
+        VerifySpatialReferencePointColors();
         VerifyNoHardCodedChartColors(root);
         Console.WriteLine("PASS WPF chart theme");
     }
@@ -192,11 +193,12 @@ internal static class ChartThemeTests
         ("ChartTheme.cs", []),
         ("ChartPainter.cs", []),
         ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks",
-            "DrawSafetyDistanceChart", "AddSafetyMarginChip", "DrawTimeDistanceDiagramFull"]),
-        ("MainWindow.xaml.cs", ["DrawSpeedProfile"]),
+            "DrawSafetyDistanceChart", "AddSafetyMarginChip", "DrawTimeDistanceDiagramFull", "DrawV2Route"]),
+        ("MainWindow.xaml.cs", ["DrawSpeedProfile", "DrawRoute"]),
         ("MainWindow.TimeDistance.cs", []),
         ("TimeDistanceStationLabelLayout.cs", []),
-        ("DiagramExportService.cs", [])
+        ("DiagramExportService.cs", []),
+        ("MainWindow.SpatialReferencePointDiagram.cs", [])
     ];
 
     private static readonly Regex HardCodedColor = new(
@@ -322,9 +324,35 @@ internal static class ChartThemeTests
                     && speed.Children.OfType<TextBlock>().Count(text => Equals(text.Tag, ChartPainter.TimeTickTag)) == 5
                     && speed.Children.OfType<StackPanel>().Any(panel => Equals(panel.Tag, ChartPainter.LegendTag)),
                 "V1 速度曲線必須有數值刻度、五個時間刻度與圖例。");
+
+            views.SelectedIndex = 0;
+            ShellLayoutTests.PumpLayout(window);
+            WpfTestWait.Invoke(window, "DrawRoute");
+            var route = (Canvas)window.FindName("RouteCanvas")!;
+            Require(ReferenceEquals(route.Children.OfType<Line>().First().Stroke, UiTheme.RailNeutralStrongBrush),
+                "V1 路線軌道必須用 RailNeutralStrong。");
+            var stations = route.Children.OfType<Ellipse>().ToArray();
+            Require(stations.Length > 0 && stations.All(marker => ReferenceEquals(marker.Fill, UiTheme.SurfaceBrush)
+                    && ReferenceEquals(marker.Stroke, UiTheme.RailNeutralStrongBrush)),
+                "V1 車站點必須白底＋RailNeutralStrong 外框。");
+            Require(route.Children.OfType<TextBlock>().Where(text => text.Text.Contains('\n'))
+                    .All(text => ReferenceEquals(text.Foreground, UiTheme.TextStrongBrush)),
+                "V1 車站名稱必須用 TextStrong。");
+
+            // 非拓樸的線性 V2 路線圖只在沒有播放 frame 時出現；以 V1 建立的路線直接繪製。
+            Require(WpfTestWait.Field(window, "_latestPlaybackFrame") is null, "V1 模式不得有 V2 播放 frame。");
+            var v2Enabled = typeof(MainWindow).GetField("_v2Enabled", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            v2Enabled.SetValue(window, true);
+            try { WpfTestWait.Invoke(window, "DrawV2Route"); }
+            finally { v2Enabled.SetValue(window, false); }
+            var tracks = route.Children.OfType<Line>()
+                .Where(item => item.StrokeThickness == 4 && Math.Abs(item.Y1 - item.Y2) < .01 && item.X2 - item.X1 > 100).ToArray();
+            Require(tracks.Length == 2 && ReferenceEquals(tracks[0].Stroke, UiTheme.RailDownBrush)
+                    && ReferenceEquals(tracks[1].Stroke, UiTheme.RailUpBrush),
+                "線性路線圖的下行軌道必須用 RailDown、上行用 RailUp。");
         }
         finally { WpfTestWait.Close(window); }
-        Console.WriteLine("[通過] V1 速度曲線使用圖表主題");
+        Console.WriteLine("[通過] V1 速度曲線、V1 路線圖與線性 V2 路線圖使用主題色");
     }
 
     private static void VerifySafetyStatusBrush()
@@ -491,6 +519,19 @@ internal static class ChartThemeTests
                 count++;
         }
         return count;
+    }
+
+    private static void VerifySpatialReferencePointColors()
+    {
+        var method = typeof(MainWindow).GetMethod("SpatialReferencePointColor", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("找不到 SpatialReferencePointColor。");
+        foreach (var (kind, color) in new[]
+                 {
+                     ("中間站", UiTheme.Success), ("站前折返", UiTheme.Accent), ("站後折返", UiTheme.RailDown),
+                     ("中央避車線折返", UiTheme.VehiclePalette[0]), ("銜接點", UiTheme.RailNeutralStrong)
+                 })
+            Require((Color)method.Invoke(null, [kind])! == color, $"空間參考點「{kind}」必須用 {color}。");
+        Console.WriteLine("[通過] 五類空間參考點幾何改用主題色");
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>

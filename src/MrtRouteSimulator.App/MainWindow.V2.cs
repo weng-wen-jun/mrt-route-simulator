@@ -726,8 +726,8 @@ public partial class MainWindow
         var trackWidth = Math.Max(1, width - left - right);
         var outboundY = height * 0.39;
         var inboundY = height * 0.63;
-        DrawTrackLine(outboundY, "下行 DOWN →");
-        DrawTrackLine(inboundY, "← 上行 UP");
+        DrawTrackLine(outboundY, "下行 DOWN →", UiTheme.RailDownBrush);
+        DrawTrackLine(inboundY, "← 上行 UP", UiTheme.RailUpBrush);
         DrawSpatialReferencePointGeometry(left, trackWidth, outboundY, inboundY, width, height);
         DrawAfterStationTailTrackGeometry(tailTrackLayouts, left, trackWidth, outboundY, inboundY, width, height);
 
@@ -743,15 +743,15 @@ public partial class MainWindow
                 {
                     Width = Math.Max(2, x2 - x1),
                     Height = zoneHeight,
-                    Fill = new SolidColorBrush(Color.FromArgb(42, 231, 165, 48)),
-                    Stroke = new SolidColorBrush(Color.FromRgb(205, 126, 24)),
+                    Fill = ChartTheme.LimitZone,
+                    Stroke = ChartTheme.LimitSeries,
                     StrokeDashArray = [3, 2],
                     ToolTip = $"速限 {limit.StartPositionMeters / 1000:0.00}～{limit.EndPositionMeters / 1000:0.00} km\n{limit.LimitMetersPerSecond * 3.6:0.#} km/h · {SpeedLimitDirectionToChinese(limit.Direction)}\n{limit.Note}"
                 };
                 Canvas.SetLeft(rectangle, x1);
                 Canvas.SetTop(rectangle, top);
                 RouteCanvas.Children.Add(rectangle);
-                AddCanvasText(RouteCanvas, $"{limit.LimitMetersPerSecond * 3.6:0.#}", x1 + 2, top - 17, 10, Color.FromRgb(166, 90, 21));
+                AddCanvasText(RouteCanvas, $"{limit.LimitMetersPerSecond * 3.6:0.#}", x1 + 2, top - 17, 10, ChartTheme.AxisLabel.Color);
             }
         }
 
@@ -764,10 +764,10 @@ public partial class MainWindow
                 X2 = x,
                 Y1 = outboundY - 18,
                 Y2 = inboundY + 18,
-                Stroke = new SolidColorBrush(Color.FromRgb(174, 183, 199)),
+                Stroke = UiTheme.HairlineBrush,
                 StrokeThickness = 1
             });
-            AddCanvasText(RouteCanvas, $"{station.StationId}\n{station.PositionMeters / 1000:0.00} km", Math.Clamp(x - 28, 0, width - 58), inboundY + 25, 10, Color.FromRgb(55, 66, 86));
+            AddCanvasText(RouteCanvas, $"{station.StationId}\n{station.PositionMeters / 1000:0.00} km", Math.Clamp(x - 28, 0, width - 58), inboundY + 25, 10, UiTheme.TextStrong);
         }
 
         snapshot ??= _latestPlaybackFrame?.GetSnapshot();
@@ -817,7 +817,7 @@ public partial class MainWindow
             KeepFollowedRouteVehicleInView(state.VehicleId, x, y);
         }
 
-        void DrawTrackLine(double y, string label)
+        void DrawTrackLine(double y, string label, Brush stroke)
         {
             RouteCanvas.Children.Add(new Line
             {
@@ -825,10 +825,10 @@ public partial class MainWindow
                 X2 = left + trackWidth,
                 Y1 = y,
                 Y2 = y,
-                Stroke = new SolidColorBrush(Color.FromRgb(70, 83, 105)),
+                Stroke = stroke,
                 StrokeThickness = 4
             });
-            AddCanvasText(RouteCanvas, label, left, y - 29, 11, Color.FromRgb(92, 103, 123));
+            AddCanvasText(RouteCanvas, label, left, y - 29, 11, UiTheme.TextMuted);
         }
     }
 

@@ -863,7 +863,7 @@ public partial class MainWindow : Window
 
         if (_route is null)
         {
-            AddCanvasText(RouteCanvas, "建立模擬後，這裡會顯示多列車往返動畫。", 26, 28, 14, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(RouteCanvas, "建立模擬後，這裡會顯示多列車往返動畫。");
             return;
         }
 
@@ -878,7 +878,7 @@ public partial class MainWindow : Window
             X2 = left + trackWidth,
             Y1 = trackY,
             Y2 = trackY,
-            Stroke = new SolidColorBrush(Color.FromRgb(70, 83, 105)),
+            Stroke = UiTheme.RailNeutralStrongBrush,
             StrokeThickness = 5,
             StrokeStartLineCap = PenLineCap.Round,
             StrokeEndLineCap = PenLineCap.Round
@@ -891,8 +891,8 @@ public partial class MainWindow : Window
             {
                 Width = 16,
                 Height = 16,
-                Fill = Brushes.White,
-                Stroke = new SolidColorBrush(Color.FromRgb(232, 109, 45)),
+                Fill = UiTheme.SurfaceBrush,
+                Stroke = UiTheme.RailNeutralStrongBrush,
                 StrokeThickness = 4,
                 ToolTip = $"{station.StationId} {station.StationName}\n{station.PositionMeters / 1000:0.###} km"
             };
@@ -905,7 +905,7 @@ public partial class MainWindow : Window
                 Text = $"{station.StationId}\n{station.StationName}",
                 TextAlignment = TextAlignment.Center,
                 FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(42, 52, 70)),
+                Foreground = UiTheme.TextStrongBrush,
                 Width = 82
             };
             Canvas.SetLeft(label, Math.Clamp(x - 41, 0, width - 82));
@@ -913,8 +913,8 @@ public partial class MainWindow : Window
             RouteCanvas.Children.Add(label);
         }
 
-        AddCanvasText(RouteCanvas, "下行 →", left, 24, 12, Color.FromRgb(102, 112, 133));
-        AddCanvasText(RouteCanvas, "← 上行", left, height - 34, 12, Color.FromRgb(102, 112, 133));
+        AddCanvasText(RouteCanvas, "下行 →", left, 24, 12, UiTheme.TextMuted);
+        AddCanvasText(RouteCanvas, "← 上行", left, height - 34, 12, UiTheme.TextMuted);
 
         states ??= _simulationEngine?.GetTrainStates(_playbackTimeSeconds);
         if (states is null)
@@ -943,12 +943,12 @@ public partial class MainWindow : Window
                 Height = 22,
                 CornerRadius = new CornerRadius(11),
                 Background = new SolidColorBrush(color),
-                BorderBrush = Brushes.White,
+                BorderBrush = UiTheme.SurfaceBrush,
                 BorderThickness = new Thickness(2),
                 Child = new TextBlock
                 {
                     Text = $"{index + 1:00}",
-                    Foreground = Brushes.White,
+                    Foreground = UiTheme.SurfaceBrush,
                     FontSize = 11,
                     FontWeight = FontWeights.Bold,
                     HorizontalAlignment = HorizontalAlignment.Center,
