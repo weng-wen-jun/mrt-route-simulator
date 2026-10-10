@@ -93,9 +93,15 @@ internal static class ChartThemeTests
         Expect(0.3, [0, 0.1, 0.2, 0.3]);
         foreach (var invalid in new[] { 0d, -5d, double.NaN, double.PositiveInfinity, double.NegativeInfinity })
             Expect(invalid, [0, 1]);
+        foreach (var tiny in new[] { double.Epsilon, 1e-320, 4e-323 })
+        {
+            var ticks = ChartPainter.NiceTicks(tiny);
+            Require(ticks.Length >= 2 && ticks[0] == 0 && ticks.All(double.IsFinite) && ticks[^1] >= tiny,
+                $"極小正值 {tiny} 的刻度必須從 0 開始、有限且涵蓋最大值。");
+        }
         var huge = ChartPainter.NiceTicks(double.MaxValue);
         Require(huge.All(double.IsFinite) && huge[^1] >= double.MaxValue * 0.999, "極大值的刻度不得溢位成無限大。");
-        Console.WriteLine("[通過] ChartPainter 取整刻度（含 0、負值、NaN、無限大與極大值防護）");
+        Console.WriteLine("[通過] ChartPainter 取整刻度（含 0、負值、NaN、無限大、極小與極大值防護）");
     }
 
     private static void VerifyPainterElements()

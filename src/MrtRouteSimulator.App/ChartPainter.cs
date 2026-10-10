@@ -49,8 +49,11 @@ public static class ChartPainter
         var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rough)));
         var normalized = rough / magnitude;
         var step = (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) * magnitude;
-        var count = Math.Max(1, (int)Math.Ceiling(maxValue / step - 1e-9));
-        if (!double.IsFinite(step * count)) return [0, maxValue];
+        // 極小（次正規）值會讓間距下溢為 0，極大值會讓最後一格溢位；兩者都退回 0 與最大值兩格。
+        if (!(step > 0) || !double.IsFinite(step)) return [0, maxValue];
+        var rawCount = Math.Ceiling(maxValue / step - 1e-9);
+        if (!(rawCount <= 1000) || !double.IsFinite(step * rawCount)) return [0, maxValue];
+        var count = Math.Max(1, (int)rawCount);
         return Enumerable.Range(0, count + 1).Select(index => index * step).ToArray();
     }
 
