@@ -104,6 +104,16 @@ internal static class Program
                 Console.WriteLine("PASS WPF validation warning dismissal");
                 return 0;
             }
+            if (args.Contains("--shell-layout-baseline"))
+            {
+                Console.WriteLine($"shellBaselineRouteViewportHeight={ShellLayoutTests.MeasureRouteViewportHeight(GetRoot(args)):0.0}");
+                return 0;
+            }
+            if (args.Contains("--shell-layout-only"))
+            {
+                ShellLayoutTests.Run(GetRoot(args));
+                return 0;
+            }
             if (args.Contains("--track-theme-only"))
             {
                 TrackDiagramThemeTests.Run(GetRoot(args));
@@ -299,6 +309,7 @@ internal static class Program
             TimeDistancePreparationTests.Run(regressionRoot);
             VisualRulesTests.Run();
             TrackDiagramThemeTests.Run(GetRoot(args));
+            ShellLayoutTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);
