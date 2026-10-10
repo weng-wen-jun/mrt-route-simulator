@@ -105,6 +105,13 @@ public static class EditorChrome
         VerticalAlignment = VerticalAlignment.Center
     };
 
+    /// <summary>驗證訊息清單：每列一個嚴重度色點加換行文字；停用左右捲動，長訊息才會換行。</summary>
+    public static void UseValidationTemplate(ListBox list)
+    {
+        list.ItemTemplate = (DataTemplate)Application.Current.FindResource(ValidationMessageTemplateKey);
+        ScrollViewer.SetHorizontalScrollBarVisibility(list, ScrollBarVisibility.Disabled);
+    }
+
     public static SolidColorBrush ValidationSeverityBrush(ProjectValidationSeverity severity) => severity switch
     {
         ProjectValidationSeverity.Error => UiTheme.DangerBrush,

@@ -28,6 +28,7 @@ internal static class EditorThemeTests
         VerifyMinimumSizeAndScale(root);
         VerifyStationPageFillsWorkspace(root);
         VerifyEditorListsShowOptions(root);
+        VerifyHintsAndSearchLabels(root);
         VerifyNoHardCodedEditorColors(root);
         Console.WriteLine("PASS WPF editor theme");
     }
@@ -340,6 +341,11 @@ internal static class EditorThemeTests
                 references.Add(list);
             }
 
+            var longOption = new[] { ("PLATFORM:LONG", "PLATFORM:LONG · 這是一個非常長的月台名稱，用來確認清單在窄視窗下仍可左右捲動看到完整文字") };
+            var longList = (ListBox)EditorType.GetMethod("ReferenceMultiSelect", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(editor, ["ReferenceLong", "長名稱參照", (IEnumerable<(string Id, string Label)>)longOption, "", (Action<string[]>)(_ => { })])!;
+            panel.Children.Add(longList);
+
             var operations = CollectionViewSource.GetDefaultView(Enumerable.Range(1, 6).Select(index => new { Id = $"OP{index}" }).ToList());
             var operationList = (ListBox)EditorType.GetMethod("CreateOperationList", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .Invoke(editor, [operations, "OperationList", "作業清單", (Action<object?>)(_ => { })])!;
@@ -361,6 +367,12 @@ internal static class EditorThemeTests
                 }
             }
 
+            Require(Descendants(longList).OfType<ScrollViewer>().First().ScrollableWidth > 0,
+                "參照清單的長名稱被截斷且無法左右捲動。");
+            var validationList = (ListBox)Field(editor, "validationList")!;
+            Require(ScrollViewer.GetHorizontalScrollBarVisibility(validationList) == ScrollBarVisibility.Disabled,
+                "驗證清單必須停用左右捲動，長訊息才會換行。");
+
             // 清單以項目為捲動單位，改量捲動內容區的像素高度。
             var rows = Descendants(operationList).OfType<ListBoxItem>().First().ActualHeight;
             var visible = Descendants(operationList).OfType<ScrollContentPresenter>().First().ActualHeight;
@@ -372,6 +384,30 @@ internal static class EditorThemeTests
             editor.Close();
         }
         Console.WriteLine("[通過] 參照清單不需捲動即可看到所有選項，作業清單至少 4 列");
+    }
+
+    // 提示文字用次要色；車站搜尋框只用框內提示字，不再重複一個同名標籤。
+    private static void VerifyHintsAndSearchLabels(string root)
+    {
+        var window = OpenEditor(root, "Stations");
+        try
+        {
+            foreach (var builder in new[] { "BuildTurnbackOperationDetail", "BuildPassingOperationDetail" })
+            {
+                var detail = (Panel)EditorType.GetMethod(builder, BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, [null])!;
+                var hint = detail.Children.OfType<TextBlock>().Single();
+                Require(ReferenceEquals(hint.Foreground, UiTheme.TextMutedBrush), $"「{hint.Text}」是提示文字，必須用次要色。");
+            }
+
+            Require(!Descendants(window).OfType<TextBlock>().Any(text => text.TemplatedParent is null && text.Text == "搜尋車站"),
+                "車站搜尋框已有框內提示字，不應再加同名標籤。");
+
+            Navigate(window, "QuickBuilder");
+            var description = Descendants(window).OfType<TextBlock>().Single(text => text.Text.StartsWith("選擇站型後重新建立", StringComparison.Ordinal));
+            Require(ReferenceEquals(description.Foreground, UiTheme.TextMutedBrush), "「依參考圖建立站場」的說明是提示文字，必須用次要色。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] 提示文字使用次要色，車站搜尋不重複標籤");
     }
 
     private static void PumpDispatcher(Dispatcher dispatcher)
@@ -476,6 +512,8 @@ internal static class EditorThemeTests
                     break;
                 case GroupBox group:
                     Require(ReferenceEquals(group.Style, EditorChrome.StyleOf("EditorGroupBox")), $"{context}：群組框「{group.Header}」必須使用卡片樣式。");
+                    Require(group.ReadLocalValue(Control.PaddingProperty) == DependencyProperty.UnsetValue,
+                        $"{context}：群組框「{group.Header}」不得自訂內距，須與其他群組框一致。");
                     break;
                 case DataGrid grid:
                     Require(grid.ReadLocalValue(Control.BorderBrushProperty) == DependencyProperty.UnsetValue,
@@ -522,6 +560,10 @@ internal static class EditorThemeTests
             var markers = canvas.Children.OfType<Rectangle>().Where(item => item.Width == 9 && item.Height == 9).ToArray();
             Require(markers.Length > 0 && markers.All(item => ReferenceEquals(item.Fill, UiTheme.RailNeutralStrongBrush)),
                 "設施清單前的小方塊必須是深灰色。");
+            var bufferStops = canvas.Children.OfType<Line>().Where(line => line.ToolTip is string tip && tip.EndsWith("· 止衝", StringComparison.Ordinal)).ToArray();
+            Require(bufferStops.Length > 0 && bufferStops.All(line => ReferenceEquals(line.Stroke, UiTheme.RailNeutralStrongBrush)
+                    && line.StrokeThickness == 4 && line.StrokeStartLineCap == PenLineCap.Round && line.StrokeEndLineCap == PenLineCap.Round),
+                "止衝擋線必須和配線圖一樣用深灰色、線寬 4、圓角端點。");
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 路線示意圖使用配線圖的軌道配色與線寬");

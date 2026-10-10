@@ -35,7 +35,7 @@ internal sealed partial class TopologyEditorWindow
             ("更新頻率", "每 0.1 秒更新一次"),
             ("套用狀態", "目前為工作區草稿，按套用後才送入主視窗")));
 
-        var basic = new GroupBox { Header = "常用設定", Margin = new Thickness(0, 12, 0, 8), Padding = new Thickness(10) };
+        var basic = new GroupBox { Header = "常用設定", Margin = new Thickness(0, 12, 0, 8) };
         var basicGrid = CreateSettingsGrid();
         AddSettingField(basicGrid, "起始時鐘（秒）", "StartClockSeconds", settings.StartClockSeconds);
         AddSettingField(basicGrid, "播放速度", "PlaybackSpeed", settings.PlaybackSpeed);

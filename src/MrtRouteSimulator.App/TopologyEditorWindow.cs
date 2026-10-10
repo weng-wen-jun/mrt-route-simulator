@@ -202,7 +202,7 @@ internal sealed partial class TopologyEditorWindow : Window
         validationList.BorderThickness = new Thickness(0);
         validationList.Padding = new Thickness(0);
         validationList.ItemsSource = validationMessages;
-        validationList.ItemTemplate = (DataTemplate)Application.Current.FindResource(EditorChrome.ValidationMessageTemplateKey);
+        EditorChrome.UseValidationTemplate(validationList);
         AttachValidationActivation(validationList);
         var validationCard = EditorChrome.Card(validationList, "驗證");
         validationCard.Margin = new Thickness(0, 10, 0, 0);
@@ -378,7 +378,7 @@ internal sealed partial class TopologyEditorWindow : Window
         actions.Children.Add(CreateButton("建立格式版本 8 拓撲", (_, _) => BuildQuickTopology(), false));
         panel.Children.Add(actions);
         panel.Children.Add(EditorChrome.SectionTitle("依參考圖建立站場"));
-        panel.Children.Add(new TextBlock { Text = "選擇站型後重新建立三站示範草稿，包含月台、實體進路與派車。會取代工作區目前草稿；按取消可保留原專案。尺寸、車型、停站及派車時間可在其他分頁調整。", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(EditorChrome.Hint("選擇站型後重新建立三站示範草稿，包含月台、實體進路與派車。會取代工作區目前草稿；按取消可保留原專案。尺寸、車型、停站及派車時間可在其他分頁調整。"));
         var stationKind = new ComboBox { ItemsSource = Enum.GetValues<StationLayoutTemplateKind>().Select(StationLayoutTemplateService.Name).ToArray(), SelectedIndex = 0, Margin = new Thickness(0, 8, 0, 4), MinWidth = 280, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(stationKind);
         panel.Children.Add(CreateButton("以此站型重新起稿", (_, _) =>
@@ -708,7 +708,8 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         CommitTableDrafts();
         var panel = NewPage("驗證", "編輯期間允許暫時無效；但儲存與執行模擬前必須沒有錯誤。按一下驗證訊息或使用 Enter／空白鍵可前往目標。 ");
-        var list = new ListBox { ItemsSource = validationMessages, Height = 480, ItemTemplate = (DataTemplate)Application.Current.FindResource(EditorChrome.ValidationMessageTemplateKey) };
+        var list = new ListBox { ItemsSource = validationMessages, Height = 480 };
+        EditorChrome.UseValidationTemplate(list);
         AttachValidationActivation(list);
         panel.Children.Add(list);
         workspace.Content = panel;
@@ -2197,8 +2198,10 @@ internal sealed partial class TopologyEditorWindow : Window
                 Y1 = point.Y - normal.Y,
                 X2 = point.X + normal.X,
                 Y2 = point.Y + normal.Y,
-                Stroke = TrackRailStyle.Brush(ToneOf(edge.TrackEdgeId)),
-                StrokeThickness = 5,
+                Stroke = UiTheme.RailNeutralStrongBrush,
+                StrokeThickness = 4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
                 ToolTip = $"{node.NodeId} · {node.Name} · 止衝"
             });
         }

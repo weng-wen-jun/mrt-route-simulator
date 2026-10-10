@@ -1097,7 +1097,6 @@
         <Setter Property="Padding" Value="3" />
         <Setter Property="Foreground" Value="{x:Static app:UiTheme.TextStrongBrush}" />
         <Setter Property="ItemContainerStyle" Value="{StaticResource EditorListItem}" />
-        <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBox">

@@ -65,7 +65,6 @@ internal sealed partial class TopologyEditorWindow
 
         var left = new DockPanel { Margin = new Thickness(0, 0, 12, 0), LastChildFill = true };
         var searchPanel = new StackPanel();
-        searchPanel.Children.Add(EditorChrome.FieldLabel("搜尋車站"));
         stationPageSearchTextBox = EditorChrome.SearchBox("搜尋車站", new TextBox { Name = "StationSearchTextBox", ToolTip = "輸入車站編號或名稱" });
         AutomationProperties.SetName(stationPageSearchTextBox, "車站搜尋");
         stationPageSearchTextBox.TextChanged += (_, _) =>
@@ -707,7 +706,7 @@ internal sealed partial class TopologyEditorWindow
     {
         stationPageTurnbackOperationDetail ??= new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         stationPageTurnbackOperationDetail.Children.Clear();
-        if (operation is null) { stationPageTurnbackOperationDetail.Children.Add(new TextBlock { Text = "本站沒有被引用的折返作業，或尚未選取。" }); return stationPageTurnbackOperationDetail; }
+        if (operation is null) { stationPageTurnbackOperationDetail.Children.Add(EditorChrome.Hint("本站沒有被引用的折返作業，或尚未選取。")); return stationPageTurnbackOperationDetail; }
         var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"折返作業：{operation.Id}", FontWeight = FontWeights.SemiBold });
@@ -724,7 +723,7 @@ internal sealed partial class TopologyEditorWindow
     {
         stationPagePassingOperationDetail ??= new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         stationPagePassingOperationDetail.Children.Clear();
-        if (operation is null) { stationPagePassingOperationDetail.Children.Add(new TextBlock { Text = "本站沒有被引用的待避作業，或尚未選取。" }); return stationPagePassingOperationDetail; }
+        if (operation is null) { stationPagePassingOperationDetail.Children.Add(EditorChrome.Hint("本站沒有被引用的待避作業，或尚未選取。")); return stationPagePassingOperationDetail; }
         var box = EditorChrome.Card();
         var content = new StackPanel();
         content.Children.Add(new TextBlock { Text = $"待避作業：{operation.Id}", FontWeight = FontWeights.SemiBold });
