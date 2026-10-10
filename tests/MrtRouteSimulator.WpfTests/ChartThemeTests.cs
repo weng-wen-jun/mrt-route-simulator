@@ -19,6 +19,7 @@ internal static class ChartThemeTests
         VerifyNiceTicks();
         VerifyPainterElements();
         VerifyHeaderFitsNarrowCanvas();
+        VerifySafetyStatusBrush();
         VerifyV2Charts(root);
         VerifyV1Charts();
         VerifyNoHardCodedChartColors(root);
@@ -190,7 +191,8 @@ internal static class ChartThemeTests
     [
         ("ChartTheme.cs", []),
         ("ChartPainter.cs", []),
-        ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks"]),
+        ("MainWindow.V2.cs", ["DrawV2SpeedProfile", "DrawSpeedLimitLabels", "DrawSpeedStopLabels", "DrawSpeedTimeAxisTicks",
+            "DrawSafetyDistanceChart", "AddSafetyMarginChip"]),
         ("MainWindow.xaml.cs", ["DrawSpeedProfile"])
     ];
 
@@ -257,6 +259,7 @@ internal static class ChartThemeTests
             ShellLayoutTests.PumpLayout(window);
             WpfTestWait.Invoke(window, "DrawV2SpeedProfile");
             VerifySpeedChart(window, "實際速度");
+            VerifySafetyChart(window);
         }
         finally { WpfTestWait.Close(window); }
     }
@@ -317,6 +320,57 @@ internal static class ChartThemeTests
         }
         finally { WpfTestWait.Close(window); }
         Console.WriteLine("[通過] V1 速度曲線使用圖表主題");
+    }
+
+    private static void VerifySafetyStatusBrush()
+    {
+        var method = typeof(MainWindow).GetMethod("SafetyStatusBrush", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("找不到 SafetyStatusBrush。");
+        foreach (var (status, brush) in new (SafetyStatus, SolidColorBrush)[]
+                 {
+                     (SafetyStatus.Safe, UiTheme.SuccessBrush),
+                     (SafetyStatus.Caution, UiTheme.CautionBrush),
+                     (SafetyStatus.BrakingRequired, UiTheme.CautionBrush),
+                     (SafetyStatus.EnvelopeIntrusion, UiTheme.DangerBrush)
+                 })
+            Require(ReferenceEquals(method.Invoke(null, [status]), brush), $"安全狀態 {status} 的顏色必須與表格色點一致。");
+        Console.WriteLine("[通過] 安全狀態顏色與表格色點一致（需要制動＝注意黃）");
+    }
+
+    private static void VerifySafetyChart(MainWindow window)
+    {
+        ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SafetyTabItem");
+        ((ComboBox)window.FindName("SafetyWindowComboBox")!).SelectedIndex = 2; // 全部時間
+        WpfTestWait.Invoke(window, "UpdateV2PlaybackView", true);
+        ShellLayoutTests.PumpLayout(window);
+        WpfTestWait.Invoke(window, "DrawSafetyDistanceChart");
+        var canvas = (Canvas)window.FindName("SafetyDistanceCanvas")!;
+        var lines = canvas.Children.OfType<Polyline>().ToArray();
+        Require(lines.Length == 3, $"距離圖應有三條線，實際 {lines.Length}。");
+        Require(ReferenceEquals(lines[0].Stroke, ChartTheme.PrimarySeries) && lines[0].StrokeThickness == 2.4
+                && (lines[0].StrokeDashArray?.Count ?? 0) == 0, "實際淨距必須為 PrimarySeries 實線、線寬 2.4。");
+        Require(ReferenceEquals(lines[1].Stroke, ChartTheme.ThresholdSeries) && lines[1].StrokeThickness == 1.6
+                && ReferenceEquals(lines[1].StrokeDashArray, ChartTheme.LongDash), "動態安全距離必須為 ThresholdSeries 虛線（5,3）、線寬 1.6。");
+        Require(ReferenceEquals(lines[2].Stroke, ChartTheme.DangerSeries) && lines[2].StrokeThickness == 1.8
+                && ReferenceEquals(lines[2].StrokeDashArray, ChartTheme.ShortDot), "障礙物煞車需求必須為 DangerSeries 點線（2,3）、線寬 1.8。");
+        Require(lines.SelectMany(line => line.Points).All(point => point.Y >= 30 - 0.01), "距離圖的線不得高於繪圖區頂端。");
+        Require(canvas.Children.OfType<TextBlock>().Any(text => Equals(text.Tag, ChartPainter.ValueTickTag) && text.Text == "0")
+                && canvas.Children.OfType<TextBlock>().Any(text => text.Text == "m"), "距離圖必須有從 0 開始的 m 數值刻度。");
+        Require(canvas.Children.OfType<TextBlock>().Count(text => Equals(text.Tag, ChartPainter.TimeTickTag)) == 5,
+            "距離圖必須有五個時間刻度。");
+        var legend = canvas.Children.OfType<StackPanel>().Single(panel => Equals(panel.Tag, ChartPainter.LegendTag));
+        Require(legend.Children.OfType<TextBlock>().Select(text => text.Text).SequenceEqual(["實際淨距", "動態安全距離", "障礙物煞車需求"]),
+            "距離圖圖例應為實際淨距、動態安全距離、障礙物煞車需求。");
+        var chip = canvas.Children.OfType<Border>().Single(border => Equals(border.Tag, "SafetyMarginChip"));
+        var chipPanel = (StackPanel)chip.Child;
+        var dot = chipPanel.Children.OfType<Ellipse>().Single();
+        var label = chipPanel.Children.OfType<TextBlock>().Single();
+        var status = label.Text[(label.Text.LastIndexOf('｜') + 1)..];
+        Require(label.Text.StartsWith("最低裕度", StringComparison.Ordinal)
+                && ReferenceEquals(dot.Fill, StatusTones.Brush(StatusTones.Classify(status)))
+                && ReferenceEquals(label.Foreground, dot.Fill),
+            $"最低裕度標籤「{label.Text}」的色點與文字必須依狀態「{status}」取 StatusTones 色。");
+        Console.WriteLine("[通過] 相鄰列車距離圖主題、刻度與最低裕度色點");
     }
 
     /// <summary>以 V1 基礎物理與預設輸入建立模擬；V1 圖表測試與截圖共用。</summary>

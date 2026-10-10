@@ -781,14 +781,13 @@ public partial class MainWindow
             var x1 = left + observation.FollowerFrontPositionMeters / _route.TotalLengthMeters * trackWidth;
             var x2 = left + observation.LeaderRearPositionMeters / _route.TotalLengthMeters * trackWidth;
             var y = observation.Direction == TrainDirection.Outbound ? outboundY - 32 : inboundY + 32;
-            var color = SafetyStatusColor(observation.Status);
             RouteCanvas.Children.Add(new Line
             {
                 X1 = x1,
                 X2 = x2,
                 Y1 = y,
                 Y2 = y,
-                Stroke = new SolidColorBrush(color),
+                Stroke = SafetyStatusBrush(observation.Status),
                 StrokeThickness = 3,
                 ToolTip = $"{ShortVehicle(observation.FollowerVehicleId)} → {ShortVehicle(observation.LeaderVehicleId)}\n"
                     + $"淨距 {observation.ActualGapMeters:0.0} m｜安全 {observation.DynamicSafetyDistanceMeters:0.0} m\n"
@@ -1773,7 +1772,7 @@ public partial class MainWindow
         {
             if (width >= 120 && height >= 100)
             {
-                AddCanvasText(SafetyDistanceCanvas, "播放多列車 V2 模擬後顯示實際淨距、安全距離與障礙物煞車需求。", 18, 18, 12, Color.FromRgb(102, 112, 133));
+                ChartPainter.DrawMessage(SafetyDistanceCanvas, "播放多列車 V2 模擬後顯示實際淨距、安全距離與障礙物煞車需求。");
             }
 
             return;
@@ -1794,26 +1793,30 @@ public partial class MainWindow
             .ToArray();
         if (history.Length == 0)
         {
-            AddCanvasText(SafetyDistanceCanvas, "所選配對在此時間範圍沒有資料；可切換上下行或選擇「全部時間」。", 18, 18, 12, Color.FromRgb(102, 112, 133));
+            ChartPainter.DrawMessage(SafetyDistanceCanvas, "所選配對在此時間範圍沒有資料；可切換上下行或選擇「全部時間」。");
             return;
         }
 
-        var left = 52d;
-        var top = 20d;
-        var plotWidth = width - left - 18;
-        var plotHeight = height - top - 34;
+        // 上方 30 DIP 給標題列（配對、圖例），下方 34 DIP 給時間刻度。
+        var area = new ChartPainter.ChartArea(52, 30, width - 52 - 18, height - 30 - 34);
         var minTime = history[0].SimulationTimeSeconds;
         var maxTime = Math.Max(minTime + 1, history[^1].SimulationTimeSeconds);
-        var maxDistance = Math.Max(50, history.Max(item => Math.Max(
+        ChartPainter.DrawHeader(SafetyDistanceCanvas, selected is null ? "全部配對" : selected.Split('｜')[0],
+        [
+            new ChartLegendItem("實際淨距", ChartTheme.PrimarySeries, ChartLegendMarker.Line),
+            new ChartLegendItem("動態安全距離", ChartTheme.ThresholdSeries, ChartLegendMarker.Dash),
+            new ChartLegendItem("障礙物煞車需求", ChartTheme.DangerSeries, ChartLegendMarker.Dot)
+        ], area.Left, 4);
+        var maxDistance = ChartPainter.DrawValueAxis(SafetyDistanceCanvas, area, Math.Max(50, history.Max(item => Math.Max(
             Math.Max(item.ActualGapMeters, item.DynamicSafetyDistanceMeters),
-            item.ObstacleBrakingDemandMeters)) * 1.12);
-        DrawAxes(SafetyDistanceCanvas, left, top, plotWidth, plotHeight, "m", "時間");
-        var gapLine = CreateChartLine(Color.FromRgb(34, 126, 173), 2.4);
-        var safetyLine = CreateChartLine(Color.FromRgb(232, 138, 35), 2.1, [5, 3]);
-        var obstacleLine = CreateChartLine(Color.FromRgb(196, 48, 48), 2.1, [2, 3]);
+            item.ObstacleBrakingDemandMeters)) * 1.12), "m");
+        DrawSpeedTimeAxisTicks(SafetyDistanceCanvas, area, minTime, maxTime);
+        var gapLine = ChartPainter.CreateSeries(ChartTheme.PrimarySeries, 2.4);
+        var safetyLine = ChartPainter.CreateSeries(ChartTheme.ThresholdSeries, 1.6, ChartTheme.LongDash);
+        var obstacleLine = ChartPainter.CreateSeries(ChartTheme.DangerSeries, 1.8, ChartTheme.ShortDot);
         foreach (var item in history)
         {
-            var x = left + (item.SimulationTimeSeconds - minTime) / (maxTime - minTime) * plotWidth;
+            var x = area.Left + (item.SimulationTimeSeconds - minTime) / (maxTime - minTime) * area.Width;
             gapLine.Points.Add(new Point(x, ToY(item.ActualGapMeters)));
             safetyLine.Points.Add(new Point(x, ToY(item.DynamicSafetyDistanceMeters)));
             obstacleLine.Points.Add(new Point(x, ToY(item.ObstacleBrakingDemandMeters)));
@@ -1822,17 +1825,37 @@ public partial class MainWindow
         SafetyDistanceCanvas.Children.Add(gapLine);
         SafetyDistanceCanvas.Children.Add(safetyLine);
         SafetyDistanceCanvas.Children.Add(obstacleLine);
-        AddCanvasText(SafetyDistanceCanvas, "— 實際淨距　- - 動態安全距離　··· 障礙物煞車需求", left + 7, top + 2, 10, Color.FromRgb(72, 82, 101));
-        var minimum = history.MinBy(item => item.SafetyMarginMeters)!;
-        AddCanvasText(
-            SafetyDistanceCanvas,
-            $"最低裕度 {minimum.SafetyMarginMeters:0.0} m @ {minimum.SimulationTimeSeconds:0.0} s",
-            left + 7,
-            top + 18,
-            10,
-            SafetyStatusColor(minimum.Status));
+        AddSafetyMarginChip(SafetyDistanceCanvas, history.MinBy(item => item.SafetyMarginMeters)!, area);
 
-        double ToY(double value) => top + plotHeight - Math.Clamp(value / maxDistance, 0, 1) * plotHeight;
+        double ToY(double value) => area.Bottom - Math.Clamp(value / maxDistance, 0, 1) * area.Height;
+    }
+
+    // 最低安全裕度色點標籤；顏色與閉塞表狀態色點相同（StatusTones）。
+    private static void AddSafetyMarginChip(Canvas canvas, SafetyObservation minimum, ChartPainter.ChartArea area)
+    {
+        var brush = SafetyStatusBrush(minimum.Status);
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = brush,
+            Margin = new Thickness(0, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        content.Children.Add(ChartPainter.CreateLabel(
+            $"最低裕度 {minimum.SafetyMarginMeters:0.0} m @ {minimum.SimulationTimeSeconds:0.0} s｜{SafetyStatusToChinese(minimum.Status)}",
+            brush, ChartTheme.LegendFontSize));
+        ChartPainter.Place(canvas, new Border
+        {
+            Child = content,
+            Background = UiTheme.SurfaceBrush,
+            BorderBrush = ChartTheme.Grid,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(9),
+            Padding = new Thickness(7, 2, 8, 2),
+            Tag = "SafetyMarginChip"
+        }, area.Left + 8, area.Top + 6);
     }
 
     // Kept as the export/reference renderer: interactive display caching must not change export precision.
@@ -2494,13 +2517,9 @@ public partial class MainWindow
         _ => "侵入安全距離"
     };
 
-    private static Color SafetyStatusColor(SafetyStatus status) => status switch
-    {
-        SafetyStatus.Safe => Color.FromRgb(22, 134, 107),
-        SafetyStatus.Caution => Color.FromRgb(218, 166, 35),
-        SafetyStatus.BrakingRequired => Color.FromRgb(232, 109, 45),
-        _ => Color.FromRgb(196, 48, 48)
-    };
+    // 安全狀態在距離圖、路線圖與閉塞表同色：依中文狀態文字查 StatusTones。
+    private static SolidColorBrush SafetyStatusBrush(SafetyStatus status) =>
+        StatusTones.Brush(StatusTones.Classify(SafetyStatusToChinese(status)));
 
     private static string EventTypeToChinese(SimulationEventType type) => type switch
     {
@@ -2529,13 +2548,6 @@ public partial class MainWindow
         SimulationEventType.OvertakeCancelled => "待避取消",
         SimulationEventType.ServiceEnded => "退出營運",
         _ => "其他事件"
-    };
-
-    private static Polyline CreateChartLine(Color color, double thickness, DoubleCollection? dash = null) => new()
-    {
-        Stroke = new SolidColorBrush(color),
-        StrokeThickness = thickness,
-        StrokeDashArray = dash
     };
 
     private static void DrawAxes(
