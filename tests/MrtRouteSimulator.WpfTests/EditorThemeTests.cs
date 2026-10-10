@@ -27,6 +27,8 @@ internal static class EditorThemeTests
         VerifyDialogs(root);
         VerifyMinimumSizeAndScale(root);
         VerifyStationPageFillsWorkspace(root);
+        VerifyWorkspaceReachable(root);
+        VerifyLongProjectName(root);
         VerifyEditorListsShowOptions(root);
         VerifyHintsAndSearchLabels(root);
         VerifyNoHardCodedEditorColors(root);
@@ -301,7 +303,7 @@ internal static class EditorThemeTests
                 PumpDispatcher(window.Dispatcher);
                 window.UpdateLayout();
                 var workspace = (ContentControl)Field(window, "workspace")!;
-                var header = (FrameworkElement)((StackPanel)workspace.Content).Children[0];
+                var header = (FrameworkElement)((StackPanel)((ScrollViewer)workspace.Content).Content).Children[0];
                 var body = (FrameworkElement)Named(window, "StationDetailScrollViewer").Parent;
                 var expected = workspace.ActualHeight - header.ActualHeight - header.Margin.Bottom - 40;
                 Require(body.ActualHeight >= expected,
@@ -318,6 +320,90 @@ internal static class EditorThemeTests
         }
         finally { window.Close(); }
         Console.WriteLine("[通過] 車站與月台頁填滿工作區且改變視窗大小後高度穩定");
+    }
+
+    // 回歸測試：980×640 與 125% 縮放下，每頁的按鈕、輸入框、下拉選單、表格與清單都看得到，或能捲動到。
+    private static void VerifyWorkspaceReachable(string root)
+    {
+        foreach (var scale in new[] { 1d, 1.25d })
+        {
+            var previous = ShellLayoutTests.SetInterfaceScale(scale);
+            var window = OpenEditor(root, "Project", 980, 640);
+            try
+            {
+                var workspace = (ContentControl)Field(window, "workspace")!;
+                foreach (var page in NavigationPages)
+                {
+                    Navigate(window, page);
+                    PumpDispatcher(window.Dispatcher);
+                    window.UpdateLayout();
+                    var controls = Descendants(workspace).OfType<Control>()
+                        .Where(control => control.TemplatedParent is null && control.IsVisible
+                                          && control is Button or TextBox or ComboBox or CheckBox or DataGrid or ListBox)
+                        .ToArray();
+                    foreach (var control in controls)
+                    {
+                        Rect Bounds() => control.TransformToAncestor(workspace).TransformBounds(new Rect(control.RenderSize));
+                        if (Bounds().Bottom <= workspace.ActualHeight + 0.5) continue;
+                        control.BringIntoView();
+                        window.UpdateLayout();
+                        var rect = Bounds();
+                        Require(rect.Top >= -0.5 && rect.Top < workspace.ActualHeight - 8,
+                            $"{scale:P0}、980×640 的「{page}」頁，「{(control as ContentControl)?.Content ?? AutomationProperties.GetName(control)}」（{control.GetType().Name}）在工作區下方且捲動不到。");
+                    }
+                }
+            }
+            finally
+            {
+                window.Close();
+                ShellLayoutTests.SetInterfaceScale(previous);
+            }
+        }
+        Console.WriteLine("[通過] 980×640 與 125% 縮放下各頁控制項都看得到或捲動得到");
+    }
+
+    // 回歸測試：專案名稱過長時以「…」截斷並提示全名；格式版本、頁名與草稿狀態完整顯示並緊接在名稱後。
+    private static void VerifyLongProjectName(string root)
+    {
+        var longName = string.Concat(Enumerable.Repeat("超長專案名稱示範", 12));
+        foreach (var (name, width) in new[] { (longName, 980d), ("短名", 1280d) })
+        {
+            var window = (Window)Activator.CreateInstance(EditorType, Sample(root) with { ProjectName = name }, Enum.Parse(PageType, "Stations"))!;
+            window.Width = width;
+            window.Height = 640;
+            ShowOffscreen(window);
+            try
+            {
+                Require(EditorType.GetField("workspaceSummaryDetail", BindingFlags.NonPublic | BindingFlags.Instance) is not null
+                        && ((TextBlock)Field(window, "workspaceSummary")!).Text == name,
+                    "頁首必須把專案名稱與格式版本、頁名、草稿狀態分開顯示。");
+                var title = (TextBlock)Field(window, "workspaceSummary")!;
+                var detail = (TextBlock)Field(window, "workspaceSummaryDetail")!;
+                var header = Named(window, "EditorHeader");
+                Rect Bounds(FrameworkElement element) => element.TransformToAncestor(header).TransformBounds(new Rect(element.RenderSize));
+                var titleRect = Bounds(title);
+                var detailRect = Bounds(detail);
+                var searchRect = Bounds((FrameworkElement)Field(window, "workspaceSearch")!);
+                Require(title.TextTrimming == TextTrimming.CharacterEllipsis && Equals(title.ToolTip, name),
+                    "頁首專案名稱過長時必須以「…」截斷，並以工具提示顯示全名。");
+                Require(detail.Text.Contains("格式版本") && detail.Text.Contains("車站與月台") && detail.Text.Contains("草稿未套用")
+                        && detail.ActualWidth >= NaturalWidth(detail) - 0.5 && detailRect.Right <= searchRect.Left + 0.5,
+                    $"「{name[..2]}…」：頁首的格式版本、頁名與草稿狀態必須完整顯示。");
+                Require(detailRect.Left >= titleRect.Right - 0.5 && detailRect.Left - titleRect.Right < 2,
+                    $"「{name[..2]}…」：格式版本等資訊必須緊接在專案名稱後面。");
+                if (name == longName)
+                    Require(title.ActualWidth < NaturalWidth(title) - 1, "長專案名稱必須被截斷而不是撐開頁首。");
+            }
+            finally { window.Close(); }
+        }
+        Console.WriteLine("[通過] 頁首長專案名稱以「…」截斷並提示全名，其餘資訊完整顯示");
+    }
+
+    private static double NaturalWidth(TextBlock text)
+    {
+        var probe = new TextBlock { Text = text.Text, FontFamily = text.FontFamily, FontSize = text.FontSize, FontWeight = text.FontWeight };
+        probe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        return probe.DesiredSize.Width;
     }
 
     // 回歸測試：多選參照清單在 5 個以內的選項不需捲動就看得到每一項及選取底色；作業清單至少看得到 4 列。

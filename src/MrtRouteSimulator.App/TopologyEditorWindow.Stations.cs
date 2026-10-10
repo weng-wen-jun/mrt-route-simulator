@@ -111,26 +111,8 @@ internal sealed partial class TopologyEditorWindow
         Grid.SetColumn(scroll, 1);
         root.Children.Add(scroll);
         panel.Children.Add(root);
-        workspace.Content = panel;
-
-        // NewPage uses a StackPanel, so its child would otherwise be measured
-        // with unlimited height. Give the station list and detail scroll the
-        // remaining workspace height, including after a narrow-window resize.
-        void SizeStationPage()
-        {
-            // panel.Children[0] is NewPage's header (title + description);
-            // root is the next child and must not count toward the header.
-            var header = (FrameworkElement)panel.Children[0];
-            var headerHeight = header.ActualHeight + header.Margin.Top + header.Margin.Bottom;
-            // Reserve room for the list's margin and the page's lower inset;
-            // DockPanel's fill child can otherwise push the bottom actions
-            // slightly past the visible workspace at both tested sizes.
-            root.Height = Math.Max(220, workspace.ActualHeight - headerHeight - 24);
-        }
-        SizeChangedEventHandler resize = (_, _) => SizeStationPage();
-        workspace.SizeChanged += resize;
-        root.Loaded += (_, _) => SizeStationPage();
-        root.Unloaded += (_, _) => workspace.SizeChanged -= resize;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, root);
 
         // A newly constructed ListBox can adopt its collection view's current
         // item before SelectionChanged is attached. Rebuild the detail explicitly
@@ -189,7 +171,7 @@ internal sealed partial class TopologyEditorWindow
         CommitTableDrafts();
 
         var panel = NewPage("軌道與設施", "軌道區段、設施與區段內資料維持 topology-native 權威。接軌側 A/B 只顯示既有值；本頁不從示意座標猜測 port-side。");
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "TracksPageScrollViewer", MinHeight = 420, MaxHeight = 500 };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "TracksPageScrollViewer" };
         AutomationProperties.SetName(scroll, "軌道與設施捲動區");
         var content = new StackPanel();
         content.Children.Add(TrackPageGroup("軌道區段", "edge 的端點、長度、方向、種類、速限、接軌側與衝突資源。", NamedEditorTabContent("TrackEdgeGrid", "軌道區段編輯表", ProjectValidationTargetKind.Edge, "軌道區段", infrastructure.Edges, AddEdge, DeleteSelectedEdge)));
@@ -204,7 +186,8 @@ internal sealed partial class TopologyEditorWindow
 
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, scroll);
     }
 
     /// <summary>保留低頻與完整 Schema 8 欄位的入口，避免一般頁面整理時遺漏資料。</summary>
@@ -214,7 +197,7 @@ internal sealed partial class TopologyEditorWindow
 
         var panel = NewPage("進階資料", "低頻 topology 欄位集中於此；每張表仍編輯既有 draft VM。節點、連接與示意位置不代表可由 UI 推導的實體接軌側。");
         var content = new StackPanel();
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "AdvancedDataPageScrollViewer", MinHeight = 420, MaxHeight = 500 };
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Name = "AdvancedDataPageScrollViewer" };
         AutomationProperties.SetName(scroll, "進階資料捲動區");
 
         content.Children.Add(TrackPageGroup("節點", "節點種類與示意位置／lane；不從示意位置推導 port-side。", NamedEditorTabContent("AdvancedNodeGrid", "節點進階資料表", ProjectValidationTargetKind.Node, "軌道節點", infrastructure.Nodes, AddNode, DeleteSelectedNode)));
@@ -241,7 +224,8 @@ internal sealed partial class TopologyEditorWindow
         content.Children.Add(schematicBox);
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
+        FitPageBodyToWorkspace(panel, scroll);
     }
 
     private static TextBlock SectionHeading(string title, string description) => new()

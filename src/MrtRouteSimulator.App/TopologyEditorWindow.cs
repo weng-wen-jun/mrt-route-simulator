@@ -68,6 +68,7 @@ internal sealed partial class TopologyEditorWindow : Window
     private Button? rightPanelToggle;
     private bool? rightPanelManuallyExpanded;
     private readonly TextBlock workspaceSummary = new();
+    private readonly TextBlock workspaceSummaryDetail = new();
     private readonly TextBlock validationSummary = new();
     private readonly Ellipse validationSummaryDot = EditorChrome.StatusDot(UiTheme.TextSubtleBrush);
     private readonly TextBox workspaceSearch = new();
@@ -120,10 +121,20 @@ internal sealed partial class TopologyEditorWindow : Window
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        // A left-aligned grid with a star name column and an auto detail column:
+        // a long project name trims with an ellipsis while the schema, page and
+        // draft state stay whole and follow the name directly.
+        var title = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         workspaceSummary.Text = "專案工作區";
         workspaceSummary.Style = EditorChrome.StyleOf("ResultPageTitle");
-        workspaceSummary.VerticalAlignment = VerticalAlignment.Center;
-        header.Children.Add(workspaceSummary);
+        workspaceSummary.TextTrimming = TextTrimming.CharacterEllipsis;
+        title.Children.Add(workspaceSummary);
+        workspaceSummaryDetail.Style = EditorChrome.StyleOf("ResultPageTitle");
+        Grid.SetColumn(workspaceSummaryDetail, 1);
+        title.Children.Add(workspaceSummaryDetail);
+        header.Children.Add(title);
         EditorChrome.SearchBox("搜尋頁面", workspaceSearch);
         workspaceSearch.Width = 220;
         workspaceSearch.Margin = new Thickness(8, 0, 0, 0);
@@ -341,7 +352,7 @@ internal sealed partial class TopologyEditorWindow : Window
         });
         panel.Children.Add(CreateButton("快速建立／重新起稿…", (_, _) => Navigate(ProjectWorkspacePage.QuickBuilder), true));
         panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), true));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
         RefreshValidation();
     }
 
@@ -385,7 +396,7 @@ internal sealed partial class TopologyEditorWindow : Window
         {
             RunEdit(() => StationLayoutTemplateService.Build(Enum.GetValues<StationLayoutTemplateKind>()[stationKind.SelectedIndex]));
         }, false));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowInfrastructure()
@@ -409,7 +420,7 @@ internal sealed partial class TopologyEditorWindow : Window
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Station, "車站作業", stationOperations, AddStationOperation, DeleteSelectedStationOperation));
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Edge, "有向接續", directedConnections, AddDirectedConnection, DeleteSelectedDirectedConnection));
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowOperations()
@@ -426,7 +437,7 @@ internal sealed partial class TopologyEditorWindow : Window
         tabs.Items.Add(stopPatternTab);
         if (stopPatternGrid is not null) RegisterValidationTarget(ProjectValidationTargetKind.StopPattern, new ValidationEditorTarget(stopPatternGrid, [stopPatternTab]));
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private UIElement BuildServiceRouteEditor()
@@ -514,7 +525,7 @@ internal sealed partial class TopologyEditorWindow : Window
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.ManualTimetable, "手動班表", dispatch.ManualRows, AddManualTimetableRow, EditSelectedManualRow, DeleteSelectedManualRow));
         tabs.Items.Add(new TabItem { Header = "展開預覽", Content = CreateGrid(dispatch.Runs, true) });
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void EditDispatchModes()
@@ -549,7 +560,7 @@ internal sealed partial class TopologyEditorWindow : Window
         panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), true));
         panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), true));
         panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), true));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void EditTrainSettings()
@@ -689,7 +700,7 @@ internal sealed partial class TopologyEditorWindow : Window
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         panel.Children.Add(CreateButton("自動排版", (_, _) => DrawSchematic(canvas), true));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowResults()
@@ -701,7 +712,7 @@ internal sealed partial class TopologyEditorWindow : Window
             ("已設定發車班次", CalculateDispatchRunCount(state.Draft).ToString(CultureInfo.InvariantCulture)),
             ("執行前驗證", ProjectEditorValidationService.Validate(state.Draft).Any(item => item.Severity == ProjectValidationSeverity.Error) ? "有錯誤" : "通過"),
             ("列車位置權威", "軌道區段編號＋偏移量")));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowValidation()
@@ -712,7 +723,7 @@ internal sealed partial class TopologyEditorWindow : Window
         EditorChrome.UseValidationTemplate(list);
         AttachValidationActivation(list);
         panel.Children.Add(list);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
         RefreshValidation();
     }
 
@@ -921,9 +932,11 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private void UpdateWorkspaceSummary()
     {
-        if (workspaceSummary is null) return;
+        if (workspaceSummary is null || workspaceSummaryDetail is null) return;
         var document = state.Draft;
-        workspaceSummary.Text = $"{document.ProjectName}  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
+        workspaceSummary.Text = document.ProjectName;
+        workspaceSummary.ToolTip = document.ProjectName;
+        workspaceSummaryDetail.Text = $"  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
     }
 
     private void ToggleRightPanel()
@@ -1053,6 +1066,49 @@ internal sealed partial class TopologyEditorWindow : Window
         var panel = new StackPanel();
         panel.Children.Add(EditorChrome.PageHeader(title, description));
         return panel;
+    }
+
+    // Pages without their own whole-page scrolling get a vertical scroller,
+    // so content below the workspace stays reachable at 980x640 or 125%.
+    private void ShowWorkspacePage(UIElement page)
+    {
+        if (page is ScrollViewer)
+        {
+            workspace.Content = page;
+            return;
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = page,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false
+        };
+        AutomationProperties.SetName(scroll, "工作區整頁捲動區");
+        workspace.Content = scroll;
+    }
+
+    // NewPage is a StackPanel, so its body would otherwise be measured with
+    // unlimited height. Give the body the workspace height left below the
+    // page header (at least minHeight), including after a resize.
+    private void FitPageBodyToWorkspace(StackPanel page, FrameworkElement body, double minHeight = 220)
+    {
+        void Fit()
+        {
+            // page.Children[0] is NewPage's header (title + description).
+            var header = (FrameworkElement)page.Children[0];
+            var headerHeight = header.ActualHeight + header.Margin.Top + header.Margin.Bottom;
+            // Reserve room for the list's margin and the page's lower inset;
+            // DockPanel's fill child can otherwise push the bottom actions
+            // slightly past the visible workspace.
+            body.Height = Math.Max(minHeight, workspace.ActualHeight - headerHeight - 24);
+        }
+
+        SizeChangedEventHandler resize = (_, _) => Fit();
+        workspace.SizeChanged += resize;
+        body.Loaded += (_, _) => Fit();
+        body.Unloaded += (_, _) => workspace.SizeChanged -= resize;
     }
 
     private DataGrid CreateGrid(System.Collections.IEnumerable items, bool readOnly = false)

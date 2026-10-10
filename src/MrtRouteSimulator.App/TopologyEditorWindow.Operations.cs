@@ -105,7 +105,7 @@ internal sealed partial class TopologyEditorWindow
         if (grid.Items.Count > 0) grid.SelectedIndex = 0;
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = WrapOperationsPage(panel);
+        ShowWorkspacePage(WrapOperationsPage(panel));
         RegisterPageCommitHook("operations.vehicle", CommitOperationsPageHook);
     }
 
@@ -171,7 +171,7 @@ internal sealed partial class TopologyEditorWindow
         content.Children.Add(tabs);
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = WrapOperationsPage(panel);
+        ShowWorkspacePage(WrapOperationsPage(panel));
         RegisterPageCommitHook("operations.services", CommitOperationsPageHook);
 
         void ShowServiceReferences(ServiceTypeEditorViewModel row)
@@ -305,7 +305,7 @@ internal sealed partial class TopologyEditorWindow
 
         RefreshStopPatternMatrix();
         if (patternSelector.Items.Count > 0) patternSelector.SelectedIndex = 0;
-        workspace.Content = WrapOperationsPage(panel);
+        ShowWorkspacePage(WrapOperationsPage(panel));
         RegisterPageCommitHook("operations.stop-patterns", CommitOperationsPageHook);
     }
 
@@ -361,7 +361,7 @@ internal sealed partial class TopologyEditorWindow
         content.Children.Add(tabs);
         scroll.Content = content;
         panel.Children.Add(scroll);
-        workspace.Content = WrapOperationsPage(panel);
+        ShowWorkspacePage(WrapOperationsPage(panel));
         RegisterPageCommitHook("operations.dispatch", CommitOperationsPageHook);
         if (dispatchManualGrid.Items.Count > 0) dispatchManualGrid.SelectedIndex = 0;
     }

@@ -102,12 +102,7 @@ internal sealed partial class TopologyEditorWindow
         });
 
         RegisterPageCommitHook("simulation-settings", CommitSimulationSettingsForm);
-        workspace.Content = new ScrollViewer
-        {
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = panel
-        };
+        ShowWorkspacePage(panel);
     }
 
     private Grid CreateSettingsGrid()
