@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue)
 ![.NET 10](https://img.shields.io/badge/.NET-10-purple)
+[![Release: v4.1.0](https://img.shields.io/badge/Release-v4.1.0-orange)](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0)
 
 MRT Route Simulator is an offline Windows desktop application for conceptual metro and railway operations simulation. It is intended for planning exploration, operations analysis, education, prototyping, and conceptual engineering studies. The interface and detailed technical documentation are primarily in Traditional Chinese.
 
@@ -23,19 +24,42 @@ The project explores an open and inspectable approach to metro operations simula
 - Acceleration, braking, and jerk modeling with fixed simulation substeps.
 - Time-distance diagrams and CSV / PNG / PDF export.
 - Versioned project files, sample scenarios, automated regression runners, and QA records.
-- Local MCP automation in the unreleased V4.1.0 source; see [MCP documentation](docs/MCP.md).
+- Local MCP automation via 15 stdio tools and an opt-in Windows desktop bridge.
+- A shared visual theme across the main window, track diagram, result pages, charts, and topology editor.
+- Track-section occupancy lights, persistent display settings, and layouts that support smaller windows.
 
 ## Quick Start
 
-Requirements: Windows and the Microsoft .NET 10 Desktop Runtime. Building from source additionally requires the .NET 10 SDK.
+The latest release is [v4.1.0](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0), published on 2026-10-11. The Windows x64 ZIP includes the .NET 10 runtime, the desktop application, MCP host, 14 Schema 8 samples, and third-party license notices. No separate runtime installation is required for this package. Building from source requires Windows and the .NET 10 SDK.
 
-1. Download and extract the Windows ZIP from [Releases](https://github.com/weng-wen-jun/mrt-route-simulator/releases/latest).
-2. Run `MRT路線進出站時間模擬器.exe`.
+1. Download [MRT-route-simulator-V4.1.0-windows.zip](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/MRT-route-simulator-V4.1.0-windows.zip) and extract the entire archive.
+2. Double-click `啟動模擬器.cmd`, or run `output/bin/MrtRouteSimulator.App/release/MRT路線進出站時間模擬器.exe` inside the extracted folder. Keep the directory structure intact.
 3. Start with the built-in six-station scenario, or use **檔案 → 讀取存檔** (File → Load) to open an included sample.
-4. Select **計算並建立模擬 / 建立模擬** (Build simulation), then **播放** (Play).
-5. Inspect the result tabs and export from **列車運行圖／匯出** (Time-distance diagram / Export).
+4. Select **計算並建立模擬 / 建立模擬** (Build simulation), then **播放** (Play) in the title bar.
+5. Use the left navigation to inspect result pages and export CSV / PNG / PDF.
 
-As checked on 2026-10-08, the latest published package is `MRT-route-simulator-V4.0.3-windows.zip`. This checkout is V4.1.0, not yet released; build it from source for the newer UI and MCP work. For current source samples, start with [the three-station baseline](samples/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md).
+Start with [the three-station baseline](samples/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md). The release provides [SHA256SUMS.txt](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/SHA256SUMS.txt); the ZIP SHA-256 is:
+
+```text
+eca66559f66da1b1cfdbaf310c5e1fff1f5b5fee56b10aef1e77d40cc174c924
+```
+
+## What's new in v4.1.0
+
+- **Main window:** left navigation, playback controls available on every page, a compact KPI strip, and an on-demand quick-start drawer.
+- **Track diagram:** blue/orange directional tracks, train labels with direction arrows, white platforms and station badges, plus optional track-section occupancy lights.
+- **Results and charts:** shared page layouts, aligned numeric columns, status indicators, consistent vehicle colors, axis ticks, and PDF legends on each page.
+- **Topology editor:** shared visual styles, scrollable content in smaller windows and at 125% interface scale, and ellipsis/tooltips for long project names.
+- **Fixes:** overlapping rows in the legacy track-port migration dialog and PDF export after switching between large and small projects via MCP.
+- **Automation:** local MCP project editing, validation, simulation, events, timetables, and exports, with an opt-in same-user named-pipe desktop bridge.
+
+Schema 8, valid legacy Schema 7 import, and the topology-native runtime contract remain unchanged. See [the release notes](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0) and [CHANGELOG.md](CHANGELOG.md) for details.
+
+## MCP from the release package
+
+Configure your MCP client with the full path to `output/bin/MrtRouteSimulator.Mcp/release/MrtRouteSimulator.Mcp.exe` and arguments `--workspace-root` followed by the full extracted-folder path. The host communicates over stdio; `desktop_launch` opens a new bridge-enabled application window. Normal desktop startup leaves the bridge disabled.
+
+MCP operations run locally without an external network connection. The desktop bridge trusts processes running as the same Windows user and has no TCP listener. See [MCP documentation](docs/MCP.md) for tools, commands, and limits; its source-build paths differ from the release-package paths above.
 
 ## Build from source
 
@@ -65,28 +89,26 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 ## 中文操作與技術說明
 
-> V4.1.0 為本機未發布版本；本輪 OSS 整理不修改模擬行為。外部參考檔保留於本機與獨立備份，不納入後續公開原始碼。來源遷移歷史見[遷移紀錄](docs/V410_CANONICAL_MIGRATION_20261008.md)，本輪公開範圍與申請前評估見[OSS 整理報告](docs/OSS_READINESS_20261008.md)。
+> [v4.1.0 已於 2026-10-11 正式發布](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0)，包含全面介面翻新、區段占用亮燈與本機 MCP。Windows x64 下載包內含 .NET runtime，可直接解壓縮使用。
 
-> V4.1.0（2026-10-07，尚未發布）新增本機 MCP：可直接載入、修改與驗證專案、推進模擬、查詢結果，並透過 opt-in 桌面橋接控制播放、切頁、縮放及匯出。使用與驗證方式見 [MCP 文件](docs/MCP.md)。
+這是一套離線 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`；Route 僅保留給 V1 解析模型與表單一次性起稿。
 
-> V4.0.3（2026-09-28）V2 寫實模擬使用 track-first topology runtime；Route 僅保留給 V1 解析模型與表單一次性起稿。
+2026-10-11 發布驗證：Release build `0 warnings / 0 errors`、完整 Engine runner `198/198`，完整 WPF runner 通過介面規則、14 個範例載入、工作區往返、播放與 CSV／PNG／PDF。MCP stdio 的 15 個工具及三輪並行推進／重設通過；最終 ZIP 解壓後也通過 MCP 桌面啟動、載入、切頁、縮放、播放／暫停、重設與匯出，重新下載的附件 SHA-256 與本機封裝一致。這些結果不代表原生 DPI、實體滑鼠／滾輪、長期記憶體或完整即時互動效能已重新驗收。
 
-這是一套完全離線的 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`。
-
-2026-09-28 Release build 為 `0 warnings / 0 errors`、Engine runner `185/185 tests`，完整 WPF runner 通過 14 個範例載入、大型工作區編輯往返、播放與 CSV／PNG／PDF 輸出。大型 full sample 在 60× 觀測約 59.0×、輸入最大間隔 41.7 ms 是 2026-09-25 V4.0.2 整合版的定向診斷數值，V4.0.3 尚未重跑這項診斷。原生桌面不同 DPI、8,000 秒連續播放，以及 O04／O13 越行與 O20 袋狀軌換端的關鍵畫面仍待人工驗收；離屏 WPF 診斷不等同桌面驗收。站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，範例修正見 [範例檢查表](samples/範例檢查表.md)，現行待辦見 [TODO.md](TODO.md)。
+站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，案例資料界線見 [samples/README.md](samples/README.md)，現行待辦見 [TODO.md](TODO.md)。詳細歷史驗收見 [QA_REPORT.md](QA_REPORT.md)；文件中發布前的紀錄仍保留當時狀態，本次發布結果以 [v4.1.0 Release](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0) 為準。
 
 路線圖以起始站月台中心為0K，外側尾軌為負里程，終點外側接續終點中心里程。七種PDF站型的停點採車體中心定位，換端保持整列車占用不動；即時列車位置顯示「車體中心 km」。舊專案未指定停點基準時保留車頭定位，相容進路距離統計仍使用原本的進路投影。
 
 ## 直接使用
 
-1. 開啟 V4.1.0 桌面程式或自行建置 Release 版本。
-2. 雙擊 `MRT路線進出站時間模擬器.exe`。
+1. 下載 [v4.1.0 Windows x64 ZIP](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/MRT-route-simulator-V4.1.0-windows.zip)，完整解壓縮並保留目錄結構。
+2. 雙擊 `啟動模擬器.cmd`，或直接開啟解壓縮目錄下的 `output/bin/MrtRouteSimulator.App/release/MRT路線進出站時間模擬器.exe`。
 3. 第一次可直接使用六站示範資料，按「計算並建立模擬」。
 4. 從「檔案 → 讀取存檔」載入 [`samples/10-小型-三站完整拓樸基準範例.mrtsim.json`](samples/10-小型-三站完整拓樸基準範例.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇合成路線、七種站場、折返或越行情境；所有範例均為 Schema 8。
 5. 以標題列右側的播放控制播放、暫停或重設（任何分頁都可操作）；左側導覽列可切換到時刻表、區間物理、移動閉塞與列車運行圖等結果頁。
 6. Schema 8 topology 專案使用「檔案 → 存檔」保存可編輯設定，並從結果頁匯出 CSV／PNG／PDF。「檔案 → 匯出完成後固定時刻表」只保留給 legacy Schema 7 相容動態模擬；讀入的 Schema 7 專案會先轉成 Schema 8，因此轉換後此選項停用。
 
-本機需要 Microsoft .NET 10 Desktop Runtime。桌面模擬不需要帳號、資料庫或執行時網路連線。新增 MCP Host 使用官方 MCP C# SDK 與 .NET Hosting 套件，首次還原需連線至 nuget.org；正常 MCP 操作透過本機 stdio／named pipe。
+v4.1.0 自攜式下載包已附 .NET 10 runtime，不必另行安裝；從原始碼建置則需要 .NET 10 SDK。桌面模擬不需要帳號、資料庫或執行時網路連線。MCP Host 使用官方 MCP C# SDK 與 .NET Hosting 套件，原始碼首次還原需連線至 nuget.org；正常 MCP 操作透過本機 stdio／named pipe。下載包的第三方授權與聲明位於 `third-party-licenses/`。
 
 ## 介面縮放（本機軟體設定）
 
@@ -96,6 +118,12 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 預設開啟尺寸依所在螢幕可用工作區的90%置中，不採固定1440 × 900；依該螢幕的Windows DPI換算，工作區小於最低尺寸時仍以工作區為上限。短視窗可用最外層上下捲軸，讓產品標題及路線摘要隨整頁捲走。Route有水平溢位時，左右捲軸以頂層浮層貼齊路線圖下緣；下緣超出視窗時固定在可見區底部，不必先將上下捲到底。整張路線圖離開視窗或切到其他頁時才隱藏。
 
+## 區段占用亮燈與新版配線圖
+
+「顯示設定 → 顯示區段占用亮燈」預設開啟，會記住本機偏好。黃色光帶標示列車占用的整條軌道區段，資料來自 Engine footprint；它是區段占用提示，不代表整段軌道都被車體填滿，也不新增安全或聯鎖計算。
+
+配線圖以上行藍、下行橘區分方向，列車標記顯示車號與車頭箭頭；同一實體車輛在配線圖、運行圖與速度曲線維持相同顏色。拓樸編輯器與結果分頁共用色票及控制項樣式，小視窗可透過各頁捲軸查看完整內容。
+
 ## 指定車次待避
 
 在主畫面選「營運設定 → 停站模式」，選取停站模式後，於車站指令的「待避指定車次」欄填入快速車的**車次編號**（`ServiceRunId`），例如 `EXPRESS-DOWN-01`。這是單一班次的編號，不是服務類型或列車實體編號。若使用主畫面的快速輸入表單，同名欄位也可輸入，並會與專案工作區及存檔同步。
@@ -104,7 +132,7 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 大型 28 站範例的 O04／O13 已示範此設定，最低停站時間為 20 秒。可在「檔案 → 讀取存檔」載入範例，再開啟「營運設定 → 停站模式」查看或修改。
 
-## V4.0.3 Track-first topology
+## V4.1.0 Track-first topology
 
 - `InfrastructureGraphV4` 的 physical truth 是 `TrackNode`、`TrackEdge`、edge-local `TrackPosition` 與附著其上的 `PlatformDefinitionV4`；車站不再是此新 topology 的實體端點。
 - `LinearInfrastructureBuilder` 會把線性三站 A—B—C 建成 A→B、B→C 與 C→B、B→A 四條獨立 edge，而非兩條全線 edge；快速表單轉 Schema 8 時會補齊兩端實體尾軌與折返資源。
@@ -114,7 +142,7 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 - 大型 Schema 8 工作區提供車站、軌道、營運、模擬與設施作業編輯入口；大型 sample 的派車、站務、有向接續及偏好月台設定可往返保存，取消草稿不會取代目前專案。
 - `DirectedTrackConnectionDefinition` 可在 switch／crossing node 明確限制「哪一個進入 traversal 可以接哪一個離開 traversal」；path finder、service route validator 與 runtime movement 共用同一限制，未宣告限制的普通節點仍依 edge 接續。
 - 折返停點使用 edge-local `TrackPosition`；若停在 edge 中段，返回 traversal 必須由相同實體位置立即反向開始，runtime 不會用 virtual position 或 teleport 補接。
-- 主畫面與 topology editor 的線路示意採鐵路配線圖風格：上下行維持固定間距，只有實際 `DirectedTrackConnection` 才畫轉向線；月台依 edge-local 起訖 offset 顯示為長色帶，尾軌沿抵達方向的主線股道直線延伸，並在 `BufferStop` 節點畫止衝。edge ID 改由 tooltip 查閱，不再壓在線路圖上。
+- 主畫面與 topology editor 的線路示意採鐵路配線圖風格：上下行維持固定間距，只有實際 `DirectedTrackConnection` 才畫轉向線；月台依 edge-local 起訖 offset 顯示為白色長條，搭配方向色編號圓點，尾軌沿抵達方向的主線股道直線延伸，並在 `BufferStop` 節點畫止衝。edge ID 改由 tooltip 查閱，不再壓在線路圖上。
 - 正常主線的 station/platform stop 會先解析成 `ResolvedStop`（edge-local stop position、traversal index 與 chainage），進站煞車與到站吸附直接使用它。
 - `TrackSpeedLimitService` 使用 `TrackSpeedLimitDefinition` 的 edge-local interval。
 - 列車進入較低速的尾軌、袋狀軌或越行進路前，會沿實體 movement plan 預視前方軌道速限，依減速度與 jerk 提前煞車；速度不會在軌道交界直接截斷。
@@ -125,7 +153,7 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 ## 驗收與限制
 
-Engine 自動化與完整 WPF runner 已完成；大型 full sample 的 60× 定向 playback 數值屬 V4.0.2 整合版紀錄，V4.0.3 尚待重測。原生桌面不同 DPI、8,000 秒連續播放及 O04／O13／O20 關鍵畫面仍待人工驗收。詳見 [TODO.md](TODO.md) 與 [CHANGELOG.md](CHANGELOG.md)。本程式是營運與號誌概念模擬器，不是可部署的鐵路安全系統。
+v4.1.0 的完整 Engine、WPF、MCP stdio 與封裝桌面黑箱驗證已通過。本次發布未重跑原生 Windows DPI、實體滑鼠／滾輪手感、長期記憶體及完整即時互動效能矩陣；歷史大型路線播放量測不得直接視為本版效能保證。時間－里程圖最上方列車標籤仍可能與圖例重疊，窄視窗的部分內容須捲動。既有驗收紀錄與剩餘項目見 [QA_REPORT.md](QA_REPORT.md) 及 [TODO.md](TODO.md)。
 
 ## V3.4.2 進站精停修正
 
@@ -228,7 +256,7 @@ Engine 自動化與完整 WPF runner 已完成；大型 full sample 的 60× 定
 
 ## 軟體版本控制
 
-- 目前來源版本為 `V4.1.0`（尚未發布），唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`；正式發布版以 GitHub Releases 為準。
+- 目前來源版本為 `V4.1.0`；正式版 [v4.1.0](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0) 已於 2026-10-11 發布。唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`。
 - 建置時會同步套用到組件、檔案、資訊版本、主視窗標題及測試標題。
 - Bug 修正增加修訂版本；新功能或其他變更增加次版本並把修訂版本歸零；未經使用者明確要求不得升主版本。
 - 完整規則見 `VERSIONING.md`，各版內容見 `CHANGELOG.md`。Git commit、tag 與 GitHub 推送只在使用者明確要求發布時執行。
@@ -255,9 +283,9 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 
 ## 使用與安全界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.0.3 仍支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.1.0 支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
 
-目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.0.3 已完成範圍內，也不宣稱全線自動超車排程或全域營運最佳化。服務類型與車型維持分離目錄。
+目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.1.0 已完成範圍內，也不宣稱全線自動超車排程或全域營運最佳化。服務類型與車型維持分離目錄。
 
 大型機場線（28 站大型範例）為抽象規劃，站碼與站心里程用於示範及回歸對照，並非實際線路里程。月台、車輛性能、停站時間、設施幾何、速限與派車均為示範假設，正式坡度與曲線資料尚未建模。未來若取得政府公開且可信的資料，將在確認使用條件後，註明來源、資料日期與更新範圍再逐步更新；目前不代表正式路線、工程設計或時刻表。
 
