@@ -48,14 +48,7 @@ public partial class MainWindow
                 point.CrossoverLengthMeters / Math.Max(1, _route.TotalLengthMeters) * trackWidth,
                 24,
                 72);
-            var color = point.Kind switch
-            {
-                "中間站" => Color.FromRgb(47, 107, 86),
-                "銜接點" => Color.FromRgb(52, 125, 101),
-                "中央避車線折返" => Color.FromRgb(121, 86, 173),
-                "站後折返" => Color.FromRgb(188, 92, 52),
-                _ => Color.FromRgb(42, 111, 162)
-            };
+            var color = SpatialReferencePointColor(point.Kind);
             var tooltip = BuildSpatialReferencePointToolTip(point);
 
             if (point.Kind == "站後折返" && explicitTailTrackStations.Contains(point.StationId))
@@ -71,7 +64,7 @@ public partial class MainWindow
                     {
                         Width = 14,
                         Height = 14,
-                        Fill = Brushes.White,
+                        Fill = UiTheme.SurfaceBrush,
                         Stroke = new SolidColorBrush(color),
                         StrokeThickness = 3,
                         ToolTip = tooltip
@@ -248,6 +241,16 @@ public partial class MainWindow
         return result;
     }
 
+    // 五類空間參考點的幾何顏色；與運行圖、配線圖共用主題色票。
+    private static Color SpatialReferencePointColor(string kind) => kind switch
+    {
+        "中間站" => UiTheme.Success,
+        "銜接點" => UiTheme.RailNeutralStrong,
+        "中央避車線折返" => UiTheme.VehiclePalette[0],
+        "站後折返" => UiTheme.RailDown,
+        _ => UiTheme.Accent
+    };
+
     private void DrawAfterStationTailTrackGeometry(
         IReadOnlyList<AfterStationTailTrackVisualLayout> tailTrackLayouts,
         double left,
@@ -257,7 +260,7 @@ public partial class MainWindow
         double canvasWidth,
         double canvasHeight)
     {
-        var color = Color.FromRgb(188, 92, 52);
+        var color = UiTheme.RailDown;
         var middleY = (outboundY + inboundY) / 2;
         foreach (var tailTrack in tailTrackLayouts)
         {
@@ -272,7 +275,7 @@ public partial class MainWindow
             {
                 Width = 16,
                 Height = 16,
-                Fill = Brushes.White,
+                Fill = UiTheme.SurfaceBrush,
                 Stroke = new SolidColorBrush(color),
                 StrokeThickness = 3,
                 ToolTip = tooltip

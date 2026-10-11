@@ -68,7 +68,9 @@ internal sealed partial class TopologyEditorWindow : Window
     private Button? rightPanelToggle;
     private bool? rightPanelManuallyExpanded;
     private readonly TextBlock workspaceSummary = new();
+    private readonly TextBlock workspaceSummaryDetail = new();
     private readonly TextBlock validationSummary = new();
+    private readonly Ellipse validationSummaryDot = EditorChrome.StatusDot(UiTheme.TextSubtleBrush);
     private readonly TextBox workspaceSearch = new();
     private DataGrid? routeGrid;
     private DataGrid? traversalGrid;
@@ -98,6 +100,7 @@ internal sealed partial class TopologyEditorWindow : Window
         MinWidth = 980;
         MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        EditorChrome.ApplyWindowChrome(this);
         Content = BuildShell();
         SizeChanged += (_, _) => UpdateRightPanelForWidth();
     }
@@ -106,7 +109,7 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private UIElement BuildShell()
     {
-        var root = new Grid { Background = Brushes.White };
+        var root = new Grid();
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -114,17 +117,26 @@ internal sealed partial class TopologyEditorWindow : Window
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.ColumnDefinitions.Add(rightPanelColumn);
 
-        var header = new Grid { Margin = new Thickness(14, 10, 14, 4) };
+        var header = new Grid { Name = "EditorHeader", Margin = new Thickness(14, 10, 14, 4) };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(230) });
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(70) });
+        // A left-aligned grid with a star name column and an auto detail column:
+        // a long project name trims with an ellipsis while the schema, page and
+        // draft state stay whole and follow the name directly.
+        var title = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        title.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         workspaceSummary.Text = "專案工作區";
-        workspaceSummary.FontSize = 16;
-        workspaceSummary.FontWeight = FontWeights.SemiBold;
-        workspaceSummary.VerticalAlignment = VerticalAlignment.Center;
-        header.Children.Add(workspaceSummary);
+        workspaceSummary.Style = EditorChrome.StyleOf("ResultPageTitle");
+        workspaceSummary.TextTrimming = TextTrimming.CharacterEllipsis;
+        title.Children.Add(workspaceSummary);
+        workspaceSummaryDetail.Style = EditorChrome.StyleOf("ResultPageTitle");
+        Grid.SetColumn(workspaceSummaryDetail, 1);
+        title.Children.Add(workspaceSummaryDetail);
+        header.Children.Add(title);
+        EditorChrome.SearchBox("搜尋頁面", workspaceSearch);
         workspaceSearch.Width = 220;
-        workspaceSearch.Height = 28;
         workspaceSearch.Margin = new Thickness(8, 0, 0, 0);
         workspaceSearch.VerticalContentAlignment = VerticalAlignment.Center;
         workspaceSearch.ToolTip = "搜尋工作區頁面";
@@ -141,6 +153,7 @@ internal sealed partial class TopologyEditorWindow : Window
         Grid.SetColumn(workspaceSearch, 1);
         header.Children.Add(workspaceSearch);
         rightPanelToggle = CreateButton("收合", (_, _) => ToggleRightPanel(), true);
+        rightPanelToggle.Style = EditorChrome.StyleOf("GhostButton");
         Grid.SetColumn(rightPanelToggle, 2);
         header.Children.Add(rightPanelToggle);
         Grid.SetRow(header, 0);
@@ -149,7 +162,7 @@ internal sealed partial class TopologyEditorWindow : Window
 
         navigation.Margin = new Thickness(10);
         navigation.BorderThickness = new Thickness(0);
-        navigation.Background = new SolidColorBrush(Color.FromRgb(247, 249, 252));
+        navigation.Style = EditorChrome.StyleOf("EditorNavList");
         navigationItems.Reset([
             new NavItem(ProjectWorkspacePage.Project, "總覽", ShowProjectHome),
             new NavItem(ProjectWorkspacePage.Stations, "車站與月台", ShowStationsPage),
@@ -167,7 +180,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var navigationText = new FrameworkElementFactory(typeof(TextBlock));
         navigationText.SetBinding(TextBlock.TextProperty, new Binding(nameof(NavItem.Label)));
         navigationText.SetValue(TextBlock.TextWrappingProperty, TextWrapping.Wrap);
-        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(4, 5, 4, 5));
+        navigationText.SetValue(TextBlock.MarginProperty, new Thickness(0, 2, 0, 2));
         navigationTemplate.VisualTree = navigationText;
         navigation.ItemTemplate = navigationTemplate;
         navigation.SelectionChanged += (_, _) => OpenSelectedNavigationItem();
@@ -185,44 +198,41 @@ internal sealed partial class TopologyEditorWindow : Window
 
         var right = new Grid { Margin = new Thickness(8, 12, 12, 12) };
         rightPanel = right;
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(230) });
-        right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        var propertyHeader = new DockPanel();
-        propertyHeader.Children.Add(new TextBlock { Text = "選取項目", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        right.Children.Add(propertyHeader);
-        selectionDetails.Margin = new Thickness(0, 8, 0, 12);
-        selectionDetails.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        right.RowDefinitions.Add(new RowDefinition { Height = new GridLength(270) });
+        selectionDetails.Margin = new Thickness(0, 0, 0, 4);
+        selectionDetails.Foreground = UiTheme.TextStrongBrush;
         var selectionScroll = new ScrollViewer
         {
             Content = selectionDetails,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
-        Grid.SetRow(selectionScroll, 1);
-        right.Children.Add(selectionScroll);
-        var validationTitle = new TextBlock { Text = "驗證", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 6) };
-        Grid.SetRow(validationTitle, 2);
-        right.Children.Add(validationTitle);
-        validationList.BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232));
-        validationList.BorderThickness = new Thickness(1);
+        right.Children.Add(EditorChrome.Card(selectionScroll, "選取項目"));
+        // 驗證清單放在卡片內，不再有自己的框線；每列前的色點依嚴重度。
+        validationList.BorderThickness = new Thickness(0);
+        validationList.Padding = new Thickness(0);
         validationList.ItemsSource = validationMessages;
+        EditorChrome.UseValidationTemplate(validationList);
         AttachValidationActivation(validationList);
-        Grid.SetRow(validationList, 3);
-        validationList.DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage);
-        right.Children.Add(validationList);
+        var validationCard = EditorChrome.Card(validationList, "驗證");
+        validationCard.Margin = new Thickness(0, 10, 0, 0);
+        Grid.SetRow(validationCard, 1);
+        right.Children.Add(validationCard);
         Grid.SetRow(right, 1);
         Grid.SetColumn(right, 2);
         root.Children.Add(right);
 
-        var footer = new DockPanel { Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
-        validationSummary.Text = "尚未驗證草稿";
-        validationSummary.Foreground = new SolidColorBrush(Color.FromRgb(65, 75, 95));
+        var footer = new DockPanel { Name = "EditorFooter", Margin = new Thickness(14, 4, 14, 10), LastChildFill = false };
+        // 起始頁（例如總覽）在建立導覽時就已驗證；保留那次結果，避免文字與色點不一致。
+        if (string.IsNullOrEmpty(validationSummary.Text)) validationSummary.Text = "尚未驗證草稿";
+        validationSummary.Foreground = UiTheme.TextMutedBrush;
         validationSummary.VerticalAlignment = VerticalAlignment.Center;
-        DockPanel.SetDock(validationSummary, Dock.Left);
-        footer.Children.Add(validationSummary);
+        var summaryRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        summaryRow.Children.Add(validationSummaryDot);
+        summaryRow.Children.Add(validationSummary);
+        DockPanel.SetDock(summaryRow, Dock.Left);
+        footer.Children.Add(summaryRow);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
         var advanced = new CheckBox { Content = "進階識別碼", IsChecked = advancedMode, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 10, 0) };
         advanced.Checked += (_, _) => advancedMode = true;
@@ -337,12 +347,12 @@ internal sealed partial class TopologyEditorWindow : Window
         {
             Text = "從這裡開始編輯大型存檔。快速建立只用於一次性起稿；載入既有拓撲後，請由車站、軌道、營運與班表頁直接修改同一份 Schema 8 草稿。",
             TextWrapping = TextWrapping.Wrap,
-            Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)),
+            Foreground = UiTheme.TextMutedBrush,
             Margin = new Thickness(0, 12, 0, 8)
         });
         panel.Children.Add(CreateButton("快速建立／重新起稿…", (_, _) => Navigate(ProjectWorkspacePage.QuickBuilder), true));
-        panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), false));
-        workspace.Content = panel;
+        panel.Children.Add(CreateButton("編輯專案編號與名稱…", (_, _) => EditProjectIdentity(), true));
+        ShowWorkspacePage(panel);
         RefreshValidation();
     }
 
@@ -378,15 +388,15 @@ internal sealed partial class TopologyEditorWindow : Window
         actions.Children.Add(CreateButton("刪除車站", (_, _) => { if (grid.SelectedItem is QuickStationEditorViewModel row) quickStations.Remove(row); }, true));
         actions.Children.Add(CreateButton("建立格式版本 8 拓撲", (_, _) => BuildQuickTopology(), false));
         panel.Children.Add(actions);
-        panel.Children.Add(new TextBlock { Text = "依參考圖建立站場", FontSize = 17, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 20, 0, 6) });
-        panel.Children.Add(new TextBlock { Text = "選擇站型後重新建立三站示範草稿，包含月台、實體進路與派車。會取代工作區目前草稿；按取消可保留原專案。尺寸、車型、停站及派車時間可在其他分頁調整。", TextWrapping = TextWrapping.Wrap });
+        panel.Children.Add(EditorChrome.SectionTitle("依參考圖建立站場"));
+        panel.Children.Add(EditorChrome.Hint("選擇站型後重新建立三站示範草稿，包含月台、實體進路與派車。會取代工作區目前草稿；按取消可保留原專案。尺寸、車型、停站及派車時間可在其他分頁調整。"));
         var stationKind = new ComboBox { ItemsSource = Enum.GetValues<StationLayoutTemplateKind>().Select(StationLayoutTemplateService.Name).ToArray(), SelectedIndex = 0, Margin = new Thickness(0, 8, 0, 4), MinWidth = 280, HorizontalAlignment = HorizontalAlignment.Left };
         panel.Children.Add(stationKind);
         panel.Children.Add(CreateButton("以此站型重新起稿", (_, _) =>
         {
             RunEdit(() => StationLayoutTemplateService.Build(Enum.GetValues<StationLayoutTemplateKind>()[stationKind.SelectedIndex]));
         }, false));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowInfrastructure()
@@ -410,7 +420,7 @@ internal sealed partial class TopologyEditorWindow : Window
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Station, "車站作業", stationOperations, AddStationOperation, DeleteSelectedStationOperation));
         tabs.Items.Add(EditorTab(ProjectValidationTargetKind.Edge, "有向接續", directedConnections, AddDirectedConnection, DeleteSelectedDirectedConnection));
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowOperations()
@@ -427,7 +437,7 @@ internal sealed partial class TopologyEditorWindow : Window
         tabs.Items.Add(stopPatternTab);
         if (stopPatternGrid is not null) RegisterValidationTarget(ProjectValidationTargetKind.StopPattern, new ValidationEditorTarget(stopPatternGrid, [stopPatternTab]));
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private UIElement BuildServiceRouteEditor()
@@ -449,7 +459,7 @@ internal sealed partial class TopologyEditorWindow : Window
         Grid.SetRow(top, 0);
         root.Children.Add(top);
         var detail = new StackPanel { Margin = new Thickness(0, 10, 0, 0) };
-        detail.Children.Add(new TextBlock { Text = "依序通過的軌道區段／路線停靠站", FontSize = 15, FontWeight = FontWeights.SemiBold });
+        detail.Children.Add(EditorChrome.SectionTitle("依序通過的軌道區段／路線停靠站"));
         traversalGrid = CreateGrid(new ObservableCollection<TraversalEditorViewModel>());
         traversalGrid.Height = 180;
         detail.Children.Add(traversalGrid);
@@ -458,7 +468,7 @@ internal sealed partial class TopologyEditorWindow : Window
         traversalActions.Children.Add(CreateButton("刪除", (_, _) => RemoveTraversal(), true));
         traversalActions.Children.Add(CreateButton("上移", (_, _) => MoveTraversal(-1), true));
         traversalActions.Children.Add(CreateButton("下移", (_, _) => MoveTraversal(1), true));
-        traversalActions.Children.Add(CreateButton("自動建立路徑", (_, _) => BuildRoutePath(), false));
+        traversalActions.Children.Add(CreateButton("自動建立路徑", (_, _) => BuildRoutePath(), true));
         detail.Children.Add(traversalActions);
         detail.Children.Add(new TextBlock { Text = "路線停靠站（候選月台只會列出這條路線通過區段上的實體月台）", Margin = new Thickness(0, 4, 0, 4), FontWeight = FontWeights.SemiBold });
         routeStopGrid = CreateGrid(new ObservableCollection<ServiceRouteStopEditorViewModel>());
@@ -509,13 +519,13 @@ internal sealed partial class TopologyEditorWindow : Window
         var panel = NewPage("發車計畫", "起點只能指定服務路徑上的實體月台。每筆班距或手動班表可選停站模式、車型與續行設定，不使用全線里程。 ");
         panel.Children.Add(SummaryGrid(("啟用模式", UiDisplayText.Enum(state.Draft.Dispatch.ActiveMode)),
             ("車輛分配", UiDisplayText.Enum(state.Draft.Dispatch.VehicleAssignmentMode))));
-        panel.Children.Add(CreateButton("設定啟用模式與車輛分配…", (_, _) => EditDispatchModes(), false));
+        panel.Children.Add(CreateButton("設定啟用模式與車輛分配…", (_, _) => EditDispatchModes(), true));
         var tabs = new TabControl();
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.HeadwayPlan, "班距計畫", dispatch.HeadwayPlans, AddHeadwayPlan, EditSelectedHeadwayPlan, DeleteSelectedHeadwayPlan));
         tabs.Items.Add(DispatchTab(ProjectValidationTargetKind.ManualTimetable, "手動班表", dispatch.ManualRows, AddManualTimetableRow, EditSelectedManualRow, DeleteSelectedManualRow));
         tabs.Items.Add(new TabItem { Header = "展開預覽", Content = CreateGrid(dispatch.Runs, true) });
         panel.Children.Add(tabs);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void EditDispatchModes()
@@ -547,10 +557,10 @@ internal sealed partial class TopologyEditorWindow : Window
             ("移動閉塞", UiDisplayText.Enum(state.Draft.Simulation.MovingBlockMode)), ("起始時鐘", TimeSpan.FromSeconds(state.Draft.Simulation.StartClockSeconds).ToString("hh\\:mm\\:ss")),
             ("存檔列車數摘要", state.Draft.Simulation.TrainCount.ToString(CultureInfo.InvariantCulture)),
             ("指定班距", state.Draft.Simulation.HeadwaySeconds is { } headway ? $"{headway:0.###} 秒" : "未指定")));
-        panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), false));
-        panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), false));
-        panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), false));
-        workspace.Content = panel;
+        panel.Children.Add(CreateButton("調整列車基準參數…", (_, _) => EditTrainSettings(), true));
+        panel.Children.Add(CreateButton("調整營運與安全參數…", (_, _) => EditOperationalSettings(), true));
+        panel.Children.Add(CreateButton("調整模擬參數…", (_, _) => EditSimulationSettings(), true));
+        ShowWorkspacePage(panel);
     }
 
     private void EditTrainSettings()
@@ -683,14 +693,14 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         CommitTableDrafts();
         var panel = NewPage("路線示意圖", "自動排版僅是介面中繼資料：正線水平、支線自動偏移；不會進入列車物理運算。 ");
-        var canvas = new Canvas { Background = new SolidColorBrush(Color.FromRgb(248, 250, 253)), Height = 520, ClipToBounds = true };
+        var canvas = new Canvas { Background = UiTheme.CanvasBackgroundBrush, Height = 520, ClipToBounds = true };
         DrawSchematic(canvas);
         canvas.SizeChanged += (_, _) => DrawSchematic(canvas);
         panel.Children.Add(new ScrollViewer { Content = canvas, MaxHeight = 520,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled });
         panel.Children.Add(CreateButton("自動排版", (_, _) => DrawSchematic(canvas), true));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowResults()
@@ -702,17 +712,18 @@ internal sealed partial class TopologyEditorWindow : Window
             ("已設定發車班次", CalculateDispatchRunCount(state.Draft).ToString(CultureInfo.InvariantCulture)),
             ("執行前驗證", ProjectEditorValidationService.Validate(state.Draft).Any(item => item.Severity == ProjectValidationSeverity.Error) ? "有錯誤" : "通過"),
             ("列車位置權威", "軌道區段編號＋偏移量")));
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
     }
 
     private void ShowValidation()
     {
         CommitTableDrafts();
         var panel = NewPage("驗證", "編輯期間允許暫時無效；但儲存與執行模擬前必須沒有錯誤。按一下驗證訊息或使用 Enter／空白鍵可前往目標。 ");
-        var list = new ListBox { ItemsSource = validationMessages, Height = 480, DisplayMemberPath = nameof(ProjectValidationMessageViewModel.DisplayMessage) };
+        var list = new ListBox { ItemsSource = validationMessages, Height = 480 };
+        EditorChrome.UseValidationTemplate(list);
         AttachValidationActivation(list);
         panel.Children.Add(list);
-        workspace.Content = panel;
+        ShowWorkspacePage(panel);
         RefreshValidation();
     }
 
@@ -921,9 +932,11 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private void UpdateWorkspaceSummary()
     {
-        if (workspaceSummary is null) return;
+        if (workspaceSummary is null || workspaceSummaryDetail is null) return;
         var document = state.Draft;
-        workspaceSummary.Text = $"{document.ProjectName}  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
+        workspaceSummary.Text = document.ProjectName;
+        workspaceSummary.ToolTip = document.ProjectName;
+        workspaceSummaryDetail.Text = $"  ·  格式版本 {document.SchemaVersion}  ·  {PageLabel(currentPage)}  ·  草稿未套用";
     }
 
     private void ToggleRightPanel()
@@ -971,10 +984,10 @@ internal sealed partial class TopologyEditorWindow : Window
         grid.SelectionChanged += (_, _) => selectionDetails.Text = DescribeSelection(grid.SelectedItem);
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        actions.Children.Add(CreateButton(readOnly ? "新增設施…" : "新增", (_, _) => add(), !readOnly));
+        actions.Children.Add(CreateButton(readOnly ? "新增設施…" : "新增", (_, _) => add(), true));
         if (edit is not null) actions.Children.Add(CreateButton("編輯選取項目…", (_, _) => edit(), true));
         if (delete is not null) actions.Children.Add(CreateButton("刪除", (_, _) => delete(), true));
-        var search = new TextBox { Width = 150, Margin = new Thickness(6, 0, 0, 0), ToolTip = "依名稱、ID、類型或關聯搜尋" };
+        var search = EditorChrome.SearchBox("搜尋名稱、ID 或關聯", new TextBox { Width = 180, Margin = new Thickness(6, 0, 0, 0), ToolTip = "依名稱、ID、類型或關聯搜尋" });
         search.TextChanged += (_, _) =>
         {
             var query = search.Text.Trim();
@@ -997,7 +1010,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
         actions.Children.Add(CreateButton("新增月台", (_, _) => AddPlatform(), true));
-        actions.Children.Add(CreateButton("新增車站到軌道…", (_, _) => AddStationOnTracks(), false));
+        actions.Children.Add(CreateButton("新增車站到軌道…", (_, _) => AddStationOnTracks(), true));
         actions.Children.Add(CreateButton("刪除", (_, _) => DeleteSelectedPlatform(), true));
         DockPanel.SetDock(actions, Dock.Top); panel.Children.Add(actions); panel.Children.Add(grid);
         var tab = new TabItem { Header = "車站與月台", Content = panel };
@@ -1027,7 +1040,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var grid = CreateGrid(view, readOnly);
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        actions.Children.Add(CreateButton(readOnly ? "查看設施" : "新增", (_, _) => add(), !readOnly));
+        actions.Children.Add(CreateButton(readOnly ? "查看設施" : "新增", (_, _) => add(), true));
         actions.Children.Add(CreateButton("刪除", (_, _) => delete(), true));
         DockPanel.SetDock(actions, Dock.Top); panel.Children.Add(actions); panel.Children.Add(grid);
         return (new TabItem { Header = title, Content = panel }, grid);
@@ -1051,9 +1064,51 @@ internal sealed partial class TopologyEditorWindow : Window
     private static StackPanel NewPage(string title, string description)
     {
         var panel = new StackPanel();
-        panel.Children.Add(new TextBlock { Text = title, FontSize = 22, FontWeight = FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text = description, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromRgb(75, 86, 106)), Margin = new Thickness(0, 6, 0, 14) });
+        panel.Children.Add(EditorChrome.PageHeader(title, description));
         return panel;
+    }
+
+    // Pages without their own whole-page scrolling get a vertical scroller,
+    // so content below the workspace stays reachable at 980x640 or 125%.
+    private void ShowWorkspacePage(UIElement page)
+    {
+        if (page is ScrollViewer)
+        {
+            workspace.Content = page;
+            return;
+        }
+
+        var scroll = new ScrollViewer
+        {
+            Content = page,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            CanContentScroll = false
+        };
+        AutomationProperties.SetName(scroll, "工作區整頁捲動區");
+        workspace.Content = scroll;
+    }
+
+    // NewPage is a StackPanel, so its body would otherwise be measured with
+    // unlimited height. Give the body the workspace height left below the
+    // page header (at least minHeight), including after a resize.
+    private void FitPageBodyToWorkspace(StackPanel page, FrameworkElement body, double minHeight = 220)
+    {
+        void Fit()
+        {
+            // page.Children[0] is NewPage's header (title + description).
+            var header = (FrameworkElement)page.Children[0];
+            var headerHeight = header.ActualHeight + header.Margin.Top + header.Margin.Bottom;
+            // Reserve room for the list's margin and the page's lower inset;
+            // DockPanel's fill child can otherwise push the bottom actions
+            // slightly past the visible workspace.
+            body.Height = Math.Max(minHeight, workspace.ActualHeight - headerHeight - 24);
+        }
+
+        SizeChangedEventHandler resize = (_, _) => Fit();
+        workspace.SizeChanged += resize;
+        body.Loaded += (_, _) => Fit();
+        body.Unloaded += (_, _) => workspace.SizeChanged -= resize;
     }
 
     private DataGrid CreateGrid(System.Collections.IEnumerable items, bool readOnly = false)
@@ -1062,8 +1117,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var grid = new DataGrid
         {
             ItemsSource = items, AutoGenerateColumns = true, CanUserAddRows = false, CanUserDeleteRows = false,
-            IsReadOnly = readOnly, RowHeaderWidth = 0, Margin = new Thickness(0),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(215, 221, 232)), BorderThickness = new Thickness(1)
+            IsReadOnly = readOnly, RowHeaderWidth = 0, Margin = new Thickness(0)
         };
         grid.AutoGeneratingColumn += (_, args) =>
         {
@@ -1102,16 +1156,11 @@ internal sealed partial class TopologyEditorWindow : Window
             }));
     }
 
+    // 主次外觀由共用樣式決定；secondary=false 只保留給規格列出的主要動作。
     private static Button CreateButton(string label, RoutedEventHandler handler, bool secondary)
     {
-        var button = new Button
-        {
-            Content = label, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 7, 0),
-            Background = secondary ? Brushes.White : new SolidColorBrush(Color.FromRgb(34, 92, 175)),
-            Foreground = secondary ? new SolidColorBrush(Color.FromRgb(38, 51, 73)) : Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(164, 178, 202))
-        };
-        button.Click += handler;
+        var button = EditorChrome.Button(label, handler, primary: !secondary);
+        button.Margin = new Thickness(0, 0, 7, 0);
         return button;
     }
 
@@ -1123,8 +1172,8 @@ internal sealed partial class TopologyEditorWindow : Window
         for (var index = 0; index < values.Length; index++)
         {
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var label = new TextBlock { Text = values[index].Label, Margin = new Thickness(0, 5, 12, 5), Foreground = new SolidColorBrush(Color.FromRgb(90, 101, 122)) };
-            var value = new TextBlock { Text = values[index].Value, Margin = new Thickness(0, 5, 0, 5), FontWeight = FontWeights.SemiBold };
+            var label = new TextBlock { Text = values[index].Label, Margin = new Thickness(0, 5, 12, 5), Foreground = UiTheme.TextMutedBrush };
+            var value = new TextBlock { Text = values[index].Value, Margin = new Thickness(0, 5, 0, 5), FontWeight = FontWeights.SemiBold, Foreground = UiTheme.TextStrongBrush };
             Grid.SetRow(label, index); Grid.SetRow(value, index); Grid.SetColumn(value, 1);
             grid.Children.Add(label); grid.Children.Add(value);
         }
@@ -1997,7 +2046,6 @@ internal sealed partial class TopologyEditorWindow : Window
         double MapX(double x) => 60 + (x - layoutMinX) / Math.Max(1, layoutMaxX - layoutMinX) * Math.Max(1, width - 120);
         const double mainlineY = 210;
         const double laneSpacing = 46;
-        var railColor = Color.FromRgb(25, 96, 125);
         StationSchematicPresentation.DrawLegend(canvas);
         var outboundRouteId = state.Draft.DirectionRouteBindings
             .FirstOrDefault(binding => binding.Direction == TrainDirection.Outbound)?.ServiceRouteId;
@@ -2011,6 +2059,9 @@ internal sealed partial class TopologyEditorWindow : Window
             .FirstOrDefault(route => route.ServiceRouteId.Equals(inboundRouteId, StringComparison.OrdinalIgnoreCase))?
             .Traversals.Select(traversal => traversal.TrackEdgeId).ToHashSet(StringComparer.OrdinalIgnoreCase)
             ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // 與主視窗配線圖相同的軌道配色：下行橘、上行藍、側線淡色、其他中性灰。
+        var railTones = TrackRailStyle.Classify(state.Draft.Topology.Edges, outboundEdgeIds, inboundEdgeIds);
+        RailTone ToneOf(string? edgeId) => edgeId is not null && railTones.TryGetValue(edgeId, out var tone) ? tone : RailTone.Neutral;
         var rawEdgePoints = new Dictionary<string, (Point From, Point To)>(StringComparer.OrdinalIgnoreCase);
         foreach (var edge in state.Draft.Topology.Edges
                      .Where(edge => layout.ContainsKey(edge.FromNodeId) && layout.ContainsKey(edge.ToNodeId)))
@@ -2137,9 +2188,11 @@ internal sealed partial class TopologyEditorWindow : Window
             var allowLaneTurn = fromEdge is not null && toEdge is not null
                 && (fromEdge.SchematicLane.HasValue || toEdge.SchematicLane.HasValue
                     || fromEdge.Kind != TrackEdgeKind.Mainline || toEdge.Kind != TrackEdgeKind.Mainline);
-            StationSchematicPresentation.DrawConnection(canvas, from, to, incoming, outgoing, new SolidColorBrush(railColor),
+            var fromTone = ToneOf(connection.FromTrackEdgeId);
+            StationSchematicPresentation.DrawConnection(canvas, from, to, incoming, outgoing,
+                TrackRailStyle.Brush(fromTone == ToneOf(connection.ToTrackEdgeId) ? fromTone : RailTone.Neutral),
                 $"合法轉向：{connection.FromTrackEdgeId} ({connection.FromDirection}) → {connection.ToTrackEdgeId} ({connection.ToDirection})",
-                allowLaneTurn);
+                allowLaneTurn, fromEdge is null ? TrackRailStyle.SideThickness : TrackRailStyle.Thickness(fromEdge));
         }
 
         foreach (var edge in state.Draft.Topology.Edges)
@@ -2152,7 +2205,7 @@ internal sealed partial class TopologyEditorWindow : Window
                 canvas.Children.Add(new Polyline
                 {
                     Points = new PointCollection(geometry.Points),
-                    Stroke = Brushes.White,
+                    Stroke = UiTheme.SurfaceBrush,
                     StrokeThickness = 7,
                     StrokeLineJoin = PenLineJoin.Round,
                     IsHitTestVisible = false
@@ -2161,8 +2214,8 @@ internal sealed partial class TopologyEditorWindow : Window
             var line = new Polyline
             {
                 Points = new PointCollection(geometry.Points),
-                Stroke = new SolidColorBrush(emphasizeSideTrack ? Color.FromRgb(8, 123, 150) : railColor),
-                StrokeThickness = emphasizeSideTrack ? 3.6 : 5,
+                Stroke = TrackRailStyle.Brush(ToneOf(edge.TrackEdgeId)),
+                StrokeThickness = TrackRailStyle.Thickness(edge),
                 StrokeLineJoin = PenLineJoin.Round,
                 ToolTip = $"{edge.TrackEdgeId}\n{UiDisplayText.Enum(edge.Kind)}\n{edge.LengthMeters:0.#} m"
             };
@@ -2201,15 +2254,17 @@ internal sealed partial class TopologyEditorWindow : Window
                 Y1 = point.Y - normal.Y,
                 X2 = point.X + normal.X,
                 Y2 = point.Y + normal.Y,
-                Stroke = new SolidColorBrush(railColor),
-                StrokeThickness = 5,
+                Stroke = UiTheme.RailNeutralStrongBrush,
+                StrokeThickness = 4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
                 ToolTip = $"{node.NodeId} · {node.Name} · 止衝"
             });
         }
 
         var stationChainage = StationChainageProjection.TryCreate(state.Draft);
-        StationSchematicPresentation.DrawStationNames(canvas, stationVisuals.Select(s => (s.Station.StationId,
-            s.Station.Name + (stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? $"\n{km / 1000:0.000}K" : ""))), width);
+        StationSchematicPresentation.DrawStationNames(canvas, stationVisuals.Select(s => (s.Station.StationId, s.Station.Name,
+            stationChainage?.StationCenters.TryGetValue(s.Station.StationId, out var km) == true ? km : (double?)null)), width);
         StationSchematicPresentation.DrawChainageReference(canvas, stationChainage, 29);
         var facilityLegendTop = Math.Max(380, canvas.Children.OfType<FrameworkElement>()
             .Where(item => item.Tag is StationSchematicPresentation.StationLabelAnchor)
@@ -2227,10 +2282,10 @@ internal sealed partial class TopologyEditorWindow : Window
             var edge = state.Draft.Topology.Edges.FirstOrDefault(item => item.TrackEdgeId.Equals(edgeId, StringComparison.OrdinalIgnoreCase));
             if (edge is null || !edgeGeometries.TryGetValue(edge.TrackEdgeId, out var geometry)) continue;
             var x = 22d; var y = facilityLegendNextY;
-            var marker = new Rectangle { Width = 9, Height = 9, Fill = new SolidColorBrush(Color.FromRgb(244, 173, 70)), ToolTip = $"{kind}：{name}" };
+            var marker = new Rectangle { Width = 9, Height = 9, Fill = UiTheme.RailNeutralStrongBrush, ToolTip = $"{kind}：{name}" };
             marker.MouseLeftButtonUp += (_, _) => selectionDetails.Text = $"設施\n{kind}\n{name}\n{edgeId}";
             Canvas.SetLeft(marker, x - 4.5); Canvas.SetTop(marker, y); canvas.Children.Add(marker);
-            var label = new TextBlock { Text = name, Width = Math.Max(1, width - 60), TextWrapping = TextWrapping.Wrap, ToolTip = $"{kind}：{name}\n{edgeId}", FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(153, 75, 17)) };
+            var label = new TextBlock { Text = name, Width = Math.Max(1, width - 60), TextWrapping = TextWrapping.Wrap, ToolTip = $"{kind}：{name}\n{edgeId}", FontSize = 10, Foreground = UiTheme.TextMutedBrush };
             label.Measure(new Size(label.Width, double.PositiveInfinity));
             facilityLegendNextY += Math.Max(22, label.DesiredSize.Height + 8);
             Canvas.SetLeft(label, x + 8); Canvas.SetTop(label, y - 3); canvas.Children.Add(label);
@@ -2257,8 +2312,8 @@ internal sealed partial class TopologyEditorWindow : Window
                     center - tangent * 5 + normal * 4.5,
                     center - tangent * 5 - normal * 4.5
                 },
-                Fill = new SolidColorBrush(railColor),
-                Stroke = Brushes.White,
+                Fill = TrackRailStyle.Brush(ToneOf(edgeId)),
+                Stroke = UiTheme.SurfaceBrush,
                 StrokeThickness = 1,
                 IsHitTestVisible = false,
                 ToolTip = $"{edgeId} · {(forward ? "正向" : "反向")}"
@@ -2314,6 +2369,7 @@ internal sealed partial class TopologyEditorWindow : Window
             validationSummary.Text = errors == 0 && warnings == 0
                 ? "驗證通過 · 草稿可套用"
                 : $"驗證摘要：{errors} 個錯誤、{warnings} 個提醒 · 點選訊息可定位";
+            validationSummaryDot.Fill = EditorChrome.ValidationSummaryBrush(validated: true, errors, warnings);
         }
     }
 
@@ -2356,34 +2412,65 @@ internal sealed partial class TopologyEditorWindow : Window
 
     private Dictionary<string, string>? Ask(string title, params (string Label, string Initial)[] fields)
     {
-        var dialog = new Window { Title = title, Owner = this, Width = 500, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var (dialog, inputs) = CreateAskDialog(title, fields);
+        return dialog.ShowDialog() == true ? inputs.ToDictionary(item => item.Key, item => item.Value.Text, StringComparer.Ordinal) : null;
+    }
+
+    // 建立「新增／編輯」對話框但不顯示，讓測試能直接檢查外觀。結構（ScrollViewer → StackPanel，
+    // 文字框為直接子元素、最後一個子元素是按鈕列）是既有自動化測試的依據，不得改變。
+    private (Window Dialog, Dictionary<string, TextBox> Inputs) CreateAskDialog(string title, (string Label, string Initial)[] fields)
+    {
+        var dialog = CreateDialogWindow(title, 500);
+        var panel = new StackPanel { Margin = new Thickness(20) };
         var inputs = new Dictionary<string, TextBox>(StringComparer.Ordinal);
         foreach (var field in fields)
         {
-            panel.Children.Add(new TextBlock { Text = field.Label, Margin = new Thickness(0, 5, 0, 3) });
+            var label = EditorChrome.FieldLabel(field.Label);
+            label.Margin = new Thickness(0, 8, 0, 4);
+            panel.Children.Add(label);
             var input = new TextBox { Text = field.Initial }; inputs.Add(field.Label, input); panel.Children.Add(input);
         }
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
-        buttons.Children.Add(CreateButton("建立", (_, _) => dialog.DialogResult = true, false));
-        buttons.Children.Add(CreateButton("取消", (_, _) => dialog.DialogResult = false, true));
-        panel.Children.Add(buttons);
+        panel.Children.Add(DialogButtons(dialog, "建立"));
         dialog.Content = new ScrollViewer { Content = panel, MaxHeight = 660, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        return dialog.ShowDialog() == true ? inputs.ToDictionary(item => item.Key, item => item.Value.Text, StringComparer.Ordinal) : null;
+        return (dialog, inputs);
     }
 
     private string? Choose(string title, string label, IReadOnlyList<string> values, string? current)
     {
-        var dialog = new Window { Title = title, Owner = this, Width = 440, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
-        var panel = new StackPanel { Margin = new Thickness(16) };
-        panel.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
+        var (dialog, choices) = CreateChooseDialog(title, label, values, current);
+        return dialog.ShowDialog() == true ? choices.SelectedItem as string : null;
+    }
+
+    // 結構（StackPanel 直接含下拉選單、最後一個子元素是按鈕列）是既有自動化測試的依據，不得改變。
+    private (Window Dialog, ComboBox Choices) CreateChooseDialog(string title, string label, IReadOnlyList<string> values, string? current)
+    {
+        var dialog = CreateDialogWindow(title, 440);
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(EditorChrome.FieldLabel(label));
         var choices = new ComboBox { ItemsSource = values, SelectedItem = values.FirstOrDefault(value => value.Equals(current, StringComparison.OrdinalIgnoreCase)) ?? values.FirstOrDefault() };
         panel.Children.Add(choices);
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 14, 0, 0) };
-        buttons.Children.Add(CreateButton("選取", (_, _) => dialog.DialogResult = true, false));
-        buttons.Children.Add(CreateButton("取消", (_, _) => dialog.DialogResult = false, true));
-        panel.Children.Add(buttons); dialog.Content = panel;
-        return dialog.ShowDialog() == true ? choices.SelectedItem as string : null;
+        panel.Children.Add(DialogButtons(dialog, "選取"));
+        dialog.Content = panel;
+        return (dialog, choices);
+    }
+
+    private Window CreateDialogWindow(string title, double width)
+    {
+        var dialog = new Window { Title = title, Owner = this, Width = width, SizeToContent = SizeToContent.Height, WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize };
+        EditorChrome.ApplyWindowChrome(dialog);
+        dialog.Background = UiTheme.SurfaceBrush;
+        return dialog;
+    }
+
+    // 確認鈕（主要）在前、取消（次要）在後，靠右排列。
+    private static StackPanel DialogButtons(Window dialog, string confirm)
+    {
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+        buttons.Children.Add(CreateButton(confirm, (_, _) => dialog.DialogResult = true, false));
+        var cancel = CreateButton("取消", (_, _) => dialog.DialogResult = false, true);
+        cancel.Margin = new Thickness(0);
+        buttons.Children.Add(cancel);
+        return buttons;
     }
 
     private sealed record NavItem(ProjectWorkspacePage Page, string Label, Action Open);

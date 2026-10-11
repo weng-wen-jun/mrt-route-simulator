@@ -1,0 +1,484 @@
+using System.IO;
+using System.Text.RegularExpressions;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Data;
+using System.Windows.Media;
+using System.Windows.Shapes;
+using MrtRouteSimulator.App;
+
+/// <summary>結果分頁（子專案 C2）的元件、版面與表格規則測試。</summary>
+internal static class ResultPageTests
+{
+    public static void Run(string root)
+    {
+        VerifyStatusTones(root);
+        VerifyResultTableRules();
+        VerifyResultPageControl();
+        VerifyBasicPages();
+        VerifySafetyAndStatisticsPages();
+        VerifyCrowdedHeaders();
+        VerifyDiagramAndSimulationPages();
+        VerifyNoHardCodedColors(root);
+        VerifyFilterLabelsStayWithControls();
+        Console.WriteLine("PASS WPF result pages");
+    }
+
+    internal static void Require(bool condition, string message)
+    {
+        if (!condition) throw new InvalidOperationException(message);
+    }
+
+    private static readonly (string Status, StatusTone Tone)[] ExpectedTones =
+    [
+        ("侵入安全距離", StatusTone.Danger), ("碰撞停止", StatusTone.Danger), ("障礙急停", StatusTone.Danger),
+        ("接近警戒", StatusTone.Caution), ("需要制動", StatusTone.Caution),
+        ("已抵達", StatusTone.Success), ("完成", StatusTone.Success), ("安全", StatusTone.Success), ("可比較", StatusTone.Success),
+        ("已發車", StatusTone.Active), ("停站中", StatusTone.Active), ("運行中", StatusTone.Active), ("停站", StatusTone.Active),
+        ("加速", StatusTone.Active), ("巡航", StatusTone.Active), ("惰行", StatusTone.Active), ("煞車", StatusTone.Active),
+        ("進站平順煞車", StatusTone.Active), ("到站", StatusTone.Active), ("駛入尾軌", StatusTone.Active),
+        ("尾軌返回", StatusTone.Active), ("駛入折返線", StatusTone.Active), ("折返線返回", StatusTone.Active),
+        ("折返", StatusTone.Active), ("減速", StatusTone.Active),
+        ("待發", StatusTone.Neutral), ("—", StatusTone.Neutral), ("V1 理論基準", StatusTone.Neutral),
+        ("V2 尚未抵達", StatusTone.Neutral), ("跨站不比較", StatusTone.Neutral), ("折返節點不適用 V1", StatusTone.Neutral),
+        ("退出營運", StatusTone.Neutral), ("未知狀態", StatusTone.Neutral)
+    ];
+
+    private static void VerifyStatusTones(string root)
+    {
+        foreach (var (status, tone) in ExpectedTones)
+            Require(StatusTones.Classify(status) == tone, $"狀態「{status}」應為 {tone}，實際 {StatusTones.Classify(status)}。");
+        Require(StatusTones.Classify(" 已抵達 ") == StatusTone.Success, "狀態文字前後空白不得影響分類。");
+        foreach (var unknown in new string?[] { null, "", "全新狀態文字" })
+            Require(StatusTones.Classify(unknown) == StatusTone.Neutral, $"無法辨識的狀態「{unknown}」應為 Neutral。");
+        Require(StatusTones.KnownStatuses.Count == ExpectedTones.Length,
+            $"對照表應恰有 {ExpectedTones.Length} 筆，實際 {StatusTones.KnownStatuses.Count}。");
+
+        // 程式實際輸出的狀態字串都必須在對照表內，避免新增狀態後默默變成灰點。
+        string Source(params string[] path) => File.ReadAllText(System.IO.Path.Combine([root, "src", .. path]));
+        string[] Literals(string text, string startPattern)
+        {
+            var match = Regex.Match(text, startPattern + @"\s*\{(?<body>.*?)\};", RegexOptions.Singleline);
+            Require(match.Success, $"找不到 {startPattern} 的對照區塊。");
+            return Regex.Matches(match.Groups["body"].Value, "\"([^\"]+)\"").Select(item => item.Groups[1].Value).ToArray();
+        }
+        var v2 = Source("MrtRouteSimulator.App", "MainWindow.V2.cs");
+        var produced = Literals(v2, @"PhaseToChinese\(OperationalPhase phase\) => phase switch")
+            .Concat(Literals(v2, @"SafetyStatusToChinese\(SafetyStatus status\) => status switch"))
+            .Concat(Literals(Source("MrtRouteSimulator.App", "MainWindow.xaml.cs"), @"StateToChinese\(TrainMotionState state\) => state switch"))
+            .Concat(Regex.Matches(Source("MrtRouteSimulator.App", "IncrementalV1V2Comparison.cs"), "const string \\w+Status = \"([^\"]+)\"")
+                .Select(item => item.Groups[1].Value))
+            .Concat(["已抵達", "停站中", "已發車", "待發", "完成", "運行中", "V1 理論基準", "—"]);
+        foreach (var status in produced.Distinct())
+            Require(StatusTones.KnownStatuses.ContainsKey(status), $"程式會輸出的狀態「{status}」不在 StatusTones 對照表內。");
+
+        var expectedBrushes = new (StatusTone Tone, SolidColorBrush Brush)[]
+        {
+            (StatusTone.Danger, UiTheme.DangerBrush), (StatusTone.Caution, UiTheme.CautionBrush),
+            (StatusTone.Success, UiTheme.SuccessBrush), (StatusTone.Active, UiTheme.AccentBrush),
+            (StatusTone.Neutral, UiTheme.TextSubtleBrush)
+        };
+        foreach (var (tone, brush) in expectedBrushes)
+            Require(ReferenceEquals(StatusTones.Brush(tone), brush), $"{tone} 色點必須取自 UiTheme。");
+        Require(UiTheme.Caution == Color.FromRgb(0xD9, 0xA4, 0x00) && UiTheme.CautionBrush.IsFrozen,
+            "Caution 色票應為 #D9A400 且畫筆凍結。");
+        var converted = new StatusToneBrushConverter().Convert("需要制動", typeof(Brush), null!, System.Globalization.CultureInfo.InvariantCulture);
+        Require(ReferenceEquals(converted, UiTheme.CautionBrush), "轉換器必須依狀態文字回傳色點畫筆。");
+        Console.WriteLine("[通過] StatusTone 狀態色點對照");
+    }
+
+    private sealed record SampleRow(string Name, string Distance, string Status);
+
+    private static void VerifyResultTableRules()
+    {
+        DataGrid CreateGrid(bool enabled)
+        {
+            var grid = new DataGrid
+            {
+                Width = 420,
+                Height = 160,
+                ItemsSource = new[]
+                {
+                    new SampleRow("很長很長很長很長很長很長的停站模式名稱", "12.345", "已抵達"),
+                    new SampleRow("短", "1.2", "侵入安全距離")
+                }
+            };
+            if (enabled) ResultTable.SetEnabled(grid, true);
+            var name = new DataGridTextColumn { Header = "名稱", Binding = new Binding(nameof(SampleRow.Name)), Width = 90 };
+            var distance = new DataGridTextColumn { Header = "距離 km", Binding = new Binding(nameof(SampleRow.Distance)), Width = 90 };
+            var status = new DataGridTextColumn { Header = "狀態", Binding = new Binding(nameof(SampleRow.Status)), Width = 140 };
+            ResultTable.SetKind(distance, ResultColumnKind.Numeric);
+            ResultTable.SetKind(status, ResultColumnKind.Status);
+            grid.Columns.Add(name);
+            grid.Columns.Add(distance);
+            grid.Columns.Add(status);
+            return grid;
+        }
+
+        DataGridCell Cell(DataGrid grid, int row, int column)
+        {
+            var container = (DataGridRow)grid.ItemContainerGenerator.ContainerFromIndex(row);
+            var presenter = ShellLayoutTests.FindDescendant<DataGridCellsPresenter>(container)!;
+            return (DataGridCell)presenter.ItemContainerGenerator.ContainerFromIndex(column);
+        }
+
+        var enabledGrid = CreateGrid(true);
+        var plainGrid = CreateGrid(false);
+        var panel = new StackPanel();
+        panel.Children.Add(enabledGrid);
+        panel.Children.Add(plainGrid);
+        var window = new Window { Width = 520, Height = 420, Content = panel };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var longName = (TextBlock)Cell(enabledGrid, 0, 0).Content;
+            Require(longName.TextTrimming == TextTrimming.CharacterEllipsis && Equals(longName.ToolTip, longName.Text),
+                "結果表文字欄必須截斷顯示「…」並以提示框顯示完整文字。");
+            var number = (TextBlock)Cell(enabledGrid, 0, 1).Content;
+            Require(number.TextAlignment == TextAlignment.Right && number.FontFamily.Source.Contains("Consolas"),
+                $"結果表數字欄必須靠右並用等寬字型；alignment={number.TextAlignment}, font={number.FontFamily}。");
+            var header = ShellLayoutTests.FindDescendant<DataGridColumnHeader>(enabledGrid, item => Equals(item.Content, "距離 km"));
+            Require(header?.HorizontalContentAlignment == HorizontalAlignment.Right, "數字欄的欄名必須靠右。");
+            // 文字畫在 TextBlock 頂端；比較頂端位置才反映實際字的高度是否一致。
+            double TextTop(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), enabledGrid).Y;
+            var statusText = (TextBlock)Cell(enabledGrid, 0, 2).Content;
+            Require(Math.Abs(TextTop(statusText) - TextTop(longName)) < 1 && Math.Abs(TextTop(number) - TextTop(longName)) < 1,
+                $"同一列的文字、數字與狀態欄必須垂直對齊；text={TextTop(longName):0.0}, number={TextTop(number):0.0}, status={TextTop(statusText):0.0}。");
+            var dangerCell = Cell(enabledGrid, 1, 2);
+            Require(ShellLayoutTests.FindDescendant<Ellipse>(dangerCell)?.Fill is var dangerFill && ReferenceEquals(dangerFill, UiTheme.DangerBrush),
+                "狀態欄必須以色點標示，「侵入安全距離」為 Danger。");
+            Require(ReferenceEquals(ShellLayoutTests.FindDescendant<Ellipse>(Cell(enabledGrid, 0, 2))?.Fill, UiTheme.SuccessBrush),
+                "「已抵達」的色點必須為 Success。");
+            enabledGrid.SelectedIndex = 1;
+            ShellLayoutTests.PumpLayout(window);
+            Require(dangerCell.IsSelected && ReferenceEquals(dangerCell.Background, UiTheme.NavSelectedBrush),
+                "狀態欄的選取格仍需 NavSelected 底色（沿用 C1 儲存格樣式）。");
+            var plainName = (TextBlock)Cell(plainGrid, 0, 0).Content;
+            Require(plainName.TextTrimming == TextTrimming.None && ShellLayoutTests.FindDescendant<Ellipse>(Cell(plainGrid, 1, 2)) is null,
+                "未啟用 ResultTable 的表格不得被改動。");
+            Require(enabledGrid.EnableRowVirtualization, "結果表必須維持列虛擬化。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] ResultTable 欄位規則：文字截斷、數字靠右、狀態色點");
+    }
+
+    private static void VerifyResultPageControl()
+    {
+        TextBlock Text(string value) => new() { Text = value };
+        var description = Text("說明");
+        var summary = Text("摘要");
+        var filter = Text("篩選");
+        var filterAction = new Button { Content = "篩選動作" };
+        var action = new Button { Content = "匯出" };
+        var footnote = Text("附註");
+        var body = new Border { Height = 120 };
+        var full = new ResultPage
+        {
+            Title = "完整頁", Description = description, Summary = summary, Filters = filter,
+            FilterActions = filterAction, Actions = action, Footnote = footnote, Content = body
+        };
+        var minimal = new ResultPage { Title = "精簡頁", Content = new Border { Height = 80 } };
+        var filtersOnly = new ResultPage { Title = "只有篩選", Filters = Text("篩選"), Content = new Border { Height = 80 } };
+        var host = new UniformGrid { Columns = 3 };
+        host.Children.Add(full);
+        host.Children.Add(minimal);
+        host.Children.Add(filtersOnly);
+        var window = new Window { Width = 1200, Height = 520, Content = host };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            double Top(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), full).Y;
+            double Left(FrameworkElement element) => element.TranslatePoint(new Point(0, 0), full).X;
+            FrameworkElement Part(ResultPage page, string name) => (FrameworkElement)page.Template.FindName(name, page);
+            var title = Part(full, "PART_Title");
+            Require(title is TextBlock { Text: "完整頁" }, "ResultPage 必須顯示標題。");
+            Require(Top(title) < Top(summary) && Top(summary) < Top(filter) && Top(filter) < Top(body) && Top(body) < Top(footnote),
+                "ResultPage 由上而下應為頁首、摘要、篩選卡、內容、附註。");
+            Require(Left(action) > Left(description) && Math.Abs(Top(action) - Top(title)) < 12, "動作鈕必須在頁首右側。");
+            Require(Left(filterAction) > Left(filter) && Math.Abs(Top(filterAction) - Top(filter)) < 12, "篩選卡的動作群組必須在篩選右側。");
+            foreach (var slot in new FrameworkElement[] { description, summary, filter, filterAction, action, footnote, body })
+                Require(LogicalTreeHelper.GetParent(slot) == full, $"{slot.GetType().Name} 必須是 ResultPage 的邏輯子元素。");
+            foreach (var part in new[] { "PART_Description", "ActionsHost", "SummaryRow", "FilterCard", "FootnoteHost" })
+                Require(Part(minimal, part).Visibility == Visibility.Collapsed, $"未設定內容時 {part} 必須隱藏。");
+            Require(Part(filtersOnly, "FilterCard").Visibility == Visibility.Visible
+                    && Part(filtersOnly, "FilterActionsHost").Visibility == Visibility.Collapsed,
+                "只有篩選時顯示篩選卡、隱藏右側動作群組。");
+            Require(!full.Focusable && !full.IsTabStop, "ResultPage 本身不應成為 Tab 停駐點。");
+        }
+        finally { window.Close(); }
+        Console.WriteLine("[通過] ResultPage 元件骨架");
+    }
+
+    internal static ResultPage Page(MainWindow window, string tabName)
+    {
+        var tab = (TabItem)window.FindName(tabName)!;
+        Require(tab.Content is ResultPage, $"{tabName} 的內容必須是 ResultPage。");
+        var page = (ResultPage)tab.Content;
+        Require(page.Title == (string)tab.Header, $"{tabName} 的標題應為「{tab.Header}」，實際「{page.Title}」。");
+        Require(page.Margin == new Thickness(0), $"{tabName} 不得再有頁面自己的外距。");
+        return page;
+    }
+
+    internal static bool InSlot(object? slot, DependencyObject element)
+    {
+        for (DependencyObject? current = element; current is not null; current = LogicalTreeHelper.GetParent(current))
+            if (ReferenceEquals(current, slot)) return true;
+        return false;
+    }
+
+    internal static void RequireIn(MainWindow window, object? slot, string slotName, params string[] names)
+    {
+        foreach (var name in names)
+            Require(window.FindName(name) is DependencyObject element && InSlot(slot, element), $"{name} 必須位於 {slotName}。");
+    }
+
+    internal static T? FindLogical<T>(object? root, Func<T, bool> predicate) where T : DependencyObject
+    {
+        if (root is not DependencyObject node) return null;
+        if (node is T match && predicate(match)) return match;
+        foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+            if (FindLogical(child, predicate) is { } found) return found;
+        return null;
+    }
+
+    internal static void VerifyTableColumns(MainWindow window, string gridName, string[] numeric, string[] status)
+    {
+        var grid = window.FindName(gridName) as DataGrid;
+        Require(grid is not null && ResultTable.GetEnabled(grid), $"{gridName} 必須存在並啟用 ResultTable。");
+        var headers = grid!.Columns.Select(column => column.Header?.ToString() ?? string.Empty).ToArray();
+        foreach (var header in numeric.Concat(status))
+            Require(headers.Contains(header), $"{gridName} 找不到欄位「{header}」。");
+        foreach (var column in grid.Columns)
+        {
+            var header = column.Header?.ToString() ?? string.Empty;
+            var expected = numeric.Contains(header) ? ResultColumnKind.Numeric
+                : status.Contains(header) ? ResultColumnKind.Status : ResultColumnKind.Text;
+            Require(ResultTable.GetKind(column) == expected, $"{gridName} 的「{header}」應為 {expected}，實際 {ResultTable.GetKind(column)}。");
+            Require(ReferenceEquals(((DataGridTextColumn)column).ElementStyle,
+                    Application.Current.FindResource(expected == ResultColumnKind.Numeric ? "NumericCell" : "TextCell")),
+                $"{gridName} 的「{header}」未套用 {expected} 樣式。");
+        }
+    }
+
+    private static void VerifyBasicPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var timetable = Page(window, "ResultsTabItem");
+            RequireIn(window, timetable.Description, "Description", "TimetableSourceText");
+            RequireIn(window, timetable.Content, "Content", "TimetableDataGrid");
+            Require(timetable.Filters is null && timetable.Summary is null && timetable.Actions is null, "時刻表頁不應有篩選、摘要或動作。");
+            VerifyTableColumns(window, "TimetableDataGrid",
+                ["計畫到站", "計畫出站", "實際到站", "實際出站", "停站", "延誤", "累積 km"], ["狀態"]);
+
+            var segment = Page(window, "SegmentTabItem");
+            RequireIn(window, segment.Description, "Description", "SegmentSourceText");
+            RequireIn(window, segment.Content, "Content", "SegmentDataGrid");
+            Require(segment.Footnote is TextBlock { Text: var segmentNote } && segmentNote.Contains("ATP"), "區間頁附註必須保留安全認證聲明。");
+            VerifyTableColumns(window, "SegmentDataGrid",
+                ["距離 km", "峰值 km/h", "旅行時間", "加速", "巡航", "惰行", "減速"], ["狀態"]);
+
+            var comparison = Page(window, "ComparisonTabItem");
+            RequireIn(window, comparison.Content, "Content", "ComparisonDataGrid");
+            Require(comparison.Footnote is TextBlock { Text: var compareNote } && compareNote.Contains("V1 不適用"),
+                "比較頁附註必須保留跨站與折返說明。");
+            VerifyTableColumns(window, "ComparisonDataGrid",
+                ["V1 到站", "V1 出站", "V1 停站", "V2 到站", "V2 出站", "V2 停站", "到站差", "出站差", "出站差 %"], ["狀態"]);
+
+            var resource = Page(window, "ResourceTabItem");
+            RequireIn(window, resource.Summary, "Summary", "ResourceOccupancySummaryText");
+            Require(FindLogical<Button>(resource.Actions, button => Equals(button.Content, "匯出資源占用 CSV")) is not null,
+                "容量頁的匯出鈕必須位於 Actions。");
+            RequireIn(window, resource.Content, "Content", "ResourceDataGrid");
+            VerifyTableColumns(window, "ResourceDataGrid",
+                ["占用時間", "使用率", "預約次數", "觀測每小時次數", "最短釋放間距"], []);
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 時刻表、區間、比較、容量頁套用 ResultPage 與表格規則");
+    }
+
+    private static void VerifySafetyAndStatisticsPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var safety = Page(window, "SafetyTabItem");
+            RequireIn(window, safety.Summary, "Summary", "SafetySummaryText");
+            RequireIn(window, safety.Filters, "Filters", "BrakingModeComboBox", "SafetyPairComboBox",
+                "SafetyDirectionComboBox", "SafetyStatusComboBox", "SafetyWindowComboBox");
+            foreach (var label in new[] { "煞車估算", "列車對", "方向", "狀態", "時間" })
+                Require(FindLogical<TextBlock>(safety.Filters, text => text.Text == label) is not null, $"閉塞頁篩選缺少標籤「{label}」。");
+            RequireIn(window, safety.FilterActions, "FilterActions", "ObstacleTrainComboBox", "ObstacleDelayTextBox");
+            Require(FindLogical<Button>(safety.FilterActions, button => Equals(button.Content, "觸發／排程急停")) is not null,
+                "障礙物急停鈕必須位於篩選卡右側群組。");
+            RequireIn(window, safety.Content, "Content", "SafetyDistanceCanvas", "SafetyDataGrid");
+            VerifyTableColumns(window, "SafetyDataGrid",
+                ["後車頭 km", "前車尾 km", "淨距 m", "安全距離 m", "煞車需求 m", "安全裕度 m"], ["狀態"]);
+
+            var statistics = Page(window, "IntervalStatisticsTabItem");
+            RequireIn(window, statistics.Summary, "Summary", "IntervalSummaryText");
+            RequireIn(window, statistics.Filters, "Filters", "IntervalDirectionComboBox", "IntervalVehicleComboBox",
+                "IntervalServiceRunComboBox", "IntervalVehicleTypeComboBox", "IntervalServiceTypeComboBox",
+                "IntervalStopPatternComboBox", "IntervalStartSecondTextBox", "IntervalEndSecondTextBox", "IncludeInProgressCheckBox");
+            foreach (var text in new[] { "重新整理", "匯出區間 CSV", "匯出彙總 CSV", "匯出全程平均 CSV" })
+                Require(FindLogical<Button>(statistics.Actions, button => Equals(button.Content, text)) is not null,
+                    $"統計頁「{text}」必須位於 Actions。");
+            RequireIn(window, statistics.Content, "Content", "JourneyStatisticsDataGrid", "IntervalStatisticsDataGrid");
+            VerifyTableColumns(window, "JourneyStatisticsDataGrid", ["起站離站", "終站抵達", "全程秒", "平均 km/h"], ["狀態"]);
+            VerifyTableColumns(window, "IntervalStatisticsDataGrid",
+                ["出發", "抵達", "旅行秒", "平均 km/h", "峰值 km/h", "閉塞受限 s"], ["狀態"]);
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 閉塞、統計頁套用 ResultPage 與表格規則");
+    }
+
+    // 審查重點：窄視窗與 125% 縮放時，頁首動作區與篩選卡右側群組不可壓住標題或篩選、不可超出頁面。
+    private static void VerifyCrowdedHeaders()
+    {
+        foreach (var (width, height, scale, tab) in new[]
+                 {
+                     (800d, 700d, 1d, "SafetyTabItem"), (800d, 700d, 1d, "IntervalStatisticsTabItem"),
+                     (1280d, 800d, 1.25d, "IntervalStatisticsTabItem"), (1280d, 800d, 1.25d, "SafetyTabItem"),
+                     (800d, 700d, 1.25d, "SafetyTabItem"), (800d, 700d, 1.25d, "IntervalStatisticsTabItem")
+                 })
+        {
+            var previousScale = ShellLayoutTests.SetInterfaceScale(scale);
+            var window = new MainWindow { Width = width, Height = height };
+            try
+            {
+                window.Show();
+                ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName(tab);
+                ShellLayoutTests.PumpLayout(window);
+                var page = (ResultPage)((TabItem)window.FindName(tab)!).Content;
+                Rect Bounds(FrameworkElement element) =>
+                    new(element.TranslatePoint(new Point(0, 0), page), new Size(element.ActualWidth, element.ActualHeight));
+                var context = $"{tab} {width}×{height}@{scale:0.##}";
+                var title = Bounds((FrameworkElement)page.Template.FindName("PART_Title", page));
+                if (page.Actions is FrameworkElement actionsElement)
+                {
+                    var actions = Bounds(actionsElement);
+                    Require(!title.IntersectsWith(actions) && actions.Right <= page.ActualWidth + .5,
+                        $"{context}：標題與動作區不可重疊或超出；title={title}, actions={actions}, page={page.ActualWidth:0.0}。");
+                }
+                if (page.Filters is FrameworkElement filtersElement && page.FilterActions is FrameworkElement filterActionsElement)
+                {
+                    var filters = Bounds(filtersElement);
+                    var filterActions = Bounds(filterActionsElement);
+                    Require(!filters.IntersectsWith(filterActions) && filterActions.Right <= page.ActualWidth + .5,
+                        $"{context}：篩選與右側群組不可重疊或超出；filters={filters}, group={filterActions}, page={page.ActualWidth:0.0}。");
+                }
+                // 外框不重疊還不夠：控制項本身也不可因寬度不足被版面裁切。
+                foreach (var (slot, slotName) in new[] { (page.Filters, "Filters"), (page.FilterActions, "FilterActions"), (page.Actions, "Actions") })
+                    RequireNotClipped(slot, $"{context} {slotName}");
+            }
+            finally
+            {
+                WpfTestWait.Close(window);
+                ShellLayoutTests.SetInterfaceScale(previousScale);
+            }
+        }
+        Console.WriteLine("[通過] 窄視窗與 125% 縮放下頁首動作區與篩選卡不重疊");
+    }
+
+    private static void VerifyDiagramAndSimulationPages()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var diagram = Page(window, "DiagramTabItem");
+            RequireIn(window, diagram.Content, "Content", "DiagramWorkspaceGrid", "DiagramControlsExpander",
+                "DiagramViewportBorder", "DiagramEventsExpander", "EventDataGrid");
+            var groups = new (string Name, string[] Controls, string[] Buttons)[]
+            {
+                ("篩選", ["DiagramDirectionComboBox", "DiagramVehicleComboBox", "ShowPlannedCheckBox", "ShowActualCheckBox", "ShowEventsCheckBox"], []),
+                ("檢視", ["DiagramZoomSlider", "DiagramVerticalZoomSlider", "DiagramStartMinuteTextBox", "DiagramEndMinuteTextBox",
+                    "DiagramTimeTickComboBox", "DiagramShowEndTimeCheckBox"], ["套用刻度"]),
+                ("匯出", ["HighResolutionCheckBox", "PdfPageSizeComboBox", "PdfSplitPagesCheckBox"], ["匯出 PNG", "匯出 PDF", "匯出實際全量 CSV"])
+            };
+            foreach (var (name, controls, buttons) in groups)
+            {
+                var row = FindLogical<DockPanel>(diagram.Content, panel => panel.Children.OfType<TextBlock>().FirstOrDefault()?.Text == name);
+                Require(row is not null, $"運行圖控制面板缺少「{name}」列。");
+                RequireIn(window, row, name, controls);
+                foreach (var text in buttons)
+                    Require(FindLogical<Button>(row, button => Equals(button.Content, text)) is not null, $"「{text}」必須位於「{name}」列。");
+            }
+            Require(window.FindName("DiagramViewportBorder") is Border { Style: var viewportStyle }
+                    && ReferenceEquals(viewportStyle, Application.Current.FindResource("ChartCard")),
+                "運行圖外框必須使用 ChartCard。");
+            VerifyTableColumns(window, "EventDataGrid", ["時間", "里程 km"], []);
+
+            VerifyTableColumns(window, "CurrentTrainDataGrid", ["車體中心 km", "速度 km/h"], ["狀態"]);
+            var toolbar = (DockPanel)window.FindName("SpeedProfileToolbar")!;
+            Require(toolbar is not null && toolbar.Children.OfType<TextBlock>().First().Text == "列車"
+                    && toolbar.Children.Contains((UIElement)window.FindName("SpeedProfileRunComboBox")!)
+                    && toolbar.Children.Contains((UIElement)window.FindName("SpeedProfileSourceText")!),
+                "速度曲線子分頁必須以「列車」標籤＋下拉＋來源文字組成精簡工具列。");
+            var speedViewer = (FrameworkElement)window.FindName("SpeedScrollViewer")!;
+            Require(speedViewer.Parent is Border { Style: var speedStyle } && ReferenceEquals(speedStyle, Application.Current.FindResource("ChartCard")),
+                "速度曲線必須放在 ChartCard 內。");
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 運行圖頁三列控制面板、模擬子分頁工具列與表格規則");
+    }
+
+    private static void VerifyNoHardCodedColors(string root)
+    {
+        var xaml = File.ReadAllText(System.IO.Path.Combine(root, "src", "MrtRouteSimulator.App", "MainWindow.xaml"));
+        var colors = Regex.Matches(xaml, "\"#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?\"").Select(match => match.Value).Distinct().ToArray();
+        Require(colors.Length == 0, $"MainWindow.xaml 不得含寫死色碼：{string.Join("、", colors)}");
+        Console.WriteLine("[通過] MainWindow.xaml 無寫死色碼");
+    }
+
+    // 篩選列換行時，標籤必須和它的控制項一起移動，不能留在上一行行尾。
+    private static void VerifyFilterLabelsStayWithControls()
+    {
+        var window = new MainWindow { Width = 1280, Height = 800 };
+        try
+        {
+            window.Show();
+            ShellLayoutTests.PumpLayout(window);
+            var labelStyle = Application.Current.FindResource("FilterLabel");
+            foreach (var tab in new[] { "SafetyTabItem", "IntervalStatisticsTabItem", "DiagramTabItem" })
+            {
+                var page = (ResultPage)((TabItem)window.FindName(tab)!).Content;
+                var labels = new List<TextBlock>();
+                foreach (var slot in new[] { page.Filters, page.FilterActions, page.Content })
+                    CollectLogical(slot, labels, text => ReferenceEquals(text.Style, labelStyle));
+                Require(labels.Count > 0, $"{tab} 找不到篩選標籤。");
+                foreach (var label in labels)
+                    Require(LogicalTreeHelper.GetParent(label) is StackPanel { Orientation: Orientation.Horizontal } pair && pair.Children.Count == 2,
+                        $"{tab} 的標籤「{label.Text}」必須和控制項包成一組，換行時才不會被拆開。");
+            }
+        }
+        finally { WpfTestWait.Close(window); }
+        Console.WriteLine("[通過] 篩選標籤與控制項成組換行");
+    }
+
+    private static void CollectLogical<T>(object? root, List<T> found, Func<T, bool> predicate) where T : DependencyObject
+    {
+        if (root is not DependencyObject node) return;
+        if (node is T match && predicate(match)) found.Add(match);
+        foreach (var child in LogicalTreeHelper.GetChildren(node).OfType<DependencyObject>())
+            CollectLogical(child, found, predicate);
+    }
+
+    private static void RequireNotClipped(object? slot, string context)
+    {
+        var elements = new List<FrameworkElement>();
+        CollectLogical(slot, elements, _ => true);
+        foreach (var element in elements.Where(item => item.IsVisible))
+            Require(LayoutInformation.GetLayoutClip(element) is null,
+                $"{context}：{element.GetType().Name} {element.Name} 寬度不足被版面裁切；actual={element.ActualWidth:0.0}, desired={element.DesiredSize.Width:0.0}。");
+    }
+}

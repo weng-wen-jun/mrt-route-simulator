@@ -86,6 +86,7 @@ public sealed record PlaybackFrame(
     ImmutableList<SafetyObservation> SafetyHistory,
     ImmutableDictionary<string, TrackPosition> TrainCenterPositions,
     ImmutableArray<LockedRouteSegment> ActiveRouteLocks,
+    ImmutableDictionary<string, ImmutableArray<string>> TrackEdgeOccupants,
     bool IsComplete,
     MovingBlockMode MovingBlockMode,
     BrakingEstimationMode BrakingEstimationMode,
@@ -618,6 +619,9 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             }
         }
 
+        var trackEdgeOccupants = TrackOccupancySnapshot.Build(_world.TopologyOccupancy.Select(pair =>
+            KeyValuePair.Create(pair.Key, pair.Value.OccupiedIntervals)));
+
         var sequence = Interlocked.Increment(ref _sequence);
         // This aggregate covers snapshot/list/center assembly. The immutable PlaybackFrame
         // constructor remains outside the legacy per-frame field to keep default behavior intact.
@@ -651,6 +655,7 @@ public sealed class SimulationPlaybackWorker : IAsyncDisposable
             _safetyHistory,
             centers.ToImmutable(),
             _world.GetActiveRouteLocks().ToImmutableArray(),
+            trackEdgeOccupants,
             _world.IsComplete,
             _world.MovingBlockMode,
             _world.BrakingEstimationMode,

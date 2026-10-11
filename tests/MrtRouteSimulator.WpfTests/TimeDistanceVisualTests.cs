@@ -509,11 +509,10 @@ internal static class TimeDistanceVisualTests
 
     private static bool HasEventLegend(Canvas canvas) =>
         canvas.Children
-            .OfType<TextBlock>()
-            .Any(text => text.Text.Contains("綠點", StringComparison.Ordinal)
-                || text.Text.Contains("紫點", StringComparison.Ordinal)
-                || text.Text.Contains("紅點", StringComparison.Ordinal)
-                || text.Text.Contains("事件標記", StringComparison.Ordinal));
+            .OfType<StackPanel>()
+            .Where(panel => Equals(panel.Tag, ChartPainter.LegendTag))
+            .SelectMany(panel => panel.Children.OfType<TextBlock>())
+            .Any(text => text.Text is "站點事件" or "端點事件" or "安全事件");
 
     private static void RequireSameSeriesEndpoints(
         VisualSnapshot expected,

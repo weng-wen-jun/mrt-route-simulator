@@ -191,7 +191,7 @@ public static class TimeDistanceStationLabelLayout
         {
             Text = placement.Text,
             FontSize = placement.FontSize,
-            FontFamily = SystemFonts.MessageFontFamily,
+            FontFamily = ChartTheme.Font,
             FontWeight = FontWeights.Normal,
             Foreground = new SolidColorBrush(placement.Color),
             TextWrapping = TextWrapping.NoWrap,
@@ -205,7 +205,8 @@ public static class TimeDistanceStationLabelLayout
 
     public static Line CreateLeaderLine(TimeDistanceStationLabelPlacement placement)
     {
-        var lineColor = Color.FromArgb(150, placement.Color.R, placement.Color.G, placement.Color.B);
+        var lineColor = placement.Color;
+        lineColor.A = 150;
         return new Line
         {
             X1 = placement.LeaderStartX,
@@ -288,7 +289,7 @@ public static class TimeDistanceStationLabelLayout
         {
             Text = text,
             FontSize = fontSize,
-            FontFamily = SystemFonts.MessageFontFamily,
+            FontFamily = ChartTheme.Font,
             FontWeight = FontWeights.Normal,
             TextWrapping = TextWrapping.NoWrap
         };

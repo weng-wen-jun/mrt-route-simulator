@@ -49,8 +49,11 @@ internal static class LargePlaybackDiagnostics
             Console.WriteLine($"layout viewTabs={viewTabs.ActualHeight:0.0} routeViewport={routeViewport.ActualHeight:0.0} "
                 + $"simulationGrid={simulationGrid.ActualHeight:0.0} workspaceTabs={workspaceTabs.ActualHeight:0.0} "
                 + $"row1={simulationGrid.RowDefinitions[1].ActualHeight:0.0} window={window.ActualHeight:0.0}");
+            // 新骨架中配線圖下方保留固定捲軸（18）與外框內距；底緣距子分頁底緣不超過 30 px 即視為撐滿。
+            var viewTabsBottom = viewTabs.TranslatePoint(new Point(0, viewTabs.ActualHeight), window).Y;
+            var routeBottom = routeViewport.TranslatePoint(new Point(0, routeViewport.ActualHeight), window).Y;
             if (Math.Abs(viewTabs.ActualHeight - simulationGrid.RowDefinitions[1].ActualHeight) > 5
-                || routeViewport.ActualHeight < viewTabs.ActualHeight - 65)
+                || viewTabsBottom - routeBottom > 30)
                 throw new InvalidOperationException("路線圖分頁未撐滿模擬頁面剩餘高度。");
             typeof(MainWindow).GetMethod("DrawV2Route",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
@@ -165,7 +168,18 @@ internal static class LargePlaybackDiagnostics
             var playInvokeDuration = clock.Elapsed - playInvokeStart;
             WpfTestWait.Wait(Task.Delay(3000));
             timer.Stop();
-            WpfTestWait.Invoke(window, "Pause_Click", new Button(), new RoutedEventArgs(Button.ClickEvent));
+            // Pause_Click 是 async void：與 Play_Click 一樣在 dispatcher 同步內容中呼叫，
+            // await 之後的 UI 更新才會回到 UI 執行緒，而不是在執行緒集區上存取 TextBlock。
+            SynchronizationContext.SetSynchronizationContext(
+                new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
+            try
+            {
+                WpfTestWait.Invoke(window, "Pause_Click", new Button(), new RoutedEventArgs(Button.ClickEvent));
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
             WpfTestWait.Wait(Task.Delay(50));
 
             var frame = WpfTestWait.LatestFrame(window);

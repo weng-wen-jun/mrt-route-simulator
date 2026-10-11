@@ -91,6 +91,7 @@ public partial class MainWindow
         }
 
         SetQuickBuilderState(locked: false, collapsed: false);
+        SetQuickBuilderDrawerOpen(true);
         StationDataGrid.BringIntoView();
         StationDataGrid.Focus();
     }

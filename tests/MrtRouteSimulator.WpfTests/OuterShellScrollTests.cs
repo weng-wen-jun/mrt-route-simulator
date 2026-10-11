@@ -368,7 +368,7 @@ internal static class OuterShellScrollTests
         for (var index = 0; index < shellGrid.Children.Count; index++)
         {
             var child = shellGrid.Children[index] as FrameworkElement;
-            if (child is null || Grid.GetRow(child) != 3 || child.Visibility != Visibility.Visible
+            if (child is null || Grid.GetRow(child) != 2 || child.Visibility != Visibility.Visible
                 || child.ActualWidth <= 0 || child.ActualHeight <= 0) continue;
             var statusBounds = Bounds(window, child);
             Require(!Intersects(proxyBounds, statusBounds),
@@ -573,7 +573,8 @@ internal static class OuterShellScrollTests
         {
             window.Show();
             PumpLayout(window);
-            var column = (ColumnDefinition)window.FindName("QuickBuilderColumn")!;
+            var drawer = (Border)window.FindName("QuickBuilderSidebar")!;
+            var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
             var shellGrid = (Grid)window.FindName("ShellContentGrid")!;
             var route = (ScrollViewer)window.FindName("RouteScrollViewer")!;
             var proxy = (ScrollBar)window.FindName("ShellRouteHorizontalScrollBar")!;
@@ -582,9 +583,13 @@ internal static class OuterShellScrollTests
                 [typeof(double), typeof(int), typeof(double)], null)!;
             Require((double)calculate.Invoke(null, [400d, 0, 2d])! == 400d,
                 "未建立路線的空白畫布不得套用 200% 路線縮放。");
-            Require(column.ActualWidth >= 280 && column.ActualWidth < 310
-                && column.ActualWidth < shellGrid.ActualWidth * .4,
-                $"800 DIP 預設頁左欄應自適應縮小；left={column.ActualWidth}, total={shellGrid.ActualWidth}。");
+            Require(drawer.Visibility == Visibility.Collapsed, "快速起稿抽屜預設必須收起。");
+            var routeWidthClosed = route.ActualWidth;
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Visible && drawer.ActualWidth >= 319.5 && drawer.ActualWidth <= 330,
+                $"800 DIP 抽屜寬度應為 320；visible={drawer.Visibility}, width={drawer.ActualWidth}, total={shellGrid.ActualWidth}。");
+            Require(Math.Abs(route.ActualWidth - routeWidthClosed) < 1, "抽屜覆蓋在主體上，不得改變配線圖寬度。");
             var stationGrid = (DataGrid)window.FindName("StationDataGrid")!;
             Require(stationGrid.Columns[1].ActualWidth >= 80,
                 "小視窗車站表的站名欄不得被壓成不可讀的窄欄。");
@@ -605,17 +610,19 @@ internal static class OuterShellScrollTests
                 $"未讀檔／未建立時不應有空白水平捲軸；overflow={route.ScrollableWidth}, proxy={proxy.Visibility}。");
             window.Width = 1400;
             PumpLayout(window);
-            Require(Math.Abs(column.ActualWidth - 450) < 1,
-                $"寬視窗左欄應保留450上限；actual={column.ActualWidth}。");
+            Require(Math.Abs(drawer.ActualWidth - 450) < 1,
+                $"寬視窗抽屜應保留 450 上限；actual={drawer.ActualWidth}。");
             window.Width = 800;
             PumpLayout(window);
             Require(route.ScrollableWidth < 1 && proxy.Visibility == Visibility.Collapsed,
                 $"寬窗縮回小窗後空白畫布不得殘留溢位；overflow={route.ScrollableWidth}, proxy={proxy.Visibility}。");
             typeof(MainWindow).GetMethod("SetQuickBuilderState", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .Invoke(window, [true, true]);
-            window.Width = 800;
             PumpLayout(window);
-            Require(column.ActualWidth < 1, "視窗縮放不得重新展開已收合左欄。");
+            Require(drawer.Visibility == Visibility.Collapsed, "SetQuickBuilderState(collapsed) 必須關閉抽屜。");
+            window.Width = 820;
+            PumpLayout(window);
+            Require(drawer.Visibility == Visibility.Collapsed, "視窗縮放不得重新打開已收合的抽屜。");
         }
         finally
         {

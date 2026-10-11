@@ -80,7 +80,14 @@ internal static class Program
             if (args.Contains("--mcp-only"))
             {
                 McpBridgeTests.Run(GetRoot(args));
+                McpProjectSwitchExportTests.Run(GetRoot(args));
                 Console.WriteLine("PASS WPF MCP bridge");
+                return 0;
+            }
+            if (args.Contains("--mcp-switch-export-only"))
+            {
+                McpProjectSwitchExportTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF MCP project switch export");
                 return 0;
             }
             if (args.Contains("--native-retention-only"))
@@ -95,6 +102,49 @@ internal static class Program
                 McpBridgeTests.Run(GetRoot(args));
             RunValidationWarningTests();
                 Console.WriteLine("PASS WPF validation warning dismissal");
+                return 0;
+            }
+            if (args.Contains("--shell-layout-baseline"))
+            {
+                Console.WriteLine($"shellBaselineRouteViewportHeight={ShellLayoutTests.MeasureRouteViewportHeight(GetRoot(args)):0.0}");
+                return 0;
+            }
+            if (args.Contains("--shell-screenshots"))
+            {
+                ShellLayoutTests.CaptureScreenshots(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--result-pages-only"))
+            {
+                ResultPageTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--editor-theme-only"))
+            {
+                EditorThemeTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--chart-theme-only"))
+            {
+                ChartThemeTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--shell-layout-only"))
+            {
+                ShellLayoutTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--track-theme-only"))
+            {
+                TrackDiagramThemeTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--visual-rules-only"))
+            {
+                // 全範例配線圖版面規則；不含需要互動桌面的像素匯出測試。
+                VisualRulesTests.Run();
+                TrackDiagramThemeTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF visual rules only");
                 return 0;
             }
             if (args.Contains("--synchronous-export-only"))
@@ -258,6 +308,7 @@ internal static class Program
                 return 0;
             }
             McpBridgeTests.Run(GetRoot(args));
+            McpProjectSwitchExportTests.Run(GetRoot(args));
             RunValidationWarningTests();
             SynchronousDiagramExportTests.Run(GetRoot(args));
             PdfPaginationRegressionTests.Run(GetRoot(args));
@@ -277,6 +328,11 @@ internal static class Program
             DiagramCompactLayoutTests.Run(regressionRoot);
             TimeDistancePreparationTests.Run(regressionRoot);
             VisualRulesTests.Run();
+            TrackDiagramThemeTests.Run(GetRoot(args));
+            ShellLayoutTests.Run(GetRoot(args));
+            ResultPageTests.Run(GetRoot(args));
+            ChartThemeTests.Run(GetRoot(args));
+            EditorThemeTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);

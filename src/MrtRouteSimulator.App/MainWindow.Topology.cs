@@ -189,6 +189,7 @@ public partial class MainWindow
         _startClockSeconds = document.Simulation.StartClockSeconds;
         _playbackTimeSeconds = 0;
         _activeTopologyProjectDocument = document;
+        UpdateQuickBuilderToggleText();
         _stationChainageProjection = prepared.StationChainage;
         UpdateFixedTimetableArchiveExportState();
         SetQuickBuilderState(locked: lockLegacyInputs, collapsed: lockLegacyInputs);

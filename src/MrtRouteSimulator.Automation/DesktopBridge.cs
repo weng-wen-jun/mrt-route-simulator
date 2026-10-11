@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace MrtRouteSimulator.Automation;
@@ -77,15 +78,19 @@ public sealed class DesktopBridgeServer : IAsyncDisposable
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_stop.Token);
                 timeout.CancelAfter(TimeSpan.FromMinutes(3));
                 DesktopResponse response;
+                string? command = null;
                 try
                 {
                     var request = await DesktopBridge.ReadAsync<DesktopRequest>(pipe, timeout.Token);
+                    command = request.Command;
                     timeout.Token.ThrowIfCancellationRequested();
                     var value = await handler(request, timeout.Token);
                     response = new(true, JsonSerializer.SerializeToElement(value, AutomationJson.Options));
                 }
                 catch (Exception exception)
                 {
+                    // The client only receives the message; keep type, inner exceptions and stack here.
+                    LogFailure(command, "handler", exception);
                     response = new(false, null, exception.Message);
                 }
                 try
@@ -94,6 +99,7 @@ public sealed class DesktopBridgeServer : IAsyncDisposable
                 }
                 catch (InvalidOperationException exception)
                 {
+                    LogFailure(command, "response", exception);
                     // Size checks happen before any bytes are written, so a small error is safe.
                     await DesktopBridge.WriteAsync(pipe, new DesktopResponse(false, null, exception.Message), timeout.Token);
                 }
@@ -103,6 +109,10 @@ public sealed class DesktopBridgeServer : IAsyncDisposable
             catch (OperationCanceledException) { /* Idle clients are bounded. */ }
         }
     }
+
+    private static void LogFailure(string? command, string stage, Exception exception) =>
+        Trace.TraceError(
+            $"MCP desktop bridge {stage} failed (PID {Environment.ProcessId}, command '{command ?? "<unread>"}'): {exception}");
 
     public async ValueTask DisposeAsync()
     {
