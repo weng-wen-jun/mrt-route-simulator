@@ -190,11 +190,15 @@ public partial class MainWindow
             var selectedSimulationView = SimulationViewTabControl.SelectedItem;
             var routeViewSelected = SimulationViewTabControl.SelectedIndex == 0;
             var speedViewSelected = ReferenceEquals(selectedSimulationView, SpeedProfileTabItem);
-            if (routeViewSelected && RefreshDue(ref _lastRouteRenderTimestamp, 33, force))
+            // Worker publication and the dispatcher already limit playback cadence.
+            // A second 33 ms gate can consume a frame without painting its route;
+            // sequence bookkeeping then prevents a later refresh from painting it.
+            if (routeViewSelected)
             {
                 using (NativeAcceptanceMeasurePhase(inputToken, "playback.selectedChart"))
                 using (_playbackDiagnostics.Measure(PlaybackDiagnosticMetricNames.RouteMarkerRender))
                 {
+                    _lastRouteRenderTimestamp = now;
                     var routeRender = Stopwatch.StartNew();
                     DrawV2Route(frame.GetSnapshot());
                     _lastRouteRenderMilliseconds = routeRender.Elapsed.TotalMilliseconds;

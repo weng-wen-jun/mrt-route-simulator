@@ -273,9 +273,13 @@ internal static class ResultPageTests
             var timetable = Page(window, "ResultsTabItem");
             RequireIn(window, timetable.Description, "Description", "TimetableSourceText");
             RequireIn(window, timetable.Content, "Content", "TimetableDataGrid");
-            Require(timetable.Filters is null && timetable.Summary is null && timetable.Actions is null, "時刻表頁不應有篩選、摘要或動作。");
+            RequireIn(window, timetable.Filters, "Filters",
+                "TimetableRouteFilterComboBox", "TimetableOperatingLineFilterComboBox");
+            Require(FindLogical<Button>(timetable.Actions, button => Equals(button.Content, "匯出時刻表 CSV")) is not null,
+                "時刻表頁的 CSV 匯出鈕必須位於 Actions。");
+            Require(timetable.Summary is null, "時刻表頁不應建立重複摘要。");
             VerifyTableColumns(window, "TimetableDataGrid",
-                ["計畫到站", "計畫出站", "實際到站", "實際出站", "停站", "延誤", "累積 km"], ["狀態"]);
+                ["計畫到站", "計畫出站", "實際到站", "實際出站", "表定停站", "實際停站", "延誤", "累積 km"], ["狀態"]);
 
             var segment = Page(window, "SegmentTabItem");
             RequireIn(window, segment.Description, "Description", "SegmentSourceText");

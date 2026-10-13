@@ -66,7 +66,7 @@ public static class TrajectoryAnalysis
             .GroupBy(item => (item.VehicleId, RoundedTime: Math.Round(item.SimulationTimeSeconds, 1)))
             .ToDictionary(group => group.Key, group => string.Join('|', group.Select(item => item.EventType)));
         var builder = new StringBuilder();
-        builder.AppendLine("software_version,model_version,vehicle_id,service_run_id,service_class_id,service_pattern_id,simulation_time_s,display_time,position_km,speed_kmh,direction,track_id,state,previous_station,next_station,event_type");
+        builder.AppendLine("software_version,model_version,vehicle_id,service_run_id,service_class_id,service_pattern_id,simulation_time_s,display_time,position_km,speed_kmh,direction,track_id,state,previous_station,next_station,event_type,service_route_id,operating_line_id");
 
         foreach (var sample in samples.OrderBy(item => item.SimulationTimeSeconds).ThenBy(item => item.VehicleId, StringComparer.Ordinal))
         {
@@ -88,7 +88,9 @@ public static class TrajectoryAnalysis
                 .Append(sample.Phase).Append(',')
                 .Append(Csv(sample.CurrentStationId)).Append(',')
                 .Append(Csv(sample.NextStationId ?? string.Empty)).Append(',')
-                .Append(Csv(eventType ?? string.Empty))
+                .Append(Csv(eventType ?? string.Empty)).Append(',')
+                .Append(Csv(sample.ServiceRouteId ?? string.Empty)).Append(',')
+                .Append(Csv(sample.OperatingLineId ?? string.Empty))
                 .AppendLine();
         }
 

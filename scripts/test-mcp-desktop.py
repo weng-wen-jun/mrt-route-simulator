@@ -47,18 +47,24 @@ def close_owned_desktop(pid: int, process_handle: int) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace-root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--server-dll", type=Path, default=None, help="Test a build directly without changing Codex registration")
     args = parser.parse_args()
     if os.name != "nt":
         raise RuntimeError("Windows is required.")
     root = args.workspace_root.resolve()
     environment = dict(os.environ, CODEX_HOME=str(Path.home() / ".codex"))
-    registration = subprocess.run([shutil.which("codex"), "mcp", "get", "mrt-route-simulator", "--json"],
-        capture_output=True, text=True, encoding="utf-8", env=environment, cwd=root, check=True)
-    registered = json.loads(registration.stdout)
-    transport = registered["transport"]
-    if not registered["enabled"] or transport["type"] != "stdio":
-        raise RuntimeError("Registered stdio server is not enabled.")
-    command = [transport["command"], *transport["args"]]
+    if args.server_dll:
+        command = [shutil.which("dotnet"), str(args.server_dll.resolve()), "--workspace-root", str(root)]
+        registration_label = "direct-build"
+    else:
+        registration = subprocess.run([shutil.which("codex"), "mcp", "get", "mrt-route-simulator", "--json"],
+            capture_output=True, text=True, encoding="utf-8", env=environment, cwd=root, check=True)
+        registered = json.loads(registration.stdout)
+        transport = registered["transport"]
+        if not registered["enabled"] or transport["type"] != "stdio":
+            raise RuntimeError("Registered stdio server is not enabled.")
+        command = [transport["command"], *transport["args"]]
+        registration_label = "mrt-route-simulator"
     client = mcp.JsonRpcClient(command, root, 60)
     pid = None
     handle = None
@@ -66,7 +72,7 @@ def main() -> int:
     kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     kernel.OpenProcess.restype = wintypes.HANDLE
     kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-    summary = {"registration": "mrt-route-simulator", "passed": False, "closedNormally": False}
+    summary = {"registration": registration_label, "passed": False, "closedNormally": False}
     try:
         client.start()
         initialized = client.request("initialize", {

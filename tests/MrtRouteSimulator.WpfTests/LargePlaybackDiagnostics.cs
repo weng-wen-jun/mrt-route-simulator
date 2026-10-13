@@ -308,7 +308,18 @@ internal static class LargePlaybackDiagnostics
             var centerOffset = (platform.PlatformStartOffsetMeters + platform.PlatformEndOffsetMeters) / 2;
             var center = (Point)geometry.GetType().GetMethod("PointAt")!
                 .Invoke(geometry, [centerOffset / edge.LengthMeters])!;
-            if (Math.Abs(center.X - stationX) > 8)
+            if (!platform.AllowsPassengerService && edge.Kind == TrackEdgeKind.Mainline)
+            {
+                // A through operational marker is not a passenger station face.
+                // Forcing it onto the passenger station's display chainage is the
+                // O13 2.32x false-speed bug. Check its actual offset on the joined rail.
+                var from = (Point)geometry.GetType().GetProperty("From")!.GetValue(geometry)!;
+                var to = (Point)geometry.GetType().GetProperty("To")!.GetValue(geometry)!;
+                var expected = from.X + (to.X - from.X) * centerOffset / edge.LengthMeters;
+                if (Math.Abs(center.X - expected) > .001)
+                    throw new InvalidOperationException($"通過正線 {platform.PlatformId} 未依實體偏移等比例顯示。");
+            }
+            else if (Math.Abs(center.X - stationX) > 8)
                 throw new InvalidOperationException(
                     $"路線圖車站投影錯誤：{platform.StationId} 月臺 {platform.PlatformId} 中心偏離站心 {center.X - stationX:0.0}px。");
         }
@@ -429,23 +440,34 @@ internal static class LargePlaybackDiagnostics
             var throughCenterOffset = (through.PlatformStartOffsetMeters + through.PlatformEndOffsetMeters) / 2;
             var localCenter = At(local.TrackEdgeId, localCenterOffset);
             var throughCenter = At(through.TrackEdgeId, throughCenterOffset);
-            if (Math.Abs(localCenter.X - throughCenter.X) > 8)
+            if (through.AllowsPassengerService && Math.Abs(localCenter.X - throughCenter.X) > 8)
                 throw new InvalidOperationException($"{facility.FacilityId} 側線／正線月臺中心未對位：X 相差 {localCenter.X - throughCenter.X:0.0}px。");
             if (Math.Abs(localCenter.Y - throughCenter.Y) < 8)
                 throw new InvalidOperationException($"{facility.FacilityId} 側線／正線月臺沒有保持可辨識的多軌間距。");
 
             var localStop = At(local.TrackEdgeId, local.StopPositionOffsetMeters);
             var throughStop = At(through.TrackEdgeId, through.StopPositionOffsetMeters);
-            if (Math.Abs(localStop.X - throughStop.X) > 8)
+            if (!through.AllowsPassengerService)
+            {
+                var physicalFrom = At(through.TrackEdgeId, 0);
+                var physicalTo = At(through.TrackEdgeId, throughEdge.LengthMeters);
+                var expectedCenterX = physicalFrom.X + (physicalTo.X - physicalFrom.X)
+                    * throughCenterOffset / throughEdge.LengthMeters;
+                var expectedStopX = physicalFrom.X + (physicalTo.X - physicalFrom.X)
+                    * through.StopPositionOffsetMeters / throughEdge.LengthMeters;
+                if (Math.Abs(throughCenter.X - expectedCenterX) > .001
+                    || Math.Abs(throughStop.X - expectedStopX) > .001)
+                    throw new InvalidOperationException($"{facility.FacilityId} 非載客通過參考點未依實體股道偏移顯示。");
+            }
+            if (through.AllowsPassengerService && Math.Abs(localStop.X - throughStop.X) > 8)
                 throw new InvalidOperationException($"{facility.FacilityId} 側線／正線停靠位置未對位：X 相差 {localStop.X - throughStop.X:0.0}px。");
 
         }
 
         CheckOppositeDirectionSymmetry("O04", 1);
-        // O13 的下／上行 edge 為 660／645 m；資料中的相對站心月臺 offset
-        // 相差 15 m，保留這個 synthetic sample 的近似對稱，不把兩條 edge
-        // 強行視為等長。
-        CheckOppositeDirectionSymmetry("O13", 20);
+        // O13 與 O04 一樣採上下行 480 m 正線配置，使用相同的 1 m
+        // 相對站心幾何對稱容許值。
+        CheckOppositeDirectionSymmetry("O13", 1);
 
         void CheckOppositeDirectionSymmetry(string stationId, double offsetToleranceMeters)
         {
@@ -491,7 +513,8 @@ internal static class LargePlaybackDiagnostics
             var upThroughCenter = At(upThrough.TrackEdgeId,
                 (upThrough.PlatformStartOffsetMeters + upThrough.PlatformEndOffsetMeters) / 2);
             if (Math.Abs(downLocalCenter.X - upLocalCenter.X) > 8
-                || Math.Abs(downThroughCenter.X - upThroughCenter.X) > 8)
+                || downThrough.AllowsPassengerService && upThrough.AllowsPassengerService
+                    && Math.Abs(downThroughCenter.X - upThroughCenter.X) > 8)
             {
                 throw new InvalidOperationException($"{stationId} 上下行月臺中心未以站心鏡射對位。");
             }
@@ -503,7 +526,8 @@ internal static class LargePlaybackDiagnostics
             var upLocalStop = At(upLocal.TrackEdgeId, upLocal.StopPositionOffsetMeters);
             var upThroughStop = At(upThrough.TrackEdgeId, upThrough.StopPositionOffsetMeters);
             if (Math.Abs(downLocalStop.X - upLocalStop.X) > 8
-                || Math.Abs(downThroughStop.X - upThroughStop.X) > 8)
+                || downThrough.AllowsPassengerService && upThrough.AllowsPassengerService
+                    && Math.Abs(downThroughStop.X - upThroughStop.X) > 8)
             {
                 throw new InvalidOperationException($"{stationId} 上下行停靠點未以站心鏡射對位。");
             }

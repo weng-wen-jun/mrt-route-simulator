@@ -543,10 +543,13 @@ internal static class VisualRulesTests
                         $"{path}：{station.Key} 應由上而下呈現待避線、通過正線、通過正線、待避線。");
                 }
             }
-            foreach (var group in bodies.GroupBy(b => (string)b.Tag.GetType().GetProperty("StationId")!.GetValue(b.Tag)!))
+            // Transparent through-marker proxies are operational references, not
+            // passenger platform bodies. Do not force their physical offsets onto
+            // the passenger station center (the O13 false-speed mapping defect).
+            foreach (var group in bodies.Where(b => b.Opacity > 0).GroupBy(b => (string)b.Tag.GetType().GetProperty("StationId")!.GetValue(b.Tag)!))
             {
                 var centers = group.Select(b => Canvas.GetLeft(b) + b.Width / 2).ToArray();
-                Require(centers.Max() - centers.Min() < .51, $"{path}：同站各股道月台中心錯列。");
+                Require(centers.Max() - centers.Min() < .51, $"{path}：同站載客月台中心錯列。");
             }
             var rails = canvas.Children.OfType<Polyline>().Where(p => p.ToolTip is string).ToArray();
             foreach (var connection in sample.Topology.DirectedConnections)

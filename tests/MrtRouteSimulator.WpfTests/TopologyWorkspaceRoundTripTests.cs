@@ -111,9 +111,11 @@ internal static class TopologyWorkspaceRoundTripTests
             CompleteChoiceDialog(editor, "選擇班次方向", "上行");
             editorType.GetMethod("AddManualTimetableRow", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(editor, null);
             draft = (TopologyProjectDocument)draftProperty.GetValue(state)!;
+            var inboundRouteId = draft.DirectionRouteBindings.Single(item => item.Direction == TrainDirection.Inbound).ServiceRouteId;
             if (draft.Dispatch.ManualTimetableRows?.Length != manualCount + 1
-                || draft.Dispatch.ManualTimetableRows[^1].Direction != TrainDirection.Inbound)
-                throw new InvalidOperationException("手動班表新增時選取上行，卻未寫入上行班次。");
+                || draft.Dispatch.ManualTimetableRows[^1].Direction != TrainDirection.Inbound
+                || draft.Dispatch.ManualTimetableRows[^1].ServiceRouteId != inboundRouteId)
+                throw new InvalidOperationException("手動班表新增時選取上行，卻未寫入上行方向綁定的班次與營運路徑。");
             TopologyProjectFormat.CreateRuntime(draft);
             Console.WriteLine("[通過] 大型樣本可由 UI 新增指定上行方向的手動班次");
 

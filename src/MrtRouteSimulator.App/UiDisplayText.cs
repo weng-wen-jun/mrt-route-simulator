@@ -10,7 +10,7 @@ internal static class UiDisplayText
 {
     private static readonly IReadOnlyDictionary<string, string> Headers = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["SchematicPosition"] = "示意水平位置", ["SchematicLane"] = "示意股道（上負下正）", ["PlatformNumber"] = "月台號碼",
+        ["SchematicPosition"] = "示意水平位置", ["SchematicLane"] = "垂直位置（單位，上負下正）", ["PlatformNumber"] = "月台號碼",
         ["PlatformBodyId"] = "共用站體編號", ["DisplaySide"] = "站體位置",
         ["StopPositionReference"] = "停點基準",
         ["Id"] = "編號", ["Name"] = "名稱", ["Kind"] = "類型", ["Detail"] = "說明",
@@ -38,6 +38,7 @@ internal static class UiDisplayText
         ["ServiceType"] = "服務類型", ["VehicleType"] = "車型", ["StopPattern"] = "停站模式",
         ["OriginPlatform"] = "起始月台", ["VehicleId"] = "車輛編號", ["ContinueAfterTerminal"] = "終點後續行",
         ["DepartureSeconds"] = "發車秒數", ["ServiceRunId"] = "車次編號", ["ContinuationServiceRunId"] = "接續車次編號",
+        ["ServiceRouteId"] = "營運路徑", ["OperatingLineId"] = "營運路線", ["StationTimetableEntries"] = "每站時刻",
         ["DistanceFromPreviousKm"] = "與前站距離（km）", ["ProjectName"] = "專案名稱", ["ProjectId"] = "專案編號",
         ["ConflictResourceIds"] = "衝突資源編號", ["AllowedVehicleTypeIds"] = "允許車型編號",
         ["AllowedServiceTypeIds"] = "允許服務編號", ["Facility"] = "設施編號",

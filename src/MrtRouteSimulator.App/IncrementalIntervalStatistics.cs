@@ -134,7 +134,8 @@ internal sealed class IncrementalIntervalStatistics
         }
 
         var run = GetRun(sample.VehicleId, sample.ServiceRunId, sample.Direction,
-            sample.ServiceClassId, sample.ServicePatternId, sample.VehicleTypeId);
+            sample.ServiceClassId, sample.ServicePatternId, sample.VehicleTypeId,
+            sample.ServiceRouteId, sample.OperatingLineId);
         run.FirstSample ??= sample;
         var previous = run.LastSample;
         var previousSegment = run.PreviousSegment;
@@ -211,7 +212,7 @@ internal sealed class IncrementalIntervalStatistics
 
     private SegmentState? ResolveSampleSegment(RunState run, TrajectorySample sample)
     {
-        var stations = GetStations(sample.Direction);
+        var stations = GetStations(run);
         var current = sample.CurrentStationId;
         var next = sample.NextStationId;
         if (!string.IsNullOrWhiteSpace(current) && !string.IsNullOrWhiteSpace(next))
@@ -251,8 +252,9 @@ internal sealed class IncrementalIntervalStatistics
         }
 
         var run = GetRun(item.VehicleId, item.ServiceRunId, item.Direction,
-            item.ServiceClassId, item.ServicePatternId, item.VehicleTypeId);
-        var stations = GetStations(item.Direction);
+            item.ServiceClassId, item.ServicePatternId, item.VehicleTypeId,
+            item.ServiceRouteId, item.OperatingLineId);
+        var stations = GetStations(run);
         var stationIndex = FindStationIndex(item, stations);
 
         if (stationIndex is { } index
@@ -427,12 +429,15 @@ internal sealed class IncrementalIntervalStatistics
         TrainDirection direction,
         string serviceClassId,
         string servicePatternId,
-        string vehicleTypeId)
+        string vehicleTypeId,
+        string? serviceRouteId,
+        string? operatingLineId)
     {
         var key = new RunKey(vehicleId, serviceRunId, direction);
         if (!_runs.TryGetValue(key, out var run))
         {
-            run = new RunState(key, serviceClassId, servicePatternId, vehicleTypeId);
+            run = new RunState(key, serviceClassId, servicePatternId, vehicleTypeId,
+                serviceRouteId, operatingLineId);
             _runs.Add(key, run);
         }
         else
@@ -443,6 +448,8 @@ internal sealed class IncrementalIntervalStatistics
                 ? servicePatternId : run.ServicePatternId;
             run.VehicleTypeId = string.IsNullOrWhiteSpace(run.VehicleTypeId)
                 ? vehicleTypeId : run.VehicleTypeId;
+            run.ServiceRouteId ??= serviceRouteId;
+            run.OperatingLineId ??= operatingLineId;
         }
 
         return run;
@@ -465,6 +472,10 @@ internal sealed class IncrementalIntervalStatistics
 
     private IReadOnlyList<Station> GetStations(TrainDirection direction) =>
         direction == TrainDirection.Outbound ? _outboundStations : _inboundStations;
+
+    private IReadOnlyList<Station> GetStations(RunState run) => _topology is null
+        ? GetStations(run.Key.Direction)
+        : _topology.GetDisplayStations(run.Key.Direction, run.ServiceRouteId);
 
     private IntervalStatistic CreateInterval(SegmentState segment)
     {
@@ -492,6 +503,8 @@ internal sealed class IncrementalIntervalStatistics
             VehicleTypeId = run.VehicleTypeId,
             ServiceClassId = run.ServiceClassId,
             ServicePatternId = run.ServicePatternId,
+            ServiceRouteId = run.ServiceRouteId,
+            OperatingLineId = run.OperatingLineId,
             Direction = run.Key.Direction,
             FromStationId = segment.From.StationId,
             FromStationName = segment.From.StationName,
@@ -523,7 +536,7 @@ internal sealed class IncrementalIntervalStatistics
     {
         var first = run.FirstSample!;
         var last = run.LastSample ?? first;
-        var stations = GetStations(run.Key.Direction);
+        var stations = GetStations(run);
         var origin = stations[0];
         var terminal = stations[^1];
         var complete = run.OriginDepartureTimeSeconds is { } departure
@@ -542,6 +555,8 @@ internal sealed class IncrementalIntervalStatistics
             VehicleTypeId = run.VehicleTypeId,
             ServiceClassId = run.ServiceClassId,
             ServicePatternId = run.ServicePatternId,
+            ServiceRouteId = run.ServiceRouteId,
+            OperatingLineId = run.OperatingLineId,
             Direction = run.Key.Direction,
             OriginStationId = origin.StationId,
             OriginStationName = origin.StationName,
@@ -708,12 +723,16 @@ internal sealed class IncrementalIntervalStatistics
         RunKey key,
         string serviceClassId,
         string servicePatternId,
-        string vehicleTypeId)
+        string vehicleTypeId,
+        string? serviceRouteId,
+        string? operatingLineId)
     {
         public RunKey Key { get; } = key;
         public string ServiceClassId { get; set; } = serviceClassId;
         public string ServicePatternId { get; set; } = servicePatternId;
         public string VehicleTypeId { get; set; } = vehicleTypeId;
+        public string? ServiceRouteId { get; set; } = serviceRouteId;
+        public string? OperatingLineId { get; set; } = operatingLineId;
         public TrajectorySample? FirstSample { get; set; }
         public TrajectorySample? LastSample { get; set; }
         public SegmentState? ActiveSegment { get; set; }

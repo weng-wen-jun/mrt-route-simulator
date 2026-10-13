@@ -68,16 +68,24 @@ public sealed record ProjectStopPatternInstruction(
 
 public sealed record ProjectStopPattern(string Id, string DisplayName, ProjectStopPatternInstruction[] Instructions);
 
+public sealed record ProjectStationTimetableEntry(
+    string StationId,
+    double PlannedDepartureTimeSeconds,
+    double MinimumDwellSeconds);
+
 public sealed record ProjectHeadwayPlan(
     TrainDirection Direction, double FirstDepartureTimeSeconds, double HeadwaySeconds, int RunCount,
     string ServiceTypeId, string? VehicleTypeId = null, string? StopPatternId = null,
-    string? OriginPlatformId = null, string? VehicleId = null, bool ContinueAfterTerminal = false);
+    string? OriginPlatformId = null, string? VehicleId = null, bool ContinueAfterTerminal = false,
+    string? ServiceRouteId = null);
 
 public sealed record ProjectManualTimetableRow(
     double PlannedDepartureTimeSeconds, TrainDirection Direction, string ServiceTypeId,
     string? VehicleTypeId = null, string? StopPatternId = null, string? OriginPlatformId = null,
     string? VehicleId = null, string? ServiceRunId = null, bool ContinueAfterTerminal = false,
-    string? ContinuationServiceRunId = null);
+    string? ContinuationServiceRunId = null,
+    ProjectStationTimetableEntry[]? StationTimetableEntries = null,
+    string? ServiceRouteId = null);
 
 public sealed record ProjectDispatchPlan(
     DispatchPlanningMode ActiveMode, VehicleAssignmentMode VehicleAssignmentMode = VehicleAssignmentMode.Automatic,
@@ -558,10 +566,15 @@ public static class SimulationProjectFormat
     private static DispatchPlanDefinition ToRuntime(ProjectDispatchPlan item) => new(
         item.SimpleHeadwayPlans?.Select(plan => new HeadwayDirectionPlan(plan.Direction, TimeSpan.FromSeconds(plan.FirstDepartureTimeSeconds),
             TimeSpan.FromSeconds(plan.HeadwaySeconds), plan.RunCount, plan.ServiceTypeId, plan.VehicleTypeId, plan.StopPatternId,
-            plan.OriginPlatformId, plan.VehicleId, plan.ContinueAfterTerminal)),
+            plan.OriginPlatformId, plan.VehicleId, plan.ContinueAfterTerminal, plan.ServiceRouteId)),
         item.ManualTimetableRows?.Select(row => new ManualTimetableRow(TimeSpan.FromSeconds(row.PlannedDepartureTimeSeconds), row.Direction,
             row.ServiceTypeId, row.VehicleTypeId, row.StopPatternId, row.OriginPlatformId, row.VehicleId, row.ServiceRunId,
-            row.ContinueAfterTerminal, row.ContinuationServiceRunId)),
+            row.ContinueAfterTerminal, row.ContinuationServiceRunId,
+            row.StationTimetableEntries?.Select(entry => new StationTimetableEntry(
+                entry.StationId,
+                TimeSpan.FromSeconds(entry.PlannedDepartureTimeSeconds),
+                entry.MinimumDwellSeconds)),
+            row.ServiceRouteId)),
         item.ActiveMode, item.VehicleAssignmentMode);
 
     private static InfrastructureGraph ToRuntime(ProjectInfrastructure item, Route route) => new(route,

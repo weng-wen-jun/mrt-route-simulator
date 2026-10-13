@@ -40,6 +40,7 @@ internal sealed partial class TopologyEditorWindow
     private ComboBox? dispatchVehicleEditor;
     private ComboBox? dispatchPatternEditor;
     private ComboBox? dispatchDirectionEditor;
+    private ComboBox? dispatchRouteEditor;
     private ComboBox? dispatchOriginEditor;
     private ComboBox? dispatchContinuationEditor;
     private TextBox? dispatchDepartureEditor;
@@ -339,6 +340,7 @@ internal sealed partial class TopologyEditorWindow
         var manualActions = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
         manualActions.Children.Add(CreateNamedButton("新增班表", "新增手動班表", (_, _) => AddManualTimetableForOperationsPage(), true));
         manualActions.Children.Add(CreateNamedButton("編輯選取班表", "編輯手動班表", (_, _) => EditSelectedManualForOperationsPage(), true));
+        manualActions.Children.Add(CreateNamedButton("逐站時刻…", "編輯逐站發車時刻與最少停站時間", (_, _) => EditSelectedStationTimetable(), true));
         manualActions.Children.Add(CreateNamedButton("刪除選取班表", "刪除手動班表", (_, _) => DeleteSelectedManualForOperationsPage(), true));
         DockPanel.SetDock(manualActions, Dock.Top); manualRoot.Children.Add(manualActions);
         DockPanel.SetDock(dispatchManualGrid, Dock.Top); manualRoot.Children.Add(dispatchManualGrid);
@@ -609,6 +611,7 @@ internal sealed partial class TopologyEditorWindow
         AutomationProperties.SetName(grid, "手動班表常用欄位");
         AddColumn(nameof(ManualTimetableEditorViewModel.DepartureSeconds), "發車秒數");
         AddColumn(nameof(ManualTimetableEditorViewModel.Direction), "方向", new TraditionalChineseEnumConverter());
+        AddColumn(nameof(ManualTimetableEditorViewModel.ServiceRouteId), "營運路徑", new OperationValueDisplayConverter(DisplayServiceRouteReference));
         AddColumn(nameof(ManualTimetableEditorViewModel.ServiceType), "服務", new OperationValueDisplayConverter(value => DisplayCatalogReference(value, serviceNetwork.ServiceTypes.Select(item => (item.Id, item.Name)))));
         AddColumn(nameof(ManualTimetableEditorViewModel.VehicleType), "車型", new OperationValueDisplayConverter(value => DisplayCatalogReference(value, serviceNetwork.VehicleTypes.Select(item => (item.Id, item.Name)))));
         AddColumn(nameof(ManualTimetableEditorViewModel.StopPattern), "停站模式", new OperationValueDisplayConverter(value => DisplayCatalogReference(value, serviceNetwork.StopPatterns.Select(item => (item.Id, item.Name)))));
@@ -653,29 +656,30 @@ internal sealed partial class TopologyEditorWindow
     private UIElement BuildDispatchDetailPanel()
     {
         var panel = new Grid { Margin = new Thickness(0, 8, 0, 0) };
-        for (var index = 0; index < 11; index++) panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        for (var index = 0; index < 12; index++) panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         dispatchDepartureEditor = AddLabeledTextBox(panel, 0, "發車秒數", "班表發車秒數");
         AddLabeledCombo(panel, 1, "方向", Enum.GetValues<TrainDirection>().Select(item => item), out dispatchDirectionEditor, "班表方向");
-        AddLabeledCombo(panel, 2, "服務", Array.Empty<object>(), out dispatchServiceEditor, "班表服務");
-        AddLabeledCombo(panel, 3, "車型", Array.Empty<object>(), out dispatchVehicleEditor, "班表車型");
-        AddLabeledCombo(panel, 4, "停站模式", Array.Empty<object>(), out dispatchPatternEditor, "班表停站模式");
-        dispatchVehicleIdEditor = AddLabeledTextBox(panel, 5, "車輛 ID（獨立身分）", "班表車輛 ID");
-        dispatchServiceRunIdEditor = AddLabeledTextBox(panel, 6, "車次 ID（獨立身分）", "班表車次 ID");
-        AddLabeledCombo(panel, 7, "起點月台", Array.Empty<object>(), out dispatchOriginEditor, "班表起點月台");
+        AddLabeledCombo(panel, 2, "營運路徑", Array.Empty<object>(), out dispatchRouteEditor, "班表營運路徑");
+        AddLabeledCombo(panel, 3, "服務", Array.Empty<object>(), out dispatchServiceEditor, "班表服務");
+        AddLabeledCombo(panel, 4, "車型", Array.Empty<object>(), out dispatchVehicleEditor, "班表車型");
+        AddLabeledCombo(panel, 5, "停站模式", Array.Empty<object>(), out dispatchPatternEditor, "班表停站模式");
+        dispatchVehicleIdEditor = AddLabeledTextBox(panel, 6, "車輛 ID（獨立身分）", "班表車輛 ID");
+        dispatchServiceRunIdEditor = AddLabeledTextBox(panel, 7, "車次 ID（獨立身分）", "班表車次 ID");
+        AddLabeledCombo(panel, 8, "起點月台", Array.Empty<object>(), out dispatchOriginEditor, "班表起點月台");
         var continueLabel = new TextBlock { Text = "終點後續行", Margin = new Thickness(0, 5, 8, 5), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetRow(continueLabel, 8); Grid.SetColumn(continueLabel, 0); panel.Children.Add(continueLabel);
+        Grid.SetRow(continueLabel, 9); Grid.SetColumn(continueLabel, 0); panel.Children.Add(continueLabel);
         dispatchContinueEditor = new CheckBox { Content = "到達終點後續行", Margin = new Thickness(0, 4, 0, 4) };
         AutomationProperties.SetName(dispatchContinueEditor, "班表終點後續行");
-        Grid.SetRow(dispatchContinueEditor, 8); Grid.SetColumn(dispatchContinueEditor, 1); panel.Children.Add(dispatchContinueEditor);
+        Grid.SetRow(dispatchContinueEditor, 9); Grid.SetColumn(dispatchContinueEditor, 1); panel.Children.Add(dispatchContinueEditor);
         var continuationLabel = new TextBlock { Text = "指定接續車次", Margin = new Thickness(0, 5, 8, 5), VerticalAlignment = VerticalAlignment.Center };
-        Grid.SetRow(continuationLabel, 9); Grid.SetColumn(continuationLabel, 0); panel.Children.Add(continuationLabel);
+        Grid.SetRow(continuationLabel, 10); Grid.SetColumn(continuationLabel, 0); panel.Children.Add(continuationLabel);
         dispatchContinuationEditor = CreateReferenceCombo("班表接續車次", Array.Empty<OperationReferenceChoice>(), null);
-        Grid.SetRow(dispatchContinuationEditor, 9); Grid.SetColumn(dispatchContinuationEditor, 1); panel.Children.Add(dispatchContinuationEditor);
+        Grid.SetRow(dispatchContinuationEditor, 10); Grid.SetColumn(dispatchContinuationEditor, 1); panel.Children.Add(dispatchContinuationEditor);
         dispatchReferences = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Foreground = UiTheme.WarningTextBrush };
         AutomationProperties.SetName(dispatchReferences, "班表既有引用鏈與缺漏");
-        Grid.SetRow(dispatchReferences, 10); Grid.SetColumn(dispatchReferences, 1); panel.Children.Add(dispatchReferences);
+        Grid.SetRow(dispatchReferences, 11); Grid.SetColumn(dispatchReferences, 1); panel.Children.Add(dispatchReferences);
         dispatchDepartureEditor.LostFocus += (_, _) => CommitDispatchDetail();
         // Changing direction changes the valid starting-platform list.  Keep the
         // old value as an explicit missing reference when it is not valid for the
@@ -683,9 +687,24 @@ internal sealed partial class TopologyEditorWindow
         dispatchDirectionEditor.SelectionChanged += (_, _) =>
         {
             if (updatingOperationEditors || dispatchDirectionEditor.SelectedItem is not TrainDirection direction) return;
+            var previousRoute = (dispatchRouteEditor?.SelectedItem as OperationReferenceChoice)?.Id;
+            dispatchRouteEditor!.ItemsSource = BuildServiceRouteChoices(direction, previousRoute);
+            dispatchRouteEditor.SelectedItem = FindChoice(dispatchRouteEditor.ItemsSource, previousRoute)
+                ?? dispatchRouteEditor.Items.OfType<OperationReferenceChoice>().FirstOrDefault();
+            var selectedRoute = (dispatchRouteEditor.SelectedItem as OperationReferenceChoice)?.Id;
             var previousOrigin = (dispatchOriginEditor.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchOriginEditor.Text;
-            dispatchOriginEditor.ItemsSource = BuildOriginChoices(direction, previousOrigin);
+            dispatchOriginEditor.ItemsSource = BuildOriginChoices(direction, selectedRoute, previousOrigin);
             dispatchOriginEditor.SelectedItem = FindChoice(dispatchOriginEditor.ItemsSource, previousOrigin);
+            CommitDispatchDetail();
+        };
+        dispatchRouteEditor.SelectionChanged += (_, _) =>
+        {
+            if (updatingOperationEditors) return;
+            var routeId = (dispatchRouteEditor.SelectedItem as OperationReferenceChoice)?.Id;
+            var previousOrigin = (dispatchOriginEditor.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchOriginEditor.Text;
+            dispatchOriginEditor.ItemsSource = BuildOriginChoices(selectedDispatchRow?.Direction ?? TrainDirection.Outbound, routeId, previousOrigin);
+            dispatchOriginEditor.SelectedItem = FindChoice(dispatchOriginEditor.ItemsSource, previousOrigin)
+                ?? dispatchOriginEditor.Items.OfType<OperationReferenceChoice>().FirstOrDefault();
             CommitDispatchDetail();
         };
         foreach (var combo in new[] { dispatchServiceEditor, dispatchVehicleEditor, dispatchPatternEditor, dispatchOriginEditor, dispatchContinuationEditor })
@@ -706,7 +725,11 @@ internal sealed partial class TopologyEditorWindow
             dispatchServiceEditor!.ItemsSource = IncludeMissing(services, row?.ServiceType);
             dispatchVehicleEditor!.ItemsSource = IncludeMissing(vehicles, row?.VehicleType);
             dispatchPatternEditor!.ItemsSource = IncludeMissing(patterns, row?.StopPattern);
-            dispatchOriginEditor!.ItemsSource = BuildOriginChoices(row?.Direction ?? TrainDirection.Outbound, row?.OriginPlatform);
+            dispatchRouteEditor!.ItemsSource = BuildServiceRouteChoices(row?.Direction ?? TrainDirection.Outbound, row?.ServiceRouteId);
+            dispatchRouteEditor.SelectedItem = FindChoice(dispatchRouteEditor.ItemsSource, row?.ServiceRouteId)
+                ?? dispatchRouteEditor.Items.OfType<OperationReferenceChoice>().FirstOrDefault();
+            var selectedRoute = (dispatchRouteEditor.SelectedItem as OperationReferenceChoice)?.Id;
+            dispatchOriginEditor!.ItemsSource = BuildOriginChoices(row?.Direction ?? TrainDirection.Outbound, selectedRoute, row?.OriginPlatform);
             dispatchContinuationEditor!.ItemsSource = BuildDispatchRunChoices(row?.ContinuationServiceRunId);
             dispatchDepartureEditor!.Text = row is null ? "" : GetRawOrValue(RawKey(row, "departure"), row.DepartureSeconds.ToString("R", CultureInfo.InvariantCulture));
             dispatchDirectionEditor!.ItemsSource = Enum.GetValues<TrainDirection>();
@@ -734,6 +757,7 @@ internal sealed partial class TopologyEditorWindow
         selectedDispatchRow.ServiceType = (dispatchServiceEditor?.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchServiceEditor?.Text ?? "";
         selectedDispatchRow.VehicleType = (dispatchVehicleEditor?.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchVehicleEditor?.Text ?? "";
         selectedDispatchRow.StopPattern = (dispatchPatternEditor?.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchPatternEditor?.Text ?? "";
+        selectedDispatchRow.ServiceRouteId = (dispatchRouteEditor?.SelectedItem as OperationReferenceChoice)?.Id ?? "";
         selectedDispatchRow.OriginPlatform = (dispatchOriginEditor?.SelectedItem as OperationReferenceChoice)?.Id ?? dispatchOriginEditor?.Text ?? "";
         selectedDispatchRow.VehicleId = dispatchVehicleIdEditor?.Text ?? "";
         selectedDispatchRow.ServiceRunId = dispatchServiceRunIdEditor?.Text ?? "";
@@ -796,12 +820,11 @@ internal sealed partial class TopologyEditorWindow
         if (service is null && !string.IsNullOrWhiteSpace(row.ServiceType)) missing.Add($"缺少服務：{row.ServiceType}");
         if (vehicle is null && !string.IsNullOrWhiteSpace(row.VehicleType)) missing.Add($"缺少車型：{row.VehicleType}");
         if (pattern is null && !string.IsNullOrWhiteSpace(row.StopPattern)) missing.Add($"缺少停站模式：{row.StopPattern}");
-        var route = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == row.Direction);
-        if (route is null) missing.Add($"缺少{UiDisplayText.Enum(row.Direction)}服務路徑綁定");
-        var originCandidates = route is null
-            ? []
-            : state.Draft.ServiceRoutes.FirstOrDefault(item => IdEquals(item.ServiceRouteId, route.ServiceRouteId))?
-                .Stops.FirstOrDefault()?.CandidatePlatformIds ?? [];
+        var routeId = EditorValue.EmptyToNull(row.ServiceRouteId)
+            ?? state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == row.Direction)?.ServiceRouteId;
+        var route = state.Draft.ServiceRoutes.FirstOrDefault(item => IdEquals(item.ServiceRouteId, routeId));
+        if (route is null) missing.Add($"缺少{UiDisplayText.Enum(row.Direction)}營運路徑");
+        var originCandidates = route?.Stops.FirstOrDefault()?.CandidatePlatformIds ?? [];
         if (!string.IsNullOrWhiteSpace(row.OriginPlatform)
             && !originCandidates.Any(item => IdEquals(item, row.OriginPlatform)))
             missing.Add($"缺少{UiDisplayText.Enum(row.Direction)}起點月台：{row.OriginPlatform}");
@@ -809,7 +832,7 @@ internal sealed partial class TopologyEditorWindow
             ? null
             : (state.Draft.Dispatch.ManualTimetableRows ?? []).FirstOrDefault(item => IdEquals(item.ServiceRunId, row.ContinuationServiceRunId));
         if (!string.IsNullOrWhiteSpace(row.ContinuationServiceRunId) && continuation is null) missing.Add($"缺少接續車次：{row.ContinuationServiceRunId}");
-        var chain = $"引用鏈：{service?.DisplayName ?? row.ServiceType} → {vehicle?.DisplayName ?? row.VehicleType} → {pattern?.DisplayName ?? row.StopPattern} → {route?.ServiceRouteId ?? "（未綁定）"}";
+        var chain = $"引用鏈：{service?.DisplayName ?? row.ServiceType} → {vehicle?.DisplayName ?? row.VehicleType} → {pattern?.DisplayName ?? row.StopPattern} → {route?.Name ?? routeId ?? "（未綁定）"}";
         return missing.Count == 0 ? chain : chain + Environment.NewLine + string.Join(Environment.NewLine, missing);
     }
 
@@ -904,9 +927,9 @@ internal sealed partial class TopologyEditorWindow
         return IncludeMissing(choices, selectedId);
     }
 
-    private IEnumerable<OperationReferenceChoice> BuildOriginChoices(TrainDirection direction, string? selectedId)
+    private IEnumerable<OperationReferenceChoice> BuildOriginChoices(TrainDirection direction, string? routeId, string? selectedId)
     {
-        var routeId = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction)?.ServiceRouteId;
+        routeId ??= state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction)?.ServiceRouteId;
         var route = state.Draft.ServiceRoutes.FirstOrDefault(item => IdEquals(item.ServiceRouteId, routeId));
         // A dispatch origin is an origin of the selected direction, so only
         // candidates on that route's first stop are valid.  Including every
@@ -914,6 +937,26 @@ internal sealed partial class TopologyEditorWindow
         var platformIds = route?.Stops.FirstOrDefault()?.CandidatePlatformIds ?? [];
         var choices = platformIds.Select(id => new OperationReferenceChoice(id, DescribePlatform(id))).ToArray();
         return IncludeMissing(choices, selectedId);
+    }
+
+    private IEnumerable<OperationReferenceChoice> BuildServiceRouteChoices(TrainDirection direction, string? selectedId)
+    {
+        var choices = new List<OperationReferenceChoice>
+        {
+            new(null, "（依方向預設）")
+        };
+        choices.AddRange(GetServiceRouteCandidates(direction)
+            .Select(route => new OperationReferenceChoice(route.ServiceRouteId, $"{route.Name}（{route.ServiceRouteId}）"))
+            .ToArray());
+        return IncludeMissing(choices, selectedId);
+    }
+
+    private string DisplayServiceRouteReference(object? value)
+    {
+        var id = value?.ToString();
+        if (string.IsNullOrWhiteSpace(id)) return "（依方向預設）";
+        var route = state.Draft.ServiceRoutes.FirstOrDefault(item => IdEquals(item.ServiceRouteId, id));
+        return route?.Name ?? $"缺少：{id}";
     }
 
     private static IEnumerable<OperationReferenceChoice> IncludeMissing(IEnumerable<OperationReferenceChoice> choices, string? selectedId)

@@ -194,11 +194,14 @@ internal sealed class ServiceRouteEditorViewModel(ServiceRouteDefinition source)
 {
     public string Id { get; set; } = source.ServiceRouteId;
     public string Name { get; set; } = source.Name;
+    public string OperatingLineId { get; set; } = source.OperatingLineId ?? "";
+    public TrainDirection? Direction { get; set; } = source.Direction;
     public ObservableCollection<TraversalEditorViewModel> Traversals { get; } = source.Traversals.Select(item => new TraversalEditorViewModel(item)).ToObservableCollection();
     public ObservableCollection<ServiceRouteStopEditorViewModel> Stops { get; } = source.Stops.Select(item => new ServiceRouteStopEditorViewModel(item)).ToObservableCollection();
     public ServiceRouteDefinition ToDomain() => new()
     {
-        ServiceRouteId = Id.Trim(), Name = Name.Trim(), Traversals = Traversals.Select(item => item.ToDomain()).ToArray(), Stops = Stops.Select(item => item.ToDomain()).ToArray()
+        ServiceRouteId = Id.Trim(), Name = Name.Trim(), OperatingLineId = EditorValue.EmptyToNull(OperatingLineId), Direction = Direction,
+        Traversals = Traversals.Select(item => item.ToDomain()).ToArray(), Stops = Stops.Select(item => item.ToDomain()).ToArray()
     };
 }
 
@@ -308,13 +311,15 @@ internal sealed class HeadwayPlanEditorViewModel(ProjectHeadwayPlan source)
     public string OriginPlatform { get; set; } = source.OriginPlatformId ?? "";
     public string VehicleId { get; set; } = source.VehicleId ?? "";
     public bool ContinueAfterTerminal { get; set; } = source.ContinueAfterTerminal;
+    public string ServiceRouteId { get; set; } = source.ServiceRouteId ?? "";
     public ProjectHeadwayPlan ToDomain() => new(Direction, FirstDepartureSeconds, HeadwaySeconds, RunCount,
         ServiceType.Trim(), EditorValue.EmptyToNull(VehicleType), EditorValue.EmptyToNull(StopPattern), EditorValue.EmptyToNull(OriginPlatform),
-        EditorValue.EmptyToNull(VehicleId), ContinueAfterTerminal);
+        EditorValue.EmptyToNull(VehicleId), ContinueAfterTerminal, EditorValue.EmptyToNull(ServiceRouteId));
 }
 
 internal sealed class ManualTimetableEditorViewModel(ProjectManualTimetableRow source)
 {
+    private readonly bool stationTimetableWasNull = source.StationTimetableEntries is null;
     public double DepartureSeconds { get; set; } = source.PlannedDepartureTimeSeconds;
     public TrainDirection Direction { get; set; } = source.Direction;
     public string ServiceType { get; set; } = source.ServiceTypeId;
@@ -325,9 +330,59 @@ internal sealed class ManualTimetableEditorViewModel(ProjectManualTimetableRow s
     public string ServiceRunId { get; set; } = source.ServiceRunId ?? "";
     public bool ContinueAfterTerminal { get; set; } = source.ContinueAfterTerminal;
     public string ContinuationServiceRunId { get; set; } = source.ContinuationServiceRunId ?? "";
+    public string ServiceRouteId { get; set; } = source.ServiceRouteId ?? "";
+    public ObservableCollection<StationTimetableEntryEditorViewModel> StationTimetableEntries { get; } =
+        (source.StationTimetableEntries ?? []).Select(item => new StationTimetableEntryEditorViewModel(item)).ToObservableCollection();
     public ProjectManualTimetableRow ToDomain() => new(DepartureSeconds, Direction, ServiceType.Trim(),
         EditorValue.EmptyToNull(VehicleType), EditorValue.EmptyToNull(StopPattern), EditorValue.EmptyToNull(OriginPlatform), EditorValue.EmptyToNull(VehicleId),
-        EditorValue.EmptyToNull(ServiceRunId), ContinueAfterTerminal, EditorValue.EmptyToNull(ContinuationServiceRunId));
+        EditorValue.EmptyToNull(ServiceRunId), ContinueAfterTerminal, EditorValue.EmptyToNull(ContinuationServiceRunId),
+        StationTimetableEntries.Count == 0 && stationTimetableWasNull
+            ? null
+            : StationTimetableEntries.Select(item => item.ToDomain()).ToArray(),
+        EditorValue.EmptyToNull(ServiceRouteId));
+}
+
+internal sealed class StationTimetableEntryEditorViewModel(ProjectStationTimetableEntry source)
+{
+    private string plannedDepartureClock = FormatClock(source.PlannedDepartureTimeSeconds);
+
+    public string StationId { get; set; } = source.StationId;
+    public double PlannedDepartureTimeSeconds { get; set; } = source.PlannedDepartureTimeSeconds;
+    public string PlannedDepartureClock
+    {
+        get => plannedDepartureClock;
+        set
+        {
+            plannedDepartureClock = value;
+            HasValidPlannedDepartureClock = TryParseClock(value, out var seconds);
+            if (HasValidPlannedDepartureClock) PlannedDepartureTimeSeconds = seconds;
+        }
+    }
+    public bool HasValidPlannedDepartureClock { get; private set; } = true;
+    public double MinimumDwellSeconds { get; set; } = source.MinimumDwellSeconds;
+    public ProjectStationTimetableEntry ToDomain() => new(StationId.Trim(), PlannedDepartureTimeSeconds, MinimumDwellSeconds);
+
+    private static string FormatClock(double seconds)
+    {
+        var rounded = Math.Max(0, (long)Math.Round(seconds, MidpointRounding.AwayFromZero));
+        return $"{rounded / 3600:00}:{rounded % 3600 / 60:00}:{rounded % 60:00}";
+    }
+
+    private static bool TryParseClock(string text, out double seconds)
+    {
+        seconds = 0;
+        var parts = text.Trim().Split(':');
+        if (parts.Length != 3
+            || !int.TryParse(parts[0], out var hours)
+            || !int.TryParse(parts[1], out var minutes)
+            || !int.TryParse(parts[2], out var wholeSeconds)
+            || hours < 0
+            || minutes is < 0 or > 59
+            || wholeSeconds is < 0 or > 59)
+            return false;
+        seconds = hours * 3600d + minutes * 60d + wholeSeconds;
+        return true;
+    }
 }
 
 internal sealed class QuickStationEditorViewModel

@@ -306,6 +306,7 @@ public partial class MainWindow
         _lastIntervalRefreshSecond = -1;
         SafetyPairComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Clear();
+        DiagramRouteComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
         SpeedProfileRunComboBox.Items.Clear();
 
@@ -439,6 +440,26 @@ public partial class MainWindow
                 item.DwellTimeSeconds,
                 item.WaitForOvertakeServiceRunId)).ToArray()))
         .ToArray();
+
+    private ServicePattern[] GetResultServicePatterns() =>
+        _activeTopologyProjectDocument is { } topologyProject
+            ? topologyProject.StopPatterns.Select(pattern => new ServicePattern(
+                pattern.Id,
+                pattern.DisplayName,
+                pattern.Instructions.Select(item => new StationServiceInstruction(
+                    item.StationId,
+                    item.Action switch
+                    {
+                        StopPatternAction.Stop => StationServiceMode.Stop,
+                        StopPatternAction.Pass => StationServiceMode.Pass,
+                        StopPatternAction.Turnback => StationServiceMode.Turnback,
+                        _ => throw new InvalidOperationException($"不支援的停站指令：{item.Action}")
+                    },
+                    item.PassingSpeedLimitMetersPerSecond,
+                    item.DwellTimeSeconds,
+                    item.WaitForOvertakeServiceRunId)).ToArray()))
+                .ToArray()
+            : BuildServicePatterns();
 
     private async void MovingBlockMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -932,7 +953,7 @@ public partial class MainWindow
         var bottom = 28d;
         var usableWidth = Math.Max(1, width - left - right);
         var mainlineY = height * 0.52 + (height < 380 ? 24 : 0);
-        var trackSpacing = inboundServiceRoute is null ? 0 : Math.Clamp(height * 0.18, 30, 46);
+        var trackSpacing = inboundServiceRoute is null ? 0 : SchematicVerticalLayout.Unit * 2;
         var outboundTrackY = mainlineY + trackSpacing / 2;
         var inboundTrackY = mainlineY - trackSpacing / 2;
         var nodePoints = new Dictionary<string, Point>(StringComparer.OrdinalIgnoreCase);
@@ -1083,8 +1104,10 @@ public partial class MainWindow
         if (topologyProject is not null)
             StationSchematicPresentation.LayoutLinearTurnbacks(rawEdgePoints, infrastructure.Edges.Values,
                 topologyProject.Topology.TurnbackFacilities, width);
+        var schematicProject = topologyProject is null ? null : SchematicVerticalLayout.FillDefaults(topologyProject);
+        var schematicEdges = schematicProject?.Topology.Edges ?? infrastructure.Edges.Values.ToArray();
         StationSchematicPresentation.ApplyNodeLayout(rawEdgePoints, infrastructure.Nodes.Values,
-            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), 60, width - 120);
+            schematicEdges, mainlineY, SchematicVerticalLayout.Unit, 60, width - 120);
         var edgeGeometries = TopologySchematicGeometry.Build(
             infrastructure.Edges.Values.Select(edge =>
             {
@@ -1093,11 +1116,11 @@ public partial class MainWindow
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            infrastructure.Edges.Values, mainlineY, Math.Max(23, trackSpacing / 2), infrastructure.Platforms.Values,
+            schematicEdges, mainlineY, SchematicVerticalLayout.Unit, infrastructure.Platforms.Values,
             infrastructure.DirectedConnections,
             StationSchematicPresentation.UsesCompactLaneTransitions(topologyProject, width),
             topologyProject?.Topology.PassingFacilities, width >= 2000);
-        edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, topologyProject, width);
+        edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, schematicProject, width);
         var railTones = TrackRailStyle.Classify(infrastructure.Edges.Values, outboundEdgeIds, inboundEdgeIds);
         StationSchematicPresentation.DrawLegend(RouteCanvas, ShowTrackOccupancyMenuItem.IsChecked, ShowLockedRoutesMenuItem.IsChecked);
         var platformVisuals = new List<(
@@ -1877,17 +1900,24 @@ public partial class MainWindow
         }
 
         var dataStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+        var serviceRouteFilter = DiagramRouteComboBox?.SelectedValue as string;
+        var selectedServiceRoute = _activeTopologyProjectDocument?.ServiceRoutes.FirstOrDefault(route =>
+            route.ServiceRouteId.Equals(serviceRouteFilter, StringComparison.OrdinalIgnoreCase));
         (string StationId, string StationName, double PositionMeters)[] displayStations = _activeTopologyProjectDocument is null
             ? _route!.Stations.Select(station => (station.StationId, station.StationName, station.PositionMeters)).ToArray()
-            : _latestPlaybackFrame.GetTopologyResultContext().GetStops(TrainDirection.Outbound)
-                .Select(stop => (stop.StationId, stop.StationName, stop.ProjectedChainageMeters)).ToArray();
-        var displayRouteName = _activeTopologyProjectDocument?.ProjectName ?? _route!.RouteName;
+            : _latestPlaybackFrame.GetTopologyResultContext().GetDisplayStations(
+                    selectedServiceRoute?.Direction ?? TrainDirection.Outbound,
+                    selectedServiceRoute?.ServiceRouteId)
+                .Select(station => (station.StationId, station.StationName, station.PositionMeters)).ToArray();
+        var displayRouteName = selectedServiceRoute?.Name ?? _activeTopologyProjectDocument?.ProjectName ?? _route!.RouteName;
 
         IReadOnlyList<TrajectorySample> actual = ShowActualCheckBox?.IsChecked == true
-            ? _latestPlaybackFrame.Trajectory
+            ? _latestPlaybackFrame.Trajectory.Where(sample => string.IsNullOrWhiteSpace(serviceRouteFilter)
+                || string.Equals(sample.ServiceRouteId, serviceRouteFilter, StringComparison.OrdinalIgnoreCase)).ToArray()
             : [];
         IReadOnlyList<TrajectorySample> planned = ShowPlannedCheckBox?.IsChecked == true
-            ? _plannedTimelineArtifact?.Trajectory ?? []
+            ? (_plannedTimelineArtifact?.Trajectory ?? []).Where(sample => string.IsNullOrWhiteSpace(serviceRouteFilter)
+                || string.Equals(sample.ServiceRouteId, serviceRouteFilter, StringComparison.OrdinalIgnoreCase)).ToArray()
             : [];
         if (actual.Count == 0 && planned.Count == 0)
         {
@@ -2014,7 +2044,7 @@ public partial class MainWindow
         DrawSeries(actual, isPlanned: false);
 
         var eventsStarted = System.Diagnostics.Stopwatch.GetTimestamp();
-        var eventStationPositions = BuildDiagramEventStationPositions(_latestPlaybackFrame);
+        var eventStationPositions = BuildRouteAwareDiagramEventStationPositions(_latestPlaybackFrame);
         foreach (var simulationEvent in _latestPlaybackFrame.Events.Where(item =>
                      ShowEventsCheckBox?.IsChecked != false
                      && item.SimulationTimeSeconds >= startTime
@@ -2025,6 +2055,8 @@ public partial class MainWindow
                      && (string.IsNullOrWhiteSpace(vehicleFilter)
                          || vehicleFilter == "全部"
                          || item.VehicleId == vehicleFilter)
+                     && (string.IsNullOrWhiteSpace(serviceRouteFilter)
+                         || string.Equals(item.ServiceRouteId, serviceRouteFilter, StringComparison.OrdinalIgnoreCase))
                      && item.EventType is
                          SimulationEventType.Departure
                          or SimulationEventType.Arrival
@@ -2042,7 +2074,7 @@ public partial class MainWindow
                          or SimulationEventType.SafetyStatusChanged))
         {
             var x = left + (simulationEvent.SimulationTimeSeconds - startTime) / visibleDuration * plotWidth;
-            var y = ToDiagramY(GetDiagramEventPosition(simulationEvent, eventStationPositions));
+            var y = ToDiagramY(GetRouteAwareDiagramEventPosition(simulationEvent, eventStationPositions));
             var isSafetyEvent = simulationEvent.EventType is
                 SimulationEventType.ObstacleEmergencyStop
                 or SimulationEventType.PredictedCollision
@@ -2083,8 +2115,10 @@ public partial class MainWindow
                     || directionFilter == "Inbound" && sample.Direction == TrainDirection.Inbound)
                 && (string.IsNullOrWhiteSpace(vehicleFilter)
                     || vehicleFilter == "全部"
-                    || sample.VehicleId == vehicleFilter)).ToArray();
-            var groups = filtered.GroupBy(sample => (sample.VehicleId, sample.ServiceRunId, sample.Direction)).ToArray();
+                    || sample.VehicleId == vehicleFilter)
+                && (string.IsNullOrWhiteSpace(serviceRouteFilter)
+                    || string.Equals(sample.ServiceRouteId, serviceRouteFilter, StringComparison.OrdinalIgnoreCase))).ToArray();
+            var groups = filtered.GroupBy(sample => (sample.VehicleId, sample.ServiceRunId, sample.Direction, sample.ServiceRouteId)).ToArray();
             _playbackDiagnostics.RecordTiming("TimeDistanceFull.FilterGroup", System.Diagnostics.Stopwatch.GetElapsedTime(filterStarted).TotalMilliseconds);
             foreach (var group in groups)
             {
@@ -2200,6 +2234,7 @@ public partial class MainWindow
     private void PopulateFilterControls(ResolvedDispatchPlan dispatchPlan)
     {
         DiagramVehicleComboBox.Items.Clear();
+        DiagramRouteComboBox.Items.Clear();
         ObstacleTrainComboBox.Items.Clear();
         DiagramVehicleComboBox.Items.Add("全部");
         foreach (var vehicleId in dispatchPlan.Runs.Select(run => run.VehicleId)
@@ -2213,6 +2248,33 @@ public partial class MainWindow
         }
 
         DiagramVehicleComboBox.SelectedIndex = 0;
+        var routeIds = dispatchPlan.Runs.Select(run => run.ServiceRouteId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (routeIds.Length == 0)
+        {
+            DiagramRouteComboBox.Items.Add(new CatalogOption(string.Empty, "全部營運路徑"));
+        }
+        else
+        {
+            foreach (var routeId in routeIds)
+            {
+                DiagramRouteComboBox.Items.Add(new CatalogOption(routeId, GetServiceRouteDisplayName(routeId)));
+            }
+        }
+        DiagramRouteComboBox.SelectedIndex = DiagramRouteComboBox.Items.Count > 0 ? 0 : -1;
+        if (_latestPlaybackFrame is { } frame)
+        {
+            _resultAccumulator.ConfigureTimetable(
+                _activeTopologyProjectDocument is null ? _route : null,
+                _activeTopologyProjectDocument is null ? null : frame.GetTopologyResultContext(),
+                dispatchPlan,
+                _plannedTimetableEvents,
+                frame.Events,
+                GetResultServicePatterns());
+        }
         ObstacleTrainComboBox.SelectedIndex = 0;
         _updatingSpeedProfileSelection = true;
         try
@@ -2253,7 +2315,7 @@ public partial class MainWindow
         var completedTrips = new List<double>();
         foreach (var run in _v2DispatchPlan.Runs)
         {
-            var routeStops = topologyResults?.GetDisplayStations(run.Direction);
+            var routeStops = topologyResults?.GetDisplayStations(run);
             var originPosition = routeStops is { Count: > 0 }
                 ? routeStops[0].PositionMeters
                 : run.Direction == TrainDirection.Outbound ? 0 : _route!.TotalLengthMeters;

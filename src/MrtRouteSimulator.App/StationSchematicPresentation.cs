@@ -185,6 +185,12 @@ internal static class StationSchematicPresentation
             var edgePlatforms = document.Topology.Platforms
                 .Where(platform => platform.TrackEdgeId.Equals(edge.TrackEdgeId, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
+            // Non-passenger through rails have operational markers, not passenger
+            // station faces. Anchoring their middle to a station display chainage
+            // stretches/compresses physical travel (sample14 O13 by 2.32x).
+            // Keep the joined endpoints but map equal edge offsets to equal X steps.
+            var constantSpeedThroughRail = edge.Kind == TrackEdgeKind.Mainline
+                && edgePlatforms.Length > 0 && edgePlatforms.All(platform => !platform.AllowsPassengerService);
             static double Ease(double value) => value * value * (3 - 2 * value);
             // Keep a small non-zero tangent through facility platform throats.
             // A pure smoothstep reaches zero horizontal speed at the platform
@@ -220,6 +226,12 @@ internal static class StationSchematicPresentation
             {
                 var sourcePoint = source.PointAt(ratio);
                 if (explicitLayout) return sourcePoint;
+                if (constantSpeedThroughRail)
+                {
+                    var fromX = endpointX[(edge.TrackEdgeId, true)];
+                    var toX = endpointX[(edge.TrackEdgeId, false)];
+                    return new(fromX + (toX - fromX) * ratio, sourcePoint.Y);
+                }
                 var x = X(projection.ToChainage(new(edge.TrackEdgeId, ratio * edge.LengthMeters))!.Value);
                 var linearizeFacilityLane = compactLaneEdges.ContainsKey(edge.TrackEdgeId)
                     || IsFacilityLaneEdge(edge) && edgePlatforms.Length > 0;
@@ -505,7 +517,10 @@ internal static class StationSchematicPresentation
             Canvas.SetLeft(label, center - label.Width / 2);
             label.Tag = new StationLabelAnchor(station.Id, center);
             label.Measure(new Size(label.Width, double.PositiveInfinity));
-            var top = Canvas.GetTop(label);
+            var top = above
+                ? Math.Min(Canvas.GetTop(label), bodies.Min(body => Canvas.GetTop(body)) - label.DesiredSize.Height - 12)
+                : Math.Max(Canvas.GetTop(label), lower);
+            if (top < 36) { above = false; top = lower; }
             var box = new Rect(Canvas.GetLeft(label), top, label.Width, label.DesiredSize.Height);
             while (occupied.Any(r => r.IntersectsWith(box)))
             {
@@ -818,17 +833,13 @@ internal static class StationSchematicPresentation
         // centre alignment remains exact.
         // Dense full-line diagrams need tighter lane separation even when their
         // horizontal width is intentionally preserved with a scroll viewer.
-        // Small multi-platform templates keep their full spacing so platform
-        // numbers remain individually readable.
-        // Keep dense overview sidings visibly distinct from their running line.
-        // A ±2 siding at half scale overlaps the ±1 mainline. Give a verified
-        // passing-facility siding enough separation from its paired through edge.
+        // 每個垂直單位在總覽與細節圖中都使用相同間距。
         var result = original.ToDictionary(p => p.Key, p => p.Value, StringComparer.OrdinalIgnoreCase);
         // Mainline geometry is always normalised, including legacy/topology
         // documents that omit SchematicLane on a through edge.  Facility
         // lanes still require an explicit schematic lane before they are
         // offset from the mainline baseline.
-        foreach (var edge in edges)
+        foreach (var edge in edges.OrderBy(edge => edge.Kind == TrackEdgeKind.Mainline ? 0 : 1))
         {
             if (!original.TryGetValue(edge.TrackEdgeId, out var geometry)) continue;
             if (edge.Kind == TrackEdgeKind.Mainline)
@@ -836,16 +847,10 @@ internal static class StationSchematicPresentation
                 // A mainline edge is part of the continuous running line even
                 // when the topology uses a schematic lane to disambiguate a
                 // split/merge.  Never draw that edge as a lane-change curve.
-                // Keep the edge's own pre-lane baseline: borrowing an incident
-                // siding's Y can move the next through edge onto a different
-                // track and create a false vertical break at the station.
-                var baselineY = denseFullLine && edge.SchematicLane is { } lane && Math.Abs(lane) > .001
-                    ? middle + Math.Sign(lane) * unit
-                    : double.IsFinite(geometry.From.Y)
-                    ? geometry.From.Y
-                    : edge.SchematicLane.HasValue
-                        ? middle + edge.SchematicLane.Value * unit
-                        : middle;
+                // 主線方向基準由 SchematicVerticalLayout 統一；無明確 lane 時沿用原幾何。
+                var baselineY = edge.SchematicLane.HasValue
+                    ? middle + edge.SchematicLane.Value * unit
+                    : double.IsFinite(geometry.From.Y) ? geometry.From.Y : middle;
                 result[edge.TrackEdgeId] = new([
                     new Point(geometry.From.X, baselineY),
                     new Point(geometry.To.X, baselineY)
@@ -853,13 +858,12 @@ internal static class StationSchematicPresentation
                 continue;
             }
             if (!edge.SchematicLane.HasValue) continue;
-            var compactLaneScale = edges.Length >= 32
-                ? verifiedSidings.Contains(edge.TrackEdgeId) ? widePassingThroats ? .9 : .75 : .555
-                : compactLaneTransitions ? .5 : 1d;
-            var y = middle + edge.SchematicLane!.Value * unit * compactLaneScale;
+            // 每一垂直單位固定等距，大型路線也不得縮小使用者指定的 lane。
+            var y = middle + edge.SchematicLane!.Value * unit;
             var from = new Point(geometry.From.X, y);
             var to = new Point(geometry.To.X, y);
             if (edge.Kind is TrackEdgeKind.PassingTrack or TrackEdgeKind.PocketTrack or TrackEdgeKind.Siding
+                or TrackEdgeKind.TailTrack or TrackEdgeKind.DepotLead or TrackEdgeKind.PlatformTrack
                 || UsesMainlineLaneTransition(edge) && platformRanges.ContainsKey(edge.TrackEdgeId))
             {
                 double EndY(string node, double fallback)
@@ -871,7 +875,7 @@ internal static class StationSchematicPresentation
                             && connection.FromTrackEdgeId.Equals(candidate.TrackEdgeId, StringComparison.OrdinalIgnoreCase));
                     double EndpointY(TrackEdgeDefinition candidate)
                     {
-                        if (!original.TryGetValue(candidate.TrackEdgeId, out var candidateGeometry)) return fallback;
+                        if (!result.TryGetValue(candidate.TrackEdgeId, out var candidateGeometry)) return fallback;
                         return candidate.FromNodeId.Equals(node, StringComparison.OrdinalIgnoreCase)
                             ? candidateGeometry.From.Y : candidateGeometry.To.Y;
                     }

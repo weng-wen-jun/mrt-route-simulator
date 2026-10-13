@@ -61,7 +61,7 @@ internal static class StationConstructionRules
         foreach (var run in dispatch.Runs)
         {
             var vehicle = document.VehicleTypes.Single(v => v.Id.Equals(run.VehicleTypeId, StringComparison.OrdinalIgnoreCase));
-            var routeId = document.DirectionRouteBindings.Single(b => b.Direction == run.Direction).ServiceRouteId;
+            var routeId = run.ServiceRouteId ?? document.DirectionRouteBindings.Single(b => b.Direction == run.Direction).ServiceRouteId;
             var route = document.ServiceRoutes.Single(r => r.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase));
             var pattern = document.StopPatterns.Single(p => p.Id.Equals(run.StopPatternId, StringComparison.OrdinalIgnoreCase));
             foreach (var stop in route.Stops)

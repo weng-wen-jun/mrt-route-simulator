@@ -343,20 +343,17 @@ internal static class SyntheticLongRouteFullScenarioBuilder
         var expressPlatformId = $"PLATFORM:{stationId}:{directionCode}:THROUGH";
         var routeId = direction == TrainDirection.Outbound ? DownRouteId : UpRouteId;
 
-        // O04 is centered on the retained station node: branch 240 m before it,
-        // platform from 170 to 310 m, and rejoin 240 m beyond it.  Splitting both
-        // neighboring edges preserves their combined length and every station chainage.
-        // O13 retains its existing synthetic passing layout.
-        var symmetricO04 = stationId == "O04";
+        // O04 與 O13 共用 480 m 示範站區：站心前後各 240 m，
+        // 月台範圍 170–310 m。分割相鄰區段以保留總長與站距。
         var arrivalLength = document.Topology.Edges.Single(edge => edge.TrackEdgeId == originalArrivalEdge).LengthMeters;
         document = TopologyEditingService.SplitEdge(document, originalArrivalEdge,
-            symmetricO04 ? arrivalLength - 240 : 200);
+            arrivalLength - 240);
         var arrivalEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":A", StringComparison.OrdinalIgnoreCase));
         var mainlineStationEdge = document.Topology.Edges.Single(edge =>
             edge.TrackEdgeId.StartsWith(originalArrivalEdge + ":B", StringComparison.OrdinalIgnoreCase));
         var facilityDepartureEdge = departureEdge;
-        if (symmetricO04)
+        // 將站心前後各 240 m 接成同一條通過正線。
         {
             document = TopologyEditingService.SplitEdge(document, departureEdge, 240);
             var departureThroat = document.Topology.Edges.Single(edge =>
@@ -401,7 +398,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
                 Topology = document.Topology with { DirectedConnections = DirectedTrackConnectionRules.Build(document) }
             };
         }
-        var stopOffset = symmetricO04 ? 240 : Math.Min(320, mainlineStationEdge.LengthMeters - 20);
+        const double stopOffset = 240;
         document = MovePlatform(document, localPlatformId, mainlineStationEdge.TrackEdgeId, stopOffset);
         var localPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == localPlatformId);
         var expressPlatform = localPlatform with
@@ -433,7 +430,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
             $"{stationId} synthetic {directionText}側線待避",
             stationId,
             arrivalEdge.ToNodeId,
-            symmetricO04 ? mainlineStationEdge.ToNodeId : Node(stationId),
+            mainlineStationEdge.ToNodeId,
             arrivalEdge.TrackEdgeId,
             facilityDepartureEdge,
             localPlatformId,

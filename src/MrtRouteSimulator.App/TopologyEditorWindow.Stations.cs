@@ -175,6 +175,7 @@ internal sealed partial class TopologyEditorWindow
         AutomationProperties.SetName(scroll, "軌道與設施捲動區");
         var content = new StackPanel();
         content.Children.Add(TrackPageGroup("軌道區段", "edge 的端點、長度、方向、種類、速限、接軌側與衝突資源。", NamedEditorTabContent("TrackEdgeGrid", "軌道區段編輯表", ProjectValidationTargetKind.Edge, "軌道區段", infrastructure.Edges, AddEdge, DeleteSelectedEdge)));
+        content.Children.Add(BuildVerticalLaneEditor());
         content.Children.Add(TrackPageGroup("設施", "可由設施詳細編輯修改折返與待避的實體 traversal、位置、月台及衝突資源。", NamedEditorTabContent("FacilityGrid", "設施編輯表", ProjectValidationTargetKind.TurnbackFacility, "設施", infrastructure.Facilities, ShowFacilityMenu, DeleteSelectedFacility, true, EditSelectedFacility)));
         content.Children.Add(TrackPageGroup("方向別速限", "速限區間以 edge-local offset 與 traversal direction 保存；顯示值使用 km/h。", NamedEditorTabContent("TrackSpeedLimitGrid", "區段速限編輯表", ProjectValidationTargetKind.SpeedLimit, "速限", infrastructure.SpeedLimits, AddSpeedLimit, DeleteSelectedSpeedLimit)));
         content.Children.Add(TrackPageGroup("坡度與曲線", "附著於 edge 的局部幾何資料；長度與偏移仍是原始資料。", TrackPageStack(

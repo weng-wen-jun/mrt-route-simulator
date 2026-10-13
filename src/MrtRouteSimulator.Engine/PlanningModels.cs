@@ -229,6 +229,32 @@ public enum VehicleAssignmentMode
     SpecifiedOrAutomatic
 }
 
+/// <summary>
+/// A per-run station departure constraint. The timetable dwell is the operational dwell for
+/// this run and station; the train may depart only after both the dwell and clock constraints
+/// have been satisfied.
+/// </summary>
+public sealed class StationTimetableEntry
+{
+    public StationTimetableEntry(
+        string stationId,
+        TimeSpan plannedDepartureTime,
+        double minimumDwellSeconds)
+    {
+        var errors = new List<string>();
+        StationId = NormalizeRequired(stationId, "逐站班表車站 ID", errors);
+        ValidateClock(plannedDepartureTime, "逐站班表表定發車時間", errors);
+        RequireNonNegativeFinite(minimumDwellSeconds, "逐站班表表定停站時間", errors);
+        PlannedDepartureTime = plannedDepartureTime;
+        MinimumDwellSeconds = minimumDwellSeconds;
+        RouteValidator.ThrowIfAny(errors);
+    }
+
+    public string StationId { get; }
+    public TimeSpan PlannedDepartureTime { get; }
+    public double MinimumDwellSeconds { get; }
+}
+
 public sealed class HeadwayDirectionPlan
 {
     public HeadwayDirectionPlan(
@@ -241,7 +267,8 @@ public sealed class HeadwayDirectionPlan
         string? stopPatternId = null,
         string? originPlatformId = null,
         string? vehicleId = null,
-        bool continueAfterTerminal = false)
+        bool continueAfterTerminal = false,
+        string? serviceRouteId = null)
     {
         var errors = new List<string>();
         ValidateDirection(direction, errors);
@@ -264,6 +291,7 @@ public sealed class HeadwayDirectionPlan
         StopPatternId = NormalizeOptional(stopPatternId, "班距計畫停站模式 ID", errors);
         OriginPlatformId = NormalizeOptional(originPlatformId, "班距計畫起點月台 ID", errors);
         VehicleId = NormalizeOptional(vehicleId, "班距計畫車輛 ID", errors);
+        ServiceRouteId = NormalizeOptional(serviceRouteId, "班距計畫營運路線 ID", errors);
         ContinueAfterTerminal = continueAfterTerminal;
         RouteValidator.ThrowIfAny(errors);
     }
@@ -278,8 +306,9 @@ public sealed class HeadwayDirectionPlan
         string? stopPatternId = null,
         string? originPlatformId = null,
         string? vehicleId = null,
-        bool continueAfterTerminal = false)
-        : this(direction, firstDepartureTime, headway, runCount, serviceTypeId, vehicleTypeId, stopPatternId, originPlatformId, vehicleId, continueAfterTerminal)
+        bool continueAfterTerminal = false,
+        string? serviceRouteId = null)
+        : this(direction, firstDepartureTime, headway, runCount, serviceTypeId, vehicleTypeId, stopPatternId, originPlatformId, vehicleId, continueAfterTerminal, serviceRouteId)
     {
     }
 
@@ -293,6 +322,7 @@ public sealed class HeadwayDirectionPlan
     public string? OriginPlatformId { get; }
     public string? VehicleId { get; }
     public bool ContinueAfterTerminal { get; }
+    public string? ServiceRouteId { get; }
 }
 
 public sealed class ManualTimetableRow
@@ -307,7 +337,9 @@ public sealed class ManualTimetableRow
         string? vehicleId = null,
         string? serviceRunId = null,
         bool continueAfterTerminal = false,
-        string? continuationServiceRunId = null)
+        string? continuationServiceRunId = null,
+        IEnumerable<StationTimetableEntry>? stationTimetableEntries = null,
+        string? serviceRouteId = null)
     {
         var errors = new List<string>();
         ValidateDirection(direction, errors);
@@ -321,6 +353,15 @@ public sealed class ManualTimetableRow
         VehicleId = NormalizeOptional(vehicleId, "手動班表車輛 ID", errors);
         ServiceRunId = NormalizeOptional(serviceRunId, "手動班表車次 ID", errors);
         ContinuationServiceRunId = NormalizeOptional(continuationServiceRunId, "折返接續車次 ID", errors);
+        ServiceRouteId = NormalizeOptional(serviceRouteId, "手動班表營運路線 ID", errors);
+        var stationEntries = stationTimetableEntries?.ToArray() ?? [];
+        var stationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in stationEntries)
+        {
+            if (!stationIds.Add(entry.StationId))
+                errors.Add($"逐站班表車站 ID「{entry.StationId}」重複。");
+        }
+        StationTimetableEntries = ReadOnly(stationEntries);
         ContinueAfterTerminal = continueAfterTerminal || ContinuationServiceRunId is not null;
         RouteValidator.ThrowIfAny(errors);
     }
@@ -335,9 +376,11 @@ public sealed class ManualTimetableRow
         string? vehicleId = null,
         string? serviceRunId = null,
         bool continueAfterTerminal = false,
-        string? continuationServiceRunId = null)
+        string? continuationServiceRunId = null,
+        IEnumerable<StationTimetableEntry>? stationTimetableEntries = null,
+        string? serviceRouteId = null)
         : this(plannedDepartureTime, direction, serviceTypeId, vehicleTypeId, stopPatternId, originPlatformId, vehicleId, serviceRunId,
-            continueAfterTerminal, continuationServiceRunId)
+            continueAfterTerminal, continuationServiceRunId, stationTimetableEntries, serviceRouteId)
     {
     }
 
@@ -351,6 +394,8 @@ public sealed class ManualTimetableRow
     public string? ServiceRunId { get; }
     public bool ContinueAfterTerminal { get; }
     public string? ContinuationServiceRunId { get; }
+    public IReadOnlyList<StationTimetableEntry> StationTimetableEntries { get; }
+    public string? ServiceRouteId { get; }
 }
 
 public sealed class DispatchPlanDefinition
@@ -406,7 +451,8 @@ public sealed class PlannedServiceRun
         string? originPlatformId,
         int sequence,
         bool continueAfterTerminal = false,
-        string? continuationServiceRunId = null)
+        string? continuationServiceRunId = null,
+        IEnumerable<StationTimetableEntry>? stationTimetableEntries = null)
     {
         var errors = new List<string>();
         ServiceRunId = NormalizeRequired(serviceRunId, "計畫車次 ID", errors);
@@ -418,6 +464,14 @@ public sealed class PlannedServiceRun
         StopPatternId = NormalizeRequired(stopPatternId, "計畫停站模式 ID", errors);
         OriginPlatformId = NormalizeOptional(originPlatformId, "計畫起點月台 ID", errors);
         ContinuationServiceRunId = NormalizeOptional(continuationServiceRunId, "折返接續車次 ID", errors);
+        var stationEntries = stationTimetableEntries?.ToArray() ?? [];
+        var stationIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in stationEntries)
+        {
+            if (!stationIds.Add(entry.StationId))
+                errors.Add($"計畫車次「{ServiceRunId}」的逐站班表車站 ID「{entry.StationId}」重複。");
+        }
+        StationTimetableEntries = ReadOnly(stationEntries);
         if (sequence < 0)
         {
             errors.Add("計畫車次排序序號不可為負數。");
@@ -441,6 +495,8 @@ public sealed class PlannedServiceRun
     public int Sequence { get; }
     public bool ContinueAfterTerminal { get; }
     public string? ContinuationServiceRunId { get; }
+    public IReadOnlyList<StationTimetableEntry> StationTimetableEntries { get; }
+    public string? ServiceRouteId { get; init; }
 }
 
 public sealed class ResolvedDispatchPlan
@@ -512,7 +568,7 @@ public static class DispatchPlanExpander
                     var raw = plan.FirstDepartureTime + TimeSpan.FromTicks(plan.Headway.Ticks * (long)runIndex);
                     candidates.Add(new Candidate(raw, plan.Direction, plan.ServiceTypeId, plan.VehicleTypeId,
                         plan.StopPatternId, plan.OriginPlatformId, plan.VehicleId, null,
-                        plan.ContinueAfterTerminal, null, sourceIndex++));
+                        plan.ContinueAfterTerminal, null, [], plan.ServiceRouteId, sourceIndex++));
                 }
             }
         }
@@ -523,7 +579,8 @@ public static class DispatchPlanExpander
             {
                 candidates.Add(new Candidate(row.PlannedDepartureTime, row.Direction, row.ServiceTypeId, row.VehicleTypeId,
                     row.StopPatternId, row.OriginPlatformId, row.VehicleId, row.ServiceRunId,
-                    row.ContinueAfterTerminal, row.ContinuationServiceRunId, sourceIndex++));
+                    row.ContinueAfterTerminal, row.ContinuationServiceRunId, row.StationTimetableEntries,
+                    row.ServiceRouteId, sourceIndex++));
             }
         }
 
@@ -610,7 +667,11 @@ public static class DispatchPlanExpander
             {
                 runs.Add(new PlannedServiceRun(runId, NormalizeClock(candidate.RawTime), candidate.Direction, vehicleId,
                     vehicleTypeId, candidate.ServiceTypeId, stopPatternId, candidate.OriginPlatformId, index,
-                    candidate.ContinueAfterTerminal, candidate.ContinuationServiceRunId));
+                    candidate.ContinueAfterTerminal, candidate.ContinuationServiceRunId,
+                    candidate.StationTimetableEntries)
+                {
+                    ServiceRouteId = candidate.ServiceRouteId
+                });
             }
         }
 
@@ -632,6 +693,8 @@ public static class DispatchPlanExpander
         string? ExplicitServiceRunId,
         bool ContinueAfterTerminal,
         string? ContinuationServiceRunId,
+        IReadOnlyList<StationTimetableEntry> StationTimetableEntries,
+        string? ServiceRouteId,
         int SourceIndex,
         double Order = 0);
 
@@ -704,7 +767,11 @@ public static class DispatchPlanExpander
             run.OriginPlatformId,
             run.Sequence,
             run.ContinueAfterTerminal,
-            run.ContinuationServiceRunId)).ToList();
+            run.ContinuationServiceRunId,
+            run.StationTimetableEntries)
+        {
+            ServiceRouteId = run.ServiceRouteId
+        }).ToList();
     }
 
     private static Dictionary<string, T>? BuildCatalog<T>(IEnumerable<T>? values, string label, ICollection<string> errors)

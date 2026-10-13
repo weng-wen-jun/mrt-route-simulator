@@ -284,6 +284,30 @@
                                 <TextBlock x:Name="TimetableSourceText" Text="V1 顯示解析基準；V2 寫實引擎顯示派車計畫與實際事件"
                                            Style="{StaticResource ResultPageDescription}" />
                             </app:ResultPage.Description>
+                            <app:ResultPage.Actions>
+                                <Button Content="匯出時刻表 CSV" Style="{StaticResource SecondaryButton}"
+                                        Click="ExportTimetableCsv_Click" />
+                            </app:ResultPage.Actions>
+                            <app:ResultPage.Filters>
+                                <WrapPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="營運路徑" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="TimetableRouteFilterComboBox" Width="180"
+                                                  DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="TimetableFilter_SelectionChanged"
+                                                  AutomationProperties.Name="進出站時刻表營運路徑篩選"
+                                                  Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="營運路線" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="TimetableOperatingLineFilterComboBox" Width="150"
+                                                  DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="TimetableFilter_SelectionChanged"
+                                                  AutomationProperties.Name="進出站時刻表營運路線篩選"
+                                                  Margin="0,3,12,3" />
+                                    </StackPanel>
+                                </WrapPanel>
+                            </app:ResultPage.Filters>
                             <Border Style="{StaticResource ResultCard}">
                                 <DataGrid x:Name="TimetableDataGrid" ItemsSource="{Binding TimetableRows}" IsReadOnly="True" RowHeaderWidth="0"
                                           FrozenColumnCount="2" BorderThickness="0" app:ResultTable.Enabled="True">
@@ -291,15 +315,18 @@
                                         <DataGridTextColumn Header="車輛 ID" Binding="{Binding TrainId}" Width="100" />
                                         <DataGridTextColumn Header="車次 ID" Binding="{Binding ServiceRunId}" Width="125" />
                                         <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="62" />
+                                        <DataGridTextColumn Header="營運路線" Binding="{Binding OperatingLine}" Width="110" />
+                                        <DataGridTextColumn Header="營運路徑" Binding="{Binding ServiceRoute}" Width="135" />
                                         <DataGridTextColumn Header="服務類型" Binding="{Binding ServiceType}" Width="90" />
                                         <DataGridTextColumn Header="停站模式" Binding="{Binding StopPattern}" Width="115" />
                                         <DataGridTextColumn Header="站號" Binding="{Binding StationId}" Width="68" />
-                                        <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="*" MinWidth="120" />
+                                        <DataGridTextColumn Header="車站" Binding="{Binding StationName}" Width="150" />
                                         <DataGridTextColumn Header="計畫到站" Binding="{Binding PlannedArrivalTime}" Width="95" app:ResultTable.Kind="Numeric" />
                                         <DataGridTextColumn Header="計畫出站" Binding="{Binding PlannedDepartureTime}" Width="95" app:ResultTable.Kind="Numeric" />
                                         <DataGridTextColumn Header="實際到站" Binding="{Binding ArrivalTime}" Width="95" app:ResultTable.Kind="Numeric" />
                                         <DataGridTextColumn Header="實際出站" Binding="{Binding DepartureTime}" Width="95" app:ResultTable.Kind="Numeric" />
-                                        <DataGridTextColumn Header="停站" Binding="{Binding DwellTime}" Width="72" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="表定停站" Binding="{Binding PlannedDwellTime}" Width="82" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="實際停站" Binding="{Binding DwellTime}" Width="82" app:ResultTable.Kind="Numeric" />
                                         <DataGridTextColumn Header="延誤" Binding="{Binding Delay}" Width="72" app:ResultTable.Kind="Numeric" />
                                         <DataGridTextColumn Header="狀態" Binding="{Binding Status}" Width="96" app:ResultTable.Kind="Status" />
                                         <DataGridTextColumn Header="累積 km" Binding="{Binding PositionKm}" Width="82" app:ResultTable.Kind="Numeric" />
@@ -534,6 +561,16 @@
                                                   SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="營運路徑" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalServiceRouteComboBox" Width="145" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="營運路線" Style="{StaticResource FilterLabel}" />
+                                        <ComboBox x:Name="IntervalOperatingLineComboBox" Width="135" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                  SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="車型" Style="{StaticResource FilterLabel}" />
                                         <ComboBox x:Name="IntervalVehicleTypeComboBox" Width="120" DisplayMemberPath="DisplayName" SelectedValuePath="Id"
                                                   SelectionChanged="IntervalFilter_Changed" Margin="0,3,12,3" />
@@ -644,6 +681,14 @@
                                                     <StackPanel Orientation="Horizontal">
                                                         <TextBlock Text="車輛" Style="{StaticResource FilterLabel}" />
                                                         <ComboBox x:Name="DiagramVehicleComboBox" Width="125" SelectionChanged="DiagramFilter_Changed" Margin="0,3,12,3" />
+                                                    </StackPanel>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="營運路徑" Style="{StaticResource FilterLabel}" />
+                                                        <ComboBox x:Name="DiagramRouteComboBox" Width="180"
+                                                                  DisplayMemberPath="DisplayName" SelectedValuePath="Id"
+                                                                  SelectionChanged="DiagramFilter_Changed"
+                                                                  ToolTip="選擇單一營運路徑，以該路徑的車站次序與路徑里程顯示支線或主線。"
+                                                                  Margin="0,3,12,3" />
                                                     </StackPanel>
                                                     <CheckBox x:Name="ShowPlannedCheckBox" Content="計畫／理論" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />
                                                     <CheckBox x:Name="ShowActualCheckBox" Content="模擬實際" IsChecked="True" Checked="DiagramFilter_Changed" Unchecked="DiagramFilter_Changed" Margin="0,3,12,3" VerticalAlignment="Center" />

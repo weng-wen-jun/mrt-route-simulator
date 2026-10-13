@@ -105,7 +105,9 @@ public partial class MainWindow
             ServicePatternId: GetSelectedFilterId(IntervalStopPatternComboBox),
             StartSimulationTimeSeconds: ParseOptionalSimulationSecond(IntervalStartSecondTextBox, "篩選開始秒"),
             EndSimulationTimeSeconds: ParseOptionalSimulationSecond(IntervalEndSecondTextBox, "篩選結束秒"),
-            IncludeInProgress: IncludeInProgressCheckBox.IsChecked == true);
+            IncludeInProgress: IncludeInProgressCheckBox.IsChecked == true,
+            ServiceRouteId: GetSelectedFilterId(IntervalServiceRouteComboBox),
+            OperatingLineId: GetSelectedFilterId(IntervalOperatingLineComboBox));
         if (filter.StartSimulationTimeSeconds is { } start
             && filter.EndSimulationTimeSeconds is { } end
             && start > end)
@@ -136,6 +138,16 @@ public partial class MainWindow
             .Where(item => !string.IsNullOrWhiteSpace(item.VehicleId))
             .Select(item => new CatalogOption(item.VehicleId!, item.VehicleId!)));
         SetFilterOptions(IntervalServiceRunComboBox, runs.Select(item => new CatalogOption(item.ServiceRunId, item.ServiceRunId)));
+        SetFilterOptions(IntervalServiceRouteComboBox, runs
+            .Where(item => !string.IsNullOrWhiteSpace(item.ServiceRouteId))
+            .Select(item => new CatalogOption(item.ServiceRouteId!, GetServiceRouteDisplayName(item.ServiceRouteId!))));
+        var topology = _activeTopologyProjectDocument is null
+            ? null
+            : _latestPlaybackFrame.GetTopologyResultContext();
+        SetFilterOptions(IntervalOperatingLineComboBox, runs
+            .Select(run => topology?.GetOperatingLineId(run))
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => new CatalogOption(id!, GetOperatingLineDisplayName(id!))));
         SetFilterOptions(IntervalVehicleTypeComboBox, VehicleTypeOptions);
         SetFilterOptions(IntervalServiceTypeComboBox, ServiceTypeOptions);
         SetFilterOptions(IntervalStopPatternComboBox, StopPatternOptions);
@@ -158,6 +170,16 @@ public partial class MainWindow
 
     private static string? GetSelectedFilterId(ComboBox comboBox) => comboBox.SelectedItem is CatalogOption option
         && !string.IsNullOrWhiteSpace(option.Id) ? option.Id : null;
+
+    private string GetServiceRouteDisplayName(string serviceRouteId) =>
+        _activeTopologyProjectDocument?.ServiceRoutes.FirstOrDefault(route =>
+            route.ServiceRouteId.Equals(serviceRouteId, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? serviceRouteId;
+
+    private string GetOperatingLineDisplayName(string operatingLineId) =>
+        _activeTopologyProjectDocument?.OperatingLines?.FirstOrDefault(line =>
+            line.LineId.Equals(operatingLineId, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? operatingLineId;
 
     private static double? ParseOptionalSimulationSecond(TextBox textBox, string field)
     {

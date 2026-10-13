@@ -17,7 +17,9 @@ using Path = System.IO.Path;
 /// </summary>
 internal static class TimeDistancePreparationTests
 {
-    private const int Sample14PlannedTrajectoryCount = 178_992;
+    // 2026-10-13：O04/O13 均採 480 m 站區、月台中心 240 m；
+    // 重新產生 sample14 並驗證完整運行後的精確計畫軌跡基準。
+    private const int Sample14PlannedTrajectoryCount = 178_952;
 
     public static void Run(string root)
     {

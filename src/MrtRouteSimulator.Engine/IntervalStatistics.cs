@@ -15,7 +15,9 @@ public sealed record IntervalStatisticsFilter(
     string? ServicePatternId = null,
     double? StartSimulationTimeSeconds = null,
     double? EndSimulationTimeSeconds = null,
-    bool IncludeInProgress = true)
+    bool IncludeInProgress = true,
+    string? ServiceRouteId = null,
+    string? OperatingLineId = null)
 {
     public bool Matches(IntervalStatistic item)
     {
@@ -28,7 +30,9 @@ public sealed record IntervalStatisticsFilter(
             || !MatchesText(ServiceRunId, item.ServiceRunId)
             || !MatchesText(VehicleTypeId, item.VehicleTypeId)
             || !MatchesText(ServiceClassId, item.ServiceClassId)
-            || !MatchesText(ServicePatternId, item.ServicePatternId))
+            || !MatchesText(ServicePatternId, item.ServicePatternId)
+            || !MatchesText(ServiceRouteId, item.ServiceRouteId)
+            || !MatchesText(OperatingLineId, item.OperatingLineId))
         {
             return false;
         }
@@ -64,7 +68,9 @@ public sealed record IntervalStatisticsFilter(
             || !MatchesText(ServiceRunId, item.ServiceRunId)
             || !MatchesText(VehicleTypeId, item.VehicleTypeId)
             || !MatchesText(ServiceClassId, item.ServiceClassId)
-            || !MatchesText(ServicePatternId, item.ServicePatternId))
+            || !MatchesText(ServicePatternId, item.ServicePatternId)
+            || !MatchesText(ServiceRouteId, item.ServiceRouteId)
+            || !MatchesText(OperatingLineId, item.OperatingLineId))
         {
             return false;
         }
@@ -110,6 +116,8 @@ public sealed record IntervalStatistic
 {
     public required string VehicleId { get; init; }
     public required string ServiceRunId { get; init; }
+    public string? ServiceRouteId { get; init; }
+    public string? OperatingLineId { get; init; }
     public string? VehicleTypeId { get; init; }
     public required string ServiceClassId { get; init; }
     public required string ServicePatternId { get; init; }
@@ -145,6 +153,8 @@ public sealed record JourneyStatistic
 {
     public required string VehicleId { get; init; }
     public required string ServiceRunId { get; init; }
+    public string? ServiceRouteId { get; init; }
+    public string? OperatingLineId { get; init; }
     public string? VehicleTypeId { get; init; }
     public required string ServiceClassId { get; init; }
     public required string ServicePatternId { get; init; }
@@ -229,7 +239,7 @@ public static class IntervalStatistics
     {
         ArgumentNullException.ThrowIfNull(route);
         return AnalyzeCore(
-            direction => direction == TrainDirection.Outbound
+            sample => sample.Direction == TrainDirection.Outbound
                 ? route.Stations.ToArray()
                 : route.Stations.Reverse().ToArray(),
             samples,
@@ -251,7 +261,7 @@ public static class IntervalStatistics
     {
         ArgumentNullException.ThrowIfNull(topology);
         return AnalyzeCore(
-            topology.GetDisplayStations,
+            sample => topology.GetDisplayStations(sample.Direction, sample.ServiceRouteId),
             samples,
             events,
             [],
@@ -261,7 +271,7 @@ public static class IntervalStatistics
     }
 
     private static IntervalStatisticsResult AnalyzeCore(
-        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
+        Func<TrajectorySample, IReadOnlyList<Station>> stationResolver,
         IEnumerable<TrajectorySample> samples,
         IEnumerable<SimulationEvent>? events,
         IEnumerable<SpeedLimitSegment>? speedLimits,
@@ -287,7 +297,7 @@ public static class IntervalStatistics
             }
 
             var direction = run.Key.Direction;
-            var stations = stationResolver(direction).ToArray();
+            var stations = stationResolver(ordered[0]).ToArray();
             for (var index = 0; index + 1 < stations.Length; index++)
             {
                 var from = stations[index];
@@ -409,7 +419,7 @@ public static class IntervalStatistics
     {
         ArgumentNullException.ThrowIfNull(result);
         var builder = new StringBuilder();
-        builder.AppendLine("軟體版本,模型版本,車輛ID,車次ID,車型,服務類型,停站模式,方向,前站,後站,狀態,是否停站,距離(m),離站模擬秒,抵達模擬秒,離站顯示時間,抵達顯示時間,旅行時間(s),平均速度(km/h),峰值速度(km/h),進入速度(km/h),離開速度(km/h),區間最低有效速限(km/h),加速(s),巡航(s),惰行(s),減速(s),進站煞車(s),抵達(s),折返(s),其他相位(s),移動閉塞受限(s),控制事件數,控制事件型別");
+        builder.AppendLine("軟體版本,模型版本,車輛ID,車次ID,車型,服務類型,停站模式,方向,前站,後站,狀態,是否停站,距離(m),離站模擬秒,抵達模擬秒,離站顯示時間,抵達顯示時間,旅行時間(s),平均速度(km/h),峰值速度(km/h),進入速度(km/h),離開速度(km/h),區間最低有效速限(km/h),加速(s),巡航(s),惰行(s),減速(s),進站煞車(s),抵達(s),折返(s),其他相位(s),移動閉塞受限(s),控制事件數,控制事件型別,營運路徑ID,營運路線ID");
         foreach (var item in result.AllIntervals.OrderBy(item => item.DepartureTimeSeconds ?? item.FirstObservedTimeSeconds).ThenBy(item => item.VehicleId, StringComparer.Ordinal))
         {
             builder.Append(Csv(ProductVersion.Current)).Append(',')
@@ -445,8 +455,9 @@ public static class IntervalStatistics
                 .Append(Number(OtherPhaseSeconds(item))).Append(',')
                 .Append(Number(item.ControlLimitedSeconds)).Append(',')
                 .Append(item.ControlEvents.TotalCount).Append(',')
-                .Append(Csv(string.Join('|', item.ControlEvents.EventTypes)))
-                .AppendLine();
+                .Append(Csv(string.Join('|', item.ControlEvents.EventTypes))).Append(',')
+                .Append(Csv(item.ServiceRouteId ?? string.Empty)).Append(',')
+                .Append(Csv(item.OperatingLineId ?? string.Empty)).AppendLine();
         }
 
         return builder.ToString();
@@ -456,7 +467,7 @@ public static class IntervalStatistics
     {
         ArgumentNullException.ThrowIfNull(result);
         var builder = new StringBuilder();
-        builder.AppendLine("軟體版本,模型版本,車輛ID,車次ID,車型,服務類型,停站模式,方向,起站,終站,狀態,距離(m),起站離站模擬秒,終站抵達模擬秒,起站離站顯示時間,終站抵達顯示時間,全程旅行時間(s),起終站平均速度(km/h)");
+        builder.AppendLine("軟體版本,模型版本,車輛ID,車次ID,車型,服務類型,停站模式,方向,起站,終站,狀態,距離(m),起站離站模擬秒,終站抵達模擬秒,起站離站顯示時間,終站抵達顯示時間,全程旅行時間(s),起終站平均速度(km/h),營運路徑ID,營運路線ID");
         foreach (var item in result.JourneyStatistics)
         {
             builder.Append(Csv(ProductVersion.Current)).Append(',')
@@ -476,8 +487,9 @@ public static class IntervalStatistics
                 .Append(Csv(item.DepartureTimeSeconds is { } d ? TrajectoryAnalysis.FormatClock(displayClockStartSeconds + d) : string.Empty)).Append(',')
                 .Append(Csv(item.ArrivalTimeSeconds is { } a ? TrajectoryAnalysis.FormatClock(displayClockStartSeconds + a) : string.Empty)).Append(',')
                 .Append(Number(item.TravelTimeSeconds)).Append(',')
-                .Append(Number(ToKmh(item.AverageSpeedMetersPerSecond)))
-                .AppendLine();
+                .Append(Number(ToKmh(item.AverageSpeedMetersPerSecond))).Append(',')
+                .Append(Csv(item.ServiceRouteId ?? string.Empty)).Append(',')
+                .Append(Csv(item.OperatingLineId ?? string.Empty)).AppendLine();
         }
 
         return builder.ToString();
@@ -543,6 +555,8 @@ public static class IntervalStatistics
         {
             VehicleId = samples[0].VehicleId,
             ServiceRunId = samples[0].ServiceRunId,
+            ServiceRouteId = samples[0].ServiceRouteId,
+            OperatingLineId = samples[0].OperatingLineId,
             VehicleTypeId = samples[0].VehicleTypeId,
             ServiceClassId = samples[0].ServiceClassId,
             ServicePatternId = samples[0].ServicePatternId,
@@ -577,7 +591,7 @@ public static class IntervalStatistics
     }
 
     private static JourneyStatistic? CreateJourneyStatistic(
-        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
+        Func<TrajectorySample, IReadOnlyList<Station>> stationResolver,
         IReadOnlyList<TrajectorySample> samples,
         IReadOnlyList<SimulationEvent> events,
         Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher)
@@ -588,7 +602,7 @@ public static class IntervalStatistics
         }
 
         var direction = samples[0].Direction;
-        var stations = stationResolver(direction);
+        var stations = stationResolver(samples[0]);
         if (stations.Count == 0)
         {
             return null;
@@ -613,6 +627,8 @@ public static class IntervalStatistics
         {
             VehicleId = samples[0].VehicleId,
             ServiceRunId = samples[0].ServiceRunId,
+            ServiceRouteId = samples[0].ServiceRouteId,
+            OperatingLineId = samples[0].OperatingLineId,
             VehicleTypeId = samples[0].VehicleTypeId,
             ServiceClassId = samples[0].ServiceClassId,
             ServicePatternId = samples[0].ServicePatternId,

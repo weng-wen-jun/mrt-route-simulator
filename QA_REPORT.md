@@ -1,5 +1,27 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 大型路網快速車畫面假變速（2026-10-12）
+
+- 重現存檔：`samples/14-大型-二十八站完整營運範例.mrtsim.json`。O13 快速通過正線 `EDGE:DOWN:O12:O13:B-001` 的 660 m 股道被站心顯示錨點分段拉伸／壓縮；實際渲染幾何的等距 X 位移為 0.834648～1.935798 px，前後比例 2.319299。修正前回歸先失敗，證據 `output/route-geometry-before.log`。
+- 物理核對：同一存檔的 SimulationWorld 固定 0.1 s 推進，EXPRESS-01 在 1332.6→1332.7 s，車體中心 offset 319.221→321.445 m，速度均為 80.072000 km/h；本次問題點的變速是顯示映射造成。新增實際車輛核對涵蓋該股道 297 筆位置。
+- 修正：非載客 Mainline 通過參考點採 edge offset 等比例 X 映射，保留共用接軌端點與原有軌道 Y；載客月台維持站心對位。O04／O13 上下行共四條快速通過正線的等距位移比皆為 1.000000。非載客通過參考點依實體偏移顯示，不強制拉到載客月台同一站心；接軌、載客月台、上下行軌距、曲線及版面 guard 保留。
+- 另一項確定問題：worker 發幀與 UI timer 都已限速，再加 route 的 33 ms gate，會出現已接收新 frame、已更新 sequence，卻未繪製 route，無新 frame 時也不補畫。移除 route 的重複 gate，仍由既有發幀／dispatcher 節奏控制。確定性重現由 consumed=1／routePaint=0 改為 consumed=1／routePaint=1，沒有新 frame 時不重畫。證據 `output/route-cadence-before.log`、`output/route-cadence-after.log`。
+- 驗證：Release solution 0 warnings／0 errors；Engine **213/213**；完整 WPF `PASS WPF visual rules`（含新增 RouteMotionGeometryTests／RouteCadenceTests）；大型存檔 60× 定向播放 PASS，觀測 58.8×、route render 1.8 ms、maxInputGap 55.3 ms、固定配線重建 2→2、dropped=0。證據 `output/route-motion-engine.log`、`output/route-motion-wpf.log`、`output/route-motion-large.log`、`output/route-geometry-after.log`。
+- 產物：`output/v411-final/bin/MrtRouteSimulator.App/release/MRT路線進出站時間模擬器.exe`，仍為 V4.1.1；重新開啟此產物才會載入修正。畫面截圖 `output/v411-final/bin/MrtRouteSimulator.WpfTests/release/large-playback-window.png` 已檢視。現有 V4.1.1 dirty 變更保留，未提交／推送／發布。
+- 邊界：示意圖各股道仍可能有不同尺度，不能把像素速度當作 km/h。完整手動 schematic 布局仍尊重作者配置。本次為 WPF 渲染／物理數值／更新路徑驗證，不等於原生 compositor、所有 DPI 與長時間人工觀察驗收。
+
+## V4.1.1 多營運路線與逐站班表（2026-10-11）
+
+- 基底：遠端 main `159a70779e75f38fb95992da342b3d02e4bc0c87`，保留新版主題、導覽、卡片及圖表；版本唯一來源 `Directory.Build.props` 為 4.1.1。未提交、推送或發布。
+- 最終 Release solution build：`output/v411-final`，0 warnings／0 errors。最終產物 Engine runner：**213/213 通過，0 失敗**；含 15 項 V4.1.1 專項及全部 15 份 sample gate。證據：`output/v411-engine-final.log`。
+- 最終完整 WPF runner：exit 0、`PASS WPF visual rules`，155 條 `[通過]` 訊息，並包含 V4.1.1 editor/results 專項；驗證路線數 1～8、單雙線／父線／里程設定、草稿取消與保存、HH:mm:ss 時刻、逐站 eligibility、route/line filters、表定／實際 dwell、增量結果一致、支線自身站序／里程、15 份 sample 載入、工作區往返、播放 worker、3600 秒長行程及 CSV／PNG／PDF。證據：`output/v411-wpf-final.log`。
+- 回歸修正：上行跨站事件在精確 route key 不適用時保留方向別共同里程，incremental/full 坐標一致；時刻表車站欄改固定寬度，保留其他欄可讀寬度及水平捲動；舊檔 route.Direction 缺少時依 DirectionRouteBindings 選合法路徑，單一候選直接採用，多條仍可選擇。既有 assertion 保留，另加欄寬與新增上行班次 route binding assertion。
+- MCP stdio：initialize／tools/list／tools/call、15 tools、3 輪並行 advance/reset 通過；sample 15 的 project_get metadata、四車次、18 筆時刻表、10 個逐站發車／dwell 控制與 reset 通過。證據：`output/v411-mcp-standard.log`、`output/v411-mcp-feature.log`。
+- WPF named pipe bridge、載入失敗不污染、專案切換及輸出通過，包含大型 PNG 後切換小型 PDF；完整 runner 與 `output/v411-wpf-mcp-final.log` 均有紀錄。最終桌面黑箱直接指定本輪 DLL，載入／推進／切頁／縮放／播放／暫停／事件／時刻表／重設與 CSV／PNG／PDF 通過，測試自建視窗正常關閉。證據：`output/v411-mcp-desktop-final.log`。本機 Codex 註冊未改；執行中的其他版本 server 不會自動更新。
+- 新 sample：`samples/15-小型-主支線逐站班表範例.mrtsim.json`，由 OperatingNetworkBuilder.CreateExample 建立；全為 synthetic 值。Structural 通過，四車次於 1152.4 秒完成、無碰撞、共用資源釋放；另有多支線共用幹線與資源延遲後仍停滿的回歸。Manifest 見 `samples/README.md`。
+- 離屏圖片已檢視：`output/v411-editor-visuals/operating-lines-1360x860.png`、`station-timetable-dialog-700x520.png`；`output/v411-results-build/screenshots/v411-timetable-route-filter-15rows.png`、`v411-time-distance-branch-route.png`。欄位／HH:mm:ss／套用取消按鈕可見，時刻表水平捲動保留欄寬。
+- 邊界：單線為整段資源互斥與端點等待的保守控制，尚無自動分區閉塞／會車最佳化；多線建置會重建草稿，應先另存原專案再檢查套用。起站停站為 0；終點發車由反向車次控制；跨站不適用、未發車停站中。原生 Windows DPI、compositor、滑鼠手感與既有長時間效能人工 gate 未重跑，不把離屏或 named pipe 測試視為人工驗收。
+
 ## 拓樸編輯器小視窗與頁首（2026-10-11）
 
 - Release build：0 warning／0 error；Engine runner 198/198 通過。
@@ -853,3 +875,30 @@ After user125% handoff, fresh20:46:43/20:46:53 Taipei checkpoints still report96
 Subsequent explicit user approval: App DPI manifest/paused viewport fix completed; final Release0warnings/0errors, Engine186/186, fullWPF and diff-check PASS. New native sessione03f7a93 independently confirms120x120 DPI/1.25x; paused FULL-O13 hit-test and Diagram max/restore redraw positive. Full per-page125% resize, refreshed100%,150%, memory/event/sanity gates remain NOT COMPLETED. See `docs/NATIVE_PLAYBACK_FINAL_PROGRESS.md` for scoped files and evidence.
 
 Later150% native observation independently confirms144x144/1.5x; paused FULL-O13 hit-test and Diagram dense-label/scroll/narrow-short checks positive. New **Speed small-window lower chart/time-axis clipping FAIL**, no scroll access. Overall NOT COMPLETED; permission requested for minimal presentation-only repair. No source changes in observation turn; remaining per-page DPI/memory/event/sanity gates retain pending status.
+
+## 2026-10-12 路線圖垂直單位與調整介面
+
+- 上下行主線以中線 0 為基準，固定為 −1／+1；每單位 23 DIP，主線總間距 46 DIP。
+- 主圖與編輯器共用映射；大型路線不再壓縮側線 lane。快速通過正線依有向主線接續繼承方向，保留接軌端點連續。
+- 「軌道與設施 → 垂直配置」提供側線數值調整、預設配置與配線預覽；支線預設向 +2／+3 遞增，可使用 −8 至 +8 的有限小數。調整隨既有 Schema 8 保存。
+- 垂直調整列只轉接原 editor VM；未編輯的跨頁檢視不改變 JSON，取消不污染原專案。長站名依實際高度避開月台。
+- Release solution build：0 warnings／0 errors。
+- Engine runner：213／213 通過，0 失敗。
+- 垂直配置專項：PASS；涵蓋小型／密集路線等單位、端點連續、快速通過正線、實際儲存格 3.5 編輯、草稿隔離與專案往返。
+- 全範例 WPF 版面專項：PASS；涵蓋 samples 01–15、主圖／編輯器、多寬度、月台對位與直接接軌。
+- 完整 WPF runner：exit 0，PASS WPF visual rules；含專案載入、跨頁未修改往返、播放 worker、定速 geometry、cadence、長行程與 CSV／PNG／PDF 輸出。
+- git diff --check：通過。未執行原生 Windows DPI／compositor／滑鼠手感驗收。
+
+操作說明：docs/SCHEMATIC_VERTICAL_LAYOUT.md。
+## 2026-10-13 大存檔 O04／O13 站區統一 480 m
+
+- 從 SyntheticLongRouteScenarioBuilder 重建 sample 14；O04／O13 上下行通過正線與待避側線皆為 480 m，分岔／匯入距站心各 240 m，月台偏移 170～310 m、停點 240 m。
+- 分割相鄰區段並重新建立有向接續，保留全線 ServiceRoute 總長 29,943 m、來源站心與相鄰站距；未改 Engine、速度性能或 validator。
+- 每階段 Structural／Operational smoke gate 通過；生成 sample 與 builder 精確序列化一致。
+- 完整 Engine runner：213／213 通過，0 失敗；O13 越行、rear-clear、所有代表班次完成及零碰撞／停站違規通過。
+- Release solution build：0 warnings／0 errors。
+- 完整 WPF runner：exit 0，PASS WPF visual rules；含 samples 01–15、多寬度配線／直接接軌／月台、未修改跨頁往返、載入、播放、3600 秒及 CSV／PNG／PDF。
+- O04／O13 四條通過正線定速幾何：長度均 480 m，等偏移 X 步距均 0.851260 DIP，max/min ratio 1.000000。O13 實際快速車穿越新中心 240 m 兩側速度均 80.072 km/h。
+- WPF 定速中心檢查改由 through platform 資料取得，不再寫死 320 m；O13 雙向診斷容許值與 O04 同為 1 m。
+- sample14 新計畫軌跡精確基準為 178,952 筆（舊站區 178,992）；背景準備專項與完整 runner 重複驗證，仍保留逐組來源／快取 parity。舊事件精確秒數因停點與站區配置改變而不再適用。
+- git diff --check 通過；原生 Windows DPI／compositor／滑鼠驗收未另行執行。

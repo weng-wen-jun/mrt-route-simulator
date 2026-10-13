@@ -25,6 +25,10 @@ public sealed class TopologyResultContext
     private readonly IReadOnlyDictionary<TrainDirection, double> routeLengthsByDirection;
     private readonly IReadOnlyDictionary<string, string> platformStationIds;
     private readonly IReadOnlyDictionary<string, TopologyTurnbackOrigin> turnbackOrigins;
+    private IReadOnlyDictionary<string, IReadOnlyList<Station>> stationsByServiceRoute = new Dictionary<string, IReadOnlyList<Station>>();
+    private IReadOnlyDictionary<string, double> lengthsByServiceRoute = new Dictionary<string, double>();
+    private IReadOnlyDictionary<string, ServiceRouteDefinition> serviceRoutesById = new Dictionary<string, ServiceRouteDefinition>();
+    private IReadOnlyDictionary<TrainDirection, string> defaultServiceRouteIds = new Dictionary<TrainDirection, string>();
 
     private TopologyResultContext(
         IReadOnlyList<TopologyResultStop> outboundStops,
@@ -60,6 +64,59 @@ public sealed class TopologyResultContext
         GetTurnbackOrigin(simulationEvent) is { } origin
         && origin.FacilityId.Equals(facilityId, StringComparison.OrdinalIgnoreCase);
 
+    public IReadOnlyList<Station> GetDisplayStations(PlannedServiceRun run) =>
+        GetDisplayStations(run.Direction, GetServiceRouteId(run));
+
+    public string? GetServiceRouteId(PlannedServiceRun run)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        if (run.ServiceRouteId is { } routeId && serviceRoutesById.ContainsKey(routeId)) return routeId;
+        return defaultServiceRouteIds.TryGetValue(run.Direction, out var defaultRouteId)
+            ? defaultRouteId
+            : run.ServiceRouteId;
+    }
+
+    public string? GetOperatingLineId(PlannedServiceRun run)
+    {
+        var routeId = GetServiceRouteId(run);
+        return routeId is not null && serviceRoutesById.TryGetValue(routeId, out var route)
+            ? route.OperatingLineId
+            : null;
+    }
+
+    public IReadOnlyList<Station> GetDisplayStations(TrainDirection direction, string? serviceRouteId)
+    {
+        if (serviceRouteId is not { } id || !stationsByServiceRoute.TryGetValue(id, out var stations))
+            return GetDisplayStations(direction);
+        if (direction == TrainDirection.Outbound) return stations;
+        return stations.Select(station => new Station(station.StationId, station.StationName,
+            lengthsByServiceRoute[id] - station.PositionMeters, station.DwellTimeSeconds)).ToArray();
+    }
+
+    internal void SetServiceRoutes(InfrastructureGraphV4 infrastructure, IEnumerable<ServiceRouteDefinition> routes,
+        string outboundServiceRouteId, string inboundServiceRouteId)
+    {
+        var routeArray = routes.ToArray();
+        serviceRoutesById = routeArray.ToDictionary(
+            route => route.ServiceRouteId,
+            StringComparer.OrdinalIgnoreCase);
+        lengthsByServiceRoute = routeArray.ToDictionary(route => route.ServiceRouteId, route => new RouteProjection(infrastructure, route).TotalLengthMeters, StringComparer.OrdinalIgnoreCase);
+        stationsByServiceRoute = routeArray.ToDictionary(route => route.ServiceRouteId, route =>
+        {
+            var context = ResolvedRunRouteContext.Create(infrastructure, route);
+                        return (IReadOnlyList<Station>)context.Stops.Select(stop => new Station(stop.StationId,
+                infrastructure.Stations[stop.StationId].Name,
+                stop.ChainageMeters,
+                infrastructure.Stations[stop.StationId].DefaultDwellTimeSeconds)).ToArray();
+        }, StringComparer.OrdinalIgnoreCase);
+        var defaults = new Dictionary<TrainDirection, string>
+        {
+            [TrainDirection.Outbound] = outboundServiceRouteId,
+            [TrainDirection.Inbound] = inboundServiceRouteId
+        };
+        defaultServiceRouteIds = defaults;
+    }
+
     public IReadOnlyList<TopologyResultStop> GetStops(TrainDirection direction) =>
         stopsByDirection.TryGetValue(direction, out var stops)
             ? stops
@@ -80,6 +137,9 @@ public sealed class TopologyResultContext
         {
             return false;
         }
+
+        if (!string.IsNullOrWhiteSpace(simulationEvent.StationId))
+            return simulationEvent.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase);
 
         var stop = GetStops(direction).FirstOrDefault(item =>
             item.StationId.Equals(stationId, StringComparison.OrdinalIgnoreCase));

@@ -1,6 +1,6 @@
-﻿# 可執行範例
+# 可執行範例
 
-目前共 14 份範例，依車站規模由小至大排列，同規模內再按軌道區段與設施複雜度排序。檔名開頭的兩位數是排序序號，不是版本號；檔案主名稱及程式顯示名稱均為中文。
+目前共 15 份範例，依車站規模由小至大排列，同規模內再按軌道區段與設施複雜度排序。檔名開頭的兩位數是排序序號，不是版本號；檔案主名稱及程式顯示名稱均為中文。
 
 逐檔合理性、修正及運行結果見 [範例檢查表](範例檢查表.md)。範例路線圖以起始站月台中心 0K 顯示；七種站場範例及完整拓樸範例使用車體中心，其餘範例保留車頭停點基準。最新驗證以 QA_REPORT.md 為準。
 
@@ -22,10 +22,11 @@
 | 12 | 12-中型-五站完整營運範例.mrtsim.json | 5 站、14 軌道區段、10 月台 | 雙向班表、停站模式、指定接續與尾軌折返 |
 | 13 | 13-中型-六站主要站示範範例.mrtsim.json | 6 站、12 軌道區段、12 月台 | 合成主要站路線與全程／快速車停站模式 |
 | 14 | 14-大型-二十八站完整營運範例.mrtsim.json | 28 站、65 軌道區段、60 月台 | 合成長路線；非正式路線資料或工程設計 |
+| 15 | 15-小型-主支線逐站班表範例.mrtsim.json | 8 站、11 軌道區段、16 月台 | 雙線主線、單線支線、非站接軌與四方向逐站班表 |
 
 副檔名 .mrtsim.json 是程式載入格式所需，保留不變。
 
-自動化範例驗收目前涵蓋 14 個現行範例（含下列七種站場範例）；一般範例以 topology-native `SimulationWorld` 推進 3,600 秒，檢查未使用 edge、legacy facility edge 欄位、未具名續行班次、碰撞、停站違規及列車退出。合成長路線 full scenario 建議使用 8,000 秒有界模擬時間，以涵蓋 O04／O13 越行、O20 折返與後續退出。這些 gate 與情境測試不代表任何正式路線、工程配線或安全設計。
+自動化範例驗收目前涵蓋 15 個現行範例（含下列七種站場範例）；一般範例以 topology-native `SimulationWorld` 推進 3,600 秒，檢查未使用 edge、legacy facility edge 欄位、未具名續行班次、碰撞、停站違規及列車退出。合成長路線 full scenario 建議使用 8,000 秒有界模擬時間，以涵蓋 O04／O13 越行、O20 折返與後續退出。這些 gate 與情境測試不代表任何正式路線、工程配線或安全設計。
 
 ## 大型範例情境資料說明
 
@@ -72,11 +73,25 @@
   - 各站 dwell、O20 折返秒數、pocket／passing facility 長度、停點、速限、資源占用與釋放時間。
   - 代表性 dispatch offset 與普通停站 20 秒、指定車次待避條件；目前 builder 的 0／30／60／500／2,600／3,000／5,600 秒是 runtime regression input，不是正式班表。
 - 已建模：28 個邏輯車站、上下行月台與主線 ServiceRoute、`directedConnections`、`directionRouteBindings`、FULL-LINE／SECTION／EXPRESS stop patterns、O20 topology-native pocket traversal、O04／O13 passing facility、VehicleId／ServiceRunId 接續，以及越行／rear-clear／折返／退出事件的 focused regression 情境。
-- 刻意省略或尚未可工程化：平縱面、曲線／坡度／曲線限速、正式 turnout 型號與岔速、正式平台有效長度、正式車輛／號誌／閉塞參數、正式尖峰／離峰 timetable、fleet cycle／layover、完整容量客流模型及 O16 樓層／轉乘的列車 physics。O04／O13 的四股道只是 synthetic planning concept；目前可執行 facility 的細部幾何與 port side 仍屬 synthetic，不能視為工程配線。O04 的 `NODE:O04` 僅保留來源站心里程作顯示錨點，並非車輛行經的實體接點；上下行列車由各自的分岔／匯入節點及連續 480 m edge 通過站區。
+- 刻意省略或尚未可工程化：平縱面、曲線／坡度／曲線限速、正式 turnout 型號與岔速、正式平台有效長度、正式車輛／號誌／閉塞參數、正式尖峰／離峰 timetable、fleet cycle／layover、完整容量客流模型及 O16 樓層／轉乘的列車 physics。O04／O13 的四股道只是 synthetic planning concept；目前可執行 facility 的細部幾何與 port side 仍屬 synthetic，不能視為工程配線。O04／O13 的站心 node 僅保留來源站心里程作顯示錨點，並非車輛行經的實體接點；上下行列車由各自的分岔／匯入節點通過站區。兩站的通過正線與待避側線均為 480 m：分岔與匯入各距站心 240 m，月台偏移 170～310 m、中心 240 m。
 - 代表性 runtime regression 班表：`FULL-O13` 於 0 秒、`FULL-UP-01` 於 30 秒、`FULL-O04` 於 60 秒、`EXPRESS-01` 於 500 秒、其上行接續於 2,600 秒、`FULL-SECTION-O04` 於 2,600 秒、`SECTION-DOWN-01` 於 3,000 秒、其上行接續於 5,600 秒。builder 將尖峰 SECTION 與離峰 EXPRESS 放在同一份代表班表，只為在單一 runtime regression 中觀察多服務、越行與折返；不表示三種服務是正式同時營運，也不表示這些 offset 是正式時刻。
-- 預期關鍵事件：EXPRESS 依序完成 O04、O13 越行，再進入 O20 pocket 折返；SECTION 在 O04 越行後進入 O20 pocket 折返。O04／O13 待避模式以 `waitForOvertakeServiceRunId` 指定要等的車次，最低停站 20 秒；指定車次跨站通過後，仍須等車尾淨空、衝突資源釋放及安全許可才離開待避進路。舊存檔不含此欄位時沿用原停站秒數。FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。O04 幾何更新後，舊版精確事件秒數不再適用。
+- 預期關鍵事件：EXPRESS 依序完成 O04、O13 越行，再進入 O20 pocket 折返；SECTION 在 O04 越行後進入 O20 pocket 折返。O04／O13 待避模式以 `waitForOvertakeServiceRunId` 指定要等的車次，最低停站 20 秒；指定車次跨站通過後，仍須等車尾淨空、衝突資源釋放及安全許可才離開待避進路。舊存檔不含此欄位時沿用原停站秒數。FULL-LINE 持續至 O26。建議將完整 scenario 有界推進至 **8,000 秒**。O04／O13 幾何更新後，舊版精確事件秒數不再適用。
 - 目前驗證狀態（2026-09-25）：builder 的 7 個階段 Structural／Operational gate、Release solution build（0 warnings／0 errors）、完整 Engine runner **170/170**、O04／O13 雙向四股實體 topology、兩次越行與 rear-clear、Schema 8 round-trip 均通過。進站控制的下一步煞停預視及啟動後持續煞車已消除 65 m 設定下 full station chain、完整情境與 V3.3 sample 的 `StationStopViolation`。原生桌面不同 DPI、O04／O13 越行與 O20 折返的連續播放目視仍需驗證，不能用離屏 runner 代替。
+- 站區更新驗證（2026-10-13）：O04／O13 四股站區皆為 480 m，來源站心、相鄰站距及全線總長保留；builder 分階段 Structural／Operational gate、Release build（0 warnings/errors）、完整 Engine 213/213、完整 WPF runner 與大存檔往返通過。這些是自動化／離屏證據；原生 DPI、compositor 與手動連續播放未另行驗收。
 - 已知限制：此案例的通過結果只代表 synthetic topology-native sample 可執行，以及目前列出的 runtime 事件可被驗證；不代表任何正式路線設計、實際站距、四股道配線、號誌安全能力、正式容量或營運時刻表。
+
+### 小型主支線逐站班表範例 Manifest
+
+- 案例與層級：`15-小型-主支線逐站班表範例`，`operational`；主要原始來源是 `OperatingNetworkBuilder.CreateExample(template)`，JSON 是可載入輸出與 builder 漂移回歸基準。
+- 資料來源與正式欄位：全案沒有採用正式路線、工程、車站、里程、車型、號誌或營運時刻資料，也沒有任何欄位可視為正式設計值。
+- synthetic test values／非正式設計值：主線長 3,000 m、4 站、雙線；支線長 1,500 m、4 站、單線；支線在主線 750 m 非站位置接入。月台與車體尺寸、最高速度、加減速度、jerk、停點、port side、schematic lane、20／25 秒停站、180 秒逐站時刻間隔及 0／60／120／180 秒起站發車均為測試值。
+- 已建模：Schema 8 topology、主線／支線 metadata、指定里程 edge 分割、實體 junction、明確 directed connections、4 條 explicit ServiceRoute、主線與支線上下行各一班、每班至少兩個中途站逐站表定發車與最短停站，以及 route／operating-line identity 的時刻表輸出。起站發車時間以手動班表列為單一來源，逐站 entry 只記中途站；終點不設定發車。
+- 資源與限制：支線使用整線共用 `Block`，銜接處使用共用 `Switch`。這是保守的整線互斥模型，會讓有衝突的車次等待整段資源釋放；不代表最佳化會車、閉塞分區、聯鎖設計或正式容量。案例沒有 turnback、passing、crossover、pocket、tail 或會車站。
+- 刻意省略：真實平縱面、曲線／坡度、正式 turnout 與限速、單線分區閉塞與會車排程、折返接續、越行、密集班表、fleet cycle、客流與容量校準。
+- 預期驗證：Structural 執行 `TopologyProjectFormat.Validate` 並確認 750 m 非站 junction、主線雙線、支線單線及 4 條 route；Operational 建立同一 topology-native `SimulationWorld`，建議有界推進至 2,400 秒，確認資源等待、逐站停滿、四車次完成、無碰撞及資源釋放；Regression 執行 Release build、V4.1.1 focused tests 與完整 Engine runner。
+- 關鍵觀察時間（2026-10-11 實際測得）：主線下行 0.0 秒發車、194.6 秒釋放支線銜接 Switch、459.0 秒退出；主線上行因共用 Switch 等待，194.7 秒發車、519.0 秒釋放並退出；支線下行因資源等待於 519.1 秒發車、835.7 秒釋放單線 Block 與 Switch 並退出；支線上行於 835.8 秒發車、1,152.4 秒釋放資源並退出。事件秒數是 deterministic regression observation，不是正式時刻。
+- 最後驗證狀態（2026-10-11）：Structural 通過；Operational 於 1,152.4 秒四車次有界完成、無碰撞，所有曾保留的共用資源均有釋放事件；新增的 sample／資源晚發停滿／多支線共用幹線／route-specific V1/V2 與 CSV 四項隔離回歸通過。完整 Engine runner 的整合結果以 `QA_REPORT.md` 為準。
+- 已知限制：通過驗證只表示這份 synthetic operational sample 可執行，並能重現目前的保守資源互斥與逐站時刻規則；不得據此宣稱真實路線可行、營運最佳化、容量、安全完整性或工程設計已獲驗證。
 
 ## 七種站場範例
 

@@ -162,7 +162,7 @@ public partial class MainWindow
                 UpdateV2PlaybackView();
                 var frame = McpFrame();
                 var rows = OperationsTimetable.Build(frame.GetTopologyResultContext(), frame.DispatchPlan!,
-                    _plannedTimetableEvents, frame.Events);
+                    _plannedTimetableEvents, frame.Events, GetResultServicePatterns());
                 return SimulationAutomationSession.Page(rows, Integer(args, "offset", 0), Integer(args, "limit", 100));
             }
             case "select_page":

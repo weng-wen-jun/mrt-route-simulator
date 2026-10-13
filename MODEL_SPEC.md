@@ -600,3 +600,25 @@ TrackEdgeDefinition 的可選 FromPortSide／ToPortSide 表示節點局部 A/B �
 CONNECTION-001 表示同側回頭或有側別與無側別混接；CONNECTION-002 表示只填單端或非法列舉。側別是獨立保存的建置資料，不由 runtime 的 schematic 座標、股道或站點里程反推。站型模板在固定藍圖建置時寫入側別，後續移動示意位置不會重算；快速建線、分割及設施精靈延續此契約。尾軌／袋狀軌精靈的進出渡線各25m，使用者指定長度仍為折返軌主體長度。
 
 Schema 8 維持向後相容：兩端皆未指定的舊 edge 仍採原有結構與有向轉向驗證，不能視為通過側別方向檢查；12份現行範例已完整補入側別。缺資料舊檔的引導式遷移另列 TODO。
+
+
+## V4.1.1 多營運路線與逐站時刻補充（2026-10-11）
+
+版本權威為 Directory.Build.props。Schema 8 的 OperatingLines 描述營運路線、股道數、父線與接軌里程；ServiceRoute 的 OperatingLineId／Direction 與 Dispatch 的 ServiceRouteId 為可選欄位。未指定車次路徑時沿用方向別預設 binding；指定時按該 route 的 resolved stops、navigator、projection 與 movement plan 執行。接軌里程只用於 builder 建立實體 node／edge；runtime 仍以 TrackEdgeId、OffsetMeters、footprint 與 rear-clear 為權威。
+
+OperatingNetworkBuilder 先建立獨立主線，再按父線順序加入支線；支線重用祖先起點至接軌點的實體幹線。雙線使用方向別 edge，單線使用雙向 edge 與整線 Block 資源，接軌使用 Switch 資源。單線目前保守預約整線，沒有站間分區或自動會車最佳化；對向車等待資源，不以畫面股道數取代控制。
+
+逐車次 StationTimetableEntries 存各站 PlannedDepartureTime 與 MinimumDwellSeconds。時間採與 Dispatch 同一 ScheduleAnchorTime 的時鐘，不是自起站出發累計時間。中途停站有效秒數優先使用逐站設定，其次停站模式／站預設。最早離站時間為 max(實際到站秒 + 有效停站秒數, 表定發車相對秒)，之後仍須通過現有安全、待避與資源控制。跨站／折返站不得使用一般發車欄位；起站停站秒數必須為 0 且表定時刻與派車一致；終點發車由反向車次處理。
+
+時刻表 PlannedDwellSeconds 為上述有效設定；ActualDwellSeconds 只由同一 world 的到站與發車事件相減，包含時刻等待與控制延長。未發車時保持 null，跨站與無到站的起站不以 0 偽裝實際停站。輸出以 ServiceRunId 與 ServiceRouteId 識別車次路徑，不以方向推斷支線。
+
+
+### 路線圖通過參考點與播放更新（2026-10-12）
+
+主線所有水平線段必須採線性距離映射：相同實體偏移增量對應相同畫面位移，站距依實際專案資料保留，不把不同站距改成相同圖長。此規則適用於上下行、載客／非載客主線及手動 schematic 布局；站心／月台中心對位及美化不得對主線移動進度施加非線性拉伸、壓縮或緩入緩出。非載客通過參考點仍依實體股道偏移定位，不強制扭曲主線來對齊載客站心。
+
+非等距呈現只允許在上下接軌的轉向部分，例如跨股道道岔、橫渡線及側線進出主線的上下轉向段。例外依實際繪製部分判斷，不因整條 edge 含轉向或屬某種 facility 就豁免其水平主線段。端點、有向接續及實際行駛方向必須連續，軌道、月台與列車共用映射。
+
+此為呈現契約，物理權威仍是 Engine 的 edge-local cursor；畫面不得反向修改速度、實體長度、停站或事件。驗收須涵蓋所有主線類別、上下行、跨 edge 等距位移及上下接軌例外，同時保留月台對位與接軌連續性檢核。
+
+路線圖對每個已接收的新 PlaybackFrame 畫出同一份位置，不另加會吞掉 frame 的 route 時間 gate；發幀與 dispatcher 仍控制更新節奏，同一 sequence 在未強制刷新時不重畫。示意圖像素速率不得當成營運速度數值。

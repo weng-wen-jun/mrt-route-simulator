@@ -77,6 +77,40 @@ internal static class Program
         app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
         try
         {
+            if (args.Contains("--vertical-lanes-only"))
+            {
+                VerticalLaneTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--route-geometry-only"))
+            {
+                RouteMotionGeometryTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--route-cadence-only"))
+            {
+                RouteCadenceTests.Run(GetRoot(args));
+                return 0;
+            }
+            if (args.Contains("--v411-editor-only"))
+            {
+                V411EditorTests.Run(GetRoot(args));
+                Console.WriteLine("PASS V4.1.1 editor");
+                return 0;
+            }
+            if (args.Contains("--v411-results-only"))
+            {
+                V411ResultTests.Run(GetRoot(args));
+                Console.WriteLine("PASS V4.1.1 results");
+                return 0;
+            }
+            if (args.Contains("--v411-only"))
+            {
+                V411EditorTests.Run(GetRoot(args));
+                V411ResultTests.Run(GetRoot(args));
+                Console.WriteLine("PASS V4.1.1 editor and results");
+                return 0;
+            }
             if (args.Contains("--mcp-only"))
             {
                 McpBridgeTests.Run(GetRoot(args));
@@ -334,6 +368,8 @@ internal static class Program
             ChartThemeTests.Run(GetRoot(args));
             EditorThemeTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);
+            V411EditorTests.Run(projectRoot);
+            V411ResultTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 專案載入測試");
             ProjectLoadTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 大型拓撲工作區往返測試");
@@ -341,6 +377,9 @@ internal static class Program
             RunInputPageTests(projectRoot);
             Console.WriteLine("開始 WPF 播放 worker 測試");
             PlaybackWorkerTests.Run(projectRoot);
+            VerticalLaneTests.Run(projectRoot);
+            RouteMotionGeometryTests.Run(projectRoot);
+            RouteCadenceTests.Run(projectRoot);
             Console.WriteLine("開始 WPF 原生量測入口測試");
             DpiConfigurationTests.Run(regressionRoot);
             NativeAcceptanceTests.Run(projectRoot);

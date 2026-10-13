@@ -150,6 +150,8 @@ public sealed record LinearInfrastructureBuildResult(
     ServiceRouteDefinition OutboundServiceRoute,
     ServiceRouteDefinition InboundServiceRoute)
 {
+    public IReadOnlyList<ServiceRouteDefinition>? AllServiceRoutes { get; init; }
+
     public ServiceRouteDefinition GetServiceRoute(TrainDirection direction) =>
         direction == TrainDirection.Outbound ? OutboundServiceRoute : InboundServiceRoute;
 }

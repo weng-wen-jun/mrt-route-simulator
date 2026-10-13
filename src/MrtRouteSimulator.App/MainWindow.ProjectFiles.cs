@@ -433,12 +433,13 @@ public partial class MainWindow
                 ParseDirection(row.Direction), ParseTime(row.FirstDeparture, "首班時間").TotalSeconds,
                 TimeSpan.FromMinutes(row.HeadwayMinutes).TotalSeconds, row.RunCount, row.ServiceTypeId,
                 EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
-                EmptyToNull(row.VehicleId), row.ContinueAfterTerminal)).ToArray(),
+                EmptyToNull(row.VehicleId), row.ContinueAfterTerminal, EmptyToNull(row.ServiceRouteId))).ToArray(),
             ManualTimetableRows.Select(row => new ProjectManualTimetableRow(
                 ParseTime(row.PlannedDeparture, "發車時間").TotalSeconds, ParseDirection(row.Direction), row.ServiceTypeId,
                 EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
                 EmptyToNull(row.VehicleId), EmptyToNull(row.ServiceRunId), row.ContinueAfterTerminal,
-                EmptyToNull(row.ContinuationServiceRunId))).ToArray());
+                EmptyToNull(row.ContinuationServiceRunId), row.StationTimetableEntries?.ToArray(),
+                EmptyToNull(row.ServiceRouteId))).ToArray());
         var infrastructure = CaptureProjectInfrastructure(stations);
 
         return new SimulationProjectDocument(

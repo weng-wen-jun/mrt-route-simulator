@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -178,8 +178,11 @@ internal static class PlaybackWorkerTests
     {
         var planned = (IReadOnlyList<SimulationEvent>)(WpfTestWait.Field(window, "_plannedTimetableEvents")
             ?? Array.Empty<SimulationEvent>());
+        var document = WpfTestWait.Field(window, "_activeTopologyProjectDocument") as TopologyProjectDocument
+            ?? throw new InvalidOperationException("拓樸時刻表 parity 需要目前專案資料。");
+        var patterns = TopologyProjectFormat.CreateRuntime(document).ServicePatterns;
         var expected = OperationsTimetable.Build(frame.GetTopologyResultContext(),
-            frame.DispatchPlan!, planned, frame.Events);
+            frame.DispatchPlan!, planned, frame.Events, patterns);
         var actual = accumulator.TimetableEntries;
         var mismatch = actual is null ? -1 : Enumerable.Range(0, Math.Min(actual.Count, expected.Count))
             .FirstOrDefault(index => !Equals(actual[index], expected[index]), -1);

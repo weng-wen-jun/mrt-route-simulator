@@ -122,13 +122,15 @@ public sealed class TimeDistanceTrajectoryCache
                 MaxTime = Math.Max(MaxTime, sample.SimulationTimeSeconds);
             }
 
-            var key = new SeriesKey(sample.VehicleId, sample.ServiceRunId, sample.Direction);
+            var key = new SeriesKey(sample.VehicleId, sample.ServiceRunId, sample.Direction, sample.ServiceRouteId);
             if (!_states.TryGetValue(key, out var state))
             {
                 var series = new TimeDistanceDisplaySeries(
                     sample.VehicleId,
                     sample.ServiceRunId,
-                    sample.Direction);
+                    sample.Direction,
+                    sample.ServiceRouteId,
+                    sample.OperatingLineId);
                 state = new SeriesState(series, _ordinaryPointBudget, _ordinarySamplingStride);
                 _states.Add(key, state);
                 _groups.Add(series);
@@ -162,7 +164,8 @@ public sealed class TimeDistanceTrajectoryCache
     private readonly record struct SeriesKey(
         string VehicleId,
         string ServiceRunId,
-        TrainDirection Direction);
+        TrainDirection Direction,
+        string? ServiceRouteId);
 
     private sealed class SeriesState
     {
@@ -357,11 +360,15 @@ public sealed class TimeDistanceDisplaySeries
     internal TimeDistanceDisplaySeries(
         string vehicleId,
         string serviceRunId,
-        TrainDirection direction)
+        TrainDirection direction,
+        string? serviceRouteId,
+        string? operatingLineId)
     {
         VehicleId = vehicleId;
         ServiceRunId = serviceRunId;
         Direction = direction;
+        ServiceRouteId = serviceRouteId;
+        OperatingLineId = operatingLineId;
     }
 
     public string VehicleId { get; }
@@ -369,6 +376,10 @@ public sealed class TimeDistanceDisplaySeries
     public string ServiceRunId { get; }
 
     public TrainDirection Direction { get; }
+
+    public string? ServiceRouteId { get; }
+
+    public string? OperatingLineId { get; }
 
     /// <summary>Changes whenever this group's display point collection is rebuilt.</summary>
     public long Version { get; private set; }

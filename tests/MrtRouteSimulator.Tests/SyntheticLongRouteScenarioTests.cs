@@ -624,13 +624,13 @@ internal static class SyntheticLongRouteFullScenarioTests
             True(document.Topology.PassingOperations.Any(operation => operation.FacilityId == facilities[0].FacilityId)
                 && document.Topology.PassingOperations.Any(operation => operation.FacilityId == facilities[1].FacilityId),
                 $"{stationId} 上下行 facility 都必須納入正式 PassingOperation，不可孤立。 ");
-            if (stationId == "O04")
+            // 兩座站均驗證相同 480 m 站區以及相鄰來源站距。
             {
                 var edges = document.Topology.Edges.ToDictionary(edge => edge.TrackEdgeId,
                     StringComparer.OrdinalIgnoreCase);
                 var projection = new StationChainageProjection(document);
                 Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId),
-                    projection.StationCenters[stationId], 0.001, "O04 站心里程不可因配線而移動。 ");
+                    projection.StationCenters[stationId], 0.001, $"{stationId} 站心里程不可因配線而移動。 ");
                 foreach (var facility in facilities)
                 {
                     var localPlatform = document.Topology.Platforms.Single(platform => platform.PlatformId == facility.LocalPlatformId);
@@ -640,40 +640,44 @@ internal static class SyntheticLongRouteFullScenarioTests
                     var siding = edges[localPlatform.TrackEdgeId];
                     var through = edges[expressPlatform.TrackEdgeId];
                     var outbound = facility.LocalPlatformId.Contains(":DOWN", StringComparison.OrdinalIgnoreCase);
-                    Close(outbound ? 2030 : 360, arrival.LengthMeters, 0.001,
-                        "O04 分岔點必須在月臺中心前 240 m。 ");
-                    Close(outbound ? 360 : 2030, departure.LengthMeters, 0.001,
-                        "O04 匯入點必須在月臺中心後 240 m。 ");
-                    Close(480, siding.LengthMeters, 0.001, "O04 側線分岔至匯入必須為 480 m。 ");
-                    Close(480, through.LengthMeters, 0.001, "O04 通過正線分岔至匯入必須為 480 m。 ");
+                    var stationIndex = Array.IndexOf(SyntheticLongRouteFullScenarioBuilder.StationIds, stationId);
+                    var before = SyntheticLongRouteFullScenarioBuilder.StationIds[stationIndex + (outbound ? -1 : 1)];
+                    var after = SyntheticLongRouteFullScenarioBuilder.StationIds[stationIndex + (outbound ? 1 : -1)];
+                    var stationChainage = SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId);
+                    var expectedBefore = Math.Abs(stationChainage - SyntheticLongRouteFullScenarioBuilder.RetainedChainage(before));
+                    var expectedAfter = Math.Abs(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(after) - stationChainage);
+                    Close(expectedBefore - 240, arrival.LengthMeters, 0.001,
+                        $"{stationId} 分岔點必須在月臺中心前 240 m。 ");
+                    Close(expectedAfter - 240, departure.LengthMeters, 0.001,
+                        $"{stationId} 匯入點必須在月臺中心後 240 m。 ");
+                    Close(480, siding.LengthMeters, 0.001, $"{stationId} 側線分岔至匯入必須為 480 m。 ");
+                    Close(480, through.LengthMeters, 0.001, $"{stationId} 通過正線分岔至匯入必須為 480 m。 ");
                     Equal(arrival.ToNodeId, siding.FromNodeId);
                     Equal(arrival.ToNodeId, through.FromNodeId);
                     Equal(departure.FromNodeId, siding.ToNodeId);
                     Equal(departure.FromNodeId, through.ToNodeId);
                     foreach (var platform in new[] { localPlatform, expressPlatform })
                     {
-                        Close(170, platform.PlatformStartOffsetMeters, 0.001, "O04 月臺起點應在岔出點後 170 m。 ");
-                        Close(240, platform.StopPositionOffsetMeters, 0.001, "O04 月臺中心應在岔出點後 240 m。 ");
-                        Close(310, platform.PlatformEndOffsetMeters, 0.001, "O04 月臺終點應在岔出點後 310 m。 ");
+                        Close(170, platform.PlatformStartOffsetMeters, 0.001, $"{stationId} 月臺起點應在岔出點後 170 m。 ");
+                        Close(240, platform.StopPositionOffsetMeters, 0.001, $"{stationId} 月臺中心應在岔出點後 240 m。 ");
+                        Close(310, platform.PlatformEndOffsetMeters, 0.001, $"{stationId} 月臺終點應在岔出點後 310 m。 ");
                         Close(SyntheticLongRouteFullScenarioBuilder.RetainedChainage(stationId),
                             projection.ToChainage(new TrackPosition(platform.TrackEdgeId, 240))!.Value,
-                            0.001, "O04 月臺中心投影應對齊來源站心。 ");
+                            0.001, $"{stationId} 月臺中心投影應對齊來源站心。 ");
                     }
-                    var expectedBefore = outbound ? 2270 : 600;
-                    var expectedAfter = outbound ? 600 : 2270;
                     Close(expectedBefore, arrival.LengthMeters + localPlatform.StopPositionOffsetMeters,
-                        0.001, "O04 前一站至月臺中心實體距離必須維持來源站距。 ");
+                        0.001, $"{stationId} 前一站至月臺中心實體距離必須維持來源站距。 ");
                     Close(expectedAfter, siding.LengthMeters - localPlatform.StopPositionOffsetMeters + departure.LengthMeters,
-                        0.001, "O04 月臺中心至下一站實體距離必須維持來源站距。 ");
+                        0.001, $"{stationId} 月臺中心至下一站實體距離必須維持來源站距。 ");
                 }
                 foreach (var route in document.ServiceRoutes)
                     Close(SyntheticLongRouteFullScenarioBuilder.FullRouteLengthMeters,
                         route.Traversals.Sum(traversal => edges[traversal.TrackEdgeId].LengthMeters),
-                        0.001, "O04 分岔與匯入不得改變主線 ServiceRoute 總長。 ");
+                        0.001, $"{stationId} 分岔與匯入不得改變主線 ServiceRoute 總長。 ");
                 True(document.ServiceRoutes.All(route => route.Traversals.All(traversal =>
-                    edges[traversal.TrackEdgeId].FromNodeId != "NODE:O04"
-                    && edges[traversal.TrackEdgeId].ToNodeId != "NODE:O04")),
-                    "O04 站心 node 僅保留來源里程錨點，列車運行必須使用具實體接點的邊。 ");
+                    edges[traversal.TrackEdgeId].FromNodeId != $"NODE:{stationId}"
+                    && edges[traversal.TrackEdgeId].ToNodeId != $"NODE:{stationId}")),
+                    $"{stationId} 站心 node 僅保留來源里程錨點，列車運行必須使用具實體接點的邊。 ");
             }
         }
     }

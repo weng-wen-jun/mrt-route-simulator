@@ -241,7 +241,9 @@ public sealed record WorldTrainState(
     string? TrackEdgeId = null,
     double? OffsetMeters = null,
     int? ServiceRouteTraversalIndex = null,
-    double? ProjectedChainageMeters = null);
+    double? ProjectedChainageMeters = null,
+    string? ServiceRouteId = null,
+    string? OperatingLineId = null);
 
 public sealed record SafetyObservation(
     double SimulationTimeSeconds,
@@ -285,7 +287,9 @@ public sealed record TrajectorySample(
     double? OffsetMeters = null,
     int? ServiceRouteTraversalIndex = null,
     double? ProjectedChainageMeters = null,
-    double? TrackSpeedLimitMetersPerSecond = null);
+    double? TrackSpeedLimitMetersPerSecond = null,
+    string? ServiceRouteId = null,
+    string? OperatingLineId = null);
 
 public sealed record SimulationEvent(
     double SimulationTimeSeconds,
@@ -310,7 +314,9 @@ public sealed record SimulationEvent(
     double? OffsetMeters = null,
     int? ServiceRouteTraversalIndex = null,
     double? ProjectedChainageMeters = null,
-    string? StationId = null);
+    string? StationId = null,
+    string? ServiceRouteId = null,
+    string? OperatingLineId = null);
 
 public sealed record SimulationSnapshot(
     double SimulationTimeSeconds,

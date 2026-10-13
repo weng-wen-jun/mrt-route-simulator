@@ -67,9 +67,10 @@ public sealed class SimulationResultAccumulator
         TopologyResultContext? topology,
         ResolvedDispatchPlan dispatchPlan,
         IReadOnlyList<SimulationEvent> plannedEvents,
-        IReadOnlyList<SimulationEvent> actualEvents) =>
+        IReadOnlyList<SimulationEvent> actualEvents,
+        IEnumerable<ServicePattern>? servicePatterns = null) =>
         _timetable = new IncrementalOperationsTimetable(route, topology, dispatchPlan,
-            plannedEvents, actualEvents);
+            plannedEvents, actualEvents, servicePatterns);
 
     public void SetPlannedTimetableEvents(IReadOnlyList<SimulationEvent> plannedEvents,
         IReadOnlyList<SimulationEvent> actualEvents) =>

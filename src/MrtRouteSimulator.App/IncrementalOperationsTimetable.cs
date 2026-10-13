@@ -12,6 +12,7 @@ internal sealed class IncrementalOperationsTimetable
     private readonly Route? _route;
     private readonly TopologyResultContext? _topology;
     private readonly ResolvedDispatchPlan _dispatchPlan;
+    private readonly IReadOnlyList<ServicePattern> _servicePatterns;
     private IReadOnlyList<SimulationEvent> _plannedEvents;
     private readonly List<OperationsTimetableEntry> _entries = [];
     private readonly Dictionary<string, RunState> _runs = new(StringComparer.OrdinalIgnoreCase);
@@ -21,7 +22,8 @@ internal sealed class IncrementalOperationsTimetable
         TopologyResultContext? topology,
         ResolvedDispatchPlan dispatchPlan,
         IReadOnlyList<SimulationEvent> plannedEvents,
-        IReadOnlyList<SimulationEvent> actualEvents)
+        IReadOnlyList<SimulationEvent> actualEvents,
+        IEnumerable<ServicePattern>? servicePatterns = null)
     {
         if (route is null && topology is null)
         {
@@ -31,6 +33,7 @@ internal sealed class IncrementalOperationsTimetable
         _route = route;
         _topology = topology;
         _dispatchPlan = dispatchPlan ?? throw new ArgumentNullException(nameof(dispatchPlan));
+        _servicePatterns = servicePatterns?.ToArray() ?? [];
         _plannedEvents = plannedEvents ?? [];
         Rebuild(actualEvents);
     }
@@ -113,8 +116,8 @@ internal sealed class IncrementalOperationsTimetable
     {
         _entries.Clear();
         _entries.AddRange(_topology is { } topology
-            ? OperationsTimetable.Build(topology, _dispatchPlan, _plannedEvents, [])
-            : OperationsTimetable.Build(_route!, _dispatchPlan, _plannedEvents, []));
+            ? OperationsTimetable.Build(topology, _dispatchPlan, _plannedEvents, [], _servicePatterns)
+            : OperationsTimetable.Build(_route!, _dispatchPlan, _plannedEvents, [], _servicePatterns));
         _runs.Clear();
         foreach (var run in _dispatchPlan.Runs)
         {
@@ -141,7 +144,10 @@ internal sealed class IncrementalOperationsTimetable
     {
         var entry = _entries[index];
         var isTerminal = index == run.RowIndices[^1];
-        var status = isTerminal && run.ServiceEnded
+        var isPass = entry.Status is "待通過" or "已通過";
+        var status = isPass
+            ? entry.ActualArrivalTimeSeconds is null ? "待通過" : "已通過"
+            : isTerminal && run.ServiceEnded
             ? "退出營運"
             : entry.ActualArrivalTimeSeconds is not null && isTerminal && run.Plan.ContinueAfterTerminal
                 ? "折返接續"

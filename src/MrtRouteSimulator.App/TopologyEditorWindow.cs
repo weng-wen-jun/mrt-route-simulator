@@ -37,7 +37,8 @@ internal enum ProjectWorkspacePage
     Services,
     StopPatterns,
     DispatchPlanning,
-    AdvancedData
+    AdvancedData,
+    OperatingLines
 }
 
 internal sealed partial class TopologyEditorWindow : Window
@@ -169,6 +170,7 @@ internal sealed partial class TopologyEditorWindow : Window
             new NavItem(ProjectWorkspacePage.Tracks, "軌道與設施", ShowTracksPage),
             new NavItem(ProjectWorkspacePage.Vehicle, "車型", ShowVehiclePage),
             new NavItem(ProjectWorkspacePage.Services, "服務與路徑", ShowServicesPage),
+            new NavItem(ProjectWorkspacePage.OperatingLines, "營運路線網路", ShowOperatingLinesPage),
             new NavItem(ProjectWorkspacePage.StopPatterns, "停站模式", ShowStopPatternsPage),
             new NavItem(ProjectWorkspacePage.DispatchPlanning, "班表與接續", ShowDispatchPlanningPage),
             new NavItem(ProjectWorkspacePage.Simulation, "模擬設定", ShowSimulationPage),
@@ -1049,6 +1051,21 @@ internal sealed partial class TopologyEditorWindow : Window
     private TabItem DispatchTab<T>(ProjectValidationTargetKind targetKind, string title, ObservableCollection<T> source, Action add, Action edit, Action delete)
     {
         var grid = CreateGrid(source, true);
+        grid.AutoGeneratingColumn += (_, args) =>
+        {
+            if (args.PropertyName == nameof(ManualTimetableEditorViewModel.StationTimetableEntries))
+            {
+                args.Cancel = true;
+                return;
+            }
+            if (args.PropertyName == nameof(ManualTimetableEditorViewModel.ServiceRouteId)
+                && args.Column is DataGridTextColumn column
+                && column.Binding is Binding binding)
+            {
+                args.Column.Header = "營運路徑";
+                binding.Converter = new OperationValueDisplayConverter(DisplayServiceRouteReference);
+            }
+        };
         grid.SelectionChanged += (_, _) => selectionDetails.Text = DescribeSelection(grid.SelectedItem, "選取班表列後可查看屬性。");
         var panel = new DockPanel { Margin = new Thickness(8) };
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
@@ -1202,8 +1219,8 @@ internal sealed partial class TopologyEditorWindow : Window
         var routesByDirection = state.Draft.DirectionRouteBindings.ToDictionary(item => item.Direction, item => item.ServiceRouteId);
         serviceNetwork.ServiceTypes.Reset(state.Draft.ServiceTypes.Select(item => new ServiceTypeEditorViewModel(item)
         {
-            ServiceRoutes = string.Join(", ", (state.Draft.Dispatch.SimpleHeadwayPlans ?? []).Where(plan => plan.ServiceTypeId.Equals(item.Id, StringComparison.OrdinalIgnoreCase)).Select(plan => routesByDirection.GetValueOrDefault(plan.Direction, "—"))
-                .Concat((state.Draft.Dispatch.ManualTimetableRows ?? []).Where(row => row.ServiceTypeId.Equals(item.Id, StringComparison.OrdinalIgnoreCase)).Select(row => routesByDirection.GetValueOrDefault(row.Direction, "—")))
+            ServiceRoutes = string.Join(", ", (state.Draft.Dispatch.SimpleHeadwayPlans ?? []).Where(plan => plan.ServiceTypeId.Equals(item.Id, StringComparison.OrdinalIgnoreCase)).Select(plan => plan.ServiceRouteId ?? routesByDirection.GetValueOrDefault(plan.Direction, "—"))
+                .Concat((state.Draft.Dispatch.ManualTimetableRows ?? []).Where(row => row.ServiceTypeId.Equals(item.Id, StringComparison.OrdinalIgnoreCase)).Select(row => row.ServiceRouteId ?? routesByDirection.GetValueOrDefault(row.Direction, "—")))
                 .Distinct(StringComparer.OrdinalIgnoreCase))
         }));
         serviceNetwork.VehicleTypes.Reset(state.Draft.VehicleTypes.Select(item => new VehicleTypeEditorViewModel(item)
@@ -1920,7 +1937,7 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         var direction = ChooseDispatchDirection(state.Draft.DirectionRouteBindings.FirstOrDefault()?.Direction ?? TrainDirection.Outbound);
         if (direction is null) return;
-        var route = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction);
+        var route = ChooseServiceRoute(direction.Value, null);
         var service = state.Draft.ServiceTypes.FirstOrDefault();
         if (route is null || service is null) { ShowErrors(["請先建立方向綁定與服務類型，才能建立班距計畫。"]); return; }
         var origin = GetRouteOriginPlatform(route.ServiceRouteId);
@@ -1928,9 +1945,9 @@ internal sealed partial class TopologyEditorWindow : Window
         {
             Dispatch = state.Draft.Dispatch with
             {
-                SimpleHeadwayPlans = (state.Draft.Dispatch.SimpleHeadwayPlans ?? []).Append(new ProjectHeadwayPlan(route.Direction,
+                SimpleHeadwayPlans = (state.Draft.Dispatch.SimpleHeadwayPlans ?? []).Append(new ProjectHeadwayPlan(direction.Value,
                     state.Draft.Simulation.StartClockSeconds, 300, 1, service.Id, service.DefaultVehicleTypeId,
-                    service.DefaultStopPatternId, origin)).ToArray()
+                    service.DefaultStopPatternId, origin, ServiceRouteId: route.ServiceRouteId)).ToArray()
             }
         });
     }
@@ -1947,7 +1964,9 @@ internal sealed partial class TopologyEditorWindow : Window
         if (Selected<HeadwayPlanEditorViewModel>() is not { } row) return;
         var direction = ChooseDispatchDirection(row.Direction);
         if (direction is null) return;
-        var origins = GetAllowedDispatchOrigins(direction.Value);
+        var route = ChooseServiceRoute(direction.Value, row.ServiceRouteId);
+        if (route is null) return;
+        var origins = GetAllowedDispatchOrigins(route.ServiceRouteId);
         if (origins.Count == 0) { ShowErrors(["目前方向綁定的服務路徑尚未有可作為起點的實體停靠站。"]); return; }
         var answer = Ask("編輯班距計畫", ("首班發車秒數", row.FirstDepartureSeconds.ToString(CultureInfo.InvariantCulture)),
             ("班距秒數", row.HeadwaySeconds.ToString(CultureInfo.InvariantCulture)), ("班次數", row.RunCount.ToString(CultureInfo.InvariantCulture)),
@@ -1962,7 +1981,7 @@ internal sealed partial class TopologyEditorWindow : Window
             row.HeadwaySeconds = Parse(answer["班距秒數"], "班距");
             if (!int.TryParse(answer["班次數"], out var count) || count <= 0) throw new SimulationValidationException(["班次數必須是大於 0 的整數。"]);
             if (!UiDisplayText.TryParseBoolean(answer["終點後續行"], out var continuation)) throw new SimulationValidationException(["終點後續行必須填寫是或否。"]);
-            row.RunCount = count; row.ServiceType = answer["服務類型"]; row.VehicleType = answer["車型"]; row.StopPattern = answer["停站模式"]; row.OriginPlatform = origin; row.ContinueAfterTerminal = continuation;
+            row.RunCount = count; row.ServiceType = answer["服務類型"]; row.VehicleType = answer["車型"]; row.StopPattern = answer["停站模式"]; row.OriginPlatform = origin; row.ContinueAfterTerminal = continuation; row.ServiceRouteId = route.ServiceRouteId;
             CommitTableDrafts(); ReloadViewModels(); ShowDispatch();
         }
         catch (SimulationValidationException exception) { ShowErrors(exception.Errors); }
@@ -1972,7 +1991,7 @@ internal sealed partial class TopologyEditorWindow : Window
     {
         var direction = ChooseDispatchDirection(state.Draft.DirectionRouteBindings.FirstOrDefault()?.Direction ?? TrainDirection.Outbound);
         if (direction is null) return;
-        var route = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction);
+        var route = ChooseServiceRoute(direction.Value, null);
         var service = state.Draft.ServiceTypes.FirstOrDefault();
         if (route is null || service is null) { ShowErrors(["請先建立方向綁定與服務類型，才能建立手動班表。"]); return; }
         RunEdit(() => state.Draft with
@@ -1980,9 +1999,10 @@ internal sealed partial class TopologyEditorWindow : Window
             Dispatch = state.Draft.Dispatch with
             {
                 ManualTimetableRows = (state.Draft.Dispatch.ManualTimetableRows ?? []).Append(new ProjectManualTimetableRow(
-                    state.Draft.Simulation.StartClockSeconds, route.Direction, service.Id, service.DefaultVehicleTypeId,
+                    state.Draft.Simulation.StartClockSeconds, direction.Value, service.Id, service.DefaultVehicleTypeId,
                     service.DefaultStopPatternId, GetRouteOriginPlatform(route.ServiceRouteId), null,
-                    NextDocumentId("RUN", (state.Draft.Dispatch.ManualTimetableRows ?? []).Select(item => item.ServiceRunId ?? "")))).ToArray()
+                    NextDocumentId("RUN", (state.Draft.Dispatch.ManualTimetableRows ?? []).Select(item => item.ServiceRunId ?? "")),
+                    ServiceRouteId: route.ServiceRouteId)).ToArray()
             }
         });
     }
@@ -1999,7 +2019,9 @@ internal sealed partial class TopologyEditorWindow : Window
         if (Selected<ManualTimetableEditorViewModel>() is not { } row) return;
         var direction = ChooseDispatchDirection(row.Direction);
         if (direction is null) return;
-        var origins = GetAllowedDispatchOrigins(direction.Value);
+        var route = ChooseServiceRoute(direction.Value, row.ServiceRouteId);
+        if (route is null) return;
+        var origins = GetAllowedDispatchOrigins(route.ServiceRouteId);
         if (origins.Count == 0) { ShowErrors(["目前方向綁定的服務路徑尚未有可作為起點的實體停靠站。"]); return; }
         var answer = Ask("編輯手動班表", ("發車秒數", row.DepartureSeconds.ToString(CultureInfo.InvariantCulture)), ("服務類型", row.ServiceType),
             ("車型", row.VehicleType), ("停站模式", row.StopPattern), ("車輛編號", row.VehicleId), ("車次編號", row.ServiceRunId),
@@ -2012,7 +2034,7 @@ internal sealed partial class TopologyEditorWindow : Window
             row.Direction = direction.Value;
             row.DepartureSeconds = Parse(answer["發車秒數"], "出發時間");
             if (!UiDisplayText.TryParseBoolean(answer["終點後續行"], out var continuation)) throw new SimulationValidationException(["終點後續行必須填寫是或否。"]);
-            row.ServiceType = answer["服務類型"]; row.VehicleType = answer["車型"]; row.StopPattern = answer["停站模式"]; row.VehicleId = answer["車輛編號"]; row.ServiceRunId = answer["車次編號"]; row.OriginPlatform = origin; row.ContinueAfterTerminal = continuation; row.ContinuationServiceRunId = answer["接續車次編號"];
+            row.ServiceType = answer["服務類型"]; row.VehicleType = answer["車型"]; row.StopPattern = answer["停站模式"]; row.VehicleId = answer["車輛編號"]; row.ServiceRunId = answer["車次編號"]; row.OriginPlatform = origin; row.ContinueAfterTerminal = continuation; row.ContinuationServiceRunId = answer["接續車次編號"]; row.ServiceRouteId = route.ServiceRouteId;
             CommitTableDrafts(); ReloadViewModels(); ShowDispatch();
         }
         catch (SimulationValidationException exception) { ShowErrors(exception.Errors); }
@@ -2029,11 +2051,44 @@ internal sealed partial class TopologyEditorWindow : Window
         return choices.First(item => UiDisplayText.Enum(item) == chosen);
     }
 
-    private IReadOnlyList<string> GetAllowedDispatchOrigins(TrainDirection direction)
+    private IReadOnlyList<string> GetAllowedDispatchOrigins(string routeId)
     {
-        var routeId = state.Draft.DirectionRouteBindings.FirstOrDefault(item => item.Direction == direction)?.ServiceRouteId;
-        return routeId is null ? [] : state.Draft.ServiceRoutes.FirstOrDefault(item => item.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase))?.Stops
+        return state.Draft.ServiceRoutes.FirstOrDefault(item => item.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase))?.Stops
             .SelectMany(stop => stop.CandidatePlatformIds).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(item => item, StringComparer.OrdinalIgnoreCase).ToArray() ?? [];
+    }
+
+    private ServiceRouteDefinition? ChooseServiceRoute(TrainDirection direction, string? currentRouteId)
+    {
+        var candidates = GetServiceRouteCandidates(direction);
+        if (candidates.Length == 0)
+        {
+            ShowErrors([$"目前沒有可供{UiDisplayText.Enum(direction)}使用的營運路徑。"]);
+            return null;
+        }
+        // 單一路徑時直接採用方向的唯一合法候選；新增後仍可在班表明細的
+        // 營運路徑下拉選單調整。只有同方向有多條路徑時才需要再詢問使用者。
+        if (candidates.Length == 1) return candidates[0];
+        var labels = candidates.Select(route => $"{route.Name}（{route.ServiceRouteId}）").ToArray();
+        var current = candidates.FirstOrDefault(route => route.ServiceRouteId.Equals(currentRouteId, StringComparison.OrdinalIgnoreCase)) ?? candidates[0];
+        var selected = Choose("選擇營運路徑", "營運路徑", labels, $"{current.Name}（{current.ServiceRouteId}）");
+        return selected is null ? null : candidates[Array.IndexOf(labels, selected)];
+    }
+
+    private ServiceRouteDefinition[] GetServiceRouteCandidates(TrainDirection direction)
+    {
+        var boundRouteIds = state.Draft.DirectionRouteBindings
+            .Where(binding => binding.Direction == direction)
+            .Select(binding => binding.ServiceRouteId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var candidates = state.Draft.ServiceRoutes
+            .Where(route => route.Direction == direction
+                || (route.Direction is null && boundRouteIds.Contains(route.ServiceRouteId)))
+            .ToArray();
+        // 舊專案可能沒有 route.Direction，也沒有方向綁定；此時保留原本讓使用者
+        // 從所有未標方向路徑選擇的相容行為。不得由 route ID 名稱猜測方向。
+        return candidates.Length > 0
+            ? candidates
+            : state.Draft.ServiceRoutes.Where(route => route.Direction is null).ToArray();
     }
 
     private void DrawSchematic(Canvas canvas)
@@ -2045,7 +2100,7 @@ internal sealed partial class TopologyEditorWindow : Window
         var layoutMaxX = layout.Count == 0 ? 1 : layout.Values.Max(point => point.X);
         double MapX(double x) => 60 + (x - layoutMinX) / Math.Max(1, layoutMaxX - layoutMinX) * Math.Max(1, width - 120);
         const double mainlineY = 210;
-        const double laneSpacing = 46;
+        const double laneSpacing = SchematicVerticalLayout.Unit * 2;
         StationSchematicPresentation.DrawLegend(canvas);
         var outboundRouteId = state.Draft.DirectionRouteBindings
             .FirstOrDefault(binding => binding.Direction == TrainDirection.Outbound)?.ServiceRouteId;
@@ -2113,8 +2168,9 @@ internal sealed partial class TopologyEditorWindow : Window
 
         StationSchematicPresentation.LayoutLinearTurnbacks(rawEdgePoints, state.Draft.Topology.Edges,
             state.Draft.Topology.TurnbackFacilities, width);
+        var schematicProject = SchematicVerticalLayout.FillDefaults(state.Draft);
         StationSchematicPresentation.ApplyNodeLayout(rawEdgePoints, state.Draft.Topology.Nodes,
-            state.Draft.Topology.Edges, mainlineY, laneSpacing / 2, 60, width - 120);
+            schematicProject.Topology.Edges, mainlineY, SchematicVerticalLayout.Unit, 60, width - 120);
         var edgeGeometries = TopologySchematicGeometry.Build(state.Draft.Topology.Edges
             .Where(edge => rawEdgePoints.ContainsKey(edge.TrackEdgeId))
             .Select(edge =>
@@ -2124,11 +2180,11 @@ internal sealed partial class TopologyEditorWindow : Window
             }));
 
         edgeGeometries = StationSchematicPresentation.ApplyLanes(edgeGeometries,
-            state.Draft.Topology.Edges, mainlineY, laneSpacing / 2, state.Draft.Topology.Platforms,
+            schematicProject.Topology.Edges, mainlineY, SchematicVerticalLayout.Unit, state.Draft.Topology.Platforms,
             state.Draft.Topology.DirectedConnections,
             StationSchematicPresentation.UsesCompactLaneTransitions(state.Draft, width),
             state.Draft.Topology.PassingFacilities, width >= 2000);
-        edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, state.Draft, width);
+        edgeGeometries = StationSchematicPresentation.ApplyChainage(edgeGeometries, schematicProject, width);
 
         var platformVisuals = new List<(
             PlatformDefinitionV4 Platform,
@@ -2329,11 +2385,15 @@ internal sealed partial class TopologyEditorWindow : Window
         {
             var route = routes.GetValueOrDefault(plan.Direction, "—");
             for (var index = 0; index < plan.RunCount; index++)
-                dispatch.Runs.Add(new DispatchRunEditorViewModel($"{plan.ServiceTypeId}-{index + 1:000}", TimeSpan.FromSeconds(plan.FirstDepartureTimeSeconds + plan.HeadwaySeconds * index).ToString("hh\\:mm\\:ss"), plan.ServiceTypeId, route, DescribePlatform(plan.OriginPlatformId), plan.VehicleTypeId ?? "自動"));
+                dispatch.Runs.Add(new DispatchRunEditorViewModel($"{plan.ServiceTypeId}-{index + 1:000}", TimeSpan.FromSeconds(plan.FirstDepartureTimeSeconds + plan.HeadwaySeconds * index).ToString("hh\\:mm\\:ss"), plan.ServiceTypeId, DescribeServiceRoute(plan.ServiceRouteId ?? route), DescribePlatform(plan.OriginPlatformId), plan.VehicleTypeId ?? "自動"));
         }
         foreach (var row in state.Draft.Dispatch.ManualTimetableRows ?? [])
-            dispatch.Runs.Add(new DispatchRunEditorViewModel(row.ServiceRunId ?? "手動", TimeSpan.FromSeconds(row.PlannedDepartureTimeSeconds).ToString("hh\\:mm\\:ss"), row.ServiceTypeId, routes.GetValueOrDefault(row.Direction, "—"), DescribePlatform(row.OriginPlatformId), row.VehicleTypeId ?? "自動"));
+            dispatch.Runs.Add(new DispatchRunEditorViewModel(row.ServiceRunId ?? "手動", TimeSpan.FromSeconds(row.PlannedDepartureTimeSeconds).ToString("hh\\:mm\\:ss"), row.ServiceTypeId, DescribeServiceRoute(row.ServiceRouteId ?? routes.GetValueOrDefault(row.Direction, "—")), DescribePlatform(row.OriginPlatformId), row.VehicleTypeId ?? "自動"));
     }
+
+    private string DescribeServiceRoute(string? routeId) => state.Draft.ServiceRoutes
+        .FirstOrDefault(route => route.ServiceRouteId.Equals(routeId, StringComparison.OrdinalIgnoreCase))?.Name
+        ?? routeId ?? "—";
 
     private string DescribePlatform(string? platformId)
     {

@@ -23,7 +23,10 @@ public sealed record TopologyProjectDocument(
     ProjectDispatchPlan Dispatch,
     TopologyInfrastructureDefinition Topology,
     ServiceRouteDefinition[] ServiceRoutes,
-    TopologyDirectionRouteBinding[] DirectionRouteBindings);
+    TopologyDirectionRouteBinding[] DirectionRouteBindings)
+{
+    public OperatingLineDefinition[]? OperatingLines { get; init; }
+}
 
 /// <summary>已驗證 Schema 8 專案轉成 V2 topology-native runtime 的唯一輸入組合。</summary>
 public sealed record TopologyProjectRuntime(
@@ -106,6 +109,15 @@ public static class TopologyProjectFormat
         if (document.Dispatch is null) errors.Add("存檔缺少發車計畫。");
         RouteValidator.ThrowIfAny(errors);
 
+        if (document.OperatingLines?.Any(line => line is null) == true)
+        {
+            errors.Add("營運路線 metadata 不可包含 null 項目。");
+        }
+        else
+        {
+            OperatingNetworkBuilder.ValidateMetadata(document, errors);
+        }
+
         if (document.Topology is not null && document.ServiceRoutes is not null)
         {
             try
@@ -143,7 +155,10 @@ public static class TopologyProjectFormat
         var inboundId = document.DirectionRouteBindings
             .Single(binding => binding.Direction == TrainDirection.Inbound)
             .ServiceRouteId;
-        var topology = new TopologySimulationDefinition(infrastructure, routes[outboundId], routes[inboundId]);
+        var topology = new TopologySimulationDefinition(infrastructure, routes[outboundId], routes[inboundId])
+        {
+            AdditionalServiceRoutes = document.ServiceRoutes
+        };
         var vehicleTypes = document.VehicleTypes.Select(ToRuntime).ToArray();
         var serviceTypes = document.ServiceTypes.Select(item => new ServiceTypeDefinition(
             item.Id,
@@ -213,8 +228,14 @@ public static class TopologyProjectFormat
         IEnumerable<ServiceRouteDefinition> serviceRoutes,
         ICollection<string> errors)
     {
-        var knownRoutes = serviceRoutes.Select(route => route.ServiceRouteId)
+        var routeValues = serviceRoutes.ToArray();
+        var knownRoutes = routeValues.Select(route => route.ServiceRouteId)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var route in routeValues)
+        {
+            if (route.Direction is { } direction && !Enum.IsDefined(direction))
+                errors.Add($"ServiceRoute「{route.ServiceRouteId}」包含無效方向。");
+        }
         var directions = new HashSet<TrainDirection>();
         foreach (var binding in bindings)
         {
@@ -239,6 +260,10 @@ public static class TopologyProjectFormat
         var vehicleIds = Index(document.VehicleTypes, item => item.Id, "車型", errors);
         var serviceIds = Index(document.ServiceTypes, item => item.Id, "服務類型", errors);
         var stopPatternIds = Index(document.StopPatterns, item => item.Id, "停站模式", errors);
+        var serviceRoutes = document.ServiceRoutes
+            .Where(route => !string.IsNullOrWhiteSpace(route.ServiceRouteId))
+            .GroupBy(route => route.ServiceRouteId, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
         foreach (var vehicle in document.VehicleTypes)
         {
@@ -269,13 +294,95 @@ public static class TopologyProjectFormat
         {
             ValidateDispatchReferences(plan.ServiceTypeId, plan.VehicleTypeId, plan.StopPatternId, plan.OriginPlatformId,
                 serviceIds, vehicleIds, stopPatternIds, platformIds, "等間距派車", errors);
+            ValidateDispatchRoute(plan.ServiceRouteId, plan.Direction, "等間距派車", serviceRoutes, errors);
         }
         foreach (var row in document.Dispatch.ManualTimetableRows ?? [])
         {
             ValidateDispatchReferences(row.ServiceTypeId, row.VehicleTypeId, row.StopPatternId, row.OriginPlatformId,
                 serviceIds, vehicleIds, stopPatternIds, platformIds, "手動班表", errors);
+            ValidateDispatchRoute(row.ServiceRouteId, row.Direction, "手動班表", serviceRoutes, errors);
         }
         ValidateSpecifiedOvertakeWaits(document, errors);
+        if (errors.Count == 0)
+        {
+            ValidateStationTimetables(document, errors);
+        }
+    }
+
+    private static void ValidateDispatchRoute(
+        string? routeId,
+        TrainDirection direction,
+        string owner,
+        IReadOnlyDictionary<string, ServiceRouteDefinition> routes,
+        ICollection<string> errors)
+    {
+        if (routeId is null) return;
+        if (!routes.TryGetValue(routeId, out var route))
+        {
+            errors.Add($"{owner}引用不存在的營運路線「{routeId}」。");
+            return;
+        }
+        if (route.Direction is { } routeDirection && routeDirection != direction)
+            errors.Add($"{owner}方向「{direction}」與營運路線「{routeId}」方向「{routeDirection}」不一致。");
+    }
+
+    private static void ValidateStationTimetables(TopologyProjectDocument document, ICollection<string> errors)
+    {
+        try
+        {
+            var vehicleTypes = document.VehicleTypes.Select(ToRuntime).ToArray();
+            var serviceTypes = document.ServiceTypes.Select(item => new ServiceTypeDefinition(
+                item.Id,
+                item.DisplayName,
+                item.ColorHex,
+                item.RunPrefix,
+                item.DefaultStopPatternId,
+                item.DefaultVehicleTypeId,
+                item.Priority,
+                item.CanRequestOvertake,
+                item.PreferredPlatformIds)).ToArray();
+            var stopPatterns = document.StopPatterns.Select(ToRuntime).ToArray();
+            var dispatch = DispatchPlanExpander.Expand(ToRuntime(document.Dispatch), vehicleTypes, serviceTypes, stopPatterns);
+            var routes = document.ServiceRoutes.ToDictionary(route => route.ServiceRouteId, StringComparer.OrdinalIgnoreCase);
+            var defaultRouteIds = document.DirectionRouteBindings.ToDictionary(
+                binding => binding.Direction,
+                binding => binding.ServiceRouteId);
+            var servicePatterns = stopPatterns.Select(pattern => new ServicePattern(
+                pattern.Id,
+                pattern.DisplayName,
+                pattern.Instructions.Select(instruction => new StationServiceInstruction(
+                    instruction.StationId,
+                    instruction.Action switch
+                    {
+                        StopPatternAction.Stop => StationServiceMode.Stop,
+                        StopPatternAction.Pass => StationServiceMode.Pass,
+                        StopPatternAction.Turnback => StationServiceMode.Turnback,
+                        _ => throw new SimulationValidationException(["停站模式動作無效。"])
+                    },
+                    instruction.PassingSpeedLimitMetersPerSecond,
+                    instruction.DwellTimeSeconds,
+                    instruction.WaitForOvertakeServiceRunId)).ToArray())).ToArray();
+
+            StationTimetableValidator.ValidateAndThrow(
+                dispatch,
+                run =>
+                {
+                    var routeId = run.ServiceRouteId ?? defaultRouteIds[run.Direction];
+                    var route = routes[routeId];
+                    if (route.Direction is { } direction && direction != run.Direction)
+                    {
+                        throw new SimulationValidationException([
+                            $"車次「{run.ServiceRunId}」的方向與營運路線「{routeId}」不一致。"
+                        ]);
+                    }
+                    return route.Stops.Select(stop => stop.StationId).ToArray();
+                },
+                servicePatterns);
+        }
+        catch (SimulationValidationException exception)
+        {
+            foreach (var error in exception.Errors) errors.Add(error);
+        }
     }
 
     private static void ValidateSpecifiedOvertakeWaits(TopologyProjectDocument document, ICollection<string> errors)
@@ -473,7 +580,8 @@ public static class TopologyProjectFormat
             plan.StopPatternId,
             plan.OriginPlatformId,
             plan.VehicleId,
-            plan.ContinueAfterTerminal)),
+            plan.ContinueAfterTerminal,
+            plan.ServiceRouteId)),
         item.ManualTimetableRows?.Select(row => new ManualTimetableRow(
             TimeSpan.FromSeconds(row.PlannedDepartureTimeSeconds),
             row.Direction,
@@ -484,7 +592,12 @@ public static class TopologyProjectFormat
             row.VehicleId,
             row.ServiceRunId,
             row.ContinueAfterTerminal,
-            row.ContinuationServiceRunId)),
+            row.ContinuationServiceRunId,
+            row.StationTimetableEntries?.Select(entry => new StationTimetableEntry(
+                entry.StationId,
+                TimeSpan.FromSeconds(entry.PlannedDepartureTimeSeconds),
+                entry.MinimumDwellSeconds)),
+            row.ServiceRouteId)),
         item.ActiveMode,
         item.VehicleAssignmentMode);
 

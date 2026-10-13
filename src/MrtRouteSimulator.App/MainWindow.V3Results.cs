@@ -1,10 +1,16 @@
 using System.Globalization;
+using System.IO;
+using System.Text;
+using System.Windows;
+using Microsoft.Win32;
 using MrtRouteSimulator.Engine;
 
 namespace MrtRouteSimulator.App;
 
 public partial class MainWindow
 {
+    private bool _updatingTimetableFilters;
+
     private void PopulateV3Timetable()
     {
         if (!_v2Enabled || _latestPlaybackFrame is null || _v2DispatchPlan is null)
@@ -12,18 +18,9 @@ public partial class MainWindow
             return;
         }
 
-        var entries = _resultAccumulator.TimetableEntries ?? (_activeTopologyProjectDocument is null
-            ? OperationsTimetable.Build(
-                _route ?? throw new InvalidOperationException("相容 V2 時刻表需要路線資料。"),
-                _v2DispatchPlan,
-                _plannedTimetableEvents,
-                _latestPlaybackFrame.Events)
-            : OperationsTimetable.Build(
-                _latestPlaybackFrame.GetTopologyResultContext(),
-                _v2DispatchPlan,
-                _plannedTimetableEvents,
-                _latestPlaybackFrame.Events));
-        var rows = entries.Select(entry =>
+        var entries = GetTimetableEntries();
+        UpdateTimetableFilters(entries);
+        var rows = FilterTimetableEntries(entries).Select(entry =>
         {
             var serviceName = ServiceTypeRows.FirstOrDefault(row =>
                 row.Id.Equals(entry.ServiceTypeId, StringComparison.OrdinalIgnoreCase))?.Name ?? entry.ServiceTypeId;
@@ -32,6 +29,12 @@ public partial class MainWindow
                 : ServicePatternRows.FirstOrDefault(row =>
                     row.PatternId.Equals(entry.StopPatternId, StringComparison.OrdinalIgnoreCase))?.PatternName
                     ?? entry.StopPatternId;
+            var routeName = entry.ServiceRouteId is { } routeId
+                ? GetServiceRouteDisplayName(routeId)
+                : "—";
+            var operatingLineName = entry.OperatingLineId is { } lineId
+                ? GetOperatingLineDisplayName(lineId)
+                : "—";
             return new TimetableRow(
                 entry.VehicleId,
                 DirectionToChinese(entry.Direction),
@@ -39,7 +42,7 @@ public partial class MainWindow
                 entry.StationName,
                 DisplayClock(entry.ActualArrivalTimeSeconds),
                 DisplayClock(entry.ActualDepartureTimeSeconds),
-                entry.ActualDwellSeconds is { } dwell ? $"{dwell:0.0} s" : "—",
+                FormatTimetableDwell(entry.ActualDwellSeconds, entry.Status, actual: true),
                 (entry.PositionMeters / 1000).ToString("0.###", CultureInfo.InvariantCulture),
                 entry.ServiceRunId,
                 serviceName,
@@ -47,7 +50,10 @@ public partial class MainWindow
                 DisplayClock(entry.PlannedArrivalTimeSeconds),
                 DisplayClock(entry.PlannedDepartureTimeSeconds),
                 entry.DelaySeconds is { } delay ? $"{delay:0.0} s" : "—",
-                entry.Status);
+                entry.Status,
+                FormatTimetableDwell(entry.PlannedDwellSeconds, entry.Status, actual: false),
+                routeName,
+                operatingLineName);
         }).ToArray();
         ApplyRowsByKey(TimetableRows, rows, row => $"{row.ServiceRunId}|{row.StationId}");
 
@@ -61,6 +67,105 @@ public partial class MainWindow
         string DisplayClock(double? seconds) => seconds is { } value
             ? FormatClock(_startClockSeconds + value)
             : "—";
+
+    }
+
+    private string FormatTimetableDwell(double? seconds, string status, bool actual)
+    {
+        if (seconds is { } value) return $"{value:0.0} s";
+        if (status.Contains("通過", StringComparison.Ordinal)) return "不適用";
+        return actual && status.Equals("停站中", StringComparison.Ordinal) ? "停站中" : "—";
+    }
+
+    private IReadOnlyList<OperationsTimetableEntry> GetTimetableEntries()
+    {
+        if (_latestPlaybackFrame is null || _v2DispatchPlan is null)
+        {
+            return [];
+        }
+
+        return _resultAccumulator.TimetableEntries ?? (_activeTopologyProjectDocument is null
+            ? OperationsTimetable.Build(
+                _route ?? throw new InvalidOperationException("相容 V2 時刻表需要路線資料。"),
+                _v2DispatchPlan,
+                _plannedTimetableEvents,
+                _latestPlaybackFrame.Events,
+                GetResultServicePatterns())
+            : OperationsTimetable.Build(
+                _latestPlaybackFrame.GetTopologyResultContext(),
+                _v2DispatchPlan,
+                _plannedTimetableEvents,
+                _latestPlaybackFrame.Events,
+                GetResultServicePatterns()));
+    }
+
+    private IEnumerable<OperationsTimetableEntry> FilterTimetableEntries(
+        IEnumerable<OperationsTimetableEntry> entries)
+    {
+        var routeId = GetSelectedFilterId(TimetableRouteFilterComboBox);
+        var lineId = GetSelectedFilterId(TimetableOperatingLineFilterComboBox);
+        return entries.Where(entry =>
+            (routeId is null || string.Equals(entry.ServiceRouteId, routeId, StringComparison.OrdinalIgnoreCase))
+            && (lineId is null || string.Equals(entry.OperatingLineId, lineId, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private void UpdateTimetableFilters(IReadOnlyList<OperationsTimetableEntry> entries)
+    {
+        if (TimetableRouteFilterComboBox is null || TimetableOperatingLineFilterComboBox is null) return;
+        _updatingTimetableFilters = true;
+        try
+        {
+            SetFilterOptions(TimetableRouteFilterComboBox, entries
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.ServiceRouteId))
+                .Select(entry => new CatalogOption(
+                    entry.ServiceRouteId!,
+                    GetServiceRouteDisplayName(entry.ServiceRouteId!))));
+            SetFilterOptions(TimetableOperatingLineFilterComboBox, entries
+                .Where(entry => !string.IsNullOrWhiteSpace(entry.OperatingLineId))
+                .Select(entry => new CatalogOption(
+                    entry.OperatingLineId!,
+                    GetOperatingLineDisplayName(entry.OperatingLineId!))));
+        }
+        finally
+        {
+            _updatingTimetableFilters = false;
+        }
+    }
+
+    private void TimetableFilter_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (!_updatingTimetableFilters) PopulateV3Timetable();
+    }
+
+    private void ExportTimetableCsv_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (!_v2Enabled || _latestPlaybackFrame is null || _v2DispatchPlan is null)
+            {
+                throw new InvalidOperationException("請先建立並播放 V2 寫實模擬。");
+            }
+
+            var entries = FilterTimetableEntries(GetTimetableEntries()).ToArray();
+            var dialog = new SaveFileDialog
+            {
+                Title = "匯出進出站時刻表 CSV",
+                Filter = "CSV 資料 (*.csv)|*.csv",
+                DefaultExt = ".csv",
+                AddExtension = true,
+                OverwritePrompt = true,
+                FileName = "V2進出站時刻表.csv"
+            };
+            if (dialog.ShowDialog(this) != true) return;
+            File.WriteAllText(dialog.FileName,
+                OperationsTimetable.BuildCsv(entries, _startClockSeconds),
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            StatusTextBlock.Text = $"已匯出：{dialog.FileName}";
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            ShowValidation([$"無法匯出進出站時刻表：{exception.Message}"]);
+        }
     }
 
     private void PopulateV3SegmentDetails()

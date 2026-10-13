@@ -2,6 +2,14 @@
 
 本功能以最新 V4.0.3 工作目錄為基礎實作，依新功能進版規則更新為 V4.1.0（尚未發布），沿用 Schema 8、TopologyProjectFormat 與 SimulationWorld。MCP C# SDK 使用官方穩定版 2.2.0；Microsoft.Extensions.Hosting 為 10.0.10。
 
+## V4.1.1 新版介面整合（2026-10-11）
+
+本輪測試直接使用 `output/v411-final/bin/MrtRouteSimulator.Mcp/release/MrtRouteSimulator.Mcp.dll`，未改動本機 Codex 註冊。此產物與同目錄 WPF App 同為 4.1.1；若既有連線仍指向其他 artifacts，須改用本輪產物並重新連線，執行中的 server 不會自動更新。
+
+多營運路線與逐站表定發車共用 Schema 8 JSON：`project_get`／`project_replace` 保留 `operatingLines`、各班次 `serviceRouteId` 及 `stationTimetableEntries`。`simulation_timetable` 包含營運路徑／路線、表定停站與實際停站秒數。詳細規則見 [V4.1.1 文件](V411_OPERATING_NETWORK_AND_TIMETABLE.md)。
+
+`scripts/test-v411-mcp.py --server-dll <本輪 DLL>` 驗證 sample 15 的四車次、18 筆時刻表與 10 個逐站控制；`scripts/test-mcp-desktop.py --server-dll <本輪 DLL>` 可測試指定建置的桌面啟動／控制／匯出，不修改註冊。省略參數時仍依原有 Codex 註冊執行。
+
 ## 建置與連線
 
 因既有桌面程式可能鎖住預設 Release 檔案，MCP 使用獨立 artifacts 目錄：

@@ -17,29 +17,57 @@ public sealed record OperationsTimetableEntry(
     double? ActualDepartureTimeSeconds,
     double? ActualDwellSeconds,
     double? DelaySeconds,
-    string Status);
+    string Status,
+    double? PlannedDwellSeconds = null,
+    string? ServiceRouteId = null,
+    string? OperatingLineId = null);
 
 /// <summary>確保時刻表、動畫與運行圖共用 SimulationWorld 的結構化事件。</summary>
 public static class OperationsTimetable
 {
     private const double PositionToleranceMeters = 0.6;
 
+    public static string BuildCsv(IEnumerable<OperationsTimetableEntry> entries, double displayClockStartSeconds = 0)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        var builder = new System.Text.StringBuilder();
+        builder.AppendLine("軟體版本,車輛ID,車次ID,營運路徑ID,營運路線ID,方向,車站ID,車站名稱,表定到站秒,表定發車秒,實際到站秒,實際發車秒,表定停站秒,實際停站秒,表定發車時刻,實際到站時刻,實際發車時刻,延誤秒,狀態");
+        foreach (var row in entries)
+        {
+            var cells = new[] { ProductVersion.Current, row.VehicleId, row.ServiceRunId,
+                row.ServiceRouteId ?? "", row.OperatingLineId ?? "", row.Direction.ToString(), row.StationId, row.StationName,
+                Number(row.PlannedArrivalTimeSeconds), Number(row.PlannedDepartureTimeSeconds),
+                Number(row.ActualArrivalTimeSeconds), Number(row.ActualDepartureTimeSeconds),
+                Number(row.PlannedDwellSeconds), Number(row.ActualDwellSeconds), Clock(row.PlannedDepartureTimeSeconds),
+                Clock(row.ActualArrivalTimeSeconds), Clock(row.ActualDepartureTimeSeconds), Number(row.DelaySeconds), row.Status };
+            builder.AppendLine(string.Join(',', cells.Select(value => "\"" + value.Replace("\"", "\"\"") + "\"")));
+        }
+        return builder.ToString();
+        static string Number(double? value) => value?.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture) ?? "";
+        string Clock(double? value) => value is { } seconds ? TrajectoryAnalysis.FormatClock(displayClockStartSeconds + seconds) : "";
+    }
+
+
     public static IReadOnlyList<OperationsTimetableEntry> Build(
         Route route,
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
-        IEnumerable<SimulationEvent>? actualEvents)
+        IEnumerable<SimulationEvent>? actualEvents,
+        IEnumerable<ServicePattern>? servicePatterns = null)
     {
         ArgumentNullException.ThrowIfNull(route);
         return BuildCore(
-            direction => direction == TrainDirection.Outbound
+            run => run.Direction == TrainDirection.Outbound
                 ? route.Stations.ToArray()
                 : route.Stations.Reverse().ToArray(),
             dispatchPlan,
             plannedEvents,
             actualEvents,
             stationEventMatcher: null,
-            turnbackOriginResolver: null);
+            turnbackOriginResolver: null,
+            serviceRouteIdResolver: run => run.ServiceRouteId,
+            operatingLineIdResolver: null,
+            servicePatterns: servicePatterns);
     }
 
     /// <summary>
@@ -50,7 +78,8 @@ public static class OperationsTimetable
         TopologyResultContext topology,
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
-        IEnumerable<SimulationEvent>? actualEvents)
+        IEnumerable<SimulationEvent>? actualEvents,
+        IEnumerable<ServicePattern>? servicePatterns = null)
     {
         ArgumentNullException.ThrowIfNull(topology);
         return BuildCore(
@@ -60,25 +89,36 @@ public static class OperationsTimetable
             actualEvents,
             (direction, stationId, simulationEvent) =>
                 topology.MatchesStationEvent(direction, stationId, simulationEvent),
-            topology.GetTurnbackOrigin);
+            topology.GetTurnbackOrigin,
+            topology.GetServiceRouteId,
+            topology.GetOperatingLineId,
+            servicePatterns: servicePatterns);
     }
 
     private static IReadOnlyList<OperationsTimetableEntry> BuildCore(
-        Func<TrainDirection, IReadOnlyList<Station>> stationResolver,
+        Func<PlannedServiceRun, IReadOnlyList<Station>> stationResolver,
         ResolvedDispatchPlan dispatchPlan,
         IEnumerable<SimulationEvent>? plannedEvents,
         IEnumerable<SimulationEvent>? actualEvents,
         Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
-        Func<SimulationEvent, TopologyTurnbackOrigin?>? turnbackOriginResolver)
+        Func<SimulationEvent, TopologyTurnbackOrigin?>? turnbackOriginResolver,
+        Func<PlannedServiceRun, string?>? serviceRouteIdResolver,
+        Func<PlannedServiceRun, string?>? operatingLineIdResolver,
+        IEnumerable<ServicePattern>? servicePatterns)
     {
         ArgumentNullException.ThrowIfNull(dispatchPlan);
         var planned = plannedEvents?.ToArray() ?? [];
         var actual = actualEvents?.ToArray() ?? [];
         var values = new List<OperationsTimetableEntry>();
+        var patterns = (servicePatterns ?? [])
+            .ToDictionary(pattern => pattern.PatternId, StringComparer.OrdinalIgnoreCase);
 
         foreach (var run in dispatchPlan.Runs.OrderBy(item => item.Sequence))
         {
-            var stations = stationResolver(run.Direction).ToArray();
+            var stations = stationResolver(run).ToArray();
+            var serviceRouteId = serviceRouteIdResolver?.Invoke(run) ?? run.ServiceRouteId;
+            var operatingLineId = operatingLineIdResolver?.Invoke(run);
+            patterns.TryGetValue(run.StopPatternId, out var servicePattern);
             var runPlannedEvents = planned.Where(item => SameRun(item, run)).ToArray();
             var runActualEvents = actual.Where(item => SameRun(item, run)).ToArray();
             var scheduledOriginDeparture = RelativeSeconds(run.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime);
@@ -112,7 +152,10 @@ public static class OperationsTimetable
                     actualDeparture,
                     null,
                     actualDeparture is { } departure ? Math.Max(0, departure - scheduledOriginDeparture) : null,
-                    actualDeparture is null ? "待發" : "已發車"));
+                    actualDeparture is null ? "待發" : "已發車",
+                    null,
+                    serviceRouteId,
+                    operatingLineId));
             }
 
             for (var index = firstStationIndex; index < stations.Length; index++)
@@ -120,13 +163,26 @@ public static class OperationsTimetable
                 var station = stations[index];
                 var plannedArrival = Find(runPlannedEvents, station, run.Direction, stationEventMatcher,
                     SimulationEventType.Arrival, SimulationEventType.StationPassed);
+                var stationTimetableEntry = run.StationTimetableEntries.FirstOrDefault(entry =>
+                    entry.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase));
                 var plannedDeparture = index == 0 && facilityOrigin is null
                     ? scheduledOriginDeparture
-                    : Find(runPlannedEvents, station, run.Direction, stationEventMatcher, SimulationEventType.Departure);
+                    : stationTimetableEntry is not null && !(facilityOrigin is not null && index == firstStationIndex)
+                        ? RelativeSeconds(stationTimetableEntry.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime)
+                        : Find(runPlannedEvents, station, run.Direction, stationEventMatcher, SimulationEventType.Departure);
                 var actualArrival = Find(runActualEvents, station, run.Direction, stationEventMatcher,
                     SimulationEventType.Arrival, SimulationEventType.StationPassed);
                 var actualDeparture = Find(runActualEvents, station, run.Direction, stationEventMatcher,
                     SimulationEventType.Departure);
+                var instruction = servicePattern?.Instructions.FirstOrDefault(item =>
+                    item.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase));
+                double? plannedDwell = index == 0 || index == stations.Length - 1
+                    ? null
+                    : instruction?.Mode == StationServiceMode.Pass
+                        ? null
+                        : stationTimetableEntry?.MinimumDwellSeconds
+                            ?? instruction?.DwellTimeSeconds
+                            ?? station.DwellTimeSeconds;
                 double? actualDwell = actualArrival is { } arrival && actualDeparture is { } departure
                     ? (double?)Math.Max(0, departure - arrival)
                     : null;
@@ -151,7 +207,12 @@ public static class OperationsTimetable
                     actualDeparture,
                     actualDwell,
                     delay,
-                    GetStatus(run, index, stations.Length, actualArrival, actualDeparture, runActualEvents)));
+                    instruction?.Mode == StationServiceMode.Pass
+                        ? actualArrival is null ? "待通過" : "已通過"
+                        : GetStatus(run, index, stations.Length, actualArrival, actualDeparture, runActualEvents),
+                    plannedDwell,
+                    serviceRouteId,
+                    operatingLineId));
             }
         }
 

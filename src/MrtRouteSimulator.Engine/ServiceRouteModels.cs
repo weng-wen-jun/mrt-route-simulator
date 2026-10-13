@@ -15,6 +15,8 @@ public sealed record ServiceRouteDefinition
 {
     public required string ServiceRouteId { get; init; }
     public required string Name { get; init; }
+    public string? OperatingLineId { get; init; }
+    public TrainDirection? Direction { get; init; }
     public IReadOnlyList<DirectedTrackTraversal> Traversals { get; init; } = [];
     public IReadOnlyList<ServiceRouteStop> Stops { get; init; } = [];
 }
@@ -154,10 +156,14 @@ public sealed record TopologySimulationDefinition(
     ServiceRouteDefinition OutboundServiceRoute,
     ServiceRouteDefinition InboundServiceRoute)
 {
+    public IReadOnlyList<ServiceRouteDefinition>? AdditionalServiceRoutes { get; init; }
+
     public LinearInfrastructureBuildResult ToBuildResult()
     {
-        InfrastructureValidator.ValidateAndThrow(Infrastructure, [OutboundServiceRoute, InboundServiceRoute]);
-        return new LinearInfrastructureBuildResult(Infrastructure, OutboundServiceRoute, InboundServiceRoute);
+        var routes = AdditionalServiceRoutes ?? [OutboundServiceRoute, InboundServiceRoute];
+        InfrastructureValidator.ValidateAndThrow(Infrastructure, routes);
+        return new LinearInfrastructureBuildResult(Infrastructure, OutboundServiceRoute, InboundServiceRoute)
+        { AllServiceRoutes = routes };
     }
 
     public Route CreateCompatibilityRoute()

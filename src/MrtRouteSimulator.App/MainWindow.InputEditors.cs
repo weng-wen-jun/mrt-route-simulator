@@ -282,6 +282,7 @@ public partial class MainWindow
         var tabs = new TabControl();
         var headwayGrid = CreateGrid(headways,
             ComboColumn("方向", nameof(HeadwayPlanInputRow.Direction), TrainDirectionOptions, 70),
+            TextColumn("營運路徑 ID", nameof(HeadwayPlanInputRow.ServiceRouteId), 125),
             TextColumn("首班", nameof(HeadwayPlanInputRow.FirstDeparture), 95),
             TextColumn("班距 min", nameof(HeadwayPlanInputRow.HeadwayMinutes), 80),
             TextColumn("班次數", nameof(HeadwayPlanInputRow.RunCount), 70),
@@ -294,6 +295,7 @@ public partial class MainWindow
         var manualGrid = CreateGrid(manual,
             TextColumn("發車", nameof(ManualTimetableInputRow.PlannedDeparture), 95),
             ComboColumn("方向", nameof(ManualTimetableInputRow.Direction), TrainDirectionOptions, 70),
+            TextColumn("營運路徑 ID", nameof(ManualTimetableInputRow.ServiceRouteId), 125),
             OptionComboColumn("服務等級", nameof(ManualTimetableInputRow.ServiceTypeId), ServiceTypeOptions, 140),
             OptionComboColumn("車型", nameof(ManualTimetableInputRow.VehicleTypeId), VehicleTypeOptions, 150),
             OptionComboColumn("停站模式", nameof(ManualTimetableInputRow.StopPatternId), StopPatternOptions, 145),
@@ -533,12 +535,15 @@ public partial class MainWindow
                 ParseDirection(row.Direction), ParseTime(row.FirstDeparture, "首班時間"),
                 TimeSpan.FromMinutes(row.HeadwayMinutes), row.RunCount, row.ServiceTypeId,
                 EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
-                EmptyToNull(row.VehicleId), row.ContinueAfterTerminal)),
+                EmptyToNull(row.VehicleId), row.ContinueAfterTerminal, EmptyToNull(row.ServiceRouteId))),
             ManualTimetableRows.Select(row => new ManualTimetableRow(
                 ParseTime(row.PlannedDeparture, "發車時間"), ParseDirection(row.Direction), row.ServiceTypeId,
                 EmptyToNull(row.VehicleTypeId), EmptyToNull(row.StopPatternId), EmptyToNull(row.OriginPlatformId),
                 EmptyToNull(row.VehicleId), EmptyToNull(row.ServiceRunId), row.ContinueAfterTerminal,
-                EmptyToNull(row.ContinuationServiceRunId))),
+                EmptyToNull(row.ContinuationServiceRunId),
+                row.StationTimetableEntries?.Select(item => new StationTimetableEntry(
+                    item.StationId, TimeSpan.FromSeconds(item.PlannedDepartureTimeSeconds), item.MinimumDwellSeconds)),
+                EmptyToNull(row.ServiceRouteId))),
             _dispatchPlanningMode == "手動班表" ? DispatchPlanningMode.ManualTimetable : DispatchPlanningMode.SimpleHeadway,
             _vehicleAssignmentMode == "全部指定" ? VehicleAssignmentMode.ExplicitOnly : VehicleAssignmentMode.Automatic);
         return DispatchPlanExpander.Expand(definition, BuildVehicleTypeDefinitions(), BuildServiceTypeDefinitions(), BuildStopPatternDefinitions());
@@ -851,7 +856,8 @@ public partial class MainWindow
                 StopPatternId = plan.StopPatternId ?? string.Empty,
                 OriginPlatformId = plan.OriginPlatformId ?? string.Empty,
                 VehicleId = plan.VehicleId ?? string.Empty,
-                ContinueAfterTerminal = plan.ContinueAfterTerminal
+                ContinueAfterTerminal = plan.ContinueAfterTerminal,
+                ServiceRouteId = plan.ServiceRouteId ?? string.Empty
             });
         }
         ManualTimetableRows.Clear();
@@ -868,7 +874,9 @@ public partial class MainWindow
                 VehicleId = row.VehicleId ?? string.Empty,
                 ServiceRunId = row.ServiceRunId ?? string.Empty,
                 ContinueAfterTerminal = row.ContinueAfterTerminal,
-                ContinuationServiceRunId = row.ContinuationServiceRunId ?? string.Empty
+                ContinuationServiceRunId = row.ContinuationServiceRunId ?? string.Empty,
+                ServiceRouteId = row.ServiceRouteId ?? string.Empty,
+                StationTimetableEntries = row.StationTimetableEntries?.ToArray()
             });
         }
         _dispatchPlanningMode = dispatch?.ActiveMode == DispatchPlanningMode.ManualTimetable ? "手動班表" : "簡易班距";
@@ -1256,11 +1264,12 @@ public partial class MainWindow
         WaitForOvertakeServiceRunId = x.WaitForOvertakeServiceRunId };
     private static HeadwayPlanInputRow Clone(HeadwayPlanInputRow x) => new() { Direction = x.Direction, FirstDeparture = x.FirstDeparture, HeadwayMinutes = x.HeadwayMinutes,
         RunCount = x.RunCount, ServiceTypeId = x.ServiceTypeId, VehicleTypeId = x.VehicleTypeId, StopPatternId = x.StopPatternId, OriginPlatformId = x.OriginPlatformId,
-        VehicleId = x.VehicleId, ContinueAfterTerminal = x.ContinueAfterTerminal };
+        VehicleId = x.VehicleId, ContinueAfterTerminal = x.ContinueAfterTerminal, ServiceRouteId = x.ServiceRouteId };
     private static ManualTimetableInputRow Clone(ManualTimetableInputRow x) => new() { PlannedDeparture = x.PlannedDeparture, Direction = x.Direction,
         ServiceTypeId = x.ServiceTypeId, VehicleTypeId = x.VehicleTypeId, StopPatternId = x.StopPatternId, OriginPlatformId = x.OriginPlatformId,
         VehicleId = x.VehicleId, ServiceRunId = x.ServiceRunId, ContinueAfterTerminal = x.ContinueAfterTerminal,
-        ContinuationServiceRunId = x.ContinuationServiceRunId };
+        ContinuationServiceRunId = x.ContinuationServiceRunId, ServiceRouteId = x.ServiceRouteId,
+        StationTimetableEntries = x.StationTimetableEntries?.ToArray() };
     private static PlatformInputRow Clone(PlatformInputRow x) => new() { PlatformId = x.PlatformId, StationId = x.StationId, Name = x.Name, Direction = x.Direction,
         EffectiveLengthMeters = x.EffectiveLengthMeters, StoppingPositionMeters = x.StoppingPositionMeters, PassengerService = x.PassengerService,
         AllowedVehicleTypeIds = x.AllowedVehicleTypeIds, AllowedServiceTypeIds = x.AllowedServiceTypeIds, TrackSegmentIds = x.TrackSegmentIds };

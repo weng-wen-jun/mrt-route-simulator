@@ -1077,7 +1077,9 @@
         "vehicleId": "FULL-O13",
         "serviceRunId": "FULL-O13-DOWN",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 60,
@@ -1089,7 +1091,9 @@
         "vehicleId": "FULL-O04",
         "serviceRunId": "FULL-O04-DOWN",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 500,
@@ -1101,7 +1105,9 @@
         "vehicleId": "EXPRESS-01",
         "serviceRunId": "EXPRESS-DOWN-01",
         "continueAfterTerminal": true,
-        "continuationServiceRunId": "EXPRESS-UP-01"
+        "continuationServiceRunId": "EXPRESS-UP-01",
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 2600,
@@ -1113,7 +1119,9 @@
         "vehicleId": "EXPRESS-01",
         "serviceRunId": "EXPRESS-UP-01",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 30,
@@ -1125,7 +1133,9 @@
         "vehicleId": "FULL-UP-01",
         "serviceRunId": "FULL-UP-01",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 2600,
@@ -1137,7 +1147,9 @@
         "vehicleId": "FULL-SECTION-O04",
         "serviceRunId": "FULL-SECTION-O04-DOWN",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 3000,
@@ -1149,7 +1161,9 @@
         "vehicleId": "SECTION-VEHICLE-01",
         "serviceRunId": "SECTION-DOWN-01",
         "continueAfterTerminal": true,
-        "continuationServiceRunId": "SECTION-UP-01"
+        "continuationServiceRunId": "SECTION-UP-01",
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       },
       {
         "plannedDepartureTimeSeconds": 5600,
@@ -1161,7 +1175,9 @@
         "vehicleId": "SECTION-VEHICLE-01",
         "serviceRunId": "SECTION-UP-01",
         "continueAfterTerminal": false,
-        "continuationServiceRunId": null
+        "continuationServiceRunId": null,
+        "stationTimetableEntries": null,
+        "serviceRouteId": null
       }
     ]
   },
@@ -1414,7 +1430,21 @@
       },
       {
         "nodeId": "NODE:SPLIT-006",
+        "name": "EDGE:DOWN:O13:O14 \u5206\u5272\u9EDE",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NODE:SPLIT-007",
         "name": "EDGE:UP:O14:O13 \u5206\u5272\u9EDE",
+        "kind": "Switch",
+        "schematicPosition": null,
+        "schematicLane": null
+      },
+      {
+        "nodeId": "NODE:SPLIT-008",
+        "name": "EDGE:UP:O13:O12 \u5206\u5272\u9EDE",
         "kind": "Switch",
         "schematicPosition": null,
         "schematicLane": null
@@ -1676,32 +1706,6 @@
         "fromNodeId": "NODE:O12",
         "toNodeId": "NODE:O11",
         "lengthMeters": 1070,
-        "directionality": "ForwardOnly",
-        "kind": "Mainline",
-        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
-        "conflictResourceIds": []
-      },
-      {
-        "fromPortSide": "A",
-        "toPortSide": "B",
-        "schematicLane": null,
-        "trackEdgeId": "EDGE:UP:O13:O12",
-        "fromNodeId": "NODE:O13",
-        "toNodeId": "NODE:O12",
-        "lengthMeters": 860,
-        "directionality": "ForwardOnly",
-        "kind": "Mainline",
-        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
-        "conflictResourceIds": []
-      },
-      {
-        "fromPortSide": "B",
-        "toPortSide": "A",
-        "schematicLane": null,
-        "trackEdgeId": "EDGE:DOWN:O13:O14",
-        "fromNodeId": "NODE:O13",
-        "toNodeId": "NODE:O14",
-        "lengthMeters": 845,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2205,7 +2209,7 @@
         "trackEdgeId": "EDGE:DOWN:O12:O13:A-001",
         "fromNodeId": "NODE:O12",
         "toNodeId": "NODE:SPLIT-005",
-        "lengthMeters": 200,
+        "lengthMeters": 620,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2217,8 +2221,21 @@
         "schematicLane": 0.5,
         "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
         "fromNodeId": "NODE:SPLIT-005",
-        "toNodeId": "NODE:O13",
-        "lengthMeters": 660,
+        "toNodeId": "NODE:SPLIT-006",
+        "lengthMeters": 480,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
+        "schematicLane": null,
+        "trackEdgeId": "EDGE:DOWN:O13:O14:B-001",
+        "fromNodeId": "NODE:SPLIT-006",
+        "toNodeId": "NODE:O14",
+        "lengthMeters": 605,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2230,8 +2247,8 @@
         "schematicLane": 2,
         "trackEdgeId": "EDGE:PASS-003",
         "fromNodeId": "NODE:SPLIT-005",
-        "toNodeId": "NODE:O13",
-        "lengthMeters": 660,
+        "toNodeId": "NODE:SPLIT-006",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2245,8 +2262,8 @@
         "schematicLane": null,
         "trackEdgeId": "EDGE:UP:O14:O13:A-001",
         "fromNodeId": "NODE:O14",
-        "toNodeId": "NODE:SPLIT-006",
-        "lengthMeters": 200,
+        "toNodeId": "NODE:SPLIT-007",
+        "lengthMeters": 605,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2254,12 +2271,12 @@
       },
       {
         "fromPortSide": "B",
-        "toPortSide": "B",
+        "toPortSide": "A",
         "schematicLane": -0.5,
         "trackEdgeId": "EDGE:UP:O14:O13:B-001",
-        "fromNodeId": "NODE:SPLIT-006",
-        "toNodeId": "NODE:O13",
-        "lengthMeters": 645,
+        "fromNodeId": "NODE:SPLIT-007",
+        "toNodeId": "NODE:SPLIT-008",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Mainline",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2268,11 +2285,24 @@
       {
         "fromPortSide": "B",
         "toPortSide": "B",
+        "schematicLane": null,
+        "trackEdgeId": "EDGE:UP:O13:O12:B-001",
+        "fromNodeId": "NODE:SPLIT-008",
+        "toNodeId": "NODE:O12",
+        "lengthMeters": 620,
+        "directionality": "ForwardOnly",
+        "kind": "Mainline",
+        "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
+        "conflictResourceIds": []
+      },
+      {
+        "fromPortSide": "B",
+        "toPortSide": "A",
         "schematicLane": -2,
         "trackEdgeId": "EDGE:PASS-004",
-        "fromNodeId": "NODE:SPLIT-006",
-        "toNodeId": "NODE:O13",
-        "lengthMeters": 645,
+        "fromNodeId": "NODE:SPLIT-007",
+        "toNodeId": "NODE:SPLIT-008",
+        "lengthMeters": 480,
         "directionality": "ForwardOnly",
         "kind": "Siding",
         "defaultSpeedLimitMetersPerSecond": 22.22222222222222,
@@ -2998,10 +3028,10 @@
         "platformId": "PLATFORM:O12:UP",
         "stationId": "O12",
         "name": "O12 \u7AD9 \u4E0A\u884C\u6708\u53F0",
-        "trackEdgeId": "EDGE:UP:O13:O12",
-        "platformStartOffsetMeters": 860,
-        "platformEndOffsetMeters": 860,
-        "stopPositionOffsetMeters": 860,
+        "trackEdgeId": "EDGE:UP:O13:O12:B-001",
+        "platformStartOffsetMeters": 620,
+        "platformEndOffsetMeters": 620,
+        "stopPositionOffsetMeters": 620,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 220,
         "allowsPassengerService": true,
@@ -3017,9 +3047,9 @@
         "stationId": "O13",
         "name": "O13 \u7AD9 \u4E0B\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:PASS-003",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -3035,9 +3065,9 @@
         "stationId": "O13",
         "name": "O13 \u7AD9 \u4E0A\u884C\u6708\u53F0",
         "trackEdgeId": "EDGE:PASS-004",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": true,
@@ -3599,9 +3629,9 @@
         "stationId": "O13",
         "name": "O13 \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
         "trackEdgeId": "EDGE:DOWN:O12:O13:B-001",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Outbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": false,
@@ -3619,9 +3649,9 @@
         "stationId": "O13",
         "name": "O13 \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\u80A1\uFF08synthetic operational marker\uFF09",
         "trackEdgeId": "EDGE:UP:O14:O13:B-001",
-        "platformStartOffsetMeters": 250,
-        "platformEndOffsetMeters": 390,
-        "stopPositionOffsetMeters": 320,
+        "platformStartOffsetMeters": 170,
+        "platformEndOffsetMeters": 310,
+        "stopPositionOffsetMeters": 240,
         "allowedDirection": "Inbound",
         "effectiveLengthMeters": 140,
         "allowsPassengerService": false,
@@ -3729,13 +3759,7 @@
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "EDGE:DOWN:O12:O13:B-001",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:DOWN:O13:O14",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "EDGE:DOWN:O13:O14",
+        "fromTrackEdgeId": "EDGE:DOWN:O13:O14:B-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:DOWN:O14:O15",
         "toDirection": "Forward"
@@ -3891,13 +3915,7 @@
         "toDirection": "Forward"
       },
       {
-        "fromTrackEdgeId": "EDGE:UP:O14:O13:B-001",
-        "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:UP:O13:O12",
-        "toDirection": "Forward"
-      },
-      {
-        "fromTrackEdgeId": "EDGE:UP:O13:O12",
+        "fromTrackEdgeId": "EDGE:UP:O13:O12:B-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:UP:O12:O11",
         "toDirection": "Forward"
@@ -4047,6 +4065,12 @@
         "toDirection": "Forward"
       },
       {
+        "fromTrackEdgeId": "EDGE:DOWN:O12:O13:B-001",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "EDGE:DOWN:O13:O14:B-001",
+        "toDirection": "Forward"
+      },
+      {
         "fromTrackEdgeId": "EDGE:DOWN:O12:O13:A-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:PASS-003",
@@ -4055,13 +4079,19 @@
       {
         "fromTrackEdgeId": "EDGE:PASS-003",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:DOWN:O13:O14",
+        "toTrackEdgeId": "EDGE:DOWN:O13:O14:B-001",
         "toDirection": "Forward"
       },
       {
         "fromTrackEdgeId": "EDGE:UP:O14:O13:A-001",
         "fromDirection": "Forward",
         "toTrackEdgeId": "EDGE:UP:O14:O13:B-001",
+        "toDirection": "Forward"
+      },
+      {
+        "fromTrackEdgeId": "EDGE:UP:O14:O13:B-001",
+        "fromDirection": "Forward",
+        "toTrackEdgeId": "EDGE:UP:O13:O12:B-001",
         "toDirection": "Forward"
       },
       {
@@ -4073,7 +4103,7 @@
       {
         "fromTrackEdgeId": "EDGE:PASS-004",
         "fromDirection": "Forward",
-        "toTrackEdgeId": "EDGE:UP:O13:O12",
+        "toTrackEdgeId": "EDGE:UP:O13:O12:B-001",
         "toDirection": "Forward"
       }
     ],
@@ -4170,8 +4200,8 @@
         "name": "O13 synthetic \u4E0B\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O13",
         "arrivalTrackEdgeId": "EDGE:DOWN:O12:O13:A-001",
-        "arrivalOffsetMeters": 200,
-        "departureTrackEdgeId": "EDGE:DOWN:O13:O14",
+        "arrivalOffsetMeters": 620,
+        "departureTrackEdgeId": "EDGE:DOWN:O13:O14:B-001",
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
@@ -4190,8 +4220,8 @@
         "name": "O13 synthetic \u4E0A\u884C\u6B63\u7DDA\u901A\u904E\uFF0F\u5074\u7DDA\u5F85\u907F",
         "stationId": "O13",
         "arrivalTrackEdgeId": "EDGE:UP:O14:O13:A-001",
-        "arrivalOffsetMeters": 200,
-        "departureTrackEdgeId": "EDGE:UP:O13:O12",
+        "arrivalOffsetMeters": 605,
+        "departureTrackEdgeId": "EDGE:UP:O13:O12:B-001",
         "departureStartOffsetMeters": 0,
         "traversals": [
           {
@@ -4336,6 +4366,8 @@
     {
       "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:DOWN",
       "name": "14-\u5927\u578B-\u4E8C\u5341\u516B\u7AD9\u5B8C\u6574\u71DF\u904B\u7BC4\u4F8B \u4E0B\u884C",
+      "operatingLineId": null,
+      "direction": null,
       "traversals": [
         {
           "trackEdgeId": "EDGE:DOWN:O01:O02",
@@ -4398,7 +4430,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:DOWN:O13:O14",
+          "trackEdgeId": "EDGE:DOWN:O13:O14:B-001",
           "direction": "Forward"
         },
         {
@@ -4628,6 +4660,8 @@
     {
       "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP",
       "name": "14-\u5927\u578B-\u4E8C\u5341\u516B\u7AD9\u5B8C\u6574\u71DF\u904B\u7BC4\u4F8B \u4E0A\u884C",
+      "operatingLineId": null,
+      "direction": null,
       "traversals": [
         {
           "trackEdgeId": "EDGE:UP:O26:O25",
@@ -4690,7 +4724,7 @@
           "direction": "Forward"
         },
         {
-          "trackEdgeId": "EDGE:UP:O13:O12",
+          "trackEdgeId": "EDGE:UP:O13:O12:B-001",
           "direction": "Forward"
         },
         {
@@ -4927,5 +4961,6 @@
       "direction": "Inbound",
       "serviceRouteId": "SYNTHETIC-LONG-ROUTE-FULL-DEMO:UP"
     }
-  ]
+  ],
+  "operatingLines": null
 }

@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Nodes;
+using System.Text.Json.Nodes;
 using MrtRouteSimulator.Engine;
 
 if (args.Length == 1 && args[0].Equals("--report-large-full-sample", StringComparison.OrdinalIgnoreCase))
@@ -20,6 +20,21 @@ if (args.Length == 2 && args[0].Equals("--write-large-full-sample", StringCompar
 
 var tests = new (string Name, Action Run)[]
 {
+    ("V4.1.1 主支線逐站班表範例結構及有界運行", CoreV411Tests.ExamplePassesStructuralAndBoundedOperationalValidation),
+    ("V4.1.1 資源延誤後仍停滿每站表定秒數", CoreV411Tests.ResourceDelayedRunStillObservesEveryScheduledDwell),
+    ("V4.1.1 多支線共用幹線完成且無碰撞", CoreV411Tests.MultipleBranchesShareTrunkAndCompleteWithoutCollision),
+    ("V4.1.1 路徑別比較與停站CSV一致", CoreV411Tests.RouteSpecificComparisonAndTimetableCsvStayConsistent),
+    ("V4.1.1 雙線主線基準可驗證及運行", OperatingNetworkTests.DoubleTrackMainBaselineValidatesAndRuns),
+    ("V4.1.1 支線按指定里程接入並共用幹線", OperatingNetworkTests.BranchAtSpecifiedChainageSharesTrunkAndDispatchRoutes),
+    ("V4.1.1 單線對向營運互斥並可重設", OperatingNetworkTests.SingleTrackOpposingRunsMutuallyExcludeAndReset),
+    ("V4.1.1 營運路線 metadata 拒絕無效網路", OperatingNetworkTests.MetadataRejectsInvalidNetworks),
+    ("V4.1.1 Schema 8 往返保留營運路線 metadata", OperatingNetworkTests.Schema8RoundTripPreservesOperatingLines),
+    ("V4.1.1 主支線四車次結果保留營運路徑識別", OperatingNetworkTests.MainAndBranchRunsKeepRouteIdentityAcrossAllResults),
+    ("V4.1.1 多獨立主線與非站位置支線接軌", OperatingNetworkTests.IndependentRootsAndNonStationJunctionRemainDistinct),
+    ("V4.1.1 Schema 8 往返保留逐站發車時刻與停站時間", StationTimetableTests.Schema8RoundTripPreservesPerStationSchedule),
+    ("V4.1.1 逐站發車同時滿足表定時刻與表定停站", StationTimetableTests.DepartureRequiresScheduledClockAndConfiguredDwell),
+    ("V4.1.1 逐站班表拒絕起站停站、終點發車與跨站時刻", StationTimetableTests.RejectsAmbiguousOriginTerminalAndPassSchedules),
+    ("V4.1.1 不同車次依指定營運路線輸出且舊車次解析預設路線", StationTimetableTests.DifferentRunsUseAssignedServiceRoutesInResults),
     ("合成長路線 full station chain 完整驗證", SyntheticLongRouteFullScenarioTests.FullStationChainValidates),
     ("合成長路線列車停點對齊月台中心", SyntheticLongRouteFullScenarioTests.FullSampleStopsUsePlatformCenters),
     ("合成長路線實際停車中心對齊月台中心", SyntheticLongRouteFullScenarioTests.FullSampleDwellCentersMatchPlatformCenters),

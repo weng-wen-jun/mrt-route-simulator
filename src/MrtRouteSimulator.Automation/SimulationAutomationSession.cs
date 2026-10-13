@@ -80,5 +80,5 @@ public sealed class SimulationAutomationSession
     }
 
     public object Timetable(int offset, int limit) => Page(
-        OperationsTimetable.Build(World.GetTopologyResultContext(), World.DispatchPlan!, [], World.Events), offset, limit);
+        OperationsTimetable.Build(World.GetTopologyResultContext(), World.DispatchPlan!, [], World.Events, World.ServicePatterns), offset, limit);
 }

@@ -23,7 +23,7 @@ public partial class MainWindow
     private double _diagramLastTime;
     private string? _diagramLayoutKey;
     private bool _diagramDrawing;
-    private readonly Dictionary<(bool Planned, string Vehicle, string Run, TrainDirection Direction), DiagramSeriesVisual> _diagramSeries = new();
+    private readonly Dictionary<(bool Planned, string Vehicle, string Run, TrainDirection Direction, string? ServiceRouteId), DiagramSeriesVisual> _diagramSeries = new();
     private readonly List<Ellipse> _diagramEventVisuals = [];
     private long _diagramStaticBuilds;
     private int _diagramLastActualCount = -1, _diagramLastPlannedCount = -1, _diagramLastEventCount = -1;
@@ -583,10 +583,17 @@ public partial class MainWindow
             }
             return;
         }
+        var direction = GetSelectedTag(DiagramDirectionComboBox);
+        var vehicle = DiagramVehicleComboBox.SelectedItem?.ToString() ?? "全部";
+        var serviceRouteId = DiagramRouteComboBox?.SelectedValue as string;
+        var selectedRoute = _activeTopologyProjectDocument?.ServiceRoutes.FirstOrDefault(route =>
+            route.ServiceRouteId.Equals(serviceRouteId, StringComparison.OrdinalIgnoreCase));
         var stations = _activeTopologyProjectDocument is null
             ? _route!.Stations.Select(s => (Id: s.StationId, Position: s.PositionMeters)).ToArray()
-            : frame.GetTopologyResultContext().GetStops(TrainDirection.Outbound)
-                .Select(s => (Id: s.StationId, Position: s.ProjectedChainageMeters)).ToArray();
+            : frame.GetTopologyResultContext().GetDisplayStations(
+                    selectedRoute?.Direction ?? TrainDirection.Outbound,
+                    selectedRoute?.ServiceRouteId)
+                .Select(s => (Id: s.StationId, Position: s.PositionMeters)).ToArray();
         var tails = _activeTopologyProjectDocument is null ? GetAfterStationTailTrackVisualLayouts() : [];
         var min = stations.Min(s => s.Position);
         var max = stations.Max(s => s.Position);
@@ -594,7 +601,14 @@ public partial class MainWindow
         foreach (var cache in new[] { showActual ? _diagramActualCache : null, showPlanned ? _diagramPlannedCache : null })
         {
             if (cache is null || cache.ProcessedCount == 0) continue;
-            min = Math.Min(min, cache.MinPosition); max = Math.Max(max, cache.MaxPosition);
+            var routeSamples = cache.Groups
+                .Where(group => string.IsNullOrWhiteSpace(serviceRouteId)
+                    || string.Equals(group.ServiceRouteId, serviceRouteId, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(group => group.Samples)
+                .ToArray();
+            if (routeSamples.Length == 0) continue;
+            min = Math.Min(min, routeSamples.Min(sample => sample.PositionMeters));
+            max = Math.Max(max, routeSamples.Max(sample => sample.PositionMeters));
         }
         var available = Math.Max(1, Math.Max(showActual ? _diagramActualCache.MaxTime : 0, showPlanned ? _diagramPlannedCache.MaxTime : 0));
         var start = Math.Clamp(ParseDiagramMinute(DiagramStartMinuteTextBox, 0) * 60, 0, available);
@@ -614,9 +628,7 @@ public partial class MainWindow
         double X(double time) => left + (time - start) / duration * pw;
         double Y(double position) => top + ph - (position - min) / span * ph;
         var diagramScale = Math.Max(1, VisualTreeHelper.GetDpi(TimeDistanceCanvas).DpiScaleY);
-        var direction = GetSelectedTag(DiagramDirectionComboBox);
-        var vehicle = DiagramVehicleComboBox.SelectedItem?.ToString() ?? "全部";
-        var key = FormattableString.Invariant($"{width:R}|{height:R}|{min:R}|{max:R}|{start:R}|{end:R}|{diagramScale:R}|{direction}|{vehicle}|{showActual}|{showPlanned}|{showEvents}|{frame.MovingBlockMode}|{_startClockSeconds:R}|{_diagramTimeTickIntervalMinutes:R}|{DiagramShowEndTimeCheckBox?.IsChecked}");
+        var key = FormattableString.Invariant($"{width:R}|{height:R}|{min:R}|{max:R}|{start:R}|{end:R}|{diagramScale:R}|{direction}|{vehicle}|{serviceRouteId}|{showActual}|{showPlanned}|{showEvents}|{frame.MovingBlockMode}|{_startClockSeconds:R}|{_diagramTimeTickIntervalMinutes:R}|{DiagramShowEndTimeCheckBox?.IsChecked}");
         var layoutChanged = key != _diagramLayoutKey;
         var eventsChanged = layoutChanged || _diagramLastEventCount != frame.Events.Count;
         if (!layoutChanged && _diagramLastActualCount == frame.Trajectory.Count
@@ -698,7 +710,7 @@ public partial class MainWindow
         using (NativeAcceptanceMeasurePhase(inputToken, "playback.diagram.events"))
         using (_playbackDiagnostics.Measure("TimeDistance.EventVisuals"))
         {
-            var eventStationPositions = BuildDiagramEventStationPositions(frame);
+            var eventStationPositions = BuildRouteAwareDiagramEventStationPositions(frame);
             var index = 0;
             foreach (var ev in frame.Events.Where(e =>
                          showEvents && e.SimulationTimeSeconds >= start
@@ -709,6 +721,8 @@ public partial class MainWindow
                          && (string.IsNullOrWhiteSpace(vehicle)
                              || vehicle == "全部"
                              || e.VehicleId == vehicle)
+                         && (string.IsNullOrWhiteSpace(serviceRouteId)
+                             || string.Equals(e.ServiceRouteId, serviceRouteId, StringComparison.OrdinalIgnoreCase))
                          && IsDiagramMarkerEvent(e.EventType)))
             {
                 if (index == _diagramEventVisuals.Count)
@@ -720,7 +734,7 @@ public partial class MainWindow
                 m.Visibility = Visibility.Visible;
                 m.Fill = IsDiagramSafetyEvent(ev.EventType) ? ChartTheme.EventSafety : IsDiagramTerminalEvent(ev.EventType) ? ChartTheme.EventTerminal : ChartTheme.EventStation;
                 m.ToolTip = $"{TrajectoryAnalysis.FormatClock(_startClockSeconds + ev.SimulationTimeSeconds)}｜{EventTypeToChinese(ev.EventType)}\n{ev.Message}";
-                Canvas.SetLeft(m, X(ev.SimulationTimeSeconds) - 4); Canvas.SetTop(m, Y(GetDiagramEventPosition(ev, eventStationPositions)) - 4);
+                Canvas.SetLeft(m, X(ev.SimulationTimeSeconds) - 4); Canvas.SetTop(m, Y(GetRouteAwareDiagramEventPosition(ev, eventStationPositions)) - 4);
             }
             for (var i = index; i < _diagramEventVisuals.Count; i++) _diagramEventVisuals[i].Visibility = Visibility.Collapsed;
         }
@@ -731,7 +745,9 @@ public partial class MainWindow
             foreach (var s in cache.Groups)
             {
                 if (vehicle != "全部" && s.VehicleId != vehicle || direction == "Outbound" && s.Direction != TrainDirection.Outbound || direction == "Inbound" && s.Direction != TrainDirection.Inbound) continue;
-                var id = (planned, s.VehicleId, s.ServiceRunId, s.Direction);
+                if (!string.IsNullOrWhiteSpace(serviceRouteId)
+                    && !string.Equals(s.ServiceRouteId, serviceRouteId, StringComparison.OrdinalIgnoreCase)) continue;
+                var id = (planned, s.VehicleId, s.ServiceRunId, s.Direction, s.ServiceRouteId);
                 if (!_diagramSeries.TryGetValue(id, out var visual))
                 {
                     var brush = UiTheme.VehicleBrush(ParseVehicleIndex(s.VehicleId));
@@ -766,17 +782,46 @@ public partial class MainWindow
         return positions;
     }
 
-    private static double GetDiagramEventPosition(SimulationEvent simulationEvent,
-        IReadOnlyDictionary<(TrainDirection Direction, string StationId), double> stationPositions)
+    private static IReadOnlyDictionary<(TrainDirection Direction, string? ServiceRouteId, string StationId), double> BuildRouteAwareDiagramEventStationPositions(PlaybackFrame frame)
+    {
+        var positions = new Dictionary<(TrainDirection Direction, string? ServiceRouteId, string StationId), double>();
+        if (frame.Context.TopologyResultContext is not { } context) return positions;
+        foreach (var direction in new[] { TrainDirection.Outbound, TrainDirection.Inbound })
+            foreach (var station in context.GetDisplayStations(direction))
+                positions[(direction, null, station.StationId)] = station.PositionMeters;
+
+        var dispatchRoutes = (frame.DispatchPlan?.Runs ?? [])
+            .Select(run => (run.Direction, ServiceRouteId: context.GetServiceRouteId(run)))
+            .Distinct()
+            .ToArray();
+        var routes = dispatchRoutes.Length > 0
+            ? dispatchRoutes
+            : frame.Events.Select(item => (item.Direction, item.ServiceRouteId)).Distinct().ToArray();
+        foreach (var route in routes)
+            foreach (var station in context.GetDisplayStations(route.Direction, route.ServiceRouteId))
+                positions[(route.Direction, route.ServiceRouteId, station.StationId)] = station.PositionMeters;
+        return positions;
+    }
+
+    private static double GetRouteAwareDiagramEventPosition(SimulationEvent simulationEvent,
+        IReadOnlyDictionary<(TrainDirection Direction, string? ServiceRouteId, string StationId), double> stationPositions)
     {
         // StationPassed carries a direction-local station position, not the train's
         // common-axis position. Keep its station semantics using the result adapter;
         // do not mirror other events or change the raw event/CSV data.
         return simulationEvent.EventType == SimulationEventType.StationPassed
             && simulationEvent.StationId is { } stationId
-            && stationPositions.TryGetValue((simulationEvent.Direction, stationId), out var position)
+            && (stationPositions.TryGetValue((simulationEvent.Direction, simulationEvent.ServiceRouteId, stationId), out var position)
+                || stationPositions.TryGetValue((simulationEvent.Direction, null, stationId), out position))
                 ? position : simulationEvent.PositionMeters;
     }
+
+    private static double GetDiagramEventPosition(SimulationEvent simulationEvent,
+        IReadOnlyDictionary<(TrainDirection Direction, string StationId), double> stationPositions) =>
+        simulationEvent.EventType == SimulationEventType.StationPassed
+        && simulationEvent.StationId is { } stationId
+        && stationPositions.TryGetValue((simulationEvent.Direction, stationId), out var position)
+            ? position : simulationEvent.PositionMeters;
 
     // 運行圖圖例：兩種線型；開啟事件點時再加三種事件色點。
     private static IReadOnlyList<ChartLegendItem> GetDiagramLegendItems(bool showEvents)

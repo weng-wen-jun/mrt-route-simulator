@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -124,7 +124,7 @@ internal static class OutputTests
 
         var runtime = TopologyProjectFormat.CreateRuntime(document);
         var context = frame.GetTopologyResultContext();
-        var timetable = OperationsTimetable.Build(context, runtime.DispatchPlan, planned.Events, frame.Events);
+        var timetable = OperationsTimetable.Build(context, runtime.DispatchPlan, planned.Events, frame.Events, runtime.ServicePatterns);
         var intervals = IntervalStatistics.Analyze(context, frame.Trajectory, frame.Events);
         var incrementalAccumulator = (SimulationResultAccumulator)(Field(window, "_resultAccumulator")
             ?? throw new InvalidOperationException("結果累積器未建立。"));
@@ -445,7 +445,7 @@ internal static class OutputTests
         var frame = WpfTestWait.LatestFrame(scenario.Window);
         var planned = (PlannedTimelineArtifact)Field(scenario.Window, "_plannedTimelineArtifact")!;
         var context = frame.GetTopologyResultContext();
-        var allTimetable = OperationsTimetable.Build(context, runtime.DispatchPlan, planned.Events, frame.Events);
+        var allTimetable = OperationsTimetable.Build(context, runtime.DispatchPlan, planned.Events, frame.Events, runtime.ServicePatterns);
         var timetable = allTimetable
             .Where(item => item.ServiceRunId.Equals(serviceRunId, StringComparison.OrdinalIgnoreCase))
             .ToArray();

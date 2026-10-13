@@ -92,7 +92,7 @@ public static class V1V2Comparison
         TrainParameters fallbackParameters,
         IEnumerable<SimulationEvent>? actualEvents,
         Func<TrainDirection, string, SimulationEvent, bool>? stationEventMatcher,
-        Func<TrainDirection, IReadOnlyList<Station>>? stationResolver = null)
+        Func<PlannedServiceRun, IReadOnlyList<Station>>? stationResolver = null)
     {
         ArgumentNullException.ThrowIfNull(route);
         ArgumentNullException.ThrowIfNull(dispatchPlan);
@@ -121,7 +121,7 @@ public static class V1V2Comparison
                 fallbackParameters.OriginTurnaroundTimeSeconds,
                 fallbackParameters.TerminalTurnaroundTimeSeconds);
             var orderedStations = stationResolver is not null
-                ? stationResolver(run.Direction).ToArray()
+                ? stationResolver(run).ToArray()
                 : run.Direction == TrainDirection.Outbound ? route.Stations.ToArray() : route.Stations.Reverse().ToArray();
             var instructions = pattern.Instructions.ToDictionary(item => item.StationId, StringComparer.OrdinalIgnoreCase);
             var runActual = actual.Where(item => item.ServiceRunId.Equals(run.ServiceRunId, StringComparison.OrdinalIgnoreCase)
@@ -168,8 +168,14 @@ public static class V1V2Comparison
                     parameters.DecelerationMetersPerSecondSquared);
                 var theoreticalArrival = theoreticalTime + motion.TravelTimeSeconds;
                 var isTerminal = index == orderedStations.Length - 1;
-                var theoreticalDwell = isTerminal ? 0 : instruction?.DwellTimeSeconds ?? station.DwellTimeSeconds;
+                var stationSchedule = run.StationTimetableEntries.FirstOrDefault(entry =>
+                    entry.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase));
+                var theoreticalDwell = isTerminal ? 0 : stationSchedule?.MinimumDwellSeconds
+                    ?? instruction?.DwellTimeSeconds ?? station.DwellTimeSeconds;
                 var theoreticalDeparture = theoreticalArrival + theoreticalDwell;
+                if (!isTerminal && stationSchedule is not null)
+                    theoreticalDeparture = Math.Max(theoreticalDeparture,
+                        RelativeSeconds(stationSchedule.PlannedDepartureTime, dispatchPlan.ScheduleAnchorTime));
                 var actualArrival = Find(runActual, run.Direction, station, stationEventMatcher, SimulationEventType.Arrival);
                 var actualDeparture = FindAfter(runActual, run.Direction, station, stationEventMatcher, actualArrival, SimulationEventType.Departure);
                 rows.Add(CreateRow(run, station, theoreticalArrival, theoreticalDeparture, theoreticalDwell,

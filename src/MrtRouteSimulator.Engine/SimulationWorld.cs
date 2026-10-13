@@ -1,6 +1,6 @@
 namespace MrtRouteSimulator.Engine;
 
-public sealed class SimulationWorld
+public sealed partial class SimulationWorld
 {
     public const double FixedTimeStepSeconds = 0.1;
 
@@ -247,6 +247,7 @@ public sealed class SimulationWorld
             .ToDictionary(stop => stop.StationId, StringComparer.OrdinalIgnoreCase);
         _inboundResolvedStops = _inboundRunRouteContext.Stops
             .ToDictionary(stop => stop.StationId, StringComparer.OrdinalIgnoreCase);
+        InitializeRuntimeServiceRoutes();
         SpeedLimits = new SpeedLimitService();
         _trackSpeedLimits = new TrackSpeedLimitService(
             _linearTopology.Infrastructure,
@@ -288,6 +289,13 @@ public sealed class SimulationWorld
         ValidateDispatchVehicleAssignments(dispatchPlan);
         var effectiveServicePlans = MergeDispatchServicePlans(serviceRunPlans, dispatchPlan);
         InitializeServicePlans(runtimeTrainCount, servicePatterns, effectiveServicePlans);
+        if (dispatchPlan is not null)
+        {
+            StationTimetableValidator.ValidateAndThrow(
+                dispatchPlan,
+                run => RuntimeRoute(run).Context.Stops.Select(stop => stop.StationId).ToArray(),
+                _servicePatterns.Values);
+        }
         ValidateVehicleTypeReferences();
 
         BaselineCycleTimeSeconds = CalculateTopologyBaselineCycleTime();
@@ -376,10 +384,13 @@ public sealed class SimulationWorld
             throw new InvalidOperationException("僅 topology-native SimulationWorld 可提供 TopologyResultContext。");
         }
 
-        return TopologyResultContext.Create(
+        var context = TopologyResultContext.Create(
             TopologyInfrastructure,
             _outboundRunRouteContext,
             _inboundRunRouteContext);
+        context.SetServiceRoutes(TopologyInfrastructure, _runtimeServiceRoutes.Values.Select(item => item.Route),
+            _linearTopology.OutboundServiceRoute.ServiceRouteId, _linearTopology.InboundServiceRoute.ServiceRouteId);
+        return context;
     }
 
     public OperationProfileMode ProfileMode { get; }
@@ -513,10 +524,10 @@ public sealed class SimulationWorld
         {
             var cursor = train.RuntimeTopologyCursor!.Value;
             if (_pocketServiceReservations.TryGetValue(train.VehicleId, out var pocket)
-                && GetServiceRouteId(train.Direction).Equals(pocket.RouteId, StringComparison.OrdinalIgnoreCase)
+                && GetServiceRouteId(train).Equals(pocket.RouteId, StringComparison.OrdinalIgnoreCase)
                 && cursor.MovementPlanId.Equals(pocket.RouteId, StringComparison.OrdinalIgnoreCase))
             {
-                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train.Direction),
+                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train),
                     cursor, 0, pocket.FirstTraversalIndex, pocket.LastTraversalIndex,
                     _resourceReservations.GetResources(pocket.OwnerId), requireEdgeResource: true);
             }
@@ -525,7 +536,7 @@ public sealed class SimulationWorld
                          item.VehicleId == train.VehicleId
                          && item.RouteId.Equals(cursor.MovementPlanId, StringComparison.OrdinalIgnoreCase)))
             {
-                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train.Direction),
+                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train),
                     cursor, 0, siding.SidingTraversalIndex, siding.SidingTraversalIndex,
                     _resourceReservations.GetResources(siding.OwnerId), requireEdgeResource: false,
                     terminalPosition: siding.EntryStopPosition);
@@ -990,10 +1001,11 @@ public sealed class SimulationWorld
     private int GetTopologyDepartureStationIndex(TurnbackOperationDefinition operation)
     {
         var direction = GetDirectionForServiceRoute(operation.DepartureServiceRouteId);
-        var context = GetRunRouteContext(direction);
+        var routeState = _runtimeServiceRoutes[operation.DepartureServiceRouteId];
+        var context = routeState.Context;
         var facility = TopologyInfrastructure.TurnbackFacilities[operation.FacilityId];
-        var routeNavigator = GetTopologyNavigator(direction);
-        var departureTraversalIndex = GetServiceRouteDefinition(direction).Traversals
+        var routeNavigator = routeState.Navigator;
+        var departureTraversalIndex = routeState.Route.Traversals
             .Select((traversal, index) => (traversal, index))
             .Single(item => item.traversal.TrackEdgeId.Equals(
                 facility.DepartureTrackEdgeId,
@@ -1029,7 +1041,7 @@ public sealed class SimulationWorld
     }
 
     private bool HasStationIndex(MutableTrain train, int stationIndex) =>
-        stationIndex >= 0 && stationIndex < GetStationCount(train.Direction);
+        stationIndex >= 0 && stationIndex < GetStationCount(train);
 
     /// <summary>
     /// 為尚未遷移的 station pattern / dwell API 提供 station 描述。Schema 8 的來源是
@@ -1060,7 +1072,7 @@ public sealed class SimulationWorld
     }
 
     private Station GetRuntimeStation(MutableTrain train, int stationIndex) =>
-        GetRuntimeStation(train.Direction, stationIndex);
+        GetRuntimeRouteStation(RuntimeRoute(train), stationIndex);
 
     private string GetCurrentStationId(MutableTrain train) =>
         GetRuntimeStation(train, train.CurrentStationIndex).StationId;
@@ -1072,9 +1084,9 @@ public sealed class SimulationWorld
 
     private void InitializeTopologyTrainPosition(MutableTrain train)
     {
-        var routeContext = GetRunRouteContext(train.Direction);
+        var routeContext = GetRunRouteContext(train);
         var originStop = ResolveVehicleStop(train, routeContext.Stops[routeContext.OriginStopIndex]);
-        var routeNavigator = GetTopologyNavigator(train.Direction);
+        var routeNavigator = GetTopologyNavigator(train);
         var distanceAlongTraversal = routeNavigator.GetDistanceAlongTraversal(
             new TopologyTraversalCursor(
                 routeNavigator.ServiceRouteId,
@@ -1082,8 +1094,8 @@ public sealed class SimulationWorld
                 originStop.Position));
         SetTrainRuntimeTopologyCursor(
             train,
-            GetMainlineMovementNavigator(train.Direction),
-            GetMainlineMovementNavigator(train.Direction).CreateCursor(
+            GetMainlineMovementNavigator(train),
+            GetMainlineMovementNavigator(train).CreateCursor(
                 0,
                 originStop.TraversalIndex,
                 distanceAlongTraversal));
@@ -1098,20 +1110,16 @@ public sealed class SimulationWorld
         _servicePatterns.Clear();
         _serviceRunPlans.Clear();
         var stationIds = _topologyNativeRuntime
-            ? _outboundRunRouteContext.Stops
-                .Concat(_inboundRunRouteContext.Stops)
+            ? _runtimeServiceRoutes.Values.SelectMany(item => item.Context.Stops)
                 .Select(stop => stop.StationId)
                 .ToHashSet(StringComparer.OrdinalIgnoreCase)
             : Route.Stations.Select(station => station.StationId).ToHashSet(StringComparer.Ordinal);
         var endpointIds = _topologyNativeRuntime
-            ? new[]
+            ? _runtimeServiceRoutes.Values.SelectMany(item => new[]
                 {
-                    _outboundRunRouteContext.Stops[_outboundRunRouteContext.OriginStopIndex].StationId,
-                    _outboundRunRouteContext.Stops[_outboundRunRouteContext.TerminalStopIndex].StationId,
-                    _inboundRunRouteContext.Stops[_inboundRunRouteContext.OriginStopIndex].StationId,
-                    _inboundRunRouteContext.Stops[_inboundRunRouteContext.TerminalStopIndex].StationId
-                }
-                .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                    item.Context.Stops[item.Context.OriginStopIndex].StationId,
+                    item.Context.Stops[item.Context.TerminalStopIndex].StationId
+                }).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : new HashSet<string>(StringComparer.Ordinal)
             {
                 Route.Stations[0].StationId,
@@ -1320,6 +1328,34 @@ public sealed class SimulationWorld
             ?? new StationServiceInstruction(station.StationId, StationServiceMode.Stop);
     }
 
+    private StationTimetableEntry? GetStationTimetableEntry(MutableTrain train, Station station)
+    {
+        return _dispatchRunsById.TryGetValue(train.ServiceRunId, out var run)
+            ? run.StationTimetableEntries.FirstOrDefault(entry =>
+                entry.StationId.Equals(station.StationId, StringComparison.OrdinalIgnoreCase))
+            : null;
+    }
+
+    private double GetStationTimetableDwellSeconds(
+        MutableTrain train,
+        Station station,
+        double configuredDwellSeconds)
+    {
+        var entry = GetStationTimetableEntry(train, station);
+        if (entry is null || _dispatchPlan is null)
+        {
+            return configuredDwellSeconds;
+        }
+
+        var scheduledDeparture = RelativeScheduleSeconds(
+            entry.PlannedDepartureTime,
+            _dispatchPlan.ScheduleAnchorTime);
+        var scheduleHold = Math.Max(0, scheduledDeparture - CurrentTimeSeconds);
+        // A zero-second timetable dwell still needs one fixed step in Dwelling so that the
+        // authoritative world emits a matching Departure event for timetable/output consumers.
+        return Math.Max(FixedTimeStepSeconds, Math.Max(entry.MinimumDwellSeconds, scheduleHold));
+    }
+
     private void InitializeTrains(int trainCount)
     {
         _trains.Clear();
@@ -1334,8 +1370,8 @@ public sealed class SimulationWorld
                          .OrderBy(item => item.Sequence))
             {
                 var outbound = run.Direction == TrainDirection.Outbound;
-                var stationIndex = GetInitialStationIndex(run.Direction);
-                var originStation = GetRuntimeStation(run.Direction, stationIndex);
+                var stationIndex = RuntimeRoute(run).Context.OriginStopIndex;
+                var originStation = GetRuntimeRouteStation(RuntimeRoute(run), stationIndex);
                 var train = new MutableTrain
                 {
                     VehicleId = run.VehicleId!,
@@ -1725,17 +1761,18 @@ public sealed class SimulationWorld
     }
 
     /// <summary>
-    /// 正常服務進路穿越雙向袋狀軌時，採保守的發車前整組預約。
+    /// 正常服務進路穿越雙向袋狀軌或單線主線時，採保守的發車前整組預約。
     /// 同一組入口／中央軌／出口的資源在車尾全數淨空後才釋放；不靠發車時差防止對向侵入。
     /// 折返及越行仍使用原有 facility reservation，不建立第二套占用管理員。
     /// </summary>
     private bool TryReservePocketServiceRoute(MutableTrain train)
     {
         var pocketResourceIds = TopologyInfrastructure.Edges.Values
-            .Where(e => e.Kind == TrackEdgeKind.PocketTrack && e.Directionality == TrackDirectionality.Bidirectional)
+            .Where(e => e.Directionality == TrackDirectionality.Bidirectional
+                && (e.Kind == TrackEdgeKind.PocketTrack || e.Kind == TrackEdgeKind.Mainline))
             .SelectMany(e => e.ConflictResourceIds).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (pocketResourceIds.Count == 0) return true;
-        var route = GetServiceRouteDefinition(train.Direction);
+        var route = GetServiceRouteDefinition(train);
         var start = train.ServiceRouteTraversalIndex ?? 0;
         var protectedTraversals = route.Traversals.Select((t, i) => (Edge: TopologyInfrastructure.GetRequiredEdge(t.TrackEdgeId), Index: i))
             .Where(item => item.Index >= start && item.Edge.ConflictResourceIds.Any(pocketResourceIds.Contains)).ToArray();
@@ -1747,13 +1784,15 @@ public sealed class SimulationWorld
             if (existing.RouteId == route.ServiceRouteId && required.IsSubsetOf(existing.Resources)) return true;
             required.UnionWith(existing.Resources);
         }
+        var routeLabel = protectedTraversals.Any(item => item.Edge.Kind == TrackEdgeKind.Mainline)
+            ? "單線共用進路" : "共用袋狀軌進路";
         var owner = $"SERVICE-POCKET:{train.VehicleId}";
         if (!_resourceReservations.Reserve(owner, required))
-            return MarkWaitingForResource(train, $"{train.ServiceRunId} 等待共用袋狀軌進路淨空後發車。", required.Order().First());
+            return MarkWaitingForResource(train, $"{train.ServiceRunId} 等待{routeLabel}淨空後發車。", required.Order().First());
         _pocketServiceReservations[train.VehicleId] = new(owner, route.ServiceRouteId,
             protectedTraversals.Min(t => t.Index), protectedTraversals.Max(t => t.Index), required);
         train.WaitingResourceEventEmitted = false;
-        AddEvent(SimulationEventType.RouteReserved, train, null, $"{train.ServiceRunId} 已預約共用袋狀軌進路。",
+        AddEvent(SimulationEventType.RouteReserved, train, null, $"{train.ServiceRunId} 已預約{routeLabel}。",
             train.Position, train.Speed, resourceIds: required.Order().ToArray());
         return true;
     }
@@ -1764,7 +1803,7 @@ public sealed class SimulationWorld
         {
             var train = _trains.First(t => t.VehicleId == vehicleId);
             var passed = train.Completed || train.Active &&
-                (GetServiceRouteId(train.Direction) != reservation.RouteId || train.ServiceRouteTraversalIndex > reservation.LastTraversalIndex);
+                (GetServiceRouteId(train) != reservation.RouteId || train.ServiceRouteTraversalIndex > reservation.LastTraversalIndex);
             if (!passed || reservation.Resources.Any(r => !TopologyResourceReleasePolicy.CanReleaseResource(
                     r, _topologyOccupancy.FootprintsByOwner.Values, TopologyInfrastructure))) continue;
             _resourceReservations.Release(reservation.OwnerId);
@@ -1785,7 +1824,7 @@ public sealed class SimulationWorld
             || !HasStationIndex(train, train.NextStationIndex))
             return true;
 
-        var route = GetServiceRouteDefinition(train.Direction);
+        var route = GetServiceRouteDefinition(train);
         var currentIndex = train.ServiceRouteTraversalIndex ?? cursor.TraversalIndex;
         var currentTraversal = route.Traversals[currentIndex];
         var currentEdge = TopologyInfrastructure.GetRequiredEdge(currentTraversal.TrackEdgeId);
@@ -1852,7 +1891,7 @@ public sealed class SimulationWorld
                 && _topologyOccupancy.FootprintsByOwner.TryGetValue(train.VehicleId, out var footprint))
             {
                 var rear = footprint.Rear;
-                var rearDistance = GetMainlineMovementNavigator(train.Direction).GetDistanceAlongTraversal(rear);
+                var rearDistance = GetMainlineMovementNavigator(train).GetDistanceAlongTraversal(rear);
                 clear = reservation.Entry
                     ? rear.TraversalIndex > reservation.SidingTraversalIndex
                       || rear.TraversalIndex == reservation.SidingTraversalIndex
@@ -1890,7 +1929,7 @@ public sealed class SimulationWorld
             || FindEligibleTopologyPassing(train, nextStation, instruction) is not null)
             return null;
 
-        var navigator = GetMainlineMovementNavigator(train.Direction);
+        var navigator = GetMainlineMovementNavigator(train);
         if (!cursor.MovementPlanId.Equals(navigator.MovementPlanId, StringComparison.OrdinalIgnoreCase))
             return null;
         var traversals = navigator.Legs[0].Traversals;
@@ -2946,8 +2985,8 @@ public sealed class SimulationWorld
             // 停點屬於 resolved traversal；不能以顯示里程回推，或在 edge 邊界
             // Advance 到下一段後失去停點所屬 traversal。保留速度，後續繼續煞車。
             var stopNavigator = GetMovementNavigator(train);
-            var stopDistance = GetTopologyNavigator(train.Direction).GetDistanceAlongTraversal(
-                new TopologyTraversalCursor(GetServiceRouteId(train.Direction), resolvedStop.TraversalIndex, resolvedStop.Position));
+            var stopDistance = GetTopologyNavigator(train).GetDistanceAlongTraversal(
+                new TopologyTraversalCursor(GetServiceRouteId(train), resolvedStop.TraversalIndex, resolvedStop.Position));
             SetTrainRuntimeTopologyCursor(train, stopNavigator, stopNavigator.CreateCursor(
                 GetCurrentServiceRouteLegIndex(train), GetMovementTraversalIndex(train, resolvedStop.TraversalIndex), stopDistance));
             train.Speed = newSpeed;
@@ -3154,7 +3193,7 @@ public sealed class SimulationWorld
         else
         {
             var navigator = GetMovementNavigator(train);
-            var topologyNavigator = GetTopologyNavigator(train.Direction);
+            var topologyNavigator = GetTopologyNavigator(train);
             var distanceAlongTraversal = topologyNavigator.GetDistanceAlongTraversal(
                 new TopologyTraversalCursor(
                     topologyNavigator.ServiceRouteId,
@@ -3183,7 +3222,7 @@ public sealed class SimulationWorld
         AddEvent(SimulationEventType.Arrival, train, null, $"{train.ServiceRunId} 抵達 {station.StationId}。", train.Position, 0);
 
         var isTerminal = _topologyNativeRuntime
-            ? train.CurrentStationIndex == GetRunRouteContext(train.Direction).TerminalStopIndex
+            ? train.CurrentStationIndex == GetRunRouteContext(train).TerminalStopIndex
             : train.Direction == TrainDirection.Outbound
                 ? train.CurrentStationIndex == Route.Stations.Count - 1
                 : train.CurrentStationIndex == 0;
@@ -3231,10 +3270,11 @@ public sealed class SimulationWorld
             ? null
             : Infrastructure.FindSpatialReferencePoint(station.StationId);
         var instructionDwellSeconds = GetStationInstruction(train, station).DwellTimeSeconds;
-        train.DwellRemaining = GetConfiguredStationDwellSeconds(
+        var configuredDwellSeconds = GetConfiguredStationDwellSeconds(
             intermediateReference,
             train.Direction,
             instructionDwellSeconds ?? station.DwellTimeSeconds);
+        train.DwellRemaining = GetStationTimetableDwellSeconds(train, station, configuredDwellSeconds);
         if (GetStationInstruction(train, station).WaitForOvertakeServiceRunId is not null)
             train.DwellRemaining = Math.Max(train.DwellRemaining, FixedTimeStepSeconds);
         train.NextStationIndex += GetStationIndexStep(train);
@@ -3427,6 +3467,10 @@ public sealed class SimulationWorld
 
         if (topologyTurnback is not null)
         {
+            // Facility traversal identifies the actual departure route, including a
+            // continuation onto a different operating line.
+            train.ActiveServiceRouteId = topologyTurnback.DepartureServiceRouteId;
+            train.RouteOwnerServiceRunId = train.ServiceRunId;
             train.PlatformId = GetTopologyDeparturePlatform(topologyTurnback);
         }
         else
@@ -3448,7 +3492,7 @@ public sealed class SimulationWorld
             // 兩條 ServiceRoute 都以各自行進方向的 stop order 編號；折返後不能保留
             // 到達 route 的 terminal index，否則會把 outbound 的索引誤當 inbound 的索引。
             train.CurrentStationIndex = topologyTurnback is null
-                ? GetRunRouteContext(train.Direction).OriginStopIndex
+                ? GetRunRouteContext(train).OriginStopIndex
                 : GetTopologyDepartureStationIndex(topologyTurnback);
         }
         train.NextStationIndex = train.CurrentStationIndex + GetStationIndexStep(train);
@@ -3621,7 +3665,7 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var serviceRouteId = GetServiceRouteId(train.Direction);
+        var serviceRouteId = GetServiceRouteId(train);
         var cursor = train.RuntimeTopologyCursor
             ?? throw new SimulationValidationException(["topology 折返列車缺少 runtime cursor。"]);
         var matches = TopologyInfrastructure.TurnbackOperations.Values
@@ -3676,8 +3720,7 @@ public sealed class SimulationWorld
             ]);
         }
 
-        var departureDirection = GetDirectionForServiceRoute(operation.DepartureServiceRouteId);
-        var departureRoute = GetServiceRouteDefinition(departureDirection);
+        var departureRoute = _runtimeServiceRoutes[operation.DepartureServiceRouteId].Route;
         if (!departureRoute.ServiceRouteId.Equals(operation.DepartureServiceRouteId, StringComparison.OrdinalIgnoreCase))
         {
             throw new SimulationValidationException([
@@ -3685,7 +3728,7 @@ public sealed class SimulationWorld
             ]);
         }
 
-        var arrivalRoute = GetServiceRouteDefinition(train.Direction);
+        var arrivalRoute = GetServiceRouteDefinition(train);
         var departureStartTraversalIndex = departureRoute.Traversals
             .Select((traversal, index) => (traversal, index))
             .FirstOrDefault(item => item.traversal.TrackEdgeId.Equals(
@@ -4058,7 +4101,7 @@ public sealed class SimulationWorld
         }
         movement.IsOperating = false;
         train.PlatformId = GetTopologyDeparturePlatform(movement.Operation);
-        train.TrackId = $"EDGE:{GetServiceRouteId(train.Direction)}";
+        train.TrackId = $"EDGE:{GetServiceRouteId(train)}";
         AddEvent(
             SimulationEventType.Arrival,
             train,
@@ -4127,7 +4170,7 @@ public sealed class SimulationWorld
             ReleaseRouteReservation(train);
         }
 
-        var mainlineNavigator = GetMainlineMovementNavigator(train.Direction);
+        var mainlineNavigator = GetMainlineMovementNavigator(train);
         var distanceAlongTraversal = movement.Navigator.GetDistanceAlongTraversal(cursor);
         var serviceRouteTraversalIndex = cursor.TraversalIndex + movement.DepartureServiceRouteTraversalOffset;
         train.TopologyTurnbackMovement = null;
@@ -4149,7 +4192,7 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var serviceRouteId = GetServiceRouteId(expressTrain.Direction);
+        var serviceRouteId = GetServiceRouteId(expressTrain);
         foreach (var operation in TopologyInfrastructure.PassingOperations.Values
                      .Where(candidate => candidate.ServiceRouteId.Equals(serviceRouteId, StringComparison.OrdinalIgnoreCase)
                          && (string.IsNullOrWhiteSpace(candidate.ExpressServiceTypeId)
@@ -4235,7 +4278,7 @@ public sealed class SimulationWorld
             return;
         }
 
-        var route = GetServiceRouteDefinition(train.Direction);
+        var route = GetServiceRouteDefinition(train);
         var arrival = route.Traversals.Single(item => item.TrackEdgeId.Equals(
             candidate.Facility.ArrivalTrackEdgeId, StringComparison.OrdinalIgnoreCase));
         var departure = route.Traversals.Single(item => item.TrackEdgeId.Equals(
@@ -4304,8 +4347,8 @@ public sealed class SimulationWorld
             return null;
         }
 
-        var routeNavigator = GetTopologyNavigator(train.Direction);
-        var traversalIndex = GetServiceRouteDefinition(train.Direction).Traversals
+        var routeNavigator = GetTopologyNavigator(train);
+        var traversalIndex = GetServiceRouteDefinition(train).Traversals
             .Select((traversal, index) => (traversal, index))
             .Single(item => item.traversal.TrackEdgeId.Equals(
                 facility.ArrivalTrackEdgeId,
@@ -4362,7 +4405,7 @@ public sealed class SimulationWorld
             ]);
         }
 
-        var route = GetServiceRouteDefinition(train.Direction);
+        var route = GetServiceRouteDefinition(train);
         var departureStartTraversalIndex = route.Traversals
             .Select((traversal, index) => (traversal, index))
             .Single(item => item.traversal.TrackEdgeId.Equals(
@@ -4505,7 +4548,7 @@ public sealed class SimulationWorld
         SetTrainRuntimeTopologyCursor(train, navigator, departureStart);
         train.Speed = newSpeed;
         train.PlatformId = movement.Facility.ExpressPlatformId;
-        train.TrackId = $"EDGE:{GetServiceRouteId(train.Direction)}";
+        train.TrackId = $"EDGE:{GetServiceRouteId(train)}";
         train.CurrentStationIndex = movement.PassedStationIndex;
         train.NextStationIndex = train.CurrentStationIndex + GetStationIndexStep(train);
         train.Phase = OperationalPhase.Cruising;
@@ -4552,7 +4595,7 @@ public sealed class SimulationWorld
             ReleaseRouteReservation(train);
         }
 
-        var mainlineNavigator = GetMainlineMovementNavigator(train.Direction);
+        var mainlineNavigator = GetMainlineMovementNavigator(train);
         var distanceAlongTraversal = movement.Navigator.GetDistanceAlongTraversal(cursor);
         var serviceRouteTraversalIndex = cursor.TraversalIndex + movement.DepartureServiceRouteTraversalOffset;
         train.TopologyPassingMovement = null;
@@ -5852,7 +5895,8 @@ public sealed class SimulationWorld
                 train.OffsetMeters,
                 train.ServiceRouteTraversalIndex,
                 train.ProjectedChainageMeters,
-                TrackSpeedLimitMetersPerSecond: GetTrackCurrentLimit(train, GetVehiclePerformance(train)));
+                TrackSpeedLimitMetersPerSecond: GetTrackCurrentLimit(train, GetVehiclePerformance(train)),
+                ServiceRouteId: GetServiceRouteId(train), OperatingLineId: RuntimeRoute(train).Route.OperatingLineId);
             _traceStore.Record(sample);
         }
     }
@@ -5888,7 +5932,8 @@ public sealed class SimulationWorld
             train.CurrentTrackEdgeId,
             train.OffsetMeters,
             train.ServiceRouteTraversalIndex,
-            train.ProjectedChainageMeters);
+            train.ProjectedChainageMeters,
+            GetServiceRouteId(train), RuntimeRoute(train).Route.OperatingLineId);
     }
 
     private void AddEvent(
@@ -5932,7 +5977,9 @@ public sealed class SimulationWorld
             train?.ProjectedChainageMeters,
             StationId: !omitStationIdentity && train is not null && eventType is (SimulationEventType.Arrival
                 or SimulationEventType.Departure or SimulationEventType.DwellStarted or SimulationEventType.StationPassed)
-                    ? GetCurrentStationId(train) : null);
+                    ? GetCurrentStationId(train) : null,
+            ServiceRouteId: train is null ? null : GetServiceRouteId(train),
+            OperatingLineId: train is null ? null : RuntimeRoute(train).Route.OperatingLineId);
         _events.Add(item);
         if (eventType == SimulationEventType.StationPassed && item.StationId is not null)
             _passedStationKeys.Add(StationPassKey(item.ServiceRunId, item.StationId));
@@ -5953,9 +6000,7 @@ public sealed class SimulationWorld
 
     private ResolvedStop GetResolvedStop(MutableTrain train, Station station)
     {
-        var stops = train.Direction == TrainDirection.Outbound
-            ? _outboundResolvedStops
-            : _inboundResolvedStops;
+        var stops = RuntimeRoute(train).Stops;
         return stops.TryGetValue(station.StationId, out var stop)
             ? ResolveVehicleStop(train, stop)
             : throw new SimulationValidationException([
@@ -5972,7 +6017,7 @@ public sealed class SimulationWorld
     private ResolvedStop ResolveVehicleStop(MutableTrain train, ResolvedStop stop)
     {
         var platform = TopologyInfrastructure.Platforms[stop.PlatformId];
-        var direction = GetServiceRouteDefinition(train.Direction).Traversals[stop.TraversalIndex].Direction;
+        var direction = GetServiceRouteDefinition(train).Traversals[stop.TraversalIndex].Direction;
         var trainLength = GetVehiclePerformance(train).LengthMeters;
         if (platform.StopPositionReference != StopPositionReference.TrainCenter)
         {
@@ -5987,7 +6032,7 @@ public sealed class SimulationWorld
         // writing an out-of-range offset on the platform's arrival edge.  This
         // keeps the physical center at the platform center while allowing the
         // footprint to span the adjacent edge at station boundaries.
-        var routeNavigator = GetTopologyNavigator(train.Direction);
+        var routeNavigator = GetTopologyNavigator(train);
         var centerCursor = new TopologyTraversalCursor(
             routeNavigator.ServiceRouteId,
             stop.TraversalIndex,
@@ -6022,7 +6067,7 @@ public sealed class SimulationWorld
                 || (direction == TrainDirection.Outbound && platform.AllowedDirection == TrackDirection.Outbound)
                 || (direction == TrainDirection.Inbound && platform.AllowedDirection == TrackDirection.Inbound))
             ?.PlatformId
-            ?? GetOriginResolvedStop(direction).PlatformId;
+            ?? _runtimeServiceRoutes[operation.DepartureServiceRouteId].Context.Stops[0].PlatformId;
     }
 
     private string GetServiceRouteId(TrainDirection direction) =>
@@ -6037,6 +6082,8 @@ public sealed class SimulationWorld
 
     private TrainDirection GetDirectionForServiceRoute(string serviceRouteId)
     {
+        if (_runtimeServiceRoutes.TryGetValue(serviceRouteId, out var state) && state.Route.Direction is { } direction)
+            return direction;
         if (serviceRouteId.Equals(_linearTopology.OutboundServiceRoute.ServiceRouteId, StringComparison.OrdinalIgnoreCase))
         {
             return TrainDirection.Outbound;
@@ -6047,7 +6094,10 @@ public sealed class SimulationWorld
             return TrainDirection.Inbound;
         }
 
-        throw new SimulationValidationException([$"service route「{serviceRouteId}」未綁定 Outbound 或 Inbound direction。"]);
+        var assignedDirections = _dispatchRunsById.Values.Where(run => string.Equals(run.ServiceRouteId, serviceRouteId, StringComparison.OrdinalIgnoreCase))
+            .Select(run => run.Direction).Distinct().ToArray();
+        if (assignedDirections.Length == 1) return assignedDirections[0];
+        throw new SimulationValidationException([$"service route「{serviceRouteId}」未指定唯一營運方向。"]);
     }
 
     private double GetDistanceToResolvedStop(
@@ -6065,9 +6115,9 @@ public sealed class SimulationWorld
 
         var navigator = GetMovementNavigator(train);
         var target = navigator.CreateCursor(GetCurrentServiceRouteLegIndex(train), GetMovementTraversalIndex(train, resolvedStop.TraversalIndex),
-            GetTopologyNavigator(train.Direction).GetDistanceAlongTraversal(
+            GetTopologyNavigator(train).GetDistanceAlongTraversal(
                 new TopologyTraversalCursor(
-                    GetTopologyNavigator(train.Direction).ServiceRouteId,
+                    GetTopologyNavigator(train).ServiceRouteId,
                     resolvedStop.TraversalIndex,
                     resolvedStop.Position)));
         return navigator.TryGetForwardDistance(train.RuntimeTopologyCursor!.Value, target)
@@ -6097,7 +6147,7 @@ public sealed class SimulationWorld
         }
 
         return _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
-            GetTopologyNavigator(train.Direction),
+            GetTopologyNavigator(train),
             ToServiceRouteCursor(train),
             performance.MaxSpeedMetersPerSecond,
             brakingMetersPerSecondSquared,
@@ -6121,7 +6171,7 @@ public sealed class SimulationWorld
         }
 
         return _trackSpeedLimits.GetCurrentLimit(
-            GetTopologyNavigator(train.Direction),
+            GetTopologyNavigator(train),
             ToServiceRouteCursor(train),
             performance.MaxSpeedMetersPerSecond);
     }
@@ -6165,7 +6215,7 @@ public sealed class SimulationWorld
             return;
         }
 
-        var projection = GetRouteProjection(train.Direction);
+        var projection = GetRouteProjection(train);
         var routeChainage = train.Direction == TrainDirection.Outbound
             ? projectedPositionMeters
             : projection.TotalLengthMeters - projectedPositionMeters;
@@ -6194,7 +6244,7 @@ public sealed class SimulationWorld
             normalizedChainage < segment.EndChainageMeters - NumericalTolerance
             || segment.TraversalIndex == projection.Segments.Count - 1);
         var position = projection.FromChainage(normalizedChainage);
-        var navigator = GetMainlineMovementNavigator(train.Direction);
+        var navigator = GetMainlineMovementNavigator(train);
         var distanceAlongTraversal = segment.Traversal.Direction == TraversalDirection.Forward
             ? position.OffsetMeters
             : TopologyInfrastructure.GetRequiredEdge(position.TrackEdgeId).LengthMeters - position.OffsetMeters;
@@ -6284,7 +6334,7 @@ public sealed class SimulationWorld
     private TopologyMovementNavigator GetMovementNavigator(MutableTrain train) =>
         train.TopologyPassingMovement?.Navigator
         ?? train.TopologyTurnbackMovement?.Navigator
-        ?? GetMainlineMovementNavigator(train.Direction);
+        ?? GetMainlineMovementNavigator(train);
 
     private int GetCurrentServiceRouteLegIndex(MutableTrain train) =>
         train.TopologyPassingMovement?.DepartureLegIndex
@@ -6331,7 +6381,7 @@ public sealed class SimulationWorld
         if (GetMovementNavigator(train).Legs[cursor.MovementLegIndex].Kind != MovementLegKind.ServiceRoute)
             throw new SimulationValidationException(["特殊設施 traversal 不可套用 mainline ServiceRoute speed-limit adapter。"]);
         return new TopologyTraversalCursor(
-            GetTopologyNavigator(train.Direction).ServiceRouteId,
+            GetTopologyNavigator(train).ServiceRouteId,
             GetServiceRouteTraversalIndex(train, cursor),
             cursor.Position);
     }
@@ -6359,7 +6409,7 @@ public sealed class SimulationWorld
         var movementLeg = navigator.Legs[cursor.MovementLegIndex];
         if (movementLeg.Kind == MovementLegKind.ServiceRoute)
         {
-            var projection = GetRouteProjection(train.Direction);
+            var projection = GetRouteProjection(train);
             var serviceRouteTraversalIndex = GetServiceRouteTraversalIndex(train, cursor);
             var projectedChainage = projection.ToChainage(serviceRouteTraversalIndex, cursor.Position);
             train.ServiceRouteTraversalIndex = serviceRouteTraversalIndex;
@@ -6413,6 +6463,9 @@ public sealed class SimulationWorld
         public TrainDirection Direction { get; set; }
 
         public string TrackId { get; set; } = string.Empty;
+
+        public string? ActiveServiceRouteId { get; set; }
+        public string? RouteOwnerServiceRunId { get; set; }
 
         public string ServiceClassId { get; set; } = DefaultServiceClassId;
 

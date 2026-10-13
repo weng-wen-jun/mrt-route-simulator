@@ -30,7 +30,10 @@ public sealed record TimetableRow(
     string PlannedArrivalTime = "—",
     string PlannedDepartureTime = "—",
     string Delay = "—",
-    string Status = "—");
+    string Status = "—",
+    string PlannedDwellTime = "—",
+    string ServiceRoute = "—",
+    string OperatingLine = "—");
 
 public sealed record SegmentRow(
     string Segment,
@@ -184,6 +187,7 @@ public sealed class HeadwayPlanInputRow
     public string OriginPlatformId { get; set; } = string.Empty;
     public string VehicleId { get; set; } = string.Empty;
     public bool ContinueAfterTerminal { get; set; }
+    public string ServiceRouteId { get; set; } = string.Empty;
 }
 
 public sealed class ManualTimetableInputRow
@@ -198,6 +202,8 @@ public sealed class ManualTimetableInputRow
     public string ServiceRunId { get; set; } = string.Empty;
     public bool ContinueAfterTerminal { get; set; }
     public string ContinuationServiceRunId { get; set; } = string.Empty;
+    public string ServiceRouteId { get; set; } = string.Empty;
+    public MrtRouteSimulator.Engine.ProjectStationTimetableEntry[]? StationTimetableEntries { get; set; }
 }
 
 public sealed class PlatformInputRow
