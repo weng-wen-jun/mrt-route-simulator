@@ -287,7 +287,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7（legacy 匯入／固定時刻�
 2. `SimulationProject.cs`（若影響 legacy 匯入或固定時刻表）
 3. `MainWindow.ProjectFiles.cs`／`MainWindow.Topology.cs`
 4. `tests/MrtRouteSimulator.Tests/Program.cs`／`TopologyRegressionTests.cs`
-5. `samples/10-小型-三站完整拓樸基準範例.mrtsim.json` 與完整 topology 範例
+5. `samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json` 與完整 topology 範例
 6. `MODEL_SPEC.md`
 7. 必要時 `README.md`／`CHANGELOG.md`
 
@@ -407,8 +407,8 @@ SimulationWorld.Tick() = 固定 0.1 s
 
 ### Topology samples
 
-- `samples/10-小型-三站完整拓樸基準範例.mrtsim.json`
-- `samples/11-小型-三站完整拓樸運行範例.mrtsim.json`
+- `samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json`
+- `samples/小型/11-小型-三站完整拓樸運行範例.mrtsim.json`
 - `samples/README.md`
 
 用途：Schema 8 基線與完整 physical facility 情境驗證；samples 內範例檔名依規模排序並使用中文，內容仍是 Schema 8。

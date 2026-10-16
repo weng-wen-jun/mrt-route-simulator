@@ -449,7 +449,7 @@ git commit -m "feat: add UiTheme as single source for app colors" -m "Co-Authore
         try
         {
             // 範例 11 的 LOCAL-01 於 0 秒停靠 P-W-D（VisualRulesTests 已驗證），可穩定取得列車標記。
-            var (canvas, _) = DrawSample(main, root, "11-小型-三站完整拓樸運行範例.mrtsim.json", 1200, 0);
+            var (canvas, _) = DrawSample(main, root, "小型/11-小型-三站完整拓樸運行範例.mrtsim.json", 1200, 0);
             var trains = canvas.Children.OfType<Border>().Where(border => border.Tag is string).ToArray();
             Require(trains.Length > 0, "範例 11 在 0 秒應至少顯示一列車。");
             foreach (var train in trains)
@@ -694,7 +694,7 @@ git commit -m "feat: draw capsule train markers with readable labels and heading
             var routeCanvas = (Canvas)main.FindName("RouteCanvas");
             Require(ReferenceEquals(routeCanvas.Background, StaticValue(theme, "CanvasBackgroundBrush")),
                 "配線圖底色必須取自 UiTheme.CanvasBackgroundBrush。");
-            var (canvas, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var (canvas, _) = DrawSample(main, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
             var rails = canvas.Children.OfType<Polyline>()
                 .Where(line => line.ToolTip is string tip && tip.Contains('\n'))
                 .ToDictionary(line => ((string)line.ToolTip!).Split('\n', 2)[0], StringComparer.OrdinalIgnoreCase);
@@ -918,7 +918,7 @@ internal static class TrackRailStyle
 
 執行共用指令。
 Expected: `[通過] 雙色軌道、白色方向箭頭、接軌與止衝擋`，結束碼 0；建置 0 warning。
-若 `PASS-LOOP-M` 的顏色不是 `RailDownSoft`：先讀 `samples/10-小型-三站完整拓樸基準範例.mrtsim.json` 中 `PASS-LOOP-M` 的端點節點，確認它與哪些路徑 edge 共用節點，再判斷是 `Classify` 寫錯還是測試預期錯；不可直接改測試去配合輸出。
+若 `PASS-LOOP-M` 的顏色不是 `RailDownSoft`：先讀 `samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json` 中 `PASS-LOOP-M` 的端點節點，確認它與哪些路徑 edge 共用節點，再判斷是 `Classify` 寫錯還是測試預期錯；不可直接改測試去配合輸出。
 
 - [ ] **Step 5: Commit**
 
@@ -953,8 +953,8 @@ git commit -m "feat: color track diagram rails by running direction" -m "Co-Auth
         {
             foreach (var (file, width) in new[]
             {
-                ("10-小型-三站完整拓樸基準範例.mrtsim.json", 1200d),
-                ("14-大型-二十八站完整營運範例.mrtsim.json", 1370d)
+                ("小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200d),
+                ("大型/01-大型-二十八站完整營運範例.mrtsim.json", 1370d)
             })
             {
                 var (canvas, sample) = DrawSample(main, root, file, width, 0);
@@ -1123,7 +1123,7 @@ git commit -m "feat: restyle platforms as white bars with direction-colored numb
         var main = new MainWindow();
         try
         {
-            var (small, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var (small, _) = DrawSample(main, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
             var labels = small.Children.OfType<FrameworkElement>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor").ToArray();
             Require(labels.Length == 3 && labels.All(item => item is Border border
                     && ReferenceEquals(border.Background, badgeFill) && border.Child is TextBlock),
@@ -1131,7 +1131,7 @@ git commit -m "feat: restyle platforms as white bars with direction-colored numb
             var west = labels.Cast<Border>().Select(border => ((TextBlock)border.Child).Text).Single(text => text.Contains("西站"));
             Require(west.Contains("W · "), $"西站徽章的次要資訊必須帶 ID 與里程，實際：{west}");
 
-            var (large, _) = DrawSample(main, root, "14-大型-二十八站完整營運範例.mrtsim.json", 1370, 0);
+            var (large, _) = DrawSample(main, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json", 1370, 0);
             foreach (var label in large.Children.OfType<Border>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor"))
             {
                 var stationId = (string)label.Tag.GetType().GetProperty("StationId")!.GetValue(label.Tag)!;
@@ -1299,7 +1299,7 @@ git commit -m "feat: show station names as badges without duplicated ids" -m "Co
             "Empty 必須是空字典。");
 
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var window = new MainWindow();
         try
         {
@@ -1622,7 +1622,7 @@ git commit -m "feat: add persisted toggle for track section occupancy lights" -m
     {
         var glowBrush = StaticValue(AppType("UiTheme"), "OccupancyGlowBrush");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var window = new MainWindow();
         try
         {
@@ -1899,13 +1899,13 @@ Expected: Engine 通過數與 Task 0 基準相同；WPF 最後一行 `PASS WPF v
 - [ ] **Step 3: 大型路線播放診斷與截圖**
 
 ```powershell
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
 ```
 
 Expected: `PASS WPF large playback diagnostics`，並印出 `routeImage=` 與 `windowImage=` 路徑。用 Read 工具開啟這兩張圖，再加上 `artifacts\station-rules-visual\` 內以下截圖，逐項檢查：
-- `14-大型-二十八站完整營運範例.mrtsim.json-main-1370-t0.png`、`...-main-2512-t0.png`
-- `05-小型-三站四股雙島待避範例.mrtsim.json-main-1200-t0.png`
-- `07-小型-三站尾軌袋狀軌折返範例.mrtsim.json-main-1200-t0.png`
+- `大型/01-大型-二十八站完整營運範例.mrtsim.json-main-1370-t0.png`、`...-main-2512-t0.png`
+- `小型/05-小型-三站四股雙島待避範例.mrtsim.json-main-1200-t0.png`
+- `小型/07-小型-三站尾軌袋狀軌折返範例.mrtsim.json-main-1200-t0.png`
 - `05-...-editor-1200.png`（編輯器的過渡外觀）
 
 人工檢查清單：上下行分別為藍、橘；側線為淺色；設施軌為灰；月台是白條加彩色圓點；站名徽章沒有重複 ID；列車膠囊車號完整、箭頭朝向行進方向；光帶在軌道下且只覆蓋占用區段；圖例完整。若光帶在小範例顯得過粗，只調整 `UiTheme.OccupancyGlowThickness`，並同步更新 Task 8 測試中的 `16`。

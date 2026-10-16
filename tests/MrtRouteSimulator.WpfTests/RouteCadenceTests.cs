@@ -17,7 +17,7 @@ internal static class RouteCadenceTests
 
     public static void Run(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(

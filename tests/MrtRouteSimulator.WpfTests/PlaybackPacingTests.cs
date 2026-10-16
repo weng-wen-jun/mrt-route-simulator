@@ -211,7 +211,7 @@ internal static class PlaybackPacingTests
         string root,
         PlaybackPerformanceDiagnostics? diagnostics = null)
     {
-        var samplePath = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var runtime = TopologyProjectFormat.CreateRuntime(document);
         var options = new SimulationWorldOptions(
@@ -280,7 +280,7 @@ internal static class PlaybackPacingTests
 
     private static void VerifyParity(string root, PlaybackFrame frame)
     {
-        var samplePath = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var runtime = TopologyProjectFormat.CreateRuntime(document);
         var options = new SimulationWorldOptions(

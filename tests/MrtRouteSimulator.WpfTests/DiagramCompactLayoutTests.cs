@@ -11,7 +11,7 @@ internal static class DiagramCompactLayoutTests
     public static void Run(string root)
     {
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(root,
-            "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var scaleService = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.InterfaceScaleService")!;
         var previousScale = (double)scaleService.GetProperty("CurrentScale")!.GetValue(null)!;
         var previousContext = SynchronizationContext.Current;

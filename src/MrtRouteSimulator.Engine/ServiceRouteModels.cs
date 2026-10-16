@@ -157,6 +157,7 @@ public sealed record TopologySimulationDefinition(
     ServiceRouteDefinition InboundServiceRoute)
 {
     public IReadOnlyList<ServiceRouteDefinition>? AdditionalServiceRoutes { get; init; }
+    public IReadOnlyList<TrackSignalBlockDefinition> SignalBlocks { get; init; } = [];
 
     public LinearInfrastructureBuildResult ToBuildResult()
     {

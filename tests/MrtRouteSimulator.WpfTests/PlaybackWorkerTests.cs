@@ -11,7 +11,7 @@ internal static class PlaybackWorkerTests
 {
     public static void Run(string root)
     {
-        var path = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var path = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(path));
         var window = new MainWindow();
         try

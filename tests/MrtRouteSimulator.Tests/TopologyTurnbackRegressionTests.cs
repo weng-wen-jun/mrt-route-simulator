@@ -1,4 +1,4 @@
-﻿using MrtRouteSimulator.Engine;
+using MrtRouteSimulator.Engine;
 
 /// <summary>
 /// 專門鎖定 Schema 8 實體尾軌折返後的反方向首站銜接。
@@ -12,7 +12,7 @@ internal static class TopologyTurnbackRegressionTests
         var samplePath = Path.Combine(
             FindRepositoryRoot(),
             "samples",
-            "11-小型-三站完整拓樸運行範例.mrtsim.json");
+            "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
         if (!File.Exists(samplePath))
         {
             throw new InvalidOperationException("找不到完整 topology 執行驗證範例。");
@@ -123,7 +123,7 @@ internal static class TopologyTurnbackRegressionTests
         var samplePath = Path.Combine(
             FindRepositoryRoot(),
             "samples",
-            "11-小型-三站完整拓樸運行範例.mrtsim.json");
+            "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var runtime = TopologyProjectFormat.CreateRuntime(document);
         var zeroDwellPatterns = runtime.ServicePatterns

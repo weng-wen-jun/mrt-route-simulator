@@ -426,7 +426,7 @@ internal static class TopologyRegressionTests
 
     public static void Schema8TopologyBaselineSampleLoadsAndBuildsWorld()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         True(File.Exists(samplePath), "找不到 Schema 8 topology baseline 範例。 ");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         Equal(TopologyProjectFormat.CurrentSchemaVersion, document.SchemaVersion);
@@ -491,7 +491,7 @@ internal static class TopologyRegressionTests
         var samplePaths = Directory.EnumerateFiles(sampleDirectory, "*.mrtsim.json", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        Equal(15, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
+        Equal(27, samplePaths.Length, "範例數量意外變更；新增範例時請同步更新此驗證。 ");
 
         foreach (var samplePath in samplePaths)
         {
@@ -538,7 +538,7 @@ internal static class TopologyRegressionTests
                 ServiceTypes: runtime.ServiceTypes,
                 Topology: runtime.Topology).CreateWorld();
             var boundedEndSeconds = Path.GetFileName(samplePath).Equals(
-                "14-大型-二十八站完整營運範例.mrtsim.json",
+                "01-大型-二十八站完整營運範例.mrtsim.json",
                 StringComparison.OrdinalIgnoreCase)
                 ? 8000
                 : 3600;
@@ -593,7 +593,7 @@ internal static class TopologyRegressionTests
 
     public static void ShortApproachBrakesBeforeStopPoint()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "12-中型-五站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "中型/01-中型-五站完整營運範例.mrtsim.json");
         var saved = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var document = saved with { Operations = saved.Operations with { ApproachDistanceMeters = 65 } };
         var runtime = TopologyProjectFormat.CreateRuntime(document);
@@ -622,7 +622,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologySimulationWorldDoesNotConstructCompatibilityRoute()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var world = new SimulationWorld(
             new TopologySimulationDefinition(
@@ -643,7 +643,7 @@ internal static class TopologyRegressionTests
 
     public static void ComprehensiveTopologySampleExercisesAllPhysicalFacilities()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
         True(File.Exists(samplePath), "找不到完整 topology 執行驗證範例。 ");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
 
@@ -798,7 +798,7 @@ internal static class TopologyRegressionTests
 
     public static void TurnbackStopPositionUsesPhysicalOffsetAndImmediateReverse()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var world = new SimulationWorld(
@@ -826,7 +826,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologyResultsUseResolvedStopsWithoutCompatibilityRoute()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(
@@ -985,7 +985,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldTurnsBackThroughTopologyFacilityWithoutVirtualTrack()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var down = document.ServiceRoutes.Single(item => item.ServiceRouteId == "DOWN");
@@ -1086,7 +1086,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldTurnsBackAtPocketTrackWithoutVirtualLocation()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var world = new SimulationWorld(
@@ -1238,7 +1238,7 @@ internal static class TopologyRegressionTests
 
     public static void SimulationWorldPassesLocalTrainThroughPhysicalTopologyFacility()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(
@@ -1308,7 +1308,7 @@ internal static class TopologyRegressionTests
 
     public static void TopologyTurnbackPreservesVehicleAndActivatesContinuationRun()
     {
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var graph = new InfrastructureGraphV4(document.Topology);
         var dispatch = new ResolvedDispatchPlan(

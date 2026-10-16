@@ -153,7 +153,7 @@ internal static class ProjectLoadTests
 
     private static void VerifyServicePreferredPlatformNullRoundTrip(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ServiceTypeEditorViewModel")!;
         foreach (var source in document.ServiceTypes)
@@ -177,7 +177,7 @@ internal static class ProjectLoadTests
 
     private static void VerifyTopologyCollectionEditorsRoundTrip(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var assembly = typeof(MainWindow).Assembly;
         var edgeType = assembly.GetType("MrtRouteSimulator.App.TrackEdgeEditorViewModel")!;

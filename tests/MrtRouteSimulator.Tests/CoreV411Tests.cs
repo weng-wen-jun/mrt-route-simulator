@@ -32,9 +32,9 @@ internal static class CoreV411Tests
                 $"{run.ServiceRunId} 的中途站逐站停站時間必須是正數。");
         }
         var committed = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(), "samples", "15-小型-主支線逐站班表範例.mrtsim.json")));
+            FindRepositoryRoot(), "samples", "小型/12-小型-主支線逐站班表範例.mrtsim.json")));
         Equal(TopologyProjectFormat.Serialize(document), TopologyProjectFormat.Serialize(committed),
-            "sample 15 必須由 OperatingNetworkBuilder.CreateExample 重建，不可讓手寫 JSON 漂移。");
+            "小型範例 12 必須由 OperatingNetworkBuilder.CreateExample 重建，不可讓手寫 JSON 漂移。");
 
         var world = created.World;
         RunToBound(world, 2_400);
@@ -272,7 +272,7 @@ internal static class CoreV411Tests
 
     private static TopologyProjectDocument LoadTemplate()
     {
-        var path = Path.Combine(FindRepositoryRoot(), "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var path = Path.Combine(FindRepositoryRoot(), "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         return TopologyProjectFormat.Deserialize(File.ReadAllText(path));
     }
 

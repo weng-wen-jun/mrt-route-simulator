@@ -1,7 +1,7 @@
 {
   "schemaVersion": 8,
   "projectId": "SAMPLE-MAIN-BRANCH-TIMETABLE",
-  "projectName": "\u5C0F\u578B\u4E3B\u652F\u7DDA\u9010\u7AD9\u73ED\u8868\u7BC4\u4F8B",
+  "projectName": "小型主支線逐站班表範例",
   "train": {
     "maxSpeedMetersPerSecond": 22.2222222,
     "accelerationMetersPerSecondSquared": 1,

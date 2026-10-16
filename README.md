@@ -35,7 +35,7 @@ Requirements: Windows and the Microsoft .NET 10 Desktop Runtime. Building from s
 4. Select **計算並建立模擬 / 建立模擬** (Build simulation), then **播放** (Play).
 5. Inspect the result tabs and export from **列車運行圖／匯出** (Time-distance diagram / Export).
 
-As checked on 2026-10-08, the latest published package is `MRT-route-simulator-V4.0.3-windows.zip`. This checkout is V4.1.0, not yet released; build it from source for the newer UI and MCP work. For current source samples, start with [the three-station baseline](samples/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md).
+As checked on 2026-10-08, the latest published package is `MRT-route-simulator-V4.0.3-windows.zip`. This checkout is V4.1.0, not yet released; build it from source for the newer UI and MCP work. For current source samples, start with [the three-station baseline](samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md).
 
 ## Build from source
 
@@ -82,7 +82,7 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 1. 開啟 V4.1.0 桌面程式或自行建置 Release 版本。
 2. 雙擊 `MRT路線進出站時間模擬器.exe`。
 3. 第一次可直接使用六站示範資料，按「計算並建立模擬」。
-4. 從「檔案 → 讀取存檔」載入 [`samples/10-小型-三站完整拓樸基準範例.mrtsim.json`](samples/10-小型-三站完整拓樸基準範例.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇合成路線、七種站場、折返或越行情境；所有範例均為 Schema 8。
+4. 從「檔案 → 讀取存檔」載入 [`samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json`](samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇合成路線、七種站場、折返或越行情境；所有範例均為 Schema 8。
 5. 以標題列右側的播放控制播放、暫停或重設（任何分頁都可操作）；左側導覽列可切換到時刻表、區間物理、移動閉塞與列車運行圖等結果頁。
 6. Schema 8 topology 專案使用「檔案 → 存檔」保存可編輯設定，並從結果頁匯出 CSV／PNG／PDF。「檔案 → 匯出完成後固定時刻表」只保留給 legacy Schema 7 相容動態模擬；讀入的 Schema 7 專案會先轉成 Schema 8，因此轉換後此選項停用。
 
@@ -163,7 +163,7 @@ Engine 自動化與完整 WPF runner 已完成；大型 full sample 的 60× 定
 - 速度曲線以實體列車 `VehicleId` 選取完整行程，串接上下行、停站及折返車次，並標示換向位置；圖上有 km/h 數值刻度、時間刻度與圖例，線色與該列車在配線圖、運行圖上的顏色相同。
 - 尚未播放時使用同一模擬會話的計畫軌跡預覽；播放後顯示所選列車已產生的實際軌跡。速限線讀取 Engine 當時記錄的方向與軌道速限。
 - 移動閉塞仍可分上下行檢核，方向篩選同時作用於歷史配對、圖表與安全摘要；列車退出後仍可選取歷史配對，以「全部時間」查看較早資料。相鄰列車距離圖標出最低安全裕度，顏色與閉塞表狀態色點相同（需要制動為黃色）。
-- 空間參考點支援中間站、站前折返、站後折返、中央避車線折返與銜接點；中間站可分別輸入順／逆行參數，確認後立即更新路線圖及 URCS 相容設計班距／容量提示。
+- Schema 8 的「容量參考點」頁可獨立編輯中間站、站前折返、站後折返、中央避車線折返與銜接點，顯示局部安全時距、設計班距、列數與旅客容量，並隨專案保存。新設定預設手冊方向；URCS 相容模式供舊結果比對。參數為手動規劃假設，不會改變列車模擬或自動推算整線容量。中間站順／逆行參數分開，坡度正上坡、負下坡，以行駛方向為準。
 - 折返參考點的距離、道岔速度、坡度與停等時間會傳入端點處理；未續行車次完成端點停站／清車後退出並從路線圖消失。
 - 進出站時刻表、區間物理、移動閉塞、區間統計、速度曲線與運行圖均標示功能版本；運行圖同步標記營運與安全事件。
 - 月台、股道、路徑、折返設施與站場模型，以及保守的資源預約、等待及釋放事件。

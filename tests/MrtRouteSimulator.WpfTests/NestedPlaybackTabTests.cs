@@ -10,7 +10,7 @@ internal static class NestedPlaybackTabTests
 {
     public static void Run(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(

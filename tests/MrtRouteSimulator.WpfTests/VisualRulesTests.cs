@@ -1,4 +1,4 @@
-﻿using System.Reflection;
+using System.Reflection;
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -51,7 +51,7 @@ internal static class VisualRulesTests
         try
         {
             foreach (var path in paths)
-            foreach (var width in System.IO.Path.GetFileName(path).Equals("14-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal)
+            foreach (var width in System.IO.Path.GetFileName(path).Equals("01-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal)
                 ? new[] { 720, 1200, 1370, 2512 }
                 : new[] { 720, 1200 })
             foreach (var stopTime in System.IO.Path.GetFileName(path).StartsWith("11-小型-三站完整拓樸", StringComparison.Ordinal)
@@ -250,7 +250,7 @@ internal static class VisualRulesTests
         MainWindow main, MenuItem showLockedRoutes, string root)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(System.IO.Path.Combine(
-            root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(sample);
         var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
             runtime.DispatchPlan.Runs.Count, null, MovingBlockMode: sample.Simulation.MovingBlockMode,

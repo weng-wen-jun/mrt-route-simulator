@@ -7,6 +7,13 @@ public enum SpatialCapacityDirection
     Reverse
 }
 
+/// <summary>中間站容量公式的坡度方向對應；URCS 相容模式保留既有行為。</summary>
+public enum SpatialCapacityCalculationMode
+{
+    UrcsCompatible,
+    TaiwanHandbook
+}
+
 /// <summary>URCS 全域容量參數；預設值與 URCS (beta) 一致。</summary>
 public sealed record SpatialCapacityGlobalParameters(
     double InterchangeTimeSeconds = 10,
@@ -51,16 +58,21 @@ public static class SpatialCapacityAnalysis
         SpatialReferencePointDefinition point,
         SpatialCapacityGlobalParameters? global = null,
         SpatialCapacityTrainParameters? train = null,
-        SpatialCapacityDirection direction = SpatialCapacityDirection.Forward)
+        SpatialCapacityDirection direction = SpatialCapacityDirection.Forward,
+        SpatialCapacityCalculationMode mode = SpatialCapacityCalculationMode.UrcsCompatible)
     {
         ArgumentNullException.ThrowIfNull(point);
         global ??= new SpatialCapacityGlobalParameters();
         train ??= new SpatialCapacityTrainParameters();
         Validate(global, train);
+        if (!Enum.IsDefined(mode))
+        {
+            throw new SimulationValidationException(["容量計算模式不是有效的設定。"]);
+        }
 
         var safetyHeadway = point.Kind switch
         {
-            SpatialReferencePointKind.IntermediateStation => CalculateStation(point, global, train, direction),
+            SpatialReferencePointKind.IntermediateStation => CalculateStation(point, global, train, direction, mode),
             SpatialReferencePointKind.BeforeStationTurnback => CalculateFrontTurnback(point, global, train),
             SpatialReferencePointKind.AfterStationTurnback => CalculateRearTurnback(point, global, train),
             SpatialReferencePointKind.CentralSidingTurnback => CalculatePocketTurnback(point, global, train),
@@ -94,7 +106,8 @@ public static class SpatialCapacityAnalysis
         SpatialReferencePointDefinition point,
         SpatialCapacityGlobalParameters global,
         SpatialCapacityTrainParameters train,
-        SpatialCapacityDirection direction)
+        SpatialCapacityDirection direction,
+        SpatialCapacityCalculationMode mode)
     {
         var reverse = direction == SpatialCapacityDirection.Reverse;
         var gradeIn = reverse ? point.StationReverseGradeInPermille : point.StationForwardGradeInPermille;
@@ -112,8 +125,10 @@ public static class SpatialCapacityAnalysis
             : point.StationForwardLaterCruiseSpeedMetersPerSecond;
         var safetyFactor = reverse ? point.StationReverseSafetyFactor : point.StationForwardSafetyFactor;
         var distance = distanceToSignal + overlap + train.LengthMeters;
-        var acceleration = RequireEffective(train.EffectiveAcceleration(gradeIn), "中間站進站有效加速度");
-        var deceleration = RequireEffective(train.EffectiveDeceleration(gradeOut), "中間站離站有效減速度");
+        var accelerationGrade = mode == SpatialCapacityCalculationMode.TaiwanHandbook ? gradeOut : gradeIn;
+        var decelerationGrade = mode == SpatialCapacityCalculationMode.TaiwanHandbook ? gradeIn : gradeOut;
+        var acceleration = RequireEffective(train.EffectiveAcceleration(accelerationGrade), "中間站清空有效加速度");
+        var deceleration = RequireEffective(train.EffectiveDeceleration(decelerationGrade), "中間站進站有效減速度");
         var approach = Math.Sqrt(2 * distance / acceleration);
         if (Math.Sqrt(2 * acceleration * distance) > earlierSpeed)
         {
@@ -265,10 +280,12 @@ public static class SpatialCapacityAnalysis
         return value;
     }
 
-    private static void Validate(
+    public static void Validate(
         SpatialCapacityGlobalParameters global,
         SpatialCapacityTrainParameters train)
     {
+        ArgumentNullException.ThrowIfNull(global);
+        ArgumentNullException.ThrowIfNull(train);
         var errors = new List<string>();
         Range(global.InterchangeTimeSeconds, 0, 60, "號誌／列車控制轉換時間", errors);
         Range(global.ReactionTimeSeconds, 0, 10, "反應時間", errors);

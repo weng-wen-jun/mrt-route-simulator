@@ -32,7 +32,7 @@ internal static class TimeDistanceVisualTests
 
     public static void Run(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         RunIncrementalVisualChecks(samplePath);
         Console.WriteLine("PASS WPF time-distance incremental visuals");
     }

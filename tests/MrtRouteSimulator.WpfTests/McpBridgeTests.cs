@@ -25,7 +25,7 @@ internal static class McpBridgeTests
             oldRouteZoom = initial.GetProperty("routeZoom").GetDouble();
             Require(initial.GetProperty("processId").GetInt32() == Environment.ProcessId, "bridge 必須指向目前 PID。");
             Reject("status", new { workspaceRoot = Path.GetPathRoot(root)! }, "不同工作目錄必須拒絕。", includeRoot: false);
-            Call("load", new { path = "samples/10-小型-三站完整拓樸基準範例.mrtsim.json" });
+            Call("load", new { path = "samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json" });
             var before = Call("status");
             Require(before.GetProperty("simulationTimeSeconds").GetDouble() == 0, "載入須從時間 0 開始。");
             var advanced = Call("advance", new { targetSeconds = 10.05 });
@@ -95,7 +95,7 @@ internal static class McpBridgeTests
 
             // 第二段：設施與營運最完整的 28 站範例。大型路線的 PDF 匯出與完整播放會長時間占用
             // 互動桌面的 UI 執行緒，因此只驗證載入、推進、儲存、查詢、切頁與 CSV 匯出。
-            Call("load", new { path = "samples/14-大型-二十八站完整營運範例.mrtsim.json" });
+            Call("load", new { path = "samples/大型/01-大型-二十八站完整營運範例.mrtsim.json" });
             WpfTestWait.WaitForPlannedTimeline(window);
             var large = Call("status");
             Require(large.GetProperty("simulationTimeSeconds").GetDouble() == 0

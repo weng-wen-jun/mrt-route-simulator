@@ -13,7 +13,7 @@ def main():
     mcp = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mcp
     spec.loader.exec_module(mcp)
-    sample = root / "samples/15-小型-主支線逐站班表範例.mrtsim.json"
+    sample = root / "samples/小型/12-小型-主支線逐站班表範例.mrtsim.json"
     project = json.loads(sample.read_text(encoding="utf-8-sig"))
     plans = project["dispatch"]["manualTimetableRows"]
     client = mcp.JsonRpcClient(["dotnet", str(args.server_dll.resolve()), "--workspace-root", str(root)], root, 60)

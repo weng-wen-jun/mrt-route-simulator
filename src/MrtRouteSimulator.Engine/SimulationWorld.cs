@@ -53,6 +53,7 @@ public sealed partial class SimulationWorld
     private readonly IReadOnlyDictionary<string, ResolvedStop> _outboundResolvedStops;
     private readonly IReadOnlyDictionary<string, ResolvedStop> _inboundResolvedStops;
     private readonly TrackSpeedLimitService _trackSpeedLimits;
+    private readonly TrackGradientService _trackGradients;
     private readonly bool _enforceRouteResources;
     private readonly bool _topologyNativeRuntime;
     private readonly SafetyObservationRetentionPolicy _safetyObservationRetentionPolicy;
@@ -67,6 +68,38 @@ public sealed partial class SimulationWorld
     private readonly Dictionary<string, long> _nearestLeaderShadowFallbackReasons = new(StringComparer.Ordinal);
 
     private VehiclePerformance GetVehiclePerformance(MutableTrain train)
+    {
+        var performance = GetBaseVehiclePerformance(train);
+        // Legacy spatial turnbacks have their own documented grade correction.
+        // Only a physical topology cursor opts into edge-local grade physics.
+        if (!_topologyNativeRuntime || !_trackGradients.HasGradients || train.RuntimeTopologyCursor is not { } cursor)
+            return performance;
+        var gravity = _trackGradients.GetGradePermille(cursor) * TrackGradientService.AccelerationPerPermille;
+        var result = performance with
+        {
+            ServiceBrakingMetersPerSecondSquared = performance.ServiceBrakingMetersPerSecondSquared + gravity,
+            EmergencyBrakingMetersPerSecondSquared = performance.EmergencyBrakingMetersPerSecondSquared + gravity,
+            GradeAccelerationMetersPerSecondSquared = gravity
+        };
+        if (result.ServiceBrakingMetersPerSecondSquared <= 0 || result.EmergencyBrakingMetersPerSecondSquared <= 0)
+            throw new SimulationValidationException([$"列車 {train.ServiceRunId} 在 {cursor.Position.TrackEdgeId} 的坡度使有效制動不大於 0。"]);
+        return result;
+    }
+
+    private double GetEnvelopeBraking(MutableTrain train, double localBraking, bool strongest = false)
+    {
+        if (!_topologyNativeRuntime || !_trackGradients.HasGradients || train.RuntimeTopologyCursor is not { } cursor)
+            return localBraking;
+        var currentGrade = _trackGradients.GetGradePermille(cursor);
+        var bounds = _trackGradients.GetForwardGradeBounds(GetMovementNavigator(train), cursor);
+        var braking = localBraking + ((strongest ? bounds.Max : bounds.Min) - currentGrade)
+            * TrackGradientService.AccelerationPerPermille;
+        if (braking <= 0)
+            throw new SimulationValidationException([$"列車 {train.ServiceRunId} 的前方實體坡度使有效制動不大於 0。"]);
+        return braking;
+    }
+
+    private VehiclePerformance GetBaseVehiclePerformance(MutableTrain train)
     {
         if (_vehicleTypes.TryGetValue(train.VehicleTypeId, out var vehicleType))
         {
@@ -102,7 +135,10 @@ public sealed partial class SimulationWorld
         double EmergencyBrakingMetersPerSecondSquared,
         double JerkMetersPerSecondCubed,
         double TractionDecayPerSecond,
-        double CoastingDecelerationMetersPerSecondSquared);
+        double CoastingDecelerationMetersPerSecondSquared)
+    {
+        public double GradeAccelerationMetersPerSecondSquared { get; init; }
+    }
 
     /// <summary>
     /// 只作為 UI 的初始班距估計。V2 實際時刻仍由固定 tick 的 topology movement 產生；
@@ -252,6 +288,7 @@ public sealed partial class SimulationWorld
         _trackSpeedLimits = new TrackSpeedLimitService(
             _linearTopology.Infrastructure,
             null);
+        _trackGradients = new TrackGradientService(_linearTopology.Infrastructure);
         ProfileMode = profileMode;
         MovingBlockMode = movingBlockMode;
         BrakingEstimationMode = BrakingEstimationMode.Service;
@@ -343,6 +380,7 @@ public sealed partial class SimulationWorld
             topologyNativeRuntime: true,
             safetyObservationRetentionPolicy: safetyObservationRetentionPolicy)
     {
+        InitializeSignalBlocks(topology.SignalBlocks);
     }
 
     /// <summary>
@@ -534,10 +572,14 @@ public sealed partial class SimulationWorld
 
             foreach (var siding in _sidingSwitchReservations.Values.Where(item =>
                          item.VehicleId == train.VehicleId
-                         && item.RouteId.Equals(cursor.MovementPlanId, StringComparison.OrdinalIgnoreCase)))
+                         && cursor.MovementLegIndex == GetCurrentServiceRouteLegIndex(train)
+                         && item.RouteId.Equals(GetServiceRouteId(train), StringComparison.OrdinalIgnoreCase)))
             {
-                AppendForwardLockedTraversals(result, train, GetMainlineMovementNavigator(train),
-                    cursor, 0, siding.SidingTraversalIndex, siding.SidingTraversalIndex,
+                var legIndex = GetCurrentServiceRouteLegIndex(train);
+                if (siding.SidingTraversalIndex < GetServiceRouteTraversalOffset(train, cursor)) continue;
+                var traversalIndex = GetMovementTraversalIndex(train, siding.SidingTraversalIndex);
+                AppendForwardLockedTraversals(result, train, GetMovementNavigator(train),
+                    cursor, legIndex, traversalIndex, traversalIndex,
                     _resourceReservations.GetResources(siding.OwnerId), requireEdgeResource: false,
                     terminalPosition: siding.EntryStopPosition);
             }
@@ -786,6 +828,7 @@ public sealed partial class SimulationWorld
             CurrentTimeSeconds = Math.Round(CurrentTimeSeconds + FixedTimeStepSeconds, 10);
             TriggerScheduledObstacles();
             ActivateDueTrains();
+            if (_signalBlocks.Count > 0) RefreshSignalBlockStates();
             if (_performanceDiagnostics.Enabled)
             {
                 _performanceDiagnostics.RecordTick(_trains.Count(train => train.Active
@@ -833,6 +876,7 @@ public sealed partial class SimulationWorld
 
     public void Reset()
     {
+        ResetSignalBlocks();
         foreach (var reservation in _pocketServiceReservations.Values) _resourceReservations.Release(reservation.OwnerId);
         _pocketServiceReservations.Clear();
         foreach (var reservation in _sidingSwitchReservations.Values) _resourceReservations.Release(reservation.OwnerId);
@@ -1886,18 +1930,25 @@ public sealed partial class SimulationWorld
         {
             var train = _trains.First(item => item.VehicleId == reservation.VehicleId);
             var clear = train.Completed;
-            if (!clear && train.RuntimeTopologyCursor is { } cursor
-                && cursor.MovementPlanId.Equals(reservation.RouteId, StringComparison.OrdinalIgnoreCase)
+            if (!clear && train.RuntimeTopologyCursor is not null
+                && GetServiceRouteId(train).Equals(reservation.RouteId, StringComparison.OrdinalIgnoreCase)
                 && _topologyOccupancy.FootprintsByOwner.TryGetValue(train.VehicleId, out var footprint))
             {
                 var rear = footprint.Rear;
-                var rearDistance = GetMainlineMovementNavigator(train).GetDistanceAlongTraversal(rear);
-                clear = reservation.Entry
-                    ? rear.TraversalIndex > reservation.SidingTraversalIndex
-                      || rear.TraversalIndex == reservation.SidingTraversalIndex
-                      && rearDistance > TrackPosition.DefaultToleranceMeters
-                    : rear.TraversalIndex > reservation.SidingTraversalIndex
-                      && rearDistance > TrackPosition.DefaultToleranceMeters;
+                // A returned train can already approach the next switch while its
+                // rear still occupies the turnback leg. Keep service-route indices
+                // stable across the later facility-to-mainline cursor conversion.
+                if (rear.MovementLegIndex == GetCurrentServiceRouteLegIndex(train))
+                {
+                    var rearIndex = GetServiceRouteTraversalIndex(train, rear);
+                    var rearDistance = GetMovementNavigator(train).GetDistanceAlongTraversal(rear);
+                    clear = reservation.Entry
+                        ? rearIndex > reservation.SidingTraversalIndex
+                          || rearIndex == reservation.SidingTraversalIndex
+                          && rearDistance > TrackPosition.DefaultToleranceMeters
+                        : rearIndex > reservation.SidingTraversalIndex
+                          && rearDistance > TrackPosition.DefaultToleranceMeters;
+                }
             }
             if (!clear) continue;
             _resourceReservations.Release(reservation.OwnerId);
@@ -1922,17 +1973,19 @@ public sealed partial class SimulationWorld
     private BlockedSwitchRoute? TryReserveServiceSwitchAhead(
         MutableTrain train, Station nextStation, StationServiceInstruction instruction)
     {
-        if (train.RuntimeTopologyCursor is not { MovementLegIndex: 0 } cursor
+        if (train.RuntimeTopologyCursor is not { } cursor
             || train.TopologyPassingMovement is not null
-            || train.TopologyTurnbackMovement is not null
+            || train.TopologyTurnbackMovement is { IsOperating: true }
             || _pendingTopologyPassingReservations.ContainsKey(train.VehicleId)
             || FindEligibleTopologyPassing(train, nextStation, instruction) is not null)
             return null;
 
-        var navigator = GetMainlineMovementNavigator(train);
-        if (!cursor.MovementPlanId.Equals(navigator.MovementPlanId, StringComparison.OrdinalIgnoreCase))
+        var navigator = GetMovementNavigator(train);
+        var legIndex = GetCurrentServiceRouteLegIndex(train);
+        if (cursor.MovementLegIndex != legIndex
+            || !cursor.MovementPlanId.Equals(navigator.MovementPlanId, StringComparison.OrdinalIgnoreCase))
             return null;
-        var traversals = navigator.Legs[0].Traversals;
+        var traversals = navigator.Legs[legIndex].Traversals;
         for (var index = cursor.TraversalIndex; index + 1 < traversals.Count; index++)
         {
             var traversal = traversals[index];
@@ -1941,7 +1994,7 @@ public sealed partial class SimulationWorld
 
             var ownerId = $"SERVICE-SIDING:{train.VehicleId}:{switchNodeId}";
             if (_sidingSwitchReservations.ContainsKey(ownerId)) continue;
-            var target = navigator.CreateCursor(0, index, traversal.LengthMeters);
+            var target = navigator.CreateCursor(legIndex, index, traversal.LengthMeters);
             var distance = navigator.TryGetForwardDistance(cursor, target);
             if (distance is null || distance < -NumericalTolerance) continue;
             // A switch beyond the next station may belong to a different
@@ -1969,8 +2022,8 @@ public sealed partial class SimulationWorld
                     terminal = stop.Position;
             }
             _sidingSwitchReservations.Add(ownerId, new SidingSwitchReservation(
-                ownerId, train.VehicleId, navigator.MovementPlanId,
-                resourceId, index + 1, true, terminal));
+                ownerId, train.VehicleId, GetServiceRouteId(train),
+                resourceId, index + 1 + GetServiceRouteTraversalOffset(train, cursor), true, terminal));
             train.WaitingResourceEventEmitted = false;
             AddEvent(SimulationEventType.RouteReserved, train, null,
                 $"{train.ServiceRunId} 已鎖定道岔 {switchNodeId}。", train.Position,
@@ -1984,7 +2037,7 @@ public sealed partial class SimulationWorld
     {
         var performance = GetVehiclePerformance(train);
         var stoppingDistance = BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
-            train.Speed, train.Acceleration, performance.ServiceBrakingMetersPerSecondSquared,
+            train.Speed, train.Acceleration, GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared),
             performance.JerkMetersPerSecondCubed, FixedTimeStepSeconds,
             ProfileMode == OperationProfileMode.RealisticOperations).DistanceMeters;
         return Math.Max(OperationalParameters.ApproachDistanceMeters,
@@ -2731,13 +2784,14 @@ public sealed partial class SimulationWorld
         var distanceToStation = GetDistanceToResolvedStop(train, nextStation, resolvedStop);
         if (isScheduledStop
             && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
-            && distanceToStation <= StationStopSnapToleranceMeters)
+            && distanceToStation <= StationStopSnapToleranceMeters
+            && SignalAllowsMovement(train, distanceToStation))
         {
             ArriveAtStation(train, nextStation, resolvedStop);
             return;
         }
 
-        var effectiveServiceBraking = performance.ServiceBrakingMetersPerSecondSquared;
+        var effectiveServiceBraking = GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared);
         var permitted = GetTrackPermittedSpeed(train, performance, effectiveServiceBraking);
 
         if (isScheduledStop)
@@ -2858,6 +2912,7 @@ public sealed partial class SimulationWorld
             train.StationBrakingActive = false;
         }
 
+        permitted = ApplySignalBlockSpeedLimit(train, permitted);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         // 預視此 Tick 原本的加速度指令；一旦進入停站全煞，保持煞車，
         // 避免速度目標暫時放寬時重新牽引而錯過停車點。
@@ -2871,7 +2926,7 @@ public sealed partial class SimulationWorld
                 stationStopControl!.PredictedStoppingDistanceMeters)))
         {
             train.StationBrakingActive = true;
-            desiredAcceleration = -effectiveServiceBraking;
+            desiredAcceleration = -performance.ServiceBrakingMetersPerSecondSquared;
         }
         else if (!isScheduledStop)
         {
@@ -2882,7 +2937,7 @@ public sealed partial class SimulationWorld
         if (!enteredStationOvertake && controlLimits.TryGetValue(train.VehicleId, out var protectionLimit)
             && train.Speed > protectionLimit + 0.03)
         {
-            desiredAcceleration = -effectiveServiceBraking;
+            desiredAcceleration = -performance.ServiceBrakingMetersPerSecondSquared;
         }
 
         if (ProfileMode == OperationProfileMode.RealisticOperations)
@@ -2903,6 +2958,8 @@ public sealed partial class SimulationWorld
         var hardCurrentLimit = GetTrackCurrentLimit(train, performance);
         newSpeed = Math.Min(newSpeed, hardCurrentLimit + 0.02);
         var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
+
+        if (TryApplySignalMovementAuthority(train, traveled)) return;
 
         if (TryCalculateMovementAuthority(
                 train,
@@ -2960,7 +3017,8 @@ public sealed partial class SimulationWorld
         var remainingAfterMove = distanceToStation - traveled;
         if (isScheduledStop
             && newSpeed <= ArrivalSpeedToleranceMetersPerSecond
-            && remainingAfterMove <= StationStopSnapToleranceMeters)
+            && remainingAfterMove <= StationStopSnapToleranceMeters
+            && SignalAllowsMovement(train, distanceToStation))
         {
             ArriveAtStation(train, nextStation, resolvedStop);
             return;
@@ -3125,7 +3183,13 @@ public sealed partial class SimulationWorld
             return -performance.ServiceBrakingMetersPerSecondSquared;
         }
 
-        if (speedError <= 0.12)
+        // A precision-approach target can be below the normal traction deadband just
+        // outside the snap range. Permit a stopped train to creep toward the stop;
+        // the final permitted speed still includes moving-block/resource limits.
+        var needsPrecisionRestart = train.Constraints.HasFlag(OperationalConstraint.StationStop)
+            && train.Speed <= ArrivalSpeedToleranceMetersPerSecond
+            && speedError > NumericalTolerance;
+        if (speedError <= 0.12 && !needsPrecisionRestart)
         {
             return 0;
         }
@@ -3134,16 +3198,16 @@ public sealed partial class SimulationWorld
         if ((_vehicleTypes.Count == 0 || performance.CoastingDecelerationMetersPerSecondSquared > 0)
             && train.Speed >= coastingThreshold)
         {
-            return _vehicleTypes.Count == 0
-                ? 0
-                : -performance.CoastingDecelerationMetersPerSecondSquared;
+            return (_vehicleTypes.Count == 0 ? 0 : -performance.CoastingDecelerationMetersPerSecondSquared)
+                - performance.GradeAccelerationMetersPerSecondSquared;
         }
 
         var speedRatio = performance.MaxSpeedMetersPerSecond <= 0
             ? 1
             : Math.Clamp(train.Speed / performance.MaxSpeedMetersPerSecond, 0, 1);
         var tractionFactor = 1 - performance.TractionDecayPerSecond * speedRatio;
-        return performance.AccelerationMetersPerSecondSquared * Math.Max(0.1, tractionFactor);
+        return performance.AccelerationMetersPerSecondSquared * Math.Max(0.1, tractionFactor)
+            - performance.GradeAccelerationMetersPerSecondSquared;
     }
 
     private OperationalPhase ClassifyPhase(
@@ -3159,7 +3223,8 @@ public sealed partial class SimulationWorld
 
         var performance = GetVehiclePerformance(train);
         if (performance.CoastingDecelerationMetersPerSecondSquared > 0
-            && Math.Abs(desiredAcceleration + performance.CoastingDecelerationMetersPerSecondSquared) <= 0.02)
+            && Math.Abs(desiredAcceleration + performance.CoastingDecelerationMetersPerSecondSquared
+                + performance.GradeAccelerationMetersPerSecondSquared) <= 0.02)
         {
             return OperationalPhase.Coasting;
         }
@@ -3999,7 +4064,8 @@ public sealed partial class SimulationWorld
         var distanceToTarget = navigator.TryGetForwardDistance(cursor, target)
             ?? throw new SimulationValidationException(["topology 折返 movement target 位於列車 cursor 後方。"]);
         if (train.Speed <= ArrivalSpeedToleranceMetersPerSecond
-            && distanceToTarget <= StationStopSnapToleranceMeters)
+            && distanceToTarget <= StationStopSnapToleranceMeters
+            && SignalAllowsMovement(train, distanceToTarget))
         {
             CompleteTopologyTurnbackLeg(train, movement, target);
             return;
@@ -4015,15 +4081,16 @@ public sealed partial class SimulationWorld
         var performance = GetVehiclePerformance(train);
         var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
             navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
-            performance.ServiceBrakingMetersPerSecondSquared,
+            GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared),
             performance.JerkMetersPerSecondCubed, train.Speed);
+        permitted = ApplySignalBlockSpeedLimit(train, permitted);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         if (movement.BrakingActive
             || ShouldBeginStationBraking(
                 train,
                 distanceToTarget,
                 desiredAcceleration,
-                performance.ServiceBrakingMetersPerSecondSquared))
+                GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared)))
         {
             movement.BrakingActive = true;
             desiredAcceleration = -performance.ServiceBrakingMetersPerSecondSquared;
@@ -4040,8 +4107,10 @@ public sealed partial class SimulationWorld
             Math.Max(0, train.Speed + train.Acceleration * FixedTimeStepSeconds),
             permitted + 0.02);
         var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
+        if (TryApplySignalMovementAuthority(train, traveled)) return;
         if (newSpeed <= ArrivalSpeedToleranceMetersPerSecond
-            && distanceToTarget - traveled <= StationStopSnapToleranceMeters)
+            && distanceToTarget - traveled <= StationStopSnapToleranceMeters
+            && SignalAllowsMovement(train, distanceToTarget))
         {
             CompleteTopologyTurnbackLeg(train, movement, target);
             return;
@@ -4515,8 +4584,9 @@ public sealed partial class SimulationWorld
         var performance = GetVehiclePerformance(train);
         var permitted = _trackSpeedLimits.GetPermittedSpeedMetersPerSecond(
             navigator, cursor, target, performance.MaxSpeedMetersPerSecond,
-            performance.ServiceBrakingMetersPerSecondSquared,
+            GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared),
             performance.JerkMetersPerSecondCubed, train.Speed);
+        permitted = ApplySignalBlockSpeedLimit(train, permitted);
         var desiredAcceleration = CalculateDesiredAcceleration(train, permitted);
         train.Acceleration = ProfileMode == OperationProfileMode.RealisticOperations
             ? BrakingEnvelopeCalculator.MoveToward(
@@ -4529,6 +4599,7 @@ public sealed partial class SimulationWorld
             Math.Max(0, train.Speed + train.Acceleration * FixedTimeStepSeconds),
             permitted + 0.02);
         var traveled = Math.Max(0, (previousSpeed + newSpeed) * 0.5 * FixedTimeStepSeconds);
+        if (TryApplySignalMovementAuthority(train, traveled)) return;
         if (traveled < distanceToTarget - NumericalTolerance)
         {
             SetTrainRuntimeTopologyCursor(train, navigator, navigator.Advance(cursor, traveled));
@@ -5519,7 +5590,7 @@ public sealed partial class SimulationWorld
             followerAcceleration,
             followerPerformance.ServiceBrakingMetersPerSecondSquared);
         var leaderBraking = leaderSpeed * leaderSpeed
-            / (2 * leaderPerformance.EmergencyBrakingMetersPerSecondSquared);
+            / (2 * GetEnvelopeBraking(leader, leaderPerformance.EmergencyBrakingMetersPerSecondSquared, strongest: true));
         var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
             + OperationalParameters.SafetyMarginMeters;
         return Math.Max(
@@ -5548,7 +5619,7 @@ public sealed partial class SimulationWorld
         var fixedAllowance = 2 * OperationalParameters.PositioningErrorMeters
             + OperationalParameters.SafetyMarginMeters;
         var leaderStopDistance = leader.Speed * leader.Speed
-            / (2 * leaderPerformance.EmergencyBrakingMetersPerSecondSquared);
+            / (2 * GetEnvelopeBraking(leader, leaderPerformance.EmergencyBrakingMetersPerSecondSquared, strongest: true));
         var controlReserve = Math.Max(
             1,
             follower.Speed * MovingBlockControlLookAheadSeconds);
@@ -5600,7 +5671,7 @@ public sealed partial class SimulationWorld
         BrakingEnvelopeCalculator.CalculateStoppingEnvelope(
             speed,
             acceleration,
-            braking,
+            GetEnvelopeBraking(train, braking),
             GetVehiclePerformance(train).JerkMetersPerSecondCubed,
             FixedTimeStepSeconds,
             ProfileMode == OperationProfileMode.RealisticOperations).DistanceMeters;
@@ -5805,13 +5876,31 @@ public sealed partial class SimulationWorld
         return Math.Max(0, ForwardDistance(train.Direction, train.Position, obstacleBoundary));
     }
 
+    private bool SignalAllowsMovement(MutableTrain train, double distance) =>
+        GetSignalBlockMovementAuthority(train) is not { } authority || distance <= authority + NumericalTolerance;
+
+    private bool TryApplySignalMovementAuthority(MutableTrain train, double proposedTravel)
+    {
+        if (GetSignalBlockMovementAuthority(train) is not { } authority
+            || proposedTravel <= authority + NumericalTolerance) return false;
+        AdvanceTrainAlongTraversal(train, Math.Max(0, authority));
+        train.Speed = 0;
+        train.Acceleration = 0;
+        train.Phase = OperationalPhase.Braking;
+        train.Constraints |= OperationalConstraint.RouteResource;
+        AddEvent(SimulationEventType.SignalAuthorityViolation, train, null,
+            "號誌停止界線最終防護介入；本 tick 的預定移動超過有效行車授權。", train.Position, 0);
+        return true;
+    }
+
     private double CalculateStopCurveSpeed(MutableTrain train, double distanceMeters)
     {
         var performance = GetVehiclePerformance(train);
-        var jerkAllowance = train.Speed * performance.ServiceBrakingMetersPerSecondSquared
+        var braking = GetEnvelopeBraking(train, performance.ServiceBrakingMetersPerSecondSquared);
+        var jerkAllowance = train.Speed * braking
             / performance.JerkMetersPerSecondCubed;
         var usable = Math.Max(0, distanceMeters - jerkAllowance - OperationalParameters.SafetyMarginMeters);
-        return Math.Sqrt(2 * performance.ServiceBrakingMetersPerSecondSquared * usable);
+        return Math.Sqrt(2 * braking * usable);
     }
 
     private double MoveAccelerationTowardZero(MutableTrain train, double acceleration)

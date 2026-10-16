@@ -11,7 +11,7 @@ internal static class TopologyWorkspaceRoundTripTests
     public static void Run(string root)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var assembly = typeof(MainWindow).Assembly;
         var editorType = assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
         var pageType = assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;

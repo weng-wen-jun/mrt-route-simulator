@@ -433,6 +433,76 @@
                         </app:ResultPage>
                     </TabItem>
 
+                    <TabItem x:Name="SpatialCapacityTabItem" Header="容量參考點" app:ShellNav.ShortLabel="理論" app:ShellNav.Icon="&#xE8A9;">
+                        <app:ResultPage Title="容量參考點">
+                            <app:ResultPage.Description>
+                                <TextBlock Text="依手動設定的五類容量參考點，計算安全時距、設計班距與容量。"
+                                           Style="{StaticResource ResultPageDescription}" />
+                            </app:ResultPage.Description>
+                            <app:ResultPage.Summary>
+                                <StackPanel>
+                                    <TextBlock x:Name="SpatialCapacitySummaryText" Text="尚未配置容量參考點。"
+                                               Style="{StaticResource ResultPageSummary}" />
+                                    <TextBlock x:Name="SpatialCapacityBottleneckSummaryText" Visibility="Collapsed"
+                                               TextWrapping="Wrap" Margin="0,4,0,0"
+                                               Style="{StaticResource ResultPageSummary}" />
+                                </StackPanel>
+                            </app:ResultPage.Summary>
+                            <app:ResultPage.Actions>
+                                <WrapPanel Orientation="Horizontal">
+                                    <Button x:Name="CapacityResultsButton" Content="容量圖表與比較…" Margin="0,0,8,0" Style="{StaticResource SecondaryButton}" Click="ShowCapacityResults_Click" AutomationProperties.Name="容量圖表與實測比較" />
+                                    <Button x:Name="EditSpatialCapacityButton" Content="編輯容量設定…"
+                                            Style="{StaticResource SecondaryButton}" Click="EditSpatialCapacity_Click"
+                                            AutomationProperties.Name="編輯容量設定" />
+                                    <Button x:Name="ApplyCapacityRuntimeButton" Content="套用中間站參數至運行" Margin="8,0,0,0" Style="{StaticResource SecondaryButton}" Click="ApplyCapacityRuntime_Click" ToolTip="將中間站容量設定轉成實體坡度、速限、方向停站、車型煞車及閉塞保護。入口與坡度範圍採明列示範假設，既有拓樸幾何不搬動。" AutomationProperties.Name="套用中間站容量參數至運行" />
+                                    <Button x:Name="EditSpatialCapacitySensitivityButton" Content="敏感度分析…"
+                                            Margin="8,0,0,0" Style="{StaticResource SecondaryButton}"
+                                            Click="EditSpatialCapacitySensitivity_Click"
+                                            AutomationProperties.Name="容量敏感度分析" />
+                                </WrapPanel>
+                            </app:ResultPage.Actions>
+                            <app:ResultPage.Footnote>
+                                <TextBlock Text="容量參考點預設僅作理論分析；按「套用中間站參數至運行」可明確建立實體坡度、速限、車型煞車與閉塞保護，再由同一模擬引擎運行。觀測通過量不代表整線最大容量。坡度沿各自行駛方向解讀：正值為上坡、負值為下坡。"
+                                           TextWrapping="Wrap" Style="{StaticResource ResultPageFootnote}" />
+                            </app:ResultPage.Footnote>
+                            <Grid><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                            <Border Style="{StaticResource ResultCard}">
+                                <DataGrid x:Name="SpatialCapacityDataGrid" ItemsSource="{Binding SpatialCapacityRows}"
+                                          IsReadOnly="True" RowHeaderWidth="0" BorderThickness="0"
+                                          app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="參考點" Binding="{Binding ReferencePoint}" Width="*" MinWidth="150" />
+                                        <DataGridTextColumn Header="型式" Binding="{Binding Kind}" Width="125" />
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="70" />
+                                        <DataGridTextColumn Header="安全時距 Ts (s)" Binding="{Binding SafetyHeadway}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="設計班距 h (s)" Binding="{Binding DesignHeadway}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="列／h" Binding="{Binding LineCapacity}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="設計乘位／h" Binding="{Binding DesignPassengerCapacity}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="可達成人／h" Binding="{Binding AchievablePassengerCapacity}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="模式" Binding="{Binding Mode}" Width="110" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                            <Border Grid.Row="1" x:Name="SpatialCapacityBottleneckCard" Style="{StaticResource ResultCard}"
+                                    Visibility="Collapsed" Margin="0,10,0,0">
+                                <DataGrid x:Name="SpatialCapacityBottleneckDataGrid" ItemsSource="{Binding SpatialCapacityBottleneckRows}"
+                                          IsReadOnly="True" RowHeaderWidth="0" BorderThickness="0"
+                                          app:ResultTable.Enabled="True">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="方向" Binding="{Binding Direction}" Width="70" />
+                                        <DataGridTextColumn Header="參考點 ID" Binding="{Binding ReferencePoint}" Width="150" />
+                                        <DataGridTextColumn Header="名稱" Binding="{Binding Name}" Width="*" MinWidth="150" />
+                                        <DataGridTextColumn Header="安全時距 Ts (s)" Binding="{Binding SafetyHeadway}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="瓶頸班距 h (s)" Binding="{Binding DesignHeadway}" Width="110" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="列／h" Binding="{Binding LineCapacity}" Width="78" app:ResultTable.Kind="Numeric" />
+                                        <DataGridTextColumn Header="模式" Binding="{Binding Mode}" Width="110" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </Border>
+                            </Grid>
+                        </app:ResultPage>
+                    </TabItem>
+
                     <TabItem x:Name="SafetyTabItem" Header="移動閉塞與煞車" app:ShellNav.ShortLabel="閉塞" app:ShellNav.Icon="&#xEA18;">
                         <app:ResultPage Title="移動閉塞與煞車">
                             <app:ResultPage.Description>

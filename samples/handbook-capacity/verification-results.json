@@ -1,0 +1,918 @@
+﻿[
+  {
+    "file": "01-\u7BC4\u4F8B\u4E00-\u6700\u7E41\u5FD9\u8ECA\u7AD9",
+    "pages": "6-1\uFF5E6-3\uFF0FPDF593\uFF5E595",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "BUSY",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 97.19999999999999,
+          "designHeadwaySeconds": 126.35999999999999,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 48720,
+          "achievablePassengerCapacityPerHour": 38976
+        },
+        "published": {
+          "id": "BUSY",
+          "direction": "Forward",
+          "headway": 126,
+          "line": 28,
+          "design": 48720,
+          "achievable": 38976
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "BUSY",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 97.19999999999999,
+          "designHeadwaySeconds": 126.35999999999999,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 48720,
+          "achievablePassengerCapacityPerHour": 38976
+        },
+        "published": null,
+        "matches": null
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "02-\u7BC4\u4F8B\u4E8C-\u7AD9\u524D\u4EA4\u66FF\u6298\u8FD4",
+    "pages": "6-4\uFF5E6-7\uFF0FPDF596\uFF5E599",
+    "note": "\u672C\u4F8B\u5168\u57DF\u3001\u5217\u8ECA\u3001\u7A7A\u9593\u53C3\u6578\u5747\u6709\u5716\u8868\u660E\u5217\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "TURNBACK",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 134.41225855041645,
+          "designHeadwaySeconds": 174.7359361155414,
+          "lineCapacityPerHour": 20,
+          "designPassengerCapacityPerHour": 33000,
+          "achievablePassengerCapacityPerHour": 26400
+        },
+        "published": {
+          "id": "TURNBACK",
+          "direction": "Forward",
+          "headway": 175,
+          "line": 20,
+          "design": 33000,
+          "achievable": 26400
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "03-\u7BC4\u4F8B\u4E09-S13\u96D9\u65B9\u5411",
+    "pages": "6-7\uFF5E6-12\uFF0FPDF599\uFF5E604",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S13",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 100.46296296296296,
+          "designHeadwaySeconds": 130.60185185185185,
+          "lineCapacityPerHour": 27,
+          "designPassengerCapacityPerHour": 45900,
+          "achievablePassengerCapacityPerHour": 36720
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Forward",
+          "headway": 131,
+          "line": 27,
+          "design": 45900,
+          "achievable": 36720
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S13",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 109.89882154882156,
+          "designHeadwaySeconds": 142.86846801346803,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 42500,
+          "achievablePassengerCapacityPerHour": 34000
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Reverse",
+          "headway": 143,
+          "line": 25,
+          "design": 42500,
+          "achievable": 34000
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "04-\u7BC4\u4F8B\u56DB-\u57166-19\u505C\u7AD940\u79D2",
+    "pages": "6-12\uFF5E6-13\uFF0FPDF604\uFF5E605",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u57166-19\u660E\u5217\u505C\u7AD940\u79D2\uFF0C\u627F\u4E0A\u984C\u5247\u662F45\u79D2\uFF1B\u4FDD\u7559\u539F\u5716\u6578\u503C\uFF0C\u4E0D\u70BA\u5C0D\u4E0A\u767C\u5E03\u7D50\u679C\u6539\u5BEB\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S13",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 74.25976101215254,
+          "designHeadwaySeconds": 96.5376893157983,
+          "lineCapacityPerHour": 37,
+          "designPassengerCapacityPerHour": 62900,
+          "achievablePassengerCapacityPerHour": 50320
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Forward",
+          "headway": null,
+          "line": 34,
+          "design": null,
+          "achievable": null
+        },
+        "matches": false
+      },
+      {
+        "referencePointId": "S13",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 81.98619528619528,
+          "designHeadwaySeconds": 106.58205387205388,
+          "lineCapacityPerHour": 33,
+          "designPassengerCapacityPerHour": 56100,
+          "achievablePassengerCapacityPerHour": 44880
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Reverse",
+          "headway": null,
+          "line": 31,
+          "design": null,
+          "achievable": null
+        },
+        "matches": false
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "04b-\u7BC4\u4F8B\u56DB-\u627F\u4E0A\u984C\u505C\u7AD945\u79D2",
+    "pages": "6-12\uFF5E6-13\uFF0FPDF604\uFF5E605",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u6BD4\u8F03\u5206\u652F\uFF1A\u6CBF\u7528\u4F8B\u4E0945\u79D2\uFF0C\u8207\u57166-19\u768440\u79D2\u4E0D\u540C\uFF1B\u4E0D\u662F\u539F\u5716\u8F38\u5165\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S13",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 79.25976101215254,
+          "designHeadwaySeconds": 103.0376893157983,
+          "lineCapacityPerHour": 34,
+          "designPassengerCapacityPerHour": 57800,
+          "achievablePassengerCapacityPerHour": 46240
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Forward",
+          "headway": null,
+          "line": 34,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S13",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 86.98619528619528,
+          "designHeadwaySeconds": 113.08205387205388,
+          "lineCapacityPerHour": 31,
+          "designPassengerCapacityPerHour": 52700,
+          "achievablePassengerCapacityPerHour": 42160
+        },
+        "published": {
+          "id": "S13",
+          "direction": "Reverse",
+          "headway": null,
+          "line": 31,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "05-\u7BC4\u4F8B\u4E94-\u81E8\u6642\u6298\u8FD4\u53C3\u8003\u9EDE",
+    "pages": "6-14\uFF5E6-15\uFF0FPDF606\uFF5E607",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u5217\u8ECA\u672A\u660E\u5217\uFF0C\u88DC\u5145\u63A1\u672C\u6A5FURCS\u9810\u8A2D141m\u3001\u52A0\u6E1B\u901F\u5EA61\u3001\u715E\u8ECA0.75\u3001352\u5EA7\u3001264m\u00B2\u3001\u5BC6\u5EA66\u30021.8km\u662F\u8DEF\u7DDA\u793A\u610F\uFF0C\u672A\u586B\u5165\u53C3\u8003\u9EDE30m\u8DDD\u96E2\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "TEMP",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 196.04148148148147,
+          "designHeadwaySeconds": 254.85392592592592,
+          "lineCapacityPerHour": 14,
+          "designPassengerCapacityPerHour": 27104,
+          "achievablePassengerCapacityPerHour": 21683
+        },
+        "published": {
+          "id": "TEMP",
+          "direction": "Forward",
+          "headway": null,
+          "line": 14,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "06-\u7BC4\u4F8B\u516D-\u929C\u63A5\u9EDE\u654F\u611F\u5EA6",
+    "pages": "6-15\uFF5E6-17\uFF0FPDF607\uFF5E609",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u5217\u8ECA\u672A\u660E\u5217\uFF0C\u88DC\u5145\u63A1\u672C\u6A5FURCS\u9810\u8A2D\uFF1B\u624B\u518A\u7AEF\u9EDE\u53EA\u6709\u7D0490\uFF0F\u7D0430\u5217\uFF0C\u4E0D\u80FD\u4F5C\u7CBE\u78BA\u6574\u6578golden\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "JUNCTION",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 61.94376068376069,
+          "designHeadwaySeconds": 80.52688888888889,
+          "lineCapacityPerHour": 44,
+          "designPassengerCapacityPerHour": 85184,
+          "achievablePassengerCapacityPerHour": 68147
+        },
+        "published": null,
+        "matches": null
+      }
+    ],
+    "bottlenecks": []
+  },
+  {
+    "file": "07-\u7BC4\u4F8B\u4E03-\u56DB\u9EDE\u74F6\u9838",
+    "pages": "6-17\uFF5E6-21\uFF0FPDF609\uFF5E613",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u56DB\u9EDE\u660E\u78BA\u540C\u5C6C\u624B\u518AS1\u81F3S14\u5BB9\u91CF\u60C5\u5883\uFF1B\u6B64\u8655\u4E0D\u662F\u5B8C\u657414\u7AD9\u8DEF\u7DB2\u5FA9\u539F\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S1",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 103.12713675213675,
+          "designHeadwaySeconds": 134.06527777777777,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": {
+          "id": "S1",
+          "direction": "Forward",
+          "headway": null,
+          "line": 26,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 105.6680107857323,
+          "designHeadwaySeconds": 137.368414021452,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": {
+          "id": "S7",
+          "direction": "Forward",
+          "headway": null,
+          "line": 25,
+          "design": null,
+          "achievable": null
+        },
+        "matches": false
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 90.21548413067401,
+          "designHeadwaySeconds": 117.28012936987622,
+          "lineCapacityPerHour": 30,
+          "designPassengerCapacityPerHour": 54000,
+          "achievablePassengerCapacityPerHour": 43200
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 95.52839738349495,
+          "designHeadwaySeconds": 124.18691659854343,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 50400,
+          "achievablePassengerCapacityPerHour": 40320
+        },
+        "published": {
+          "id": "S10",
+          "direction": "Forward",
+          "headway": null,
+          "line": 27,
+          "design": null,
+          "achievable": null
+        },
+        "matches": false
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 107.42181309223761,
+          "designHeadwaySeconds": 139.6483570199089,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S14",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        },
+        "published": {
+          "id": "S14",
+          "direction": "Forward",
+          "headway": null,
+          "line": 13,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": [
+      {
+        "direction": "Forward",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        }
+      },
+      {
+        "direction": "Reverse",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        }
+      }
+    ]
+  },
+  {
+    "file": "07b-\u7BC4\u4F8B\u4E03-URCS\u76F8\u5BB9\u5C0D\u7167",
+    "pages": "6-17\uFF5E6-21\uFF0FPDF609\uFF5E613",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u4FDD\u7559\u6B77\u53F2\u76F8\u5BB9\u6A21\u5F0F\uFF0C\u4EE5\u8FA8\u8A8D\u5761\u5EA6\u6A21\u5F0F\u9020\u6210\u7684\u5DEE\u7570\u3002",
+    "mode": "UrcsCompatible",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S1",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 103.12713675213675,
+          "designHeadwaySeconds": 134.06527777777777,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": {
+          "id": "S1",
+          "direction": "Forward",
+          "headway": null,
+          "line": 26,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 108.32844714582379,
+          "designHeadwaySeconds": 140.82698128957094,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        },
+        "published": {
+          "id": "S7",
+          "direction": "Forward",
+          "headway": null,
+          "line": 25,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 92.34952599256907,
+          "designHeadwaySeconds": 120.0543837903398,
+          "lineCapacityPerHour": 29,
+          "designPassengerCapacityPerHour": 52200,
+          "achievablePassengerCapacityPerHour": 41760
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 100.7864988247251,
+          "designHeadwaySeconds": 131.02244847214263,
+          "lineCapacityPerHour": 27,
+          "designPassengerCapacityPerHour": 48600,
+          "achievablePassengerCapacityPerHour": 38880
+        },
+        "published": {
+          "id": "S10",
+          "direction": "Forward",
+          "headway": null,
+          "line": 27,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 114.40459305940158,
+          "designHeadwaySeconds": 148.72597097722206,
+          "lineCapacityPerHour": 24,
+          "designPassengerCapacityPerHour": 43200,
+          "achievablePassengerCapacityPerHour": 34560
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S14",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        },
+        "published": {
+          "id": "S14",
+          "direction": "Forward",
+          "headway": null,
+          "line": 13,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": [
+      {
+        "direction": "Forward",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        }
+      },
+      {
+        "direction": "Reverse",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 201.4943978657213,
+          "designHeadwaySeconds": 261.9427172254377,
+          "lineCapacityPerHour": 13,
+          "designPassengerCapacityPerHour": 23400,
+          "achievablePassengerCapacityPerHour": 18720
+        }
+      }
+    ]
+  },
+  {
+    "file": "08-\u7BC4\u4F8B\u516B-\u96D9\u5C3E\u8ECC\u6539\u5584",
+    "pages": "6-21\uFF5E6-23\uFF0FPDF613\uFF5E615",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002S14\u5C40\u90E8\u5BB9\u91CF\u6539\u5584\u4E0D\u7B49\u65BC\u6574\u500B\u56DB\u9EDE\u60C5\u5883\u63D0\u5347\u70BA27\u5217\uFF1B\u4ECD\u9700\u6BD4\u8F03\u5176\u5B83\u74F6\u9838\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S1",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 103.12713675213675,
+          "designHeadwaySeconds": 134.06527777777777,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 105.6680107857323,
+          "designHeadwaySeconds": 137.368414021452,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 90.21548413067401,
+          "designHeadwaySeconds": 117.28012936987622,
+          "lineCapacityPerHour": 30,
+          "designPassengerCapacityPerHour": 54000,
+          "achievablePassengerCapacityPerHour": 43200
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 95.52839738349495,
+          "designHeadwaySeconds": 124.18691659854343,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 50400,
+          "achievablePassengerCapacityPerHour": 40320
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 107.42181309223761,
+          "designHeadwaySeconds": 139.6483570199089,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S14",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 100.74719893286066,
+          "designHeadwaySeconds": 130.97135861271886,
+          "lineCapacityPerHour": 27,
+          "designPassengerCapacityPerHour": 48600,
+          "achievablePassengerCapacityPerHour": 38880
+        },
+        "published": {
+          "id": "S14",
+          "direction": "Forward",
+          "headway": null,
+          "line": 27,
+          "design": null,
+          "achievable": null
+        },
+        "matches": true
+      }
+    ],
+    "bottlenecks": [
+      {
+        "direction": "Forward",
+        "referencePointId": "S7",
+        "name": "S7 \u4E2D\u9593\u7AD9",
+        "result": {
+          "safetyHeadwaySeconds": 105.6680107857323,
+          "designHeadwaySeconds": 137.368414021452,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        }
+      },
+      {
+        "direction": "Reverse",
+        "referencePointId": "S10",
+        "name": "S10 \u4E2D\u9593\u7AD9",
+        "result": {
+          "safetyHeadwaySeconds": 107.42181309223761,
+          "designHeadwaySeconds": 139.6483570199089,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        }
+      }
+    ]
+  },
+  {
+    "file": "08b-\u7BC4\u4F8B\u516B-\u5C3E\u8ECC\u505C\u7B4935\u79D2",
+    "pages": "6-22\uFF0FPDF614",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u624B\u518A\u7D66\u5B9A35\u79D2\u4EE5\u5167\u53EF\u6EFF\u8DB3150\u79D2\uFF1B\u6B64\u6A94\u793A\u7BC435\u79D2\u7684\u81E8\u754C\u9644\u8FD1\u7D50\u679C\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S1",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 103.12713675213675,
+          "designHeadwaySeconds": 134.06527777777777,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 105.6680107857323,
+          "designHeadwaySeconds": 137.368414021452,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 90.21548413067401,
+          "designHeadwaySeconds": 117.28012936987622,
+          "lineCapacityPerHour": 30,
+          "designPassengerCapacityPerHour": 54000,
+          "achievablePassengerCapacityPerHour": 43200
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 95.52839738349495,
+          "designHeadwaySeconds": 124.18691659854343,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 50400,
+          "achievablePassengerCapacityPerHour": 40320
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 107.42181309223761,
+          "designHeadwaySeconds": 139.6483570199089,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S14",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 116.49439786572131,
+          "designHeadwaySeconds": 151.44271722543772,
+          "lineCapacityPerHour": 23,
+          "designPassengerCapacityPerHour": 41400,
+          "achievablePassengerCapacityPerHour": 33120
+        },
+        "published": null,
+        "matches": null
+      }
+    ],
+    "bottlenecks": [
+      {
+        "direction": "Forward",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 116.49439786572131,
+          "designHeadwaySeconds": 151.44271722543772,
+          "lineCapacityPerHour": 23,
+          "designPassengerCapacityPerHour": 41400,
+          "achievablePassengerCapacityPerHour": 33120
+        }
+      },
+      {
+        "direction": "Reverse",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 116.49439786572131,
+          "designHeadwaySeconds": 151.44271722543772,
+          "lineCapacityPerHour": 23,
+          "designPassengerCapacityPerHour": 41400,
+          "achievablePassengerCapacityPerHour": 33120
+        }
+      }
+    ]
+  },
+  {
+    "file": "08c-\u7BC4\u4F8B\u516B-\u5C3E\u8ECC\u505C\u7B4933\u79D2",
+    "pages": "6-22\uFF0FPDF614",
+    "note": "\u5168\u57DF\u672A\u5728\u8A72\u4F8B\u660E\u5217\uFF1A\u88DC\u5145\u63A1\u806F\u939610\u79D2\u3001\u53CD\u61C91\u79D2\u3001PHF0.8\u3001\u9918\u88D50.3\uFF1B\u4E0D\u662F\u7531\u624B\u518A\u78BA\u8A8D\u7684\u8F38\u5165\u3002\u88DC\u5145\u9A57\u8B49\u5206\u652F\uFF1A\u5728\u672C\u6A94\u660E\u5217\u7684\u5168\u57DF\u5047\u8A2D\u4E0B\uFF0C33\u79D2\u53EF\u6EFF\u8DB3150\u79D2\u73ED\u8DDD\uFF1B\u4E0D\u662F\u624B\u518A\u539F\u5716\u7684\u8F38\u5165\u3002",
+    "mode": "TaiwanHandbook",
+    "carrier": "\u5C08\u6848\u7DAD\u8B77\u7BC4\u4F8B01\u7684\u4E09\u7AD9\u793A\u610F\u8F09\u9AD4\uFF1B\u975E\u624B\u518A\u5B8C\u6574\u5BE6\u9AD4\u8DEF\u7DB2",
+    "validation": "Schema8 validate/roundtrip/CreateRuntime/10-second carrier smoke passed",
+    "rows": [
+      {
+        "referencePointId": "S1",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 103.12713675213675,
+          "designHeadwaySeconds": 134.06527777777777,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 105.6680107857323,
+          "designHeadwaySeconds": 137.368414021452,
+          "lineCapacityPerHour": 26,
+          "designPassengerCapacityPerHour": 46800,
+          "achievablePassengerCapacityPerHour": 37440
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S7",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 90.21548413067401,
+          "designHeadwaySeconds": 117.28012936987622,
+          "lineCapacityPerHour": 30,
+          "designPassengerCapacityPerHour": 54000,
+          "achievablePassengerCapacityPerHour": 43200
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 95.52839738349495,
+          "designHeadwaySeconds": 124.18691659854343,
+          "lineCapacityPerHour": 28,
+          "designPassengerCapacityPerHour": 50400,
+          "achievablePassengerCapacityPerHour": 40320
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S10",
+        "direction": "Reverse",
+        "result": {
+          "safetyHeadwaySeconds": 107.42181309223761,
+          "designHeadwaySeconds": 139.6483570199089,
+          "lineCapacityPerHour": 25,
+          "designPassengerCapacityPerHour": 45000,
+          "achievablePassengerCapacityPerHour": 36000
+        },
+        "published": null,
+        "matches": null
+      },
+      {
+        "referencePointId": "S14",
+        "direction": "Forward",
+        "result": {
+          "safetyHeadwaySeconds": 114.49439786572131,
+          "designHeadwaySeconds": 148.8427172254377,
+          "lineCapacityPerHour": 24,
+          "designPassengerCapacityPerHour": 43200,
+          "achievablePassengerCapacityPerHour": 34560
+        },
+        "published": null,
+        "matches": null
+      }
+    ],
+    "bottlenecks": [
+      {
+        "direction": "Forward",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 114.49439786572131,
+          "designHeadwaySeconds": 148.8427172254377,
+          "lineCapacityPerHour": 24,
+          "designPassengerCapacityPerHour": 43200,
+          "achievablePassengerCapacityPerHour": 34560
+        }
+      },
+      {
+        "direction": "Reverse",
+        "referencePointId": "S14",
+        "name": "S14 \u7AD9\u5F8C\u6298\u8FD4",
+        "result": {
+          "safetyHeadwaySeconds": 114.49439786572131,
+          "designHeadwaySeconds": 148.8427172254377,
+          "lineCapacityPerHour": 24,
+          "designPassengerCapacityPerHour": 43200,
+          "achievablePassengerCapacityPerHour": 34560
+        }
+      }
+    ]
+  }
+]

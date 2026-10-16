@@ -352,7 +352,7 @@ internal static class PdfPaginationRegressionTests
             Points = [new Point(82, 338), new Point(420, 250), new Point(width - 22, 48)]
         });
 
-        AddText(canvas, "14-大型-二十八站完整營運範例｜計畫／理論與 V2 模擬實際運行圖", 82, 8, 14);
+        AddText(canvas, "01-大型-二十八站完整營運範例｜計畫／理論與 V2 模擬實際運行圖", 82, 8, 14);
         // 與運行圖相同的圖例元件；項目多到比 A4 分頁寬，驗證每頁補畫且等比縮小而不被切掉。
         ChartPainter.DrawLegend(canvas, 82, 28,
         [

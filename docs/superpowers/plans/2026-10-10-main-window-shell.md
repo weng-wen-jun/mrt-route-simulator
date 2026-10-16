@@ -138,7 +138,7 @@ internal static class ShellLayoutTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
             ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
@@ -1566,7 +1566,7 @@ git commit -m "feat: add shell tab control, nav rail and segmented templates" -m
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             window.Activate(); // TabItem 以滑鼠選取時需要取得焦點。
             PumpLayout(window);
@@ -2246,7 +2246,7 @@ git commit -m "feat: rebuild main window shell with nav rail, app bar playback a
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
             ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
@@ -2340,7 +2340,7 @@ Expected: 兩檔原本皆為無 BOM 的 UTF-8，寫回後編碼與換行不變�
 ```powershell
 dotnet build .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- . --shell-layout-only
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
 ```
 
 Expected: 三個新 `[通過]` 與 `PASS WPF shell layout`；`PASS WPF large playback diagnostics`。若 `VerifyAppBarFits` 在 125% 失敗，先縮小 `PlaybackSpeedComboBox` 寬度或 `AppBarButton` 間距，不得移除元件。
@@ -2377,7 +2377,7 @@ git commit -m "feat: add status indicator and harden app bar and banner layout" 
                 var window = new MainWindow { Width = width, Height = height };
                 try
                 {
-                    LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+                    LoadSample(window, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json");
                     window.Show();
                     WpfTestWait.Wait(Task.Delay(200));
                     WpfTestWait.Advance(window, 300); // 推進到 5 分鐘並刷新畫面，讓配線圖上有列車。
@@ -2401,7 +2401,7 @@ git commit -m "feat: add status indicator and harden app bar and banner layout" 
             var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
             var pageType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-                System.IO.Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+                System.IO.Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
             foreach (var page in new[] { "Tracks", "Services" })
             {
                 var editor = (Window)Activator.CreateInstance(editorType, document, Enum.Parse(pageType, page))!;
@@ -2450,7 +2450,7 @@ query user
 dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- . --shell-screenshots
 ```
 

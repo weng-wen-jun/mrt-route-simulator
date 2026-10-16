@@ -15,7 +15,7 @@
 - Computer Use list_apps 實際確認唯一 MRT 視窗 id397278，執行路徑為整合工作樹 Release exe，標題 V4.0.3。不沿用前日視窗 handle。
 - 目前 UI 的 CurrentProjectFileTextBlock 顯示原目錄 `mrt-route-simulator/samples/大型機場線-完整營運示範範例.mrtsim.json`；clock0.0s，尚未播放。這不是整合版 sample14，不能混用事件秒數／營運證據。
 - 透過正常檔案選單開啟讀檔對話框。工具 set_value 回報 `element 317 is not available in cached app state`。重新取得 window/state 並嘗試座標聚焦及 Alt+n 後，accessibility focused_element 仍回報搜尋欄位，而不是檔案名稱欄位；未輸入路徑、未按開啟、未開始播放。請使用者手動完成讀檔，避免未知焦點輸入。
-- 指定案例：`D:/AI/codex/mrt-v403-integration/samples/14-大型-二十八站完整營運範例.mrtsim.json`。
+- 指定案例：`D:/AI/codex/mrt-v403-integration/samples/大型/01-大型-二十八站完整營運範例.mrtsim.json`。
 
 ## 下一步與判定邊界
 

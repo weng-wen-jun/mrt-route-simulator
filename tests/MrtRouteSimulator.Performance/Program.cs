@@ -1,11 +1,11 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Text.Json;
 using MrtRouteSimulator.Engine;
 
 var root = FindRepositoryRoot();
 var samplePath = args.Length > 0
     ? Path.GetFullPath(args[0], root)
-    : Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
+    : Path.Combine(root, "samples", "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
 var advanceSeconds = args.Length > 1 && double.TryParse(args[1], out var parsedSeconds)
     ? parsedSeconds
     : 8000;

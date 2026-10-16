@@ -255,7 +255,7 @@ internal static class StationTimetableTests
     private static TopologyProjectDocument LoadBaseline()
     {
         var root = FindRepositoryRoot();
-        var path = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var path = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         return TopologyProjectFormat.Deserialize(File.ReadAllText(path));
     }
 

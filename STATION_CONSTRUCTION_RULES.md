@@ -38,7 +38,7 @@
 ./tests/ValidateStationConstruction.ps1
 ```
 
-此入口依序執行 Release build、完整 Engine 測試及正式 WPF 測試。WPF 測試自動遞迴枚舉 `samples/*.mrtsim.json`，實際呼叫主視窗載入流程，包含計畫時間軸及雙向速度預覽；任何例外會令測試失敗。所有範例均檢查720／1200 px的主圖及編輯器，並另測大量設施圖例。
+此入口依序執行 Release build、完整 Engine 測試及正式 WPF 測試。WPF 測試自動遞迴枚舉 `samples/**/*.mrtsim.json`，實際呼叫主視窗載入流程，包含計畫時間軸及雙向速度預覽；任何例外會令測試失敗。所有範例均檢查720／1200 px的主圖及編輯器，並另測大量設施圖例。
 
 新增範例必須加入 samples 並通過上述入口；新增站型須補對應實體運行測試。錯誤案例也必須留在測試中，不能只驗證正常範例。
 

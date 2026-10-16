@@ -2210,7 +2210,7 @@ git commit -m "fix: keep the status dot in sync for V1 playback, UI failures and
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             WpfTestWait.Wait(Task.Delay(200));
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
@@ -2317,7 +2317,7 @@ git commit -m "fix: keep the status dot in sync for V1 playback, UI failures and
             var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
             Require(AutomationProperties.GetName(toggle) == "快速起稿抽屜開關" && Equals(toggle.ToolTip, "快速建立線性路線（一次性起稿）"),
                 "未讀入專案時起稿鈕應描述快速起稿抽屜。");
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             Require(AutomationProperties.GetName(toggle) == "開啟專案工作區（快速起稿）" && Equals(toggle.ToolTip, "開啟專案工作區（快速起稿）"),
                 "已讀入專案時起稿鈕應描述為開啟專案工作區。");
             WpfTestWait.Invoke(window, "ClearResults");
@@ -2476,7 +2476,7 @@ query user
 dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- . --shell-screenshots
 ```
 

@@ -11,7 +11,7 @@ internal static class RouteMotionGeometryTests
     public static void Run(string root)
     {
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(root,
-            "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         var window = new MainWindow();

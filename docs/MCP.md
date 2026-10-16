@@ -33,7 +33,7 @@ dotnet .\output\v4.1.0-unified\bin\MrtRouteSimulator.Mcp\release\MrtRouteSimulat
 `project_save` 採暫存檔與原子搬移。所有輸出預設 `overwrite=false`，需明確設 true 才覆寫，輸出目錄須先存在。路徑只接受 workspace 內的實體檔案，不接受 junction／symbolic link。
 
 範例流程：
-1. project_load：path = samples/10-小型-三站完整拓樸基準範例.mrtsim.json
+1. project_load：path = samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json
 2. simulation_advance：targetSeconds = 10
 3. simulation_snapshot
 4. simulation_events：offset = 0，limit = 100
@@ -60,7 +60,7 @@ headless 與桌面 session 各自獨立；headless 不控制正在開啟的視�
 | command | argumentsJson 範例 |
 |---|---|
 | project | {} |
-| load | {"path":"samples/10-小型-三站完整拓樸基準範例.mrtsim.json"} |
+| load | {"path":"samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json"} |
 | save | {"path":"output/project.mrtsim.json","overwrite":false} |
 | play | {"rate":10} |
 | pause / reset | {} |

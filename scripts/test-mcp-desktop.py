@@ -97,7 +97,7 @@ def main() -> int:
         assert status["processId"] == pid
         assert Path(status["workspaceRoot"]).resolve() == root
         original_zoom = status["routeZoom"]
-        desktop("load", {"path": "samples/10-小型-三站完整拓樸基準範例.mrtsim.json"})
+        desktop("load", {"path": "samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json"})
         advanced = desktop("advance", {"targetSeconds": 10})
         assert advanced["simulationTimeSeconds"] == 10
         desktop("select_page", {"page": "diagram"})

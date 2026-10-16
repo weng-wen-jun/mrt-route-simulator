@@ -97,7 +97,8 @@ public enum SimulationEventType
     OvertakeRequested,
     OvertakeCompleted,
     OvertakeCancelled,
-    ServiceEnded
+    ServiceEnded,
+    SignalAuthorityViolation
 }
 
 [Flags]

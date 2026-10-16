@@ -14,7 +14,7 @@ internal static class V411ResultTests
     public static void Run(string root)
     {
         var template = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            root, "samples", "01-小型-三站雙股島式站場範例.mrtsim.json")));
+            root, "samples", "小型/01-小型-三站雙股島式站場範例.mrtsim.json")));
         var main = new OperatingLineDefinition
         {
             LineId = "RESULT-MAIN",

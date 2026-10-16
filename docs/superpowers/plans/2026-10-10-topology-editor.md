@@ -149,7 +149,7 @@ internal static class EditorThemeTests
     internal static Type AppType(string name) => typeof(MainWindow).Assembly.GetType($"MrtRouteSimulator.App.{name}")!;
 
     internal static TopologyProjectDocument Sample(string root) => TopologyProjectFormat.Deserialize(
-        File.ReadAllText(System.IO.Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+        File.ReadAllText(System.IO.Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
 
     /// <summary>在螢幕外開啟編輯器（範例 14），測試結束由呼叫端關閉。</summary>
     internal static Window OpenEditor(string root, string page, double width = 1280, double height = 800)

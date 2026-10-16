@@ -41,7 +41,7 @@ Git history / old tags / releases: unchanged
 |---|---|---|
 | 外部檔案參考/大型機場線_完整站序來源資料.md | `9e2b1ac` | 歷史文件使用 source-backed 措辭，與維護者此次抽象規劃說明不同；保留本機原件，不據此認定里程為實際資料。此本地整合 commit 本輪未推送。 |
 | 外部檔案參考/CODEX_TASK_Taichung_full_station_chain_source_data.md | `2a68bee`, `89d9818`, `9e2b1ac` | 歷史有正式規劃／站心里程措辭，僅記錄標示差異，不認定已確認侵權或敏感資料。若日後引用實際政府資料，另確認來源與使用條件。 |
-| samples/13-中型-六站主要站示範範例.mrtsim.json、samples/14-大型-二十八站完整營運範例.mrtsim.json；SyntheticLongRouteScenarioBuilder | 現行 `217c803`；樣本沿革 `89d9818` | 維護者已確認為抽象規劃；manifest 已明確標示非實際線路里程。數值與模型不變，保留 regression 對照，不宣稱正式資料校準。 |
+| samples/中型/02-中型-六站主要站示範範例.mrtsim.json、samples/大型/01-大型-二十八站完整營運範例.mrtsim.json；SyntheticLongRouteScenarioBuilder | 現行 `217c803`；樣本沿革 `89d9818` | 維護者已確認為抽象規劃；manifest 已明確標示非實際線路里程。數值與模型不變，保留 regression 對照，不宣稱正式資料校準。 |
 
 目前依使用者要求排除參考目錄、保留本機與備份，不因歷史措辭差異自行清除歷史。若後續找到具體第三方材料問題，再另行審查並取得清理授權。本輪不 force push、不 rewrite history、不改 sample 值或移除正式 release。
 

@@ -36,7 +36,7 @@ internal static class McpProjectSwitchExportTests
             var pngScale = ((CheckBox)window.FindName("HighResolutionCheckBox")).IsChecked == true ? 2 : 1;
 
             Call("zoom", new { horizontal = 1.5, vertical = 1.25 });
-            Call("load", new { path = "samples/14-大型-二十八站完整營運範例.mrtsim.json" });
+            Call("load", new { path = "samples/大型/01-大型-二十八站完整營運範例.mrtsim.json" });
             WpfTestWait.WaitForPlannedTimeline(window);
             Call("advance", new { targetSeconds = 60 });
             Call("export", new { path = Path.Combine(output, "large.csv"), format = "csv" });
@@ -47,7 +47,7 @@ internal static class McpProjectSwitchExportTests
             Require(pngWidth == (int)Math.Ceiling(exportedWidth * pngScale),
                 $"PNG 必須以實際畫布寬度輸出，不可是未配置的 1 px：png={pngWidth}，canvas={exportedWidth}。");
 
-            Call("load", new { path = "samples/10-小型-三站完整拓樸基準範例.mrtsim.json" });
+            Call("load", new { path = "samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json" });
             WpfTestWait.WaitForPlannedTimeline(window);
             Call("advance", new { targetSeconds = 10 });
             var pdf = Path.Combine(output, "small.pdf");

@@ -15,7 +15,7 @@ internal static class VerticalLaneTests
         VerifyGeometry(4, false);
         VerifyGeometry(32, true);
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(root,
-            "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var layoutType = AppAssembly.GetType("MrtRouteSimulator.App.SchematicVerticalLayout")!;
         var defaults = (TopologyProjectDocument)layoutType.GetMethod("FillDefaults")!.Invoke(null, [document, true])!;
         TopologyProjectFormat.CreateRuntime(defaults);

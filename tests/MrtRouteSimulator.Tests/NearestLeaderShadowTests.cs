@@ -6,8 +6,8 @@ using MrtRouteSimulator.Engine;
 
 internal static class NearestLeaderShadowTests
 {
-    private const string FullTopologySample = "11-小型-三站完整拓樸運行範例.mrtsim.json";
-    private const string LargeFullSample = "14-大型-二十八站完整營運範例.mrtsim.json";
+    private const string FullTopologySample = "小型/11-小型-三站完整拓樸運行範例.mrtsim.json";
+    private const string LargeFullSample = "大型/01-大型-二十八站完整營運範例.mrtsim.json";
     private const double FullTopologyDurationSeconds = 3_000;
     private const double LargeFullDurationSeconds = 8_000;
     private const double RetainedSampleIntervalSeconds = 1;

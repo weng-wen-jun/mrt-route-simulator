@@ -342,7 +342,7 @@ def main() -> int:
     dll = choose_dll(root, args.server_dll)
     if not dll.is_file():
         raise TestFailure(f"MCP server DLL is missing; build it before running this test: {dll}")
-    sample = root / "samples" / "10-小型-三站完整拓樸基準範例.mrtsim.json"
+    sample = root / "samples" / "小型/10-小型-三站完整拓樸基準範例.mrtsim.json"
     if not sample.is_file():
         raise TestFailure(f"baseline sample is missing: {sample}")
     names = parse_tool_map(args.tool_map)

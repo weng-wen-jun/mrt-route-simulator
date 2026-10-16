@@ -19,7 +19,7 @@ internal static class V411EditorTests
     public static void Run(string root)
     {
         var template = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var document = OperatingNetworkBuilder.Build(template,
         [
             Line("MAIN", "主線", 2, null, 0, 4_000, 5),

@@ -101,8 +101,8 @@ Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::Prim
 dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --profile-interactive-timedistance-only > "$(git rev-parse --show-toplevel)\.superpowers\sdd\2026-10-10-result-charts\profile-before.txt"
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --profile-interactive-timedistance-only > "$(git rev-parse --show-toplevel)\.superpowers\sdd\2026-10-10-result-charts\profile-before.txt"
 ```
 
 Expected: session `Active`；工作區高度 ≥ 720；0 warning／0 error；Engine 198/198；WPF 最後一行 `PASS WPF visual rules`（C2 結束時 124 項 `[通過]`）；大型播放 `PASS WPF large playback diagnostics`（C2：58.5×、最大 UI 輸入間隔 70 ms）；`profile-before.txt` 含 `INTERACTIVE_TIME_DISTANCE_PROFILE_JSON=`。把數字記入進度紀錄。
@@ -982,7 +982,7 @@ git commit -m "feat: add ChartPainter shared chart drawing helpers" -m "Co-Autho
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            ShellLayoutTests.LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+            ShellLayoutTests.LoadSample(window, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json");
             window.Show();
             WpfTestWait.WaitForPlannedTimeline(window);
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
@@ -2961,9 +2961,9 @@ Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Screen]::Prim
 dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csproj -c Release --no-build --no-restore
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --large-playback-only
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- . --pacing-lazy-only
-dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\14-大型-二十八站完整營運範例.mrtsim.json --profile-interactive-timedistance-only > "$(git rev-parse --show-toplevel)\.superpowers\sdd\2026-10-10-result-charts\profile-after.txt"
+dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- .\samples\大型/01-大型-二十八站完整營運範例.mrtsim.json --profile-interactive-timedistance-only > "$(git rev-parse --show-toplevel)\.superpowers\sdd\2026-10-10-result-charts\profile-after.txt"
 dotnet run --project .\tests\MrtRouteSimulator.WpfTests\MrtRouteSimulator.WpfTests.csproj -c Release --no-build --no-restore -- . --shell-screenshots
 ```
 

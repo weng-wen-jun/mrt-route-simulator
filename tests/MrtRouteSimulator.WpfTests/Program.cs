@@ -111,6 +111,13 @@ internal static class Program
                 Console.WriteLine("PASS V4.1.1 editor and results");
                 return 0;
             }
+            if (args.Contains("--spatial-capacity-only"))
+            {
+                SpatialCapacityTests.Run(GetRoot(args));
+                CapacityChartTests.Run(GetRoot(args));
+                Console.WriteLine("PASS WPF spatial capacity");
+                return 0;
+            }
             if (args.Contains("--mcp-only"))
             {
                 McpBridgeTests.Run(GetRoot(args));
@@ -365,6 +372,8 @@ internal static class Program
             TrackDiagramThemeTests.Run(GetRoot(args));
             ShellLayoutTests.Run(GetRoot(args));
             ResultPageTests.Run(GetRoot(args));
+            SpatialCapacityTests.Run(GetRoot(args));
+                CapacityChartTests.Run(GetRoot(args));
             ChartThemeTests.Run(GetRoot(args));
             EditorThemeTests.Run(GetRoot(args));
             var projectRoot = GetRoot(args);

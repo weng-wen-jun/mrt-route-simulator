@@ -1,4 +1,4 @@
-﻿using MrtRouteSimulator.Engine;
+using MrtRouteSimulator.Engine;
 
 internal static class SyntheticLongRouteFullScenarioTests
 {
@@ -714,7 +714,7 @@ internal static class SyntheticLongRouteFullScenarioTests
         var source = Stages.Value.FullScenario;
         var json = TopologyProjectFormat.Serialize(source);
         var roundTrip = TopologyProjectFormat.Deserialize(json);
-        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var artifact = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         Equal(TopologyProjectFormat.CurrentSchemaVersion, roundTrip.SchemaVersion);
         Equal(28, roundTrip.Topology.Stations.Count);

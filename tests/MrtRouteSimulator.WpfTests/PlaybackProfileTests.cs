@@ -232,7 +232,7 @@ internal static class PlaybackProfileTests
             root = root.Parent;
         if (root is null) throw new InvalidOperationException("Repository root not found.");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(root.FullName,
-            "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         var window = new MainWindow();

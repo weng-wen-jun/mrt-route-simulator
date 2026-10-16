@@ -235,11 +235,11 @@ internal static class TimeDistanceStationLabelTests
         var samplesDirectory = Path.Combine(Path.GetFullPath(root), "samples");
         var paths = Directory.GetFiles(samplesDirectory, "*.mrtsim.json", SearchOption.AllDirectories);
         return paths.FirstOrDefault(path => Path.GetFileName(path)
-                       .Equals("14-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal))
+                       .Equals("01-大型-二十八站完整營運範例.mrtsim.json", StringComparison.Ordinal))
             ?? paths.FirstOrDefault(path => Path.GetFileName(path)
-                       .Contains("14-大型-二十八站", StringComparison.Ordinal)
+                       .Contains("01-大型-二十八站", StringComparison.Ordinal)
                     && Path.GetFileName(path).Contains("完整", StringComparison.Ordinal))
-            ?? throw new InvalidOperationException("找不到 14-大型-二十八站完整營運 real Schema 8 sample。");
+            ?? throw new InvalidOperationException("找不到 01-大型-二十八站完整營運 real Schema 8 sample。");
     }
 
     private static void RequireNoOverlapAndNoClipping(

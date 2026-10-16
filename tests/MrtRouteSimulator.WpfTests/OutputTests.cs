@@ -16,7 +16,7 @@ internal static class OutputTests
     {
         var output = Path.Combine(root, "artifacts", "output-qa-large");
         Directory.CreateDirectory(output);
-        var large = Load(root, "14-大型-二十八站完整營運範例.mrtsim.json");
+        var large = Load(root, "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(large.Window, "大型完整營運");
@@ -31,7 +31,7 @@ internal static class OutputTests
         var output = Path.Combine(root, "artifacts", "output-qa");
         Directory.CreateDirectory(output);
 
-        var complete = Load(root, "11-小型-三站完整拓樸運行範例.mrtsim.json");
+        var complete = Load(root, "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(complete.Window, "完整拓撲");
@@ -42,7 +42,7 @@ internal static class OutputTests
             WpfTestWait.Close(complete.Window);
         }
 
-        var rearTurnback = Load(root, "09-小型-三站站後尾軌折返範例.mrtsim.json");
+        var rearTurnback = Load(root, "小型/09-小型-三站站後尾軌折返範例.mrtsim.json");
         try
         {
             VerifyLoadedPlan(rearTurnback.Window, "TrainCenter 尾軌折返");

@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,7 +9,7 @@ internal static class Program
 {
     private const double DefaultDurationSeconds = 8_000;
     private const string DefaultSampleRelativePath =
-        "samples/11-小型-三站完整拓樸運行範例.mrtsim.json";
+        "samples/小型/11-小型-三站完整拓樸運行範例.mrtsim.json";
 
     private static int Main(string[] args)
     {

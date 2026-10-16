@@ -132,6 +132,15 @@ public static class InfrastructureValidator
                 errors.Add($"坡度區間「{gradient.GradientId}」坡度必須是有限數值。");
         }
 
+        foreach (var group in definition.Gradients.GroupBy(gradient => gradient.TrackEdgeId, StringComparer.OrdinalIgnoreCase))
+        {
+            var segments = group.OrderBy(gradient => gradient.StartOffsetMeters).ToArray();
+            for (var i = 0; i < segments.Length; i++)
+                for (var j = i + 1; j < segments.Length && segments[j].StartOffsetMeters < segments[i].EndOffsetMeters - 1e-7; j++)
+                    if (Math.Abs(segments[i].GradePermille - segments[j].GradePermille) > 1e-7)
+                        errors.Add($"edge「{group.Key}」坡度區間重疊且坡度不同。");
+        }
+
         foreach (var curve in definition.Curves)
         {
             ValidateEdgeInterval(curve.CurveId, "曲線區間", curve.TrackEdgeId,

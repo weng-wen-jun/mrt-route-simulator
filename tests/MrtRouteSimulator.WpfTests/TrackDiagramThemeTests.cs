@@ -46,7 +46,7 @@ internal static class TrackDiagramThemeTests
     private static void VerifyLegendFollowsToggles(string root)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(sample);
         var world = CreateWorld(sample, runtime);
         var main = new MainWindow();
@@ -127,7 +127,7 @@ internal static class TrackDiagramThemeTests
     private static void VerifyLegacyTrainMarkers(string root)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/11-小型-三站完整拓樸運行範例.mrtsim.json")));
         var world = CreateWorld(sample, TopologyProjectFormat.CreateRuntime(sample));
         world.AdvanceTo(120);
         var main = new MainWindow();
@@ -165,7 +165,7 @@ internal static class TrackDiagramThemeTests
     {
         var glowBrush = StaticValue(AppType("UiTheme"), "OccupancyGlowBrush");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var window = new MainWindow();
         try
         {
@@ -309,7 +309,7 @@ internal static class TrackDiagramThemeTests
             "Empty 必須是空字典。");
 
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var window = new MainWindow();
         try
         {
@@ -355,7 +355,7 @@ internal static class TrackDiagramThemeTests
         var main = new MainWindow();
         try
         {
-            var (small, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var (small, _) = DrawSample(main, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
             var labels = small.Children.OfType<FrameworkElement>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor").ToArray();
             Require(labels.Length == 3 && labels.All(item => item is Border border
                     && ReferenceEquals(border.Background, badgeFill) && border.Child is TextBlock),
@@ -363,7 +363,7 @@ internal static class TrackDiagramThemeTests
             var west = labels.Cast<Border>().Select(border => PlainText((TextBlock)border.Child)).Single(text => text.Contains("西站"));
             Require(west.Contains("W · "), $"西站徽章的次要資訊必須帶 ID 與里程，實際：{west}");
 
-            var (large, _) = DrawSample(main, root, "14-大型-二十八站完整營運範例.mrtsim.json", 1370, 0);
+            var (large, _) = DrawSample(main, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json", 1370, 0);
             foreach (var label in large.Children.OfType<Border>().Where(item => item.Tag?.GetType().Name == "StationLabelAnchor"))
             {
                 var stationId = (string)label.Tag.GetType().GetProperty("StationId")!.GetValue(label.Tag)!;
@@ -386,8 +386,8 @@ internal static class TrackDiagramThemeTests
         {
             foreach (var (file, width) in new[]
             {
-                ("10-小型-三站完整拓樸基準範例.mrtsim.json", 1200d),
-                ("14-大型-二十八站完整營運範例.mrtsim.json", 1370d)
+                ("小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200d),
+                ("大型/01-大型-二十八站完整營運範例.mrtsim.json", 1370d)
             })
             {
                 var (canvas, sample) = DrawSample(main, root, file, width, 0);
@@ -442,7 +442,7 @@ internal static class TrackDiagramThemeTests
             var routeCanvas = (Canvas)main.FindName("RouteCanvas");
             Require(ReferenceEquals(routeCanvas.Background, StaticValue(theme, "CanvasBackgroundBrush")),
                 "配線圖底色必須取自 UiTheme.CanvasBackgroundBrush。");
-            var (canvas, _) = DrawSample(main, root, "10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
+            var (canvas, _) = DrawSample(main, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json", 1200, 0);
             var rails = canvas.Children.OfType<Polyline>()
                 .Where(line => line.ToolTip is string tip && tip.Contains('\n'))
                 .ToDictionary(line => ((string)line.ToolTip!).Split('\n', 2)[0], StringComparer.OrdinalIgnoreCase);
@@ -556,7 +556,7 @@ internal static class TrackDiagramThemeTests
         try
         {
             // 範例 11 的 LOCAL-01 於 0 秒停靠 P-W-D（VisualRulesTests 已驗證），可穩定取得列車標記。
-            var (canvas, _) = DrawSample(main, root, "11-小型-三站完整拓樸運行範例.mrtsim.json", 1200, 0);
+            var (canvas, _) = DrawSample(main, root, "小型/11-小型-三站完整拓樸運行範例.mrtsim.json", 1200, 0);
             var trains = canvas.Children.OfType<Border>().Where(border => border.Tag is string).ToArray();
             Require(trains.Length > 0, "範例 11 在 0 秒應至少顯示一列車。");
             foreach (var train in trains)
@@ -578,7 +578,7 @@ internal static class TrackDiagramThemeTests
     private static void VerifyLiveTrainMarkers(string root)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            System.IO.Path.Combine(root, "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json")));
+            System.IO.Path.Combine(root, "samples", "小型/11-小型-三站完整拓樸運行範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(sample);
         var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
             runtime.DispatchPlan.Runs.Count, sample.Simulation.HeadwaySeconds,

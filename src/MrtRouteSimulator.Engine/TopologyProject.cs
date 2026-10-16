@@ -26,6 +26,8 @@ public sealed record TopologyProjectDocument(
     TopologyDirectionRouteBinding[] DirectionRouteBindings)
 {
     public OperatingLineDefinition[]? OperatingLines { get; init; }
+    public SpatialCapacityProjectSettings? SpatialCapacity { get; init; }
+    public IReadOnlyList<TrackSignalBlockDefinition> SignalBlocks { get; init; } = [];
 }
 
 /// <summary>已驗證 Schema 8 專案轉成 V2 topology-native runtime 的唯一輸入組合。</summary>
@@ -109,6 +111,9 @@ public static class TopologyProjectFormat
         if (document.Dispatch is null) errors.Add("存檔缺少發車計畫。");
         RouteValidator.ThrowIfAny(errors);
 
+        if (document.SpatialCapacity is not null)
+            SpatialCapacityProjectAnalysis.Validate(document.SpatialCapacity);
+
         if (document.OperatingLines?.Any(line => line is null) == true)
         {
             errors.Add("營運路線 metadata 不可包含 null 項目。");
@@ -123,6 +128,8 @@ public static class TopologyProjectFormat
             try
             {
                 InfrastructureValidator.ValidateAndThrow(document.Topology, document.ServiceRoutes);
+                if (document.SignalBlocks is null) errors.Add("閉塞號誌集合不可為null。");
+                else TrackSignalBlockValidation.Validate(document.SignalBlocks, new InfrastructureGraphV4(document.Topology));
             }
             catch (SimulationValidationException exception)
             {
@@ -148,6 +155,7 @@ public static class TopologyProjectFormat
     {
         Validate(document);
         var infrastructure = new InfrastructureGraphV4(document.Topology);
+        TrackSignalBlockValidation.Validate(document.SignalBlocks, infrastructure);
         var routes = document.ServiceRoutes.ToDictionary(route => route.ServiceRouteId, StringComparer.OrdinalIgnoreCase);
         var outboundId = document.DirectionRouteBindings
             .Single(binding => binding.Direction == TrainDirection.Outbound)
@@ -157,7 +165,8 @@ public static class TopologyProjectFormat
             .ServiceRouteId;
         var topology = new TopologySimulationDefinition(infrastructure, routes[outboundId], routes[inboundId])
         {
-            AdditionalServiceRoutes = document.ServiceRoutes
+            AdditionalServiceRoutes = document.ServiceRoutes,
+            SignalBlocks = document.SignalBlocks
         };
         var vehicleTypes = document.VehicleTypes.Select(ToRuntime).ToArray();
         var serviceTypes = document.ServiceTypes.Select(item => new ServiceTypeDefinition(

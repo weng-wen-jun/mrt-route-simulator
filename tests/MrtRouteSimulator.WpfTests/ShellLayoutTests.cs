@@ -81,7 +81,7 @@ internal static class ShellLayoutTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
             ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
@@ -270,7 +270,7 @@ internal static class ShellLayoutTests
     private static readonly (string Name, string Label)[] NavPages =
     [
         ("SimulationTabItem", "模擬"), ("ResultsTabItem", "時刻表"), ("SegmentTabItem", "區間"), ("ComparisonTabItem", "比較"),
-        ("ResourceTabItem", "容量"), ("SafetyTabItem", "閉塞"), ("IntervalStatisticsTabItem", "統計"), ("DiagramTabItem", "運行圖")
+        ("ResourceTabItem", "容量"), ("SpatialCapacityTabItem", "理論"), ("SafetyTabItem", "閉塞"), ("IntervalStatisticsTabItem", "統計"), ("DiagramTabItem", "運行圖")
     ];
 
     private static void VerifyShellSkeleton(string root)
@@ -283,7 +283,7 @@ internal static class ShellLayoutTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             window.Activate(); // TabItem 以滑鼠選取時需要取得焦點。
             PumpLayout(window);
@@ -296,7 +296,7 @@ internal static class ShellLayoutTests
             var tabs = (TabControl)window.FindName("WorkspaceTabControl")!;
             Require(tabs is ShellTabControl, "WorkspaceTabControl 必須是 ShellTabControl。");
             var items = tabs.Items.OfType<TabItem>().ToArray();
-            Require(items.Select(item => item.Name).SequenceEqual(NavPages.Select(page => page.Name)), "導覽列必須依序有 8 個頁面。");
+            Require(items.Select(item => item.Name).SequenceEqual(NavPages.Select(page => page.Name)), "導覽列必須依序有 9 個頁面。");
             var appBar = (Visual)window.FindName("AppBar")!;
             var play = (Button)window.FindName("PlayButton")!;
             foreach (var (item, page) in items.Zip(NavPages))
@@ -458,7 +458,7 @@ internal static class ShellLayoutTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
             ((TabControl)window.FindName("SimulationViewTabControl")!).SelectedIndex = 0;
@@ -489,7 +489,7 @@ internal static class ShellLayoutTests
                 var window = new MainWindow { Width = width, Height = height };
                 try
                 {
-                    LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+                    LoadSample(window, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json");
                     window.Show();
                     WpfTestWait.Wait(Task.Delay(200));
                     WpfTestWait.Advance(window, 300); // 推進到 5 分鐘並刷新畫面，讓配線圖上有列車。
@@ -555,7 +555,7 @@ internal static class ShellLayoutTests
             var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
             var pageType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(
-                System.IO.Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+                System.IO.Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
             foreach (var page in new[] { "Project", "Stations", "Tracks", "Services", "DispatchPlanning", "Schematic" })
             {
                 // 路線示意圖不是導覽頁，先開軌道頁再導覽過去。
@@ -880,7 +880,7 @@ internal static class ShellLayoutTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             window.Show();
             WpfTestWait.Wait(Task.Delay(200));
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");
@@ -987,7 +987,7 @@ internal static class ShellLayoutTests
             var toggle = (Button)window.FindName("QuickBuilderToggleButton")!;
             Require(AutomationProperties.GetName(toggle) == "快速起稿抽屜開關" && Equals(toggle.ToolTip, "快速建立線性路線（一次性起稿）"),
                 "未讀入專案時起稿鈕應描述快速起稿抽屜。");
-            LoadSample(window, root, "10-小型-三站完整拓樸基準範例.mrtsim.json");
+            LoadSample(window, root, "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
             Require(AutomationProperties.GetName(toggle) == "開啟專案工作區（快速起稿）" && Equals(toggle.ToolTip, "開啟專案工作區（快速起稿）"),
                 "已讀入專案時起稿鈕應描述為開啟專案工作區。");
             WpfTestWait.Invoke(window, "ClearResults");

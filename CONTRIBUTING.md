@@ -110,7 +110,7 @@ SimulationProjectFormat.CurrentSchemaVersion = 7  // legacy / frozen timetable c
 - `src/MrtRouteSimulator.App/MainWindow.Topology.cs`
 - `tests/MrtRouteSimulator.Tests/Program.cs`
 - `tests/MrtRouteSimulator.Tests/TopologyRegressionTests.cs`
-- 相關 `samples/*.mrtsim.json`
+- 相關 `samples/**/*.mrtsim.json`
 - `MODEL_SPEC.md`
 
 所有讀檔流程都應維持「完整驗證成功後才替換目前 UI 狀態」的交易式邊界。

@@ -17,7 +17,7 @@
 ## 2026-10-02：sample14 一般／最大化／寬矮／窄小視窗
 
 - 使用 integration worktree 的 V4.0.3 Release 執行檔，原生 HWND 726048；未改程式、未重跑 build/tests、未 commit/push。
-- 正常檔案選單載入 `14-大型-二十八站完整營運範例.mrtsim.json`。檔案對話框 UIA 索引失效後，改用新截圖中的可見檔案列雙擊；成功載入，沒有修改 sample。
+- 正常檔案選單載入 `大型/01-大型-二十八站完整營運範例.mrtsim.json`。檔案對話框 UIA 索引失效後，改用新截圖中的可見檔案列雙擊；成功載入，沒有修改 sample。
 - 量測 session `90830412-3ce4-47bd-94c3-3b9afe871daa`；實際 DPI 120 / scale 1.25，軟體介面比例 1。起始視窗 1382.4×820.8 DIP，為所在 monitor 工作區 90% 置中。
 - 正常 30× 播放後於 245.5 s 暫停；後續點選／切頁／捲動維持 00:04:05.5。本輪只做 UI 檢查，不是完整播放 throughput 或事件驗收；停止量測標為 manual-stop / runAborted，不能算一輪完成。
 

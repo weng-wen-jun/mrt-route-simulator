@@ -59,7 +59,7 @@ internal static class NativeRetentionTests
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static RetentionProbe CaptureNormalCompletedResetAndStop(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
         var outputDirectory = Path.Combine(
             Path.GetTempPath(),

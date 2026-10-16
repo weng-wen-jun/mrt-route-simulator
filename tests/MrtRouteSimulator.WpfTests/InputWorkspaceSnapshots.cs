@@ -14,7 +14,7 @@ internal static class InputWorkspaceSnapshots
     public static void Run(string root, string outputDirectory)
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var editorType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.TopologyEditorWindow")!;
         var pageType = typeof(MainWindow).Assembly.GetType("MrtRouteSimulator.App.ProjectWorkspacePage")!;
         Directory.CreateDirectory(outputDirectory);

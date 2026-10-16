@@ -16,7 +16,7 @@ internal static class ShellInputTests
     public static void Run(string root)
     {
         var source = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         VerifySettingsNavigationAndCancellation(source);
         VerifyUnmodifiedRoundTrip(source);
         Console.WriteLine("[通過] 工作區跨頁保留、無效輸入攔截、速度原值與取消隔離");

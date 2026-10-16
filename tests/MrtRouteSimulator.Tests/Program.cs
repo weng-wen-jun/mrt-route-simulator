@@ -19,7 +19,21 @@ if (args.Length == 2 && args[0].Equals("--write-large-full-sample", StringCompar
 }
 
 var tests = new (string Name, Action Run)[]
-{
+{    ("容量觀測窗口與站方向篩選", CapacityObservationTests.FiltersStationDirectionAndUsesHalfOpenWindow),
+    ("容量觀測車次去重及缺ID排除", CapacityObservationTests.DeduplicatesServiceRunAndIgnoresMissingRunId),
+    ("容量觀測空窗口區分缺資料", CapacityObservationTests.EmptyObservationIsZeroAndNullableMetricsRemainMissing),
+    ("容量觀測短窗口使用正確分母", CapacityObservationTests.UsesExactShortWindowDenominator),
+    ("容量觀測終點到站需明確選擇", CapacityObservationTests.ArrivalRequiresExplicitEventKind),
+    ("容量觀測拒絕無效窗口", CapacityObservationTests.RejectsInvalidObservationWindow),
+    ("閉塞同路徑可略過選用轉轍等待並保持保護", SignalBlockTests.SameRouteSkipsOnlyOptionalChangeoverDelay),
+    ("閉塞容量映射保存與無效輸入拒絕", SignalBlockTests.MappingAndRoundTrip),
+    ("閉塞車尾淨空轉換與重設一致", SignalBlockTests.RearClearDelayAndReset),
+    ("實體坡度方向與前方下坡制動界線", TrackGradientTests.GradeDirectionAndFutureBounds),
+    ("實體坡度改變牽引且安全停站", TrackGradientTests.RuntimeGradesAffectTractionAndStops),
+    ("平坡保留既有模擬事件與時間", TrackGradientTests.FlatGradePreservesRuntime),
+    ("密班距跨上坡下坡保持安全停站", TrackGradientTests.DenseDownhillTransitionsRemainSafe),
+    ("原地折返後下一道岔於車尾淨空前持續保護", PostTurnbackSwitchProtectionTests.DepartureSwitchRemainsLockedUntilRearClearsAfterStationaryTurnback),
+    ("密班距精停死區後可恢復到站並完成", DenseCapacityRegressionTests.DenseArrivalsResumeOutsidePrecisionSnap),
     ("V4.1.1 主支線逐站班表範例結構及有界運行", CoreV411Tests.ExamplePassesStructuralAndBoundedOperationalValidation),
     ("V4.1.1 資源延誤後仍停滿每站表定秒數", CoreV411Tests.ResourceDelayedRunStillObservesEveryScheduledDwell),
     ("V4.1.1 多支線共用幹線完成且無碰撞", CoreV411Tests.MultipleBranchesShareTrunkAndCompleteWithoutCollision),
@@ -183,6 +197,16 @@ var tests = new (string Name, Action Run)[]
     ("V3.2 URCS 五類預設安全時距與容量相符", TestSpatialCapacityDefaultVectors),
     ("V3.2 URCS 中間站順逆行參數獨立", TestSpatialCapacityStationDirections),
     ("V3.2 URCS 容量採截斷且拒絕無效坡度組合", TestSpatialCapacityTruncationAndValidation),
+    ("容量分析三組坡度支援 URCS／台灣手冊模式", SpatialCapacityModeTests.ThreeGradeVectorsDifferByMode),
+    ("容量分析兩種模式保留中間站順逆行獨立", SpatialCapacityModeTests.ReverseDirectionRemainsIndependentInBothModes),
+    ("容量分析五類平坡及交替月台向量保持相容", SpatialCapacityModeTests.FlatVectorsPreserveAllFiveKindsAndAlternateVectors),
+    ("Schema 8 容量設定可選往返且新設定預設台灣手冊", SpatialCapacityModeTests.ProjectSettingsValidateAndRoundTrip),
+    ("Schema 8 無容量設定保持相容", SpatialCapacityModeTests.MissingCapacitySettingsRemainCompatible),
+    ("容量設定拒絕無效模式及有效加速度", SpatialCapacityModeTests.InvalidModeAndEffectiveAccelerationAreRejected),
+    ("容量情境瓶頸需明確 opt-in 且分離順逆行", SpatialCapacityModeTests.ScenarioBottleneckRequiresOptInAndKeepsDirectionsSeparate),
+    ("容量情境瓶頸同值依穩定 ID 決定", SpatialCapacityModeTests.ScenarioBottleneckTieBreaksByStableId),
+    ("容量敏感度依固定值掃描並套用適用型式", SpatialCapacityModeTests.SensitivityScansUseFixedValuesAndApplicableKinds),
+    ("容量敏感度拒絕錯型、無限值及過大點數", SpatialCapacityModeTests.SensitivityRejectsInvalidRangeKindAndPointInputs),
     ("V3.2 首班零秒與端點退出完整進入時刻表及區間統計", TestV3TimetableAndIntervalTerminalBoundaries),
     ("V2 車型目錄性能成為列車運算權威", TestVehicleCatalogPerformanceAuthority),
     ("V4 線性 builder 逐站建立雙向 topology", TopologyRegressionTests.LinearBuilderCreatesSegmentedBidirectionalTopology),
@@ -1027,7 +1051,7 @@ static void TestPlannedTimelineHandlesDelayedContinuation()
 
 static void TestPlannedTimelineWaitsForResource()
 {
-    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "11-小型-三站完整拓樸運行範例.mrtsim.json");
+    var samplePath = Path.Combine(FindRepositoryRoot(), "samples", "小型/11-小型-三站完整拓樸運行範例.mrtsim.json");
     var document = TopologyProjectFormat.Deserialize(File.ReadAllText(samplePath));
     var runtime = TopologyProjectFormat.CreateRuntime(document);
     var options = new SimulationWorldOptions(
@@ -2469,7 +2493,7 @@ static void TestV3TimetableAndIntervalTerminalBoundaries()
 static void TestComprehensiveSampleProject()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "12-中型-五站完整營運範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "中型/01-中型-五站完整營運範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到完整功能範例存檔：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
@@ -2628,7 +2652,7 @@ static void TestComprehensiveSampleProject()
 static void TestFourTrackExpressPassingScenario()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "小型/03-小型-三站快速越行範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到雙島四股越行驗證範例：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
@@ -2717,7 +2741,7 @@ static void TestFourTrackExpressPassingScenario()
 static void TestMultipleStationOvertakeCandidates()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "小型/03-小型-三站快速越行範例.mrtsim.json");
     var source = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));
     var primary = source.Infrastructure!.StationOvertakeFacilities!.Single();
     var nearerAlternative = primary with
@@ -2750,7 +2774,7 @@ static void TestMultipleStationOvertakeCandidates()
 static void TestSimultaneousBidirectionalOvertakes()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "03-小型-三站快速越行範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "小型/03-小型-三站快速越行範例.mrtsim.json");
     var document = CreateBidirectionalOvertakeDocument(
         SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath)));
     var (world, _, _) = CreateWorldFromProjectDocument(document);
@@ -3540,7 +3564,7 @@ static void TestCentralSidingAnchoredStationTurnback()
 static void TestTurnbackScenarioSampleProject()
 {
     var repositoryRoot = FindRepositoryRoot();
-    var samplePath = Path.Combine(repositoryRoot, "samples", "07-小型-三站尾軌袋狀軌折返範例.mrtsim.json");
+    var samplePath = Path.Combine(repositoryRoot, "samples", "小型/07-小型-三站尾軌袋狀軌折返範例.mrtsim.json");
     True(File.Exists(samplePath), $"找不到折返檢核範例：{samplePath}");
 
     var document = SimulationProjectFormat.Deserialize(File.ReadAllText(samplePath));

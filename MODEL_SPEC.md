@@ -44,6 +44,7 @@ StationId + PlatformId + TrackPosition + traversal index + chainage
 - **V2 權威位置：**`TrackEdgeId + OffsetMeters + ServiceRouteTraversalIndex`。
 - **實體設施：**尾軌、袋狀軌、crossover／turnback 與 passing facility 均由有序 `DirectedTrackTraversal` 表示；`TurnbackStopPosition` 是 edge-local `TrackPosition`，若停在 edge 中段，返回 traversal 必須從同一物理位置立即反向開始；資源在車尾 footprint 淨空後才釋放。
 - **passing rear-clear：**快速車車頭已離開 passing edge、但車尾仍在該設施時，停在平行 local edge 的普通車必須保持待避；不得把兩條平行 edge 投影成負 safety gap。普通車僅能在 passing movement rear-clear 後匯入正線。
+- **折返後道岔保護：**車頭完成折返停等、已進入返回路線時，即使車尾仍在原設施，仍須沿目前movement navigator預約前方道岔。預約以服務路線traversal索引保存，跨設施／主線cursor轉換仍保持鎖定，直到車尾淨空才釋放。不得以提早清除原設施movement繞過此狀態。
 - **結果邊界：**`TopologyResultContext`、`RouteProjection`、`PositionMeters` 僅能用於 UI、統計與匯出，不能用於物理、occupancy、safety 或 routing。
 - **V1 邊界：**V1 analytical API 可以使用 Route；不得由 V1 Route 回灌 V2 runtime。
 
@@ -51,6 +52,7 @@ StationId + PlatformId + TrackPosition + traversal index + chainage
 
 - `StationStopController` 是 V2 排定停站的單一進站速度控制來源。它以剩餘距離、目前速度／加速度、營運煞車能力、Jerk 與 0.1 秒步長產生距離－速度曲線，並呼叫 `BrakingEnvelopeCalculator` 預測現在全營運煞車的停止距離。
 - 預測停止距離超過剩餘距離 0.05 m 時，控制器要求營運煞車；否則由目標速度控制牽引、惰行或煞車。最後 12 m 的精停曲線額外限制為 3 m/s，並以 `sqrt(2 × 0.5 × max(0, D - 2 m))` 收斂至 2 m 近停吸附邊界。
+- 已停止的排定停站列車，只要最終允許速度仍高於目前速度，精停重新牽引可略過一般0.12 m/s牽引死區，避免停在2 m吸附範圍外約1 cm而永久停止。既有移動閉塞、資源允許速度與movement authority仍照常限制，不增加吸附距離。
 - `SimulationWorld` 先取站點控制目標，再對障礙物、越行及移動閉塞取更低允許速度；因此新控制器不放寬既有保護。既有 `StationBrakingActive` 低速解除條件保留，排定停站不再以該旗標作為持續全煞車的唯一控制。
 
 ## V3.4.1 本輪變更
@@ -95,6 +97,24 @@ StationId + PlatformId + TrackPosition + traversal index + chainage
 
 `SpatialCapacityGlobalParameters` 保存號誌／轉換時間、反應時間、PHF 與營運餘裕率；`SpatialCapacityTrainParameters` 保存列車長度、加減速度與煞車有效因子。各參考點先依型式計算最小追蹤時間 `Ts`，再套用安全係數、PHF 與營運餘裕率求得設計班距及每小時容量。坡度造成有效加減速度小於等於 0 時會拒絕計算，不輸出無效容量。
 
+## Schema 8 容量參考點與計算基準（2026-10-13）
+
+容量分析是獨立的手動規劃設定；不從 topology 自動猜測號誌重疊區、安全係數或旅客參數，也不改變 SimulationWorld 的安全、資源及固定步進。Schema 8 的可選 `spatialCapacity` 保存全域參數、列車參數、參考點及計算模式；舊檔缺少此欄位表示尚未配置，不能把預設示範值當成實際路線資料。
+
+新增設定預設 `TaiwanHandbook`；`UrcsCompatible` 用於重現既有結果。舊的 `SpatialCapacityAnalysis.Calculate` 呼叫未指定模式時仍採相容模式。兩模式目前僅中間站坡度來源不同：
+
+| 模式 | 清空車站加速度 | 進站煞車減速度 |
+| --- | --- | --- |
+| TaiwanHandbook | a0 − 0.009 × 離站坡度 | b0 + 0.009 × 進站坡度 |
+| UrcsCompatible | a0 − 0.009 × 進站坡度 | b0 + 0.009 × 離站坡度 |
+
+坡度以各自行駛方向定義，正值為上坡、負值為下坡；順逆行參數分開，不自動從固定里程坡度推測。輸入加減速度是尚未加入上述坡度修正的基準值，不能再輸入已含坡度的總有效值。介面速度使用 km/h，Engine 及存檔使用 m/s。先行列車巡航速度屬離站，續行列車巡航速度屬進站。
+
+其餘折返及銜接點公式保持現有模型；「手冊方向」模式的差异目前只涵蓋中間站坡度對應，不代表全部公式已完成逐項手冊一致性認證。結果展示安全時距 Ts、h=(1+MarginRate)Ts、trunc(3600/h) 列/h、依列車乘位計算並截斷的設計容量，以及再乘 PHF 並截斷的可達成容量。PHF 只作用於旅客容量，不作用於班距或列數。
+
+每筆輸出是該參考點與所填假設下的局部容量，不宣稱自動求得整線最大容量；沒有服務路徑／方向／營運情境 assignment 時，不將全網參考點直接取最小值。既有「資源占用與觀測容量」由模擬事件統計，與此理論計算維持不同定義。
+
+依據：運研所《2019年臺灣鐵道容量手冊》都會篇表4.1及4.2；TRB TCRP Report13 §3.7、Report165頁3-33；ERA Introduction to ETCS Braking Curves §3.3.1。國外文獻支持區段與坡度效應，沒有直接驗證URCS或本案例120秒。2026-10-13 URCS介面15組共60項輸出與相容公式相符；中間站進+10／離−10‰的相容班距約130.468秒、手冊方向約119.983秒。
 ## V3.1.0 本輪變更
 
 - V2 首頁不再顯示僅 V1 使用的列車數量、指定班距與首班時間；V2 初始發車以 `DispatchPlanDefinition`／發車計畫為準。播放倍率仍只控制 UI 推進節奏，不改變 Engine 時間。
@@ -575,7 +595,7 @@ safety_margin_value = actual_gap - dynamic_safety_distance
 
 - V4 topology 是抽象軌道圖，不是地理地圖或可直接用於工程設計的真實軌道平面。尾軌、袋狀軌、crossover、passing 與折返均有實體 edge／traversal，但幾何仍是概念模型。
 - 預設上下行使用不同軌道；尚未建立完整單線共用運轉與聯鎖失效模型。有向道岔轉向與 conflict resource 只提供概念層約束。
-- 尚未以逐段坡度、曲線阻力、超高、黏著變化及乘客上下車量動態修正列車性能；不同車型的額定性能已能逐車次套用，服務類型仍只表示普通／快速等營運身分。
+- 逐段edge-local坡度已作用於車頭單質點牽引／惰行與制動；尚未對整列車長度積分坡度、曲線阻力、超高、黏著變化及乘客上下車量。不同車型的額定性能已能逐車次套用，服務類型仍只表示普通／快速等營運身分。
 - 未以真實路線資料校準；人工輸入結果不能宣稱重現特定捷運路線。
 - 移動閉塞為概念模型，未涵蓋通訊失效、列車完整性、ATP／ATO／ATS 或安全完整性認證。
 - V4 已提供區間統計、中文 CSV、概念層多月台配置與實體 passing facility 越行；仍不宣稱全線自動超車排程、全域營運最佳化或安全認證。
@@ -622,3 +642,34 @@ OperatingNetworkBuilder 先建立獨立主線，再按父線順序加入支線�
 此為呈現契約，物理權威仍是 Engine 的 edge-local cursor；畫面不得反向修改速度、實體長度、停站或事件。驗收須涵蓋所有主線類別、上下行、跨 edge 等距位移及上下接軌例外，同時保留月台對位與接軌連續性檢核。
 
 路線圖對每個已接收的新 PlaybackFrame 畫出同一份位置，不另加會吞掉 frame 的 route 時間 gate；發幀與 dispatcher 仍控制更新節奏，同一 sequence 在未強制刷新時不重畫。示意圖像素速率不得當成營運速度數值。
+
+### 手冊案例所需的容量情境與敏感度（2026-10-13）
+
+`SpatialCapacityProjectSettings.CompareAsSingleScenario` 為可選欄位，預設false；只在使用者明確確認所有參考點屬同一分析情境時，`SpatialCapacityScenarioAnalysis.Calculate` 才分方向取最大原始設計班距為瓶頸。中間站使用方向別輸入，其餘設施沿用其单組幾何；不代表自動建立服務路徑或整個網路的容量assignment。
+
+`AnalyzeSensitivity` 重用同一容量計算器，支援銜接點主線連續通過比例及三種折返的停靠時間。驗證參數型式、ID、有限值、範圍及正步長，最多201筆；取固定起點加索引乘步長，不以累加造成漂移。若终點不能被步長整除，不額外加入不規則間隔的终點。選填目標班距使用未顯示四捨五入的原始h判斷，不能拿整秒顯示值作達標依據。
+
+手冊對照檔與正式值／補充假設見 `samples/handbook-capacity/README.md`。12檔使用既有三站示意載體，不是手冊14站完整路網建模。範例四圖示40秒與發布結果存在差異，另存45秒對照；範例七另存URCS相容對照；範例八保存35秒與33秒分支，不修改公式迎合手冊概略結果。
+
+## 容量輸入與實體運行對照（2026-10-15）
+
+- 容量設定仍預設為獨立分析；`CapacityRuntimeMapper.ApplyStations`是明確套用動作。以既有StationId、ServiceRoute與月台定位建立方向別停站模式、軌道速限、edge-local坡度及實體閉塞。缺站、坡度衝突、保護距離不足時拒絕整份候選設定，不猜測畫面座標或搬動現有幾何。
+- 動態坡度正值表示沿edge increasing offset上坡，Reverse traversal翻號，重疊不同坡度拒絕。採0.009 m/s²/‰近似；牽引／惰行扣除此重力分量，營運與緊急制動加上它。制動前視採剩餘movement最不利坡下界，前車停止距離信用用最強制動上界，平坡維持既有結果。尚非全車長積分或精確逐秒坡道包絡。
+- Schema 8新增可選`SignalBlocks`（舊檔預設空集合）。每個號誌使用明確TrackPosition、TraversalDirection、實體ProtectedSections、ClearanceDelaySeconds及BrakingSafetyFactor；解析後隨TopologySimulationDefinition進入同一SimulationWorld，不從容量公式讀取最小班距做門禁。
+- 號誌依實際footprint判斷整列車尾淨空，每0.1秒更新轉換計時；相交保護區共享互斥授權，即使車頭尚未跨線也不能同時開放相衝突車輛。Reset清空所有運行占用與計時。紅燈停止包絡使用坡道制動界線；最終移動權限與停站吸附亦不得越過紅線。若最後防護被迫截停，記錄`SignalAuthorityViolation`，不可計為無違規通過。
+- 中間站示範映射將合成入口設在停止列車上游車尾位置，保護至停車車頭＋出站號誌距離＋overlap；車尾清空後再經反應時間開放。安全係數擴大紅燈停止包絡；BrakeEffect乘於營運煞車，緊急煞車保留額定值。這是明列運行政策，非宣稱與手冊簡化項逐項等價。
+- 折返驗證幾何以手冊另加L的式義，使用車體端部至渡線／尾軌的sp間距；渡線保護依實際占用與轉換時間開放。PHF、旅客容量與營運餘裕保留於需求／分析層，不直接減慢列車。原有Jerk、較低實體速限、建立時間與定位誤差仍生效。
+- 比較工具預設11小時，保留[1800,37800)中央10小時，計數除以10，20個半小時桶；另保留積壓與延誤前後變化、安全事件、首末跨度流率與中位班距。計數解析度0.1列/h不等於模型準確度；積壓成長只能稱過載通過量。
+
+### 銜接點換線延遲與整線量測補充（2026-10-15）
+
+`TrackSignalBlockDefinition.DelayOnlyOnRouteChange` 預設為 false，保留每次車尾淨空後等待 `ClearanceDelaySeconds` 的行為。明確設為 true 時，以最後淨空車次的 `ServiceRouteId` 作為路由識別：後車路由相同可略過換線延遲，路由不同或無法唯一辨識仍等待完整延遲。實體占用、相交區互斥及紅燈停止權限照常生效。Reset 同時清空路由歷史。這是明確的示範路由政策，不能由相同繪圖線段推定兩條 ServiceRoute 等價。
+
+手冊範例六的 r 表示相鄰主線列車間未插入側線列車的比例，並非主線占總車流比例。工具以有側線／無側線的需求間隔組成輸入班表，公式僅決定需求，不作為 runtime 放行條件；結果檢查實際通過順序的 r、排隊與安全事件。
+
+完整 14 站示範路網採有限車隊與實體車輛接續，同一 VehicleId 往返 S1/S14，避免兩端獨立派車造成重複需求。最少車數取自由往返週期除班距後上取整，再取偶數以交替使用 S1 月台及雙尾軌；多餘週期時間均分至兩端。手冊缺少站距，13 個站心間距使用 1.2 km 示範假設，0.8/1.6 km 僅做有界自由循環敏感度。自由往返超過 30 分鐘，因此整線長跑採 12 小時、前 90 分鐘暖機及末 30 分鐘不計，中央 10 小時仍以 20 個半小時桶計數；局部案例維持 11 小時前後各捨 30 分鐘。
+### 容量結果圖表與觀測窗口（2026-10-16）
+
+CapacityObservationAnalysis只聚合既有SimulationEvent，明確指定StationId、方向、Arrival或Departure及[start,end)窗口，按ServiceRunId去重；缺ID保守忽略並計數。列車流率為事件數×3600/窗口秒數；跨度流率及排序後中位班距另列，少於兩筆為null。窗口非有限／非正長度或無效方向／事件種類拒絕。合法空窗口為0，不等同尚無快照／未映射／未完成窗口的缺值。觀測旅客流未建模。
+
+WPF容量結果視窗讀immutable PlaybackFrame；不重新建立world。紅色瓶頸線只消費已確認同一容量情境的Engine分析結果；型式顏色、方向、單位及觀測窗口皆隨匯出保留。詳見docs/CAPACITY_RESULTS.md。

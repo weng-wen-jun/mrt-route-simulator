@@ -1,4 +1,4 @@
-﻿using MrtRouteSimulator.Engine;
+using MrtRouteSimulator.Engine;
 
 internal sealed record SyntheticLongRouteScenarioStages(
     TopologyProjectDocument MinimalBaseline,
@@ -121,7 +121,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
         var template = StationLayoutTemplateService.Build(StationLayoutTemplateKind.IslandTwoTracks) with
         {
             ProjectId = ProjectId,
-            ProjectName = "13-中型-六站主要站示範範例",
+            ProjectName = "02-中型-六站主要站示範範例",
             Train = new ProjectTrainSettings(80d / 3.6d, 1.2, 1.5, 30, 30, 30),
             Operations = new ProjectOperationalSettings(1, 0.1, 65, 40d / 3.6d, 0, 100, 1.5, 2, 0.2, 0.2, 1, 5, 5),
             Simulation = new ProjectRunSettings(2, null, 0, 1, OperationProfileMode.RealisticOperations,
@@ -188,7 +188,7 @@ internal static class SyntheticLongRouteFullScenarioBuilder
             }
         };
         var projectName = stationIds.Count == StationIds.Length
-            ? "14-大型-二十八站完整營運範例"
+            ? "01-大型-二十八站完整營運範例"
             : template.ProjectName;
         return document with
         {

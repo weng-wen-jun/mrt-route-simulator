@@ -61,7 +61,7 @@
 ### 原生恢复與使用者停點（2026-10-01，23:06後）
 
 - 使用computer-use啟動上述4.0.3隔離exe，實際窗口id1905336／標題V4.0.3；原4.0.2窗口1053604保留，未強制關閉。
-- 初次觀察間有窗口大小變動與舊sample載入（不歸因為代理操作）。重新取得狀態，透過正常讀檔對話框載入隔離目錄的 `samples/14-大型-二十八站完整營運範例.mrtsim.json`；標題／CurrentProjectFile／就緒狀態確認正確來源，clock0.0s。
+- 初次觀察間有窗口大小變動與舊sample載入（不歸因為代理操作）。重新取得狀態，透過正常讀檔對話框載入隔離目錄的 `samples/大型/01-大型-二十八站完整營運範例.mrtsim.json`；標題／CurrentProjectFile／就緒狀態確認正確來源，clock0.0s。
 - 正常選單啟用 opt-in session `7baa84d7292e4446b12aca3a4959f972`，本地檔 `src/MrtRouteSimulator.App/bin/Release/net10.0-windows/NativeAcceptanceLogs/native-acceptance-20261001-150621862-7baa84d7292e4446b12aca3a4959f972.jsonl` 及events檔仍0bytes（尚未正常Play／未flush）。**未按Play、未開始60x sanity、未取得新DPI/input/memory/event驗收結果**。
 - 使用者要求「驗收作業先這樣，明天再繼續」後立即停止所有UI輸入，沒有更改倍率／分頁／DPI，也未操作停止量測。session保持待命、模擬仍0s；不建立自動續跑／提醒。明天由使用者返回後重新觀察實際窗口／clock／session，不能使用舊element indices。
 - 下一輪使用4.0.3整合exe＋sample14重新建立native證據；先取得真實DPI telemetry，確認Speed窄短裁切，完成60x sanity／同頁5輪memory／input／O04-O13-O20 visual／100-125-150 DPI等剩餘gate。若Speed最小修正需新授權，先回報，不默默擴大。

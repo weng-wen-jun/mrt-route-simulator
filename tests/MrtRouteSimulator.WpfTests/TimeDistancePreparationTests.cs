@@ -57,7 +57,7 @@ internal static class TimeDistancePreparationTests
 
     private static void VerifyPreparationDoesNotBlockDispatcherAndFirstPlannedDraw(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.GetFullPath(samplePath)));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(
@@ -125,7 +125,7 @@ internal static class TimeDistancePreparationTests
 
     private static void VerifyStaleCompletionCancellationFaultAndClose(string root)
     {
-        var samplePath = Path.Combine(root, "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json");
+        var samplePath = Path.Combine(root, "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json");
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.GetFullPath(samplePath)));
         var previousContext = SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(

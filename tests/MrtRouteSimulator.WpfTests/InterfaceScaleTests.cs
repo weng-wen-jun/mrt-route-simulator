@@ -24,7 +24,7 @@ internal static class InterfaceScaleTests
         {
             SetScale(1);
             var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(root,
-                "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+                "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
             var originalProject = TopologyProjectFormat.Serialize(document);
             WpfTestWait.Wait(WpfTestWait.InvokeOnUiAsync(window, "ConfigureTopologyProjectForPlaybackAsync", document, true));
             WpfTestWait.Advance(window, 20);

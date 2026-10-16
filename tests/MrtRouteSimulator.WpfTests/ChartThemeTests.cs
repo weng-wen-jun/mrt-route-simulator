@@ -274,7 +274,7 @@ internal static class ChartThemeTests
         var window = new MainWindow { Width = 1280, Height = 800 };
         try
         {
-            ShellLayoutTests.LoadSample(window, root, "14-大型-二十八站完整營運範例.mrtsim.json");
+            ShellLayoutTests.LoadSample(window, root, "大型/01-大型-二十八站完整營運範例.mrtsim.json");
             window.Show();
             WpfTestWait.WaitForPlannedTimeline(window);
             ((TabControl)window.FindName("WorkspaceTabControl")!).SelectedItem = window.FindName("SimulationTabItem");

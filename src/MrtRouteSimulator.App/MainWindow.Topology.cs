@@ -260,6 +260,7 @@ public partial class MainWindow
         ObstacleStopButton.IsEnabled = true;
         PlayButton.IsEnabled = true;
         PopulateV2Results();
+        RefreshSpatialCapacityResults();
         PlaybackStatusText.Text = "實際營運與完整計畫時間軸已就緒，可開始播放。";
     }
 

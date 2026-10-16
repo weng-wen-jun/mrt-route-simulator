@@ -5,7 +5,7 @@ internal static class PocketServiceReservationTests
     public static void TailAndPocketWaitWithoutReturnRouteLock()
     {
         var document = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            "samples", "10-小型-三站完整拓樸基準範例.mrtsim.json")));
+            "samples", "小型/10-小型-三站完整拓樸基準範例.mrtsim.json")));
         var graph = new InfrastructureGraphV4(document.Topology);
         var topology = new TopologySimulationDefinition(graph,
             document.ServiceRoutes.Single(item => item.ServiceRouteId == "DOWN"),
@@ -92,7 +92,7 @@ internal static class PocketServiceReservationTests
     public static void LargeSampleEveryTrainLocksTraversedSwitches()
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            Path.Combine("samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            Path.Combine("samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(sample);
         var world = CreateWorld(runtime);
         var infrastructure = world.TopologyInfrastructure;
@@ -168,7 +168,7 @@ internal static class PocketServiceReservationTests
     public static void LargeSampleO13PassUsesThroughRouteFromFirstLock()
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(Path.Combine(
-            "samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            "samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var world = CreateWorld(TopologyProjectFormat.CreateRuntime(sample));
         const string vehicleId = "EXPRESS-01";
         const string throughEdgeId = "EDGE:DOWN:O12:O13:B-001";
@@ -197,7 +197,7 @@ internal static class PocketServiceReservationTests
     public static void LargeSamplePlannedPhysicsCompletesWithSwitchLocks()
     {
         var sample = TopologyProjectFormat.Deserialize(File.ReadAllText(
-            Path.Combine("samples", "14-大型-二十八站完整營運範例.mrtsim.json")));
+            Path.Combine("samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json")));
         var runtime = TopologyProjectFormat.CreateRuntime(sample);
         var world = new SimulationWorldOptions(null, runtime.TrainParameters, runtime.OperationalParameters,
             runtime.DispatchPlan.Runs.Count, null, ProfileMode: OperationProfileMode.BasicPhysics,
@@ -216,7 +216,7 @@ internal static class PocketServiceReservationTests
 
     public static void LargeSampleLocalEntryLocksSidingAndClearsBeforeWaiting()
     {
-        var path = Path.Combine("samples", "14-大型-二十八站完整營運範例.mrtsim.json");
+        var path = Path.Combine("samples", "大型/01-大型-二十八站完整營運範例.mrtsim.json");
         var runtime = TopologyProjectFormat.CreateRuntime(
             TopologyProjectFormat.Deserialize(File.ReadAllText(path)));
         var world = CreateWorld(runtime);

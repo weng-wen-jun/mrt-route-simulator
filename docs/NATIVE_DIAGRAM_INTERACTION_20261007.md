@@ -51,7 +51,7 @@
 ## 額度末段既有interactive暖機診斷
 
 - 新test-only局部profiler未改檔；子代理只交付方案。需要另外await `WaitForPlannedTimeDistanceCacheWarmupAsync`，不能將`WaitForPlannedTimeline`直接視為display cache已就緒；建置／執行一律使用隔離artifact DLL，不用default輸出來混入原4.0.3。排空deferred callbacks後必須檢查timing count，不能把多次draw當一次cold sample。
-- 執行已完整驗證的`diagram-draw-phases-20261007` WPF DLL，`--profile-playback-only --profile-tab=TimeDistance samples/14-大型-二十八站完整營運範例.mrtsim.json`；exit0／PASS。原生量測已停止且原生視窗已關閉，沒有並行build/tests；runner是程式驅動的暖機／短播放profiler，不是native input／compositor驗收。
+- 執行已完整驗證的`diagram-draw-phases-20261007` WPF DLL，`--profile-playback-only --profile-tab=TimeDistance samples/大型/01-大型-二十八站完整營運範例.mrtsim.json`；exit0／PASS。原生量測已停止且原生視窗已關閉，沒有並行build/tests；runner是程式驅動的暖機／短播放profiler，不是native input／compositor驗收。
 - 60×實際59.60465×，sim606.3s／wall10.1720252s，publish22.2178fps／apply19.3668fps，drop29；Input dispatcher probe gap max216.4629ms（excess196.4629ms），不代表已消除舊Route stall或原生互動延遲。
 - TimeDistanceRender37筆p50 `1.2967`／p95 `3.68252`／max `11.0165ms`；SeriesVisuals37筆p50 `.2298`／p95 `1.10018`／max `10.2706ms`；IncrementalData37筆p50 `.5281`／p95 `2.37058`／max `4.3354ms`。此測段沒有StaticVisuals timing，不能拿暖機增量series取代cold建立25.2274ms的同資料重建比較。
 - cache：actual3795筆／4groups、planned178992筆／8groups；max actual display691／critical130、max planned display1624／critical1217、max ordinary571。critical點明確允許超过ordinary600預算，不為效能丟棄必要transition／extrema；資料指出planned曲線建立非空小樣本，但不證明逐點Add是原因。

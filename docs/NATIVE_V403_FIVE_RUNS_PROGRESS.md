@@ -3,7 +3,7 @@
 ## 固定條件
 
 - session `19aa5fa12b0041598c9fdd39826ee3b1`，由正常選單啟用；正常 Play／Reset，不直接推進 world、不呼叫 GC.Collect。
-- App 是整合工作樹 Release exe；案例為整合工作樹 `14-大型-二十八站完整營運範例.mrtsim.json`。同一 process／同一案例／運行圖分頁，UI倍率60×。
+- App 是整合工作樹 Release exe；案例為整合工作樹 `大型/01-大型-二十八站完整營運範例.mrtsim.json`。同一 process／同一案例／運行圖分頁，UI倍率60×。
 - 真實 DPI144×144（150%）、介面縮放100%；1152×676.667 DIP，外層捲到頁首可隱藏位置。沒有在連續播放中並行重型 build／tests。
 - 原始紀錄：`src/MrtRouteSimulator.App/bin/Release/net10.0-windows/NativeAcceptanceLogs/native-acceptance-20261002-110952157-19aa5fa12b0041598c9fdd39826ee3b1.jsonl`，另有同名 `.events.jsonl`。
 - 已另存兩個session的原始metrics／events到 `docs/native-acceptance-raw/`，不依賴bin目錄長期存在。

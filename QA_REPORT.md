@@ -1,8 +1,82 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 容量顯示精度切換（2026-10-16）
+
+- 容量結果視窗上方新增整數截斷／未截斷3位小數切換。列車容量欄、柱高、瓶頸摘要／紅線與CSV模式同步；未截斷柱高及瓶頸採原始3600/h，標籤顯示3位小數。設計與可達成旅客容量維持Engine結果；理論實測比較固定未截斷，柱標籤同樣顯示3位。
+- WPF專項核對兩種模式的數值比例、瓶頸線位置、每點3位標籤與表格、CSV模式及切回整數；實際驗圖artifacts/capacity-chart-ui/route-capacity-forward-decimal.png。例七S14由13切至13.743列/h。
+- Release solution 0警告／0錯誤，完整Engine238/238、0失敗，完整WPF PASS WPF visual rules。新建置獨立於artifacts/capacity-chart-decimal-build/，測試輸出capacity-chart-decimal-validation/，日誌capacity-chart-decimal-{build,engine,wpf}.log。
+- 未改容量公式、模擬物理與Schema，舊建置與38輪證據保留。此建置Engine SHA256 AACFC64169DAC1F1D5824B4545E4565BF618B105F91C327294D5A89A722A372F；未commit／push／發布。
+
+## 容量結果圖表與實測比較（2026-10-16）
+
+- 容量參考點頁新增「容量圖表與比較…」入口；結果表、順逆行、按五類設施配色長條圖、路線／設計／可達成容量、同情境紅色瓶頸線及理論實測比較。PNG／PDF／CSV儲存與表格／圖片複製已接入。
+- 只讀同一PlaybackFrame，不另建world。觀測窗口採[start,end)，明確Arrival／Departure及StationId，車次去重／缺ID提示；合法零事件與未模擬／無映射／無效窗口分開。理論比較用未截斷3600/h，旅客容量只作理論顯示。
+- 新增6項Engine觀測回歸，涵蓋窗口、方向、站ID、去重、大小寫、空值、短窗、非均勻班距中位數；完整238/238，0失敗。Release solution 0警告、0錯誤；完整WPF PASS WPF visual rules。鎖檔時使用獨立artifacts輸出，未繞過測試。
+- WPF專項核對方向柱高／瓶頸線、未確認情境無紅線、無快照缺值、controlled immutable snapshot的3/h及方向1/h／到站2/h、窗口邊界／零事件／超出快照後清除舊值，及PNG/PDF/CSV有效輸出；實際檢視圖表與整個結果視窗的離屏截圖。截圖在artifacts/capacity-chart-ui/。未宣稱原生桌面滑鼠／DPI人工驗收。
+- 最終建置artifacts/capacity-chart-build/；測試來源輸出artifacts/capacity-chart-final-validation/，日誌capacity-chart-final-build.log、capacity-chart-engine-acceptance.log、capacity-chart-wpf-acceptance.log。Engine SHA256 B02C2C8F6B805941130D6D12B90DB87E3AA63B733B0078C7D0C135D69FF3A5E9。使用說明docs/CAPACITY_RESULTS.md。
+- 新增分析服務改變組件雜湊，但未修改既有物理、派車或Schema。下方38輪長跑仍保留其凍結Engine及原始證據；不把它們改標為此新建置的結果。未commit／push／發布。
+
+## 全部手冊案例補完與整線長跑（2026-10-16）
+
+- 補完銜接點範例六 r=0..1 的11輪、範例七S1局部1輪、S7/S10雙向及URCS對照8輪、14站範例七／八及35／33秒分支各設計需求與150秒整線8輪；範例一／三／四與45秒分支8方向、範例二／五2輪亦以同一Engine重跑。合計38輪；原始手冊8例及4補充分支均有覆蓋，非每項實地設計資料都已知。
+- 局部均11小時、中央10小時；整線12小時，前90分鐘暖機、末30分鐘不計，中央10小時20個半小時桶。整線自由往返約56–58分鐘；站距為13個1.2km示範值，0.8/1.6km僅做有界自由循環敏感度。有限車隊同車接續，900秒檢查不重複產生實體車輛。
+- 新增可選DelayOnlyOnRouteChange，預設false保留原行為；只按明確ServiceRouteId辨識同路由，未知或不同路由仍等待，實體占用／衝突授權不變。對應同路由、不同路由與Reset回歸通過。
+- 局部站點／折返及銜接點38輪中的30輪均無四類安全事件；銜接點11比例主線通過量30至88.1列/h，S1局部26.8列/h，S7/S10依設計需求及模式對照。這是給定需求下可行性，不是獨立搜尋最大容量。
+- 整線保留120秒單尾軌在150秒派車下約16列/h，積壓增量161，預測事件150,248次；雙尾軌150秒雙向24列/h、積壓增量0、四類事件0。雙尾軌設計需求139.648秒可達約25.8列/h，但有148次預測事件。35／33秒單尾軌雖平均達到需求（150秒時雙向24列/h），各有約2.9萬次預測狀態事件，不判零預警通過。所有整線實際碰撞、停站違規、授權最終防護介入為0；預測事件為全12小時狀態轉換次數，不是獨立事故數。
+- 35秒分支公式含餘裕設計班距151.443秒，仍大於150秒；33秒148.843秒。平均達標、公式餘裕及動態預警分開判讀。旅客上下車與擁擠未模擬，列車通過量不是實際旅客吞吐量。
+- 有界首警診斷以實體footprint核對S14淨距，確認靜止障礙煞停需求與動態安全狀態門檻不同；所見窗口未出現EnvelopeIntrusion，但部分最小動態裕度為0m，不推及完整12h。LeaderRearPositionMeters顯示語意問題列入TODO，本批以ActualGap／footprint判讀。詳見artifacts/handbook-network-warning-review/REPORT.md。
+- Release solution 0警告／錯誤、Engine232/232、完整WPF PASS WPF visual rules；工具建置0警告／錯誤、非對稱窗口self-test通過。Engine SHA256 FC38528FF0876BBBC9E017CAA56DEC6545FF190039EFDE179A6056277DD6FC12，所有新長跑及獨立新建置一致；git diff --check exit0。沒有改版本或對外發布。
+- 完整報告、逐輪專案、manifest及量測集中於 `artifacts/capacity-throughput-experiment/handbook-completion-11h/`；獨立應用程式為 `artifacts/handbook-completion-build/`，重現工具為 `artifacts/handbook-completion-tools/`。既有結果保留，下方段落為歷次驗算，不作為最新覆蓋狀態。
+
+## 容量參數動態整合與11小時對照（2026-10-15）
+
+- 新增實體軌道坡度牽引／惰行／營運及緊急制動，停站、速限及移動閉塞以前方最不利坡道計算包絡；平坡事件完全一致回歸通過。
+- Schema 8可選SignalBlocks實際控制紅燈保護、overlap、相交區互斥授權、車尾淨空與轉換時間。每Tick持續更新計時、Reset復歸，最終移動及停站吸附不得越紅線；介入另記SignalAuthorityViolation。
+- 容量頁新增「套用中間站參數至運行」，明確StationId對應後套用方向停站／速限／坡度、車型性能與營運煞車有效因子；候選完整驗證後才替換。折返幾何以builder重建站前15/30m、站後20m、渡線及對稱尾軌15m端部淨空。
+- 完整Release solution build：0警告、0錯誤。最終Engine231/231通過，完整WPF exit0、PASS WPF visual rules；WPF亦核對套用入口。先前UseAppHost=false導致DPI artifact檢查缺exe，正式apphost重建後完整重跑通過，未降低測試。
+- 全部18輪（中間站8方向、折返10情境）各推進39,600秒，取[1800,37800)中央10小時，20段半小時桶；事件數除以10，解析度0.1列/h。獨立桶加總與相同Engine SHA核對通過。
+- 中間站8方向設計班距下實測28.5/28.5、27.6/25.2、37.3/33.8、34.9/31.9列/h，均無新增起點積壓、碰撞／制動侵入預測／停站／授權違規。與未截斷3600/h的差別在0.1列/h計數解析度內；不代表獨立證明最大容量。
+- 150秒目標：雙尾軌、單尾軌35秒及33秒停等均為24列/h，積壓增量0、四類安全事件0。保留120秒的單尾軌只能16列/h，未到折返站增量80列、制動侵入預測131,275次；這些是預測狀態變化事件，不是實際碰撞。全折返批次碰撞、停站違規及授權最終防護介入均為0。
+- 35秒方案公式含餘裕設計班距仍151.443秒；物理模擬可跑150秒不等於滿足同一設計餘裕。33秒公式148.843秒。未以公式Ts節流或降低validator迎合結果。
+- 坡度單質點、有限區界及合成進站號誌仍是明列假設；緊急煞車、Jerk、建立時間與定位誤差不全等同手冊簡化式。銜接點與S1–S14完整路網尚未等條件重建，未宣稱現地／安全認證或原生Windows DPI滑鼠驗收。
+- 最終報告與可載入案例集中 `artifacts/capacity-throughput-experiment/after-alignment-11h-final/`；新建置獨立於 `artifacts/capacity-alignment-11h-build/`，Engine SHA與驗證工具相同。舊3小時及修正前證據保留；版本仍4.1.1，未commit、push、tag或Release。
+
+## 手冊案例實際運行對照（2026-10-15）
+
+- 每輪SimulationWorld固定0.1秒推進3小時，統計中間2小時單方向事件數÷2，另附四段半小時、積壓與安全事件。主報告依案例設計班距與範例八150秒目標；最密班距另列補充，不作為手冊原要求。
+- 中間站4組雙方向名義班距均無新增起點積壓及碰撞／預測警示／停站違規；實測計數與未截斷理論流率的差別在0.5列/h計數解析度內。這只能證明目前部分參數對齊模型可承受該派車率。
+- 實體折返6種情境共10輪完整3小時。雙尾軌150秒目標達24列/h，積壓增量0、三類安全事件0；單尾軌35／33秒停等在150秒派車下為21／21.5列/h，未到折返站增量6／5列，且有煞車侵入預測警示。實體模板幾何與動態坡度未等條件復原，不據此判定手冊公式錯誤。
+- 修正精停牽引死區卡死及折返後前方道岔預約缺口；兩項均有修正前失敗、修正後通過的回歸。交叉節點smoke涵蓋雙月台與雙尾軌，同車接續、預約／釋放，零碰撞／預測警示／停站違規。
+- 最終Release solution build：0警告、0錯誤；完整Engine225/225、0失敗；完整WPF runner exit0、PASS WPF visual rules。未宣稱原生Windows DPI／滑鼠人工驗收。
+- 報告、逐輪可載入專案、指標、來源與未對齊參數集中 `artifacts/capacity-throughput-experiment/after-fix/`；最新應用程式另置同層 `../app-build/`，版本維持4.1.1。未新增commit或對外發布。銜接點、S7/S10動態坡度及S1–S14完整路網尚未等條件復原。
+## 範例分類與重新編號（2026-10-13）
+
+- 15份專案維護路線範例分入 `samples/小型/`（12份，01–12）、`samples/中型/`（2份，01–02）及 `samples/大型/`（1份，01）；原12/13/14/15號改為中型01/02、大型01及小型12。手冊容量12檔仍在 `samples/handbook-capacity/`。
+- 同步測試、產生器、MCP腳本及文件引用，各分類附README索引；大型覆蓋矩陣隨範例移入大型資料夾。根目錄不再混放路線JSON。
+- 15/15逐檔比較拓樸、車型、服務、停站、派車及營運設定一致，僅檔案路徑、編號及部分顯示名稱同步。大型範例由原builder重建，保留artifact parity；主支線範例亦保留CreateExample一致性。
+- Release solution build：0警告、0錯誤。最終完整Engine runner：223/223通過、0失敗；完整WPF runner：exit 0、PASS WPF visual rules。分類編號及README連結檢查通過；手冊產生器在新路徑重建成功；git diff --check通過。
+- 最新建置仍集中 `artifacts/handbook-capacity-build/`，版本維持4.1.1。沒有新增commit、push、tag或Release；未宣稱原生Windows DPI／滑鼠人工驗收。
+
+## 手冊8例存檔與對應元素（2026-10-13）
+
+- 存檔集中 `samples/handbook-capacity/`：8個容量案例與4個對照／改善分支，共12個Schema 8檔；原有15個專案維護範例保持原位。可重建產生器為 `scripts/HandbookCapacityExamples/`。
+- 新建置集中 `artifacts/handbook-capacity-build/`，版本維持既有4.1.1，沒有新增commit、push、tag或Release。
+- 新增明確opt-in的同容量情境瓶頸比較，以及銜接點主線連續通過比例／折返停等時間敏感度；原始容量公式由同一Engine提供。
+- 最後原路徑Release solution build：0警告、0錯誤。Engine完整runner：223/223、0失敗；範例全集由15更新為27，所有新檔同樣執行完整結構與有界運行檢查，未排除子資料夾。
+- 完整WPF runner：PASS WPF visual rules。12檔載入驗收涵蓋設定與結果列、例四40/45秒差異、例七雙模式、S14瓶頸、33秒達標分支；新增情境旗標取消／套用、敏感度範圍／適用型式／有限值驗證亦通過。
+- 單獨輸出目錄建置成功，但既有完整runner依assembly所在目錄尋找repository root，造成路徑相關失敗；使用者關閉原程式後，改以原專案路徑重建及重跑，最終完整runner通過。未修改validator以繞過資料問題。
+- 輸入核對以公開手冊PDF與圖像為來源；例二全域有明列，其餘未明列欄位與例五／六列車採補充假設，見案例README及verification-results.json。例四40秒原圖不能得到發布34/31列；45秒分支可重現。例七手冊方向S7/S10為26/28列，URCS相容為25/27列。例八35秒在目前明列全域假設下h=151.443秒；33秒為148.843秒。
+- 檔案的三站實體路線是示意載體，不是手冊S1–S14完整路網。載體運行通過不構成手冊實際路網或容量的認證。
+## Schema 8 容量參考點與坡度雙模式（2026-10-13）
+
+- 修改前基準已本地提交 `23a299f264e0e9c344f3bf3182a35df8937a1a25`（76項既有變更）；新容量實作不混入該commit，保留未提交差異。
+- Engine完整runner：219/219通過、0失敗。新增測試涵蓋3組坡度兩模式、五類平坡、站前／站後交替股道30/180秒、Schema 8有／無容量設定往返、無效模式、重複ID及空參考點仍驗證參數。
+- 整合Release solution build：0警告、0錯誤；WPF容量專項通過，涵蓋引擎精確顯示、交易取消／套用、速度單位往返、切點及切分頁輸入保留、無效輸入、小視窗及拓樸工作區保留容量metadata。
+- 完整WPF runner：PASS WPF visual rules，含容量專項與既有導覽、播放、輸出回歸；最後高精度顯示修正另重建並重跑容量專項通過，避免未修改數值在編輯往返被截斷。原生桌面 Computer Use 啟動時應用程式存取授權逾時，未宣稱原生滑鼠操作驗收完成。
+- URCS相容結果來自2026-10-13介面黑箱：15組、60項輸出相符。手冊方向坡度值由公開公式計算，外部文獻只交叉核對物理對應，不構成對數值的獨立實測認證。
 ## 大型路網快速車畫面假變速（2026-10-12）
 
-- 重現存檔：`samples/14-大型-二十八站完整營運範例.mrtsim.json`。O13 快速通過正線 `EDGE:DOWN:O12:O13:B-001` 的 660 m 股道被站心顯示錨點分段拉伸／壓縮；實際渲染幾何的等距 X 位移為 0.834648～1.935798 px，前後比例 2.319299。修正前回歸先失敗，證據 `output/route-geometry-before.log`。
+- 重現存檔：`samples/大型/01-大型-二十八站完整營運範例.mrtsim.json`。O13 快速通過正線 `EDGE:DOWN:O12:O13:B-001` 的 660 m 股道被站心顯示錨點分段拉伸／壓縮；實際渲染幾何的等距 X 位移為 0.834648～1.935798 px，前後比例 2.319299。修正前回歸先失敗，證據 `output/route-geometry-before.log`。
 - 物理核對：同一存檔的 SimulationWorld 固定 0.1 s 推進，EXPRESS-01 在 1332.6→1332.7 s，車體中心 offset 319.221→321.445 m，速度均為 80.072000 km/h；本次問題點的變速是顯示映射造成。新增實際車輛核對涵蓋該股道 297 筆位置。
 - 修正：非載客 Mainline 通過參考點採 edge offset 等比例 X 映射，保留共用接軌端點與原有軌道 Y；載客月台維持站心對位。O04／O13 上下行共四條快速通過正線的等距位移比皆為 1.000000。非載客通過參考點依實體偏移顯示，不強制拉到載客月台同一站心；接軌、載客月台、上下行軌距、曲線及版面 guard 保留。
 - 另一項確定問題：worker 發幀與 UI timer 都已限速，再加 route 的 33 ms gate，會出現已接收新 frame、已更新 sequence，卻未繪製 route，無新 frame 時也不補畫。移除 route 的重複 gate，仍由既有發幀／dispatcher 節奏控制。確定性重現由 consumed=1／routePaint=0 改為 consumed=1／routePaint=1，沒有新 frame 時不重畫。證據 `output/route-cadence-before.log`、`output/route-cadence-after.log`。
@@ -18,7 +92,7 @@
 - 回歸修正：上行跨站事件在精確 route key 不適用時保留方向別共同里程，incremental/full 坐標一致；時刻表車站欄改固定寬度，保留其他欄可讀寬度及水平捲動；舊檔 route.Direction 缺少時依 DirectionRouteBindings 選合法路徑，單一候選直接採用，多條仍可選擇。既有 assertion 保留，另加欄寬與新增上行班次 route binding assertion。
 - MCP stdio：initialize／tools/list／tools/call、15 tools、3 輪並行 advance/reset 通過；sample 15 的 project_get metadata、四車次、18 筆時刻表、10 個逐站發車／dwell 控制與 reset 通過。證據：`output/v411-mcp-standard.log`、`output/v411-mcp-feature.log`。
 - WPF named pipe bridge、載入失敗不污染、專案切換及輸出通過，包含大型 PNG 後切換小型 PDF；完整 runner 與 `output/v411-wpf-mcp-final.log` 均有紀錄。最終桌面黑箱直接指定本輪 DLL，載入／推進／切頁／縮放／播放／暫停／事件／時刻表／重設與 CSV／PNG／PDF 通過，測試自建視窗正常關閉。證據：`output/v411-mcp-desktop-final.log`。本機 Codex 註冊未改；執行中的其他版本 server 不會自動更新。
-- 新 sample：`samples/15-小型-主支線逐站班表範例.mrtsim.json`，由 OperatingNetworkBuilder.CreateExample 建立；全為 synthetic 值。Structural 通過，四車次於 1152.4 秒完成、無碰撞、共用資源釋放；另有多支線共用幹線與資源延遲後仍停滿的回歸。Manifest 見 `samples/README.md`。
+- 新 sample：`samples/小型/12-小型-主支線逐站班表範例.mrtsim.json`，由 OperatingNetworkBuilder.CreateExample 建立；全為 synthetic 值。Structural 通過，四車次於 1152.4 秒完成、無碰撞、共用資源釋放；另有多支線共用幹線與資源延遲後仍停滿的回歸。Manifest 見 `samples/README.md`。
 - 離屏圖片已檢視：`output/v411-editor-visuals/operating-lines-1360x860.png`、`station-timetable-dialog-700x520.png`；`output/v411-results-build/screenshots/v411-timetable-route-filter-15rows.png`、`v411-time-distance-branch-route.png`。欄位／HH:mm:ss／套用取消按鈕可見，時刻表水平捲動保留欄寬。
 - 邊界：單線為整段資源互斥與端點等待的保守控制，尚無自動分區閉塞／會車最佳化；多線建置會重建草稿，應先另存原專案再檢查套用。起站停站為 0；終點發車由反向車次控制；跨站不適用、未發車停站中。原生 Windows DPI、compositor、滑鼠手感與既有長時間效能人工 gate 未重跑，不把離屏或 named pipe 測試視為人工驗收。
 
