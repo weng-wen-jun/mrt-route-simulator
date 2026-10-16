@@ -327,6 +327,8 @@ internal static class ShellLayoutTests
             var headers = menu.Items.OfType<MenuItem>().Select(item => (string)item.Header).ToArray();
             Require(headers.SequenceEqual(["_檔案", "_編輯", "_顯示設定", "_原生驗收量測"]),
                 $"頂層選單應為檔案／編輯／顯示設定／原生驗收量測，實際：{string.Join("、", headers)}");
+            var fileMenu = menu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "_檔案");
+            Require(fileMenu.Items.OfType<MenuItem>().Any(item => AutomationProperties.GetName(item) == "更新中心"), "檔案選單必須提供更新中心。");
             var edit = menu.Items.OfType<MenuItem>().Single(item => (string)item.Header == "_編輯");
             Require(edit.Items.OfType<MenuItem>().Select(AutomationProperties.GetName).SequenceEqual(["快速起稿", "軌道與設施工作區", "服務與路徑工作區", "模擬設定"]),
                 "編輯選單必須依序有快速起稿、軌道與設施、服務與路徑、模擬設定。");

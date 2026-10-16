@@ -40,6 +40,7 @@
                         <MenuItem Header="存檔" Click="SaveProject_Click" AutomationProperties.Name="儲存模擬專案" />
                         <MenuItem Header="讀取存檔" Click="LoadProject_Click" AutomationProperties.Name="讀取模擬專案" />
                         <Separator />
+                        <MenuItem Header="更新中心…" Click="OpenUpdateCenter_Click" AutomationProperties.Name="更新中心" />
                         <MenuItem x:Name="ExportFixedTimetableArchiveMenuItem" Header="匯出完成後固定時刻表…" Click="ExportFixedTimetableArchive_Click" AutomationProperties.Name="匯出完成後固定時刻表" />
                     </MenuItem>
                     <MenuItem Header="_編輯" AutomationProperties.Name="編輯選單">
@@ -73,6 +74,7 @@
                                   ToolTip="以黃色光帶標示列車目前占用的整條軌道區段；資料直接取自模擬核心。"
                                   AutomationProperties.Name="顯示區段占用亮燈" />
                     </MenuItem>
+
                     <MenuItem Header="_原生驗收量測" AutomationProperties.Name="原生驗收量測">
                         <MenuItem Header="播放／繼續播放" Tag="play" Click="Play_Click" AutomationProperties.Name="驗收正常播放／繼續播放" />
                         <MenuItem Header="暫停" Tag="pause" Click="Pause_Click" AutomationProperties.Name="驗收正常暫停" />

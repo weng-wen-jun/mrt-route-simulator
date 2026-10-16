@@ -13,5 +13,22 @@
   <ItemGroup>
     <ProjectReference Include="../MrtRouteSimulator.Engine/MrtRouteSimulator.Engine.csproj" />
     <ProjectReference Include="../MrtRouteSimulator.Automation/MrtRouteSimulator.Automation.csproj" />
+    <ProjectReference Include="../MrtRouteSimulator.UpdateCore/MrtRouteSimulator.UpdateCore.csproj" />
+    <ProjectReference Include="../MrtRouteSimulator.Updater/MrtRouteSimulator.Updater.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+  <Target Name="CopyUpdateRunner" AfterTargets="Build">
+    <MSBuild Projects="../MrtRouteSimulator.Updater/MrtRouteSimulator.Updater.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_UpdateRunnerTarget" />
+    </MSBuild>
+    <ItemGroup><_UpdateRunnerFiles Include="%(_UpdateRunnerTarget.RootDir)%(_UpdateRunnerTarget.Directory)*.*" /></ItemGroup>
+    <Copy SourceFiles="@(_UpdateRunnerFiles)" DestinationFolder="$(OutDir)updater" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="PublishUpdateRunner" AfterTargets="ComputeFilesToPublish" DependsOnTargets="CopyUpdateRunner">
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_UpdateRunnerFiles)">
+        <RelativePath>updater/%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

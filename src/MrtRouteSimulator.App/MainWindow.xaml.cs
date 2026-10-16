@@ -73,6 +73,7 @@ public partial class MainWindow : Window
             DrawRoute();
             DrawSpeedProfile();
             InitializeMcpBridgeFromArguments();
+            _ = CheckUpdatesAtStartupAsync();
         };
         _trackInitialWindowSize = true;
     }

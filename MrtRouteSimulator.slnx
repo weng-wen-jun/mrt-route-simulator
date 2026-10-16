@@ -6,4 +6,9 @@
   <Project Path="tests/MrtRouteSimulator.PlaybackBenchmarks/MrtRouteSimulator.PlaybackBenchmarks.csproj" />
   <Project Path="src/MrtRouteSimulator.Automation/MrtRouteSimulator.Automation.csproj" />
   <Project Path="src/MrtRouteSimulator.Mcp/MrtRouteSimulator.Mcp.csproj" />
+  <Project Path="src/MrtRouteSimulator.UpdateCore/MrtRouteSimulator.UpdateCore.csproj" />
+  <Project Path="src/MrtRouteSimulator.Updater/MrtRouteSimulator.Updater.csproj" />
+  <Project Path="tests/MrtRouteSimulator.UpdateTests/MrtRouteSimulator.UpdateTests.csproj" />
+  <Project Path="tests/MrtRouteSimulator.UpdaterTests/MrtRouteSimulator.UpdaterTests.csproj" />
+  <Project Path="tests/MrtRouteSimulator.UpdateWpfTests/MrtRouteSimulator.UpdateWpfTests.csproj" />
 </Solution>

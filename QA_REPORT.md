@@ -1,5 +1,17 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## 軟體內程式／範例資料更新（2026-10-16）
+
+- 新增「檔案 → 更新中心」：手動版本檢查、可選啟動通知、下載進度與取消、兩通道更新、維護範例載入及最近更新前專案副本載入。程式採完整套件更新；未實作差分 OTA。資料經同一 Engine 驗證後切換版本目錄，不改使用者專案。
+- 獨立 updater 等待符合 PID／啟動時間／執行檔的主程序退出，不強制終止程序、不提升權限。列管 receipt 限制檔案範圍；先驗證同目錄暫存檔再原子替換，備份及 journal 支援失敗復原與中斷後 --recover。工作目錄／Git 祖先／reparse point 不接受自我更新，介面提前說明原因。
+- 更新核心43/43、更新器17/17、STA更新中心／服務13/13通過；包含真 Engine 有效／無效資料、雜湊／大小／ZIP路徑／symlink／取消、鎖檔、來源變更、rollback、PID重用防護、損毀active指標不污染工作區及復原副本。
+- Release solution建置0警告／0錯誤，完整Engine238/238、0失敗；完整WPF最終 PASS WPF visual rules，含800 DIP／125%排版。初次新增頂層選單造成播放列溢出，已改既有檔案選單；隔離輸出缺少既有DPI測試固定路徑apphost，補標準Release App建置後完整重跑通過。更新中心PNG為離屏驗證，不代表原生桌面滑鼠／DPI驗收。
+- 本地完整包位於 artifacts/in-app-updates-final-20261016/portable/；包含獨立updater、MCP、receipt及完整samples。應用程式DLL與測試建置／publish／portable的SHA256皆為 E3E49E817DAE7771ADA9470963BFB6D84F251F448595689753853B056CE3904D。此版Engine SHA256 F4A2D346FD43292025A65BD9B0FB3982360EB118D769E7CF7DF6DEE6A9975A26；未改Engine來源，不把歷史38輪長跑改標為此建置結果。
+- 真實套件整合verifier通過：兩份manifest及ZIP fake GitHub digest staging、27份實際mrtsim專案全部Deserialize/CreateRuntime、資料啟用、66個managed檔案逐項hash，以及隔離4.1.0 receipt→4.1.1替換並保留自訂檔。原指定28份，實際27份，未虛構缺少的樣本。
+- 日誌：artifacts/in-app-updates-build/{wpf-final,update-core-final,updater-final,update-wpf-final}.log。套件驗證及hash：artifacts/in-app-updates-package-validation/REPORT.md、validation.log、package-sha256sums.txt；介面截圖：artifacts/update-wpf-tests/update-center-760x660.png。
+- 借鏡官方MAA pending plan／外部updater／資源更新流程並獨立實作，未複製其AGPL來源。官方來源與操作方式見docs/UPDATES.md；完整唯讀研究在artifacts/maa-update-research/REPORT.md。
+- 本次確認公開GitHub最新Release仍v4.1.0，只有舊ZIP及SHA256SUMS.txt，尚無新更新manifest／資料Release。此為本地候選包及隔離驗證，未對外發布、未commit／push。portable位於本repo內時只供執行驗看；須整份複製到專案外，才可使用程式更新。
+
 ## 容量顯示精度切換（2026-10-16）
 
 - 容量結果視窗上方新增整數截斷／未截斷3位小數切換。列車容量欄、柱高、瓶頸摘要／紅線與CSV模式同步；未截斷柱高及瓶頸採原始3600/h，標籤顯示3位小數。設計與可達成旅客容量維持Engine結果；理論實測比較固定未截斷，柱標籤同樣顯示3位。
