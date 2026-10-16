@@ -83,4 +83,4 @@ data ZIP 只包含 `samples/` 下遞迴找到的 `.mrtsim.json` 與 `README.md`�
 
 Maa repository 與 WPF/updater source 採 AGPL-3.0-only（見其 [`LICENSE`](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/23feeddc538de4e10646b692b0bb065efe77ccb3/LICENSE)／[`LICENSE.spdx`](https://github.com/MaaAssistantArknights/MaaAssistantArknights/blob/23feeddc538de4e10646b692b0bb065efe77ccb3/LICENSE.spdx)）。本專案是 MIT；此處只採用獨立設計概念與介面契約，沒有複製 Maa 的 AGPL 程式碼、類別、字串或實作。未來若引入任何第三方更新器程式，必須另做授權相容性審核。
 
-已知限制：application manifest 尚未攜帶檔案簽章；GitHub digest 與 HTTPS/固定 repository 驗證是目前信任邊界。portable 是 framework-dependent 發行材料，所需 .NET runtime 及第三方授權檔必須由發布流程另行確認；本 script 不替建置、測試、原生 Windows 安裝驗收或 release gate 背書。
+已知限制：application manifest 尚未攜帶檔案簽章；GitHub digest 與 HTTPS/固定 repository 驗證是目前信任邊界。Build-UpdatePackages可接受framework-dependent或self-contained來源；正式Windows完整包由Build-Release產製並附帶.NET runtime與對應第三方授權；本 script 不替建置、測試、原生 Windows 安裝驗收或 release gate 背書。

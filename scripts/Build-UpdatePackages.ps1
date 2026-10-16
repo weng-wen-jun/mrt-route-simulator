@@ -85,7 +85,7 @@ function Test-PathWithin([string] $Path, [string] $Root) {
 
 function Assert-OutputDoesNotOverlapSources([string] $Output, [string[]] $Sources) {
     foreach ($source in $Sources) {
-        if (Test-PathWithin $Output $source -or Test-PathWithin $source $Output) {
+        if ((Test-PathWithin $Output $source) -or (Test-PathWithin $source $Output)) {
             throw "輸出目錄不可與來源目錄重疊：$Output / $source"
         }
     }
@@ -114,7 +114,15 @@ function Assert-SafeRelativePath([string] $Path) {
 function Test-AllowedApplicationPath([string] $Path) {
     try { Assert-SafeRelativePath $Path | Out-Null } catch { return $false }
     $parts = $Path.Split('/')
-    if ($parts.Count -gt 1 -and $parts[0] -cnotin @('runtimes', 'mcp', 'updater')) { return $false }
+    if ($parts.Count -eq 2 -and $parts[0] -ceq 'third-party-licenses') {
+        return $parts[1].EndsWith('.txt', [System.StringComparison]::OrdinalIgnoreCase) -or
+            $parts[1].EndsWith('.md', [System.StringComparison]::OrdinalIgnoreCase)
+    }
+    if ($parts.Count -gt 1 -and $parts[0] -cnotin @('runtimes', 'mcp', 'updater')) {
+        return $parts.Count -eq 2 -and
+            $parts[0] -cin @('cs', 'de', 'es', 'fr', 'it', 'ja', 'ko', 'pl', 'pt-BR', 'ru', 'tr', 'zh-Hans', 'zh-Hant') -and
+            $parts[1].EndsWith('.resources.dll', [System.StringComparison]::OrdinalIgnoreCase)
+    }
     $name = $parts[$parts.Count - 1]
     if ($parts.Count -eq 1 -and $name -cin @('README.md', 'LICENSE.txt')) { return $true }
     return $name.EndsWith('.dll', [System.StringComparison]::OrdinalIgnoreCase) -or

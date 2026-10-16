@@ -95,6 +95,29 @@ internal static class Program
                     finally { blocked.Close(); }
                 }
             });
+            Test("software job carries complete isolated runner runtime", () =>
+            {
+                using var f = new Fixture("runner-runtime");
+                string updater = Path.Combine(f.Install, "updater"); Directory.CreateDirectory(updater);
+                foreach (string relative in new[] { "MrtRouteSimulator.Updater.dll", "MrtRouteSimulator.Updater.exe", "hostfxr.dll", "coreclr.dll", "MrtRouteSimulator.Updater.runtimeconfig.json", "runtimes/win-x64/native/native.dll", "zh-Hant/example.resources.dll" })
+                {
+                    string path = Path.Combine(updater, relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!); File.WriteAllText(path, relative);
+                }
+                File.WriteAllText(Path.Combine(f.Install, UpdateConstants.InstallationReceipt), "{}");
+                var package = Package(UpdateKind.Application, "99.0.0", new() { [UpdateConstants.ApplicationExe] = [1] });
+                f.Handler.Offers = [package];
+                var download = f.Service.DownloadAsync(package.Offer, new Progress<UpdateProgress>(), CancellationToken.None);
+                PumpUntil(() => download.IsCompleted);
+                var staged = download.GetAwaiter().GetResult();
+                string job = f.Service.PrepareSoftwareJob(staged), runner = Path.Combine(Path.GetDirectoryName(job)!, "runner");
+                foreach (string source in Directory.GetFiles(updater, "*", SearchOption.AllDirectories))
+                {
+                    string relative = Path.GetRelativePath(updater, source);
+                    Assert(File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(Path.Combine(runner, relative))), "Runner omitted or changed " + relative);
+                }
+                File.WriteAllText(Path.Combine(updater, "settings.json"), "must not copy");
+                Throws<InvalidOperationException>(() => f.Service.PrepareSoftwareJob(staged));
+            });
             Test("packaged sample library includes nested directories", () =>
             {
                 using var f = new Fixture("recursive-library"); f.WritePackaged("b.mrtsim.json"); f.WritePackaged("小型/深層/a.mrtsim.json");

@@ -1,8 +1,8 @@
 # MRT MCP 使用方式
 
-本功能以最新 V4.0.3 工作目錄為基礎實作，依新功能進版規則更新為 V4.1.0（尚未發布），沿用 Schema 8、TopologyProjectFormat 與 SimulationWorld。MCP C# SDK 使用官方穩定版 2.2.0；Microsoft.Extensions.Hosting 為 10.0.10。
+MCP於V4.1.0加入，現行來源為V4.1.1，沿用Schema 8、TopologyProjectFormat與SimulationWorld；V4.1.0已於2026-10-11發布。MCP C# SDK使用2.2.0；Microsoft.Extensions.Hosting為10.0.10。V4.1.1原始碼差異見 [版本對照](V411_CHANGES.md)。
 
-## V4.1.1 新版介面整合（2026-10-11）
+## V4.1.1 新版介面整合（2026-10-16）
 
 本輪測試直接使用 `output/v411-final/bin/MrtRouteSimulator.Mcp/release/MrtRouteSimulator.Mcp.dll`，未改動本機 Codex 註冊。此產物與同目錄 WPF App 同為 4.1.1；若既有連線仍指向其他 artifacts，須改用本輪產物並重新連線，執行中的 server 不會自動更新。
 
@@ -12,17 +12,19 @@
 
 ## 建置與連線
 
-因既有桌面程式可能鎖住預設 Release 檔案，MCP 使用獨立 artifacts 目錄：
+一般原始碼建置可直接使用標準Release輸出，與通用config範本一致：
 
 ```powershell
-dotnet restore .\MrtRouteSimulator.slnx --configfile .\src\MrtRouteSimulator.Mcp\NuGet.Config -p:ArtifactsPath=output/v4.1.0-unified
-dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore -p:ArtifactsPath=output/v4.1.0-unified
-dotnet .\output\v4.1.0-unified\bin\MrtRouteSimulator.Mcp\release\MrtRouteSimulator.Mcp.dll --workspace-root .
+dotnet restore .\MrtRouteSimulator.slnx --configfile .\src\MrtRouteSimulator.Mcp\NuGet.Config
+dotnet build .\MrtRouteSimulator.slnx -c Release --no-restore
+dotnet .\src\MrtRouteSimulator.Mcp\bin\Release\net10.0\MrtRouteSimulator.Mcp.dll --workspace-root .
 ```
+
+若執行中的程式鎖住輸出，請使用新的artifacts目錄並相應修改本機config；不要覆蓋或刪除仍被使用的舊建置。
 
 最後一行是 stdio server，會等待 MCP client，非一般互動式 CLI。所有日誌寫 stderr，stdout 僅提供 JSON-RPC。專案根目錄原有的離線 NuGet.Config 保留；僅 MCP 的 NuGet.Config 啟用官方 nuget.org。
 
-已透過 `codex mcp add` 註冊啟用 `mrt-route-simulator`，固定指向這個最新工作目錄；啟動逾時20秒、工具逾時180秒。本次對話曾自動載入工具並完成直接呼叫；最後修正版重新建置時已停止本次 MCP 連線，請新開對話或重新連線以載入最終版本。目前 CLI 的 `mcp get` 未讀取專案 config，因此以本機註冊為驗證依據；專案 `.codex/config.toml` 保留相同連線設定。其他電腦須調整 config 的 cwd；不要把本機工作路徑直接套用到別台電腦。啟動的是已建置版本，修改後須重新 build 及重新連線。
+倉庫提供 .codex/config.example.toml 通用範本；複製成 .codex/config.toml 後，將cwd改為你的專案絕對路徑，並先完成Release建置。本機config.toml不再追蹤；既有使用者的原檔保留，可能仍指向舊建置，須確認實際啟動的版本。修改來源後須重新build並重新連線。資料公開界線見 [REPOSITORY_LAYOUT.md](REPOSITORY_LAYOUT.md)。
 
 ## headless 模擬
 
@@ -90,7 +92,7 @@ python .\scripts\test-mcp-desktop.py --workspace-root .
 
 WPF 專項透過真正 named pipe 執行 PID、workspace、載入與失敗保留、固定 tick、分頁、覆寫拒絕、切頁、縮放、CSV／PNG／PDF、Play／Pause 確認、Reset 等回歸。Python 腳本檢查 stdio initialize、tools/list、tools/call 與 session 行為，無第三方 Python 套件。額外驗證三輪並行 advance/reset；桌面黑箱腳本使用已註冊的 command／args，建立新視窗完成操作與輸出後只正常關閉該測試視窗，報告位於 `output/mcp-desktop-smoke.json`。
 
-2026-10-07 最終驗證：V4.1.0 Release 建置 0 警告／0 錯誤，Engine 198/198、完整 WPF runner、stdio 黑箱及已註冊 MCP 的桌面黑箱全部通過。本次 Codex 對話亦直接呼叫 server_info、project_validate、project_load、simulation_advance 與 simulation_snapshot，確認版本 4.1.0.0、Schema 8 及時間到達 10 秒。記錄見 QA_REPORT.md 與 output/mcp-engine-final.log、output/mcp-wpf-final.log、output/mcp-desktop-smoke.json。這些結果不取代既有原生 DPI／互動效能驗收。
+歷史驗收（2026-10-07開發階段）：V4.1.0 Release 建置 0 警告／0 錯誤，Engine 198/198、完整 WPF runner、stdio 黑箱及已註冊 MCP 的桌面黑箱全部通過。本次 Codex 對話亦直接呼叫 server_info、project_validate、project_load、simulation_advance 與 simulation_snapshot，確認版本 4.1.0.0、Schema 8 及時間到達 10 秒。記錄見 QA_REPORT.md 與 output/mcp-engine-final.log、output/mcp-wpf-final.log、output/mcp-desktop-smoke.json。這些結果不取代既有原生 DPI／互動效能驗收。
 
 官方來源：
 - https://www.nuget.org/packages/ModelContextProtocol/2.2.0

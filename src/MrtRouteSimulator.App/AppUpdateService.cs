@@ -71,13 +71,31 @@ public sealed class AppUpdateService : IDisposable
         if (SoftwareUpdateUnavailableReason is string reason) throw new InvalidOperationException(reason);
         PackageStager.ValidateStaged(staged.RootPath, staged.Manifest);
         if (staged.Manifest.Kind != UpdateKind.Application) throw new InvalidOperationException("套件不是軟體更新。");
-        UpdatePathPolicy.RejectReparsePoints(Path.Combine(InstallDirectory, "updater"));
+        string updaterRoot = Path.Combine(InstallDirectory, "updater");
+        UpdatePathPolicy.RejectReparsePoints(updaterRoot);
+        var pending = new Queue<string>(); pending.Enqueue(updaterRoot);
+        var runnerFiles = new List<(string Source, string Relative)>();
+        while (pending.Count > 0)
+        {
+            foreach (string entry in Directory.EnumerateFileSystemEntries(pending.Dequeue()))
+            {
+                if ((File.GetAttributes(entry) & FileAttributes.ReparsePoint) != 0)
+                    throw new InvalidOperationException("更新器不可使用連結檔案或目錄。");
+                if (Directory.Exists(entry)) { pending.Enqueue(entry); continue; }
+                string relative = Path.GetRelativePath(updaterRoot, entry).Replace('\\', '/');
+                if (!UpdatePathPolicy.IsAllowedApplicationPath("updater/" + relative))
+                    throw new InvalidOperationException("更新器含未允許的檔案。");
+                runnerFiles.Add((entry, relative));
+            }
+        }
         var folder = Path.Combine(StateRoot, "Jobs", Guid.NewGuid().ToString("N"));
         var runner = Path.Combine(folder, "runner"); Directory.CreateDirectory(runner);
-        foreach (var file in Directory.GetFiles(Path.Combine(InstallDirectory, "updater")))
+        foreach (var file in runnerFiles)
         {
-            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0) throw new InvalidOperationException("更新器不可使用連結檔案。");
-            File.Copy(file, Path.Combine(runner, Path.GetFileName(file)));
+            UpdatePathPolicy.RejectReparsePoints(file.Source);
+            string destination = UpdatePathPolicy.GetContainedPath(runner, file.Relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(file.Source, destination);
         }
         using var process = Process.GetCurrentProcess();
         var job = new SoftwareUpdateJob(staged.RootPath, Path.GetFullPath(InstallDirectory), UpdateConstants.ApplicationExe, process.Id, process.StartTime.ToUniversalTime().Ticks, true);

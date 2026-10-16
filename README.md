@@ -1,9 +1,9 @@
-# MRT Route Simulator
+# MRT Route Simulator — V4.1.1
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Platform: Windows](https://img.shields.io/badge/Platform-Windows-blue)
 ![.NET 10](https://img.shields.io/badge/.NET-10-purple)
-[![Release: v4.1.0](https://img.shields.io/badge/Release-v4.1.0-orange)](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0)
+[![Release: v4.1.1](https://img.shields.io/badge/Release-v4.1.1-orange)](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.1)
 
 MRT Route Simulator is an offline Windows desktop application for conceptual metro and railway operations simulation. It is intended for planning exploration, operations analysis, education, prototyping, and conceptual engineering studies. The interface and detailed technical documentation are primarily in Traditional Chinese.
 
@@ -28,23 +28,36 @@ The project explores an open and inspectable approach to metro operations simula
 - A shared visual theme across the main window, track diagram, result pages, charts, and topology editor.
 - Track-section occupancy lights, persistent display settings, and layouts that support smaller windows.
 
+## V4.1.1 compared with V4.1.0
+
+V4.1.1 (2026-10-16) adds the following features over the previous published v4.1.0. See the [Windows release](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.1). See the [version comparison](docs/V411_CHANGES.md) and [changelog](CHANGELOG.md).
+
+| Area | V4.1.1 changes |
+|---|---|
+| Network and timetable | Multiple operating lines, explicit main/branch connections, conservative single-track operation, and per-station departure/dwell settings. |
+| Capacity | Five reference-point types, directional/grade parameters, capacity charts, bottleneck summaries, and theoretical versus simulated train throughput. |
+| Simulation | Physical grade effects, optional signal-block/overlap constraints, and fixes for turnback resource protection and low-speed queue stalls. |
+| Diagram | Editable vertical layout and proportional movement on horizontal mainline sections. |
+| Samples | 15 maintained examples in small/medium/large folders plus 12 handbook scenarios; local numbering and indexes updated together. |
+| Updates | Separate application/data channels, verified downloads, an external updater with backup/recovery, and pre-update project copies. |
+
+Schema 8 remains the editable project format. Optional V4.1.1 fields retain older-file defaults; older applications should not be used to resave projects containing new settings. Simulation works offline; update checks/downloads are optional network operations.
+
+Validation: Release build with 0 warnings/errors, Engine 238/238, update tests 98/98, full WPF regression passed, and all 27 actual sample projects validated. These are automated/local checks, not native desktop or railway certification. See [QA_REPORT.md](QA_REPORT.md).
+
 ## Quick Start
 
-The latest release is [v4.1.0](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0), published on 2026-10-11. The Windows x64 ZIP includes the .NET 10 runtime, the desktop application, MCP host, 14 Schema 8 samples, and third-party license notices. No separate runtime installation is required for this package. Building from source requires Windows and the .NET 10 SDK.
+The current release is [v4.1.1](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.1). The Windows x64 ZIP includes the .NET 10 runtime, desktop application, MCP host, external updater, 27 Schema 8 sample projects, and third-party license notices. No separate runtime installation is required for this package. Building from source requires Windows and the .NET 10 SDK.
 
-1. Download [MRT-route-simulator-V4.1.0-windows.zip](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/MRT-route-simulator-V4.1.0-windows.zip) and extract the entire archive.
-2. Double-click `啟動模擬器.cmd`, or run `output/bin/MrtRouteSimulator.App/release/MRT路線進出站時間模擬器.exe` inside the extracted folder. Keep the directory structure intact.
+1. Download [MRT-route-simulator-V4.1.1-windows.zip](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.1/MRT-route-simulator-V4.1.1-windows.zip) and extract the entire archive.
+2. Run `MRT路線進出站時間模擬器.exe` in the extracted folder. Keep the directory structure intact.
 3. Start with the built-in six-station scenario, or use **檔案 → 讀取存檔** (File → Load) to open an included sample.
 4. Select **計算並建立模擬 / 建立模擬** (Build simulation), then **播放** (Play) in the title bar.
 5. Use the left navigation to inspect result pages and export CSV / PNG / PDF.
 
-Start with [the three-station baseline](samples/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md). The release provides [SHA256SUMS.txt](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/SHA256SUMS.txt); the ZIP SHA-256 is:
+Start with [the three-station baseline](samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json) and consult [sample manifests](samples/README.md). Verify the downloaded files with [v4.1.1 SHA256SUMS.txt](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.1/SHA256SUMS.txt).
 
-```text
-eca66559f66da1b1cfdbaf310c5e1fff1f5b5fee56b10aef1e77d40cc174c924
-```
-
-## What's new in v4.1.0
+## Previous published release: v4.1.0
 
 - **Main window:** left navigation, playback controls available on every page, a compact KPI strip, and an on-demand quick-start drawer.
 - **Track diagram:** blue/orange directional tracks, train labels with direction arrows, white platforms and station badges, plus optional track-section occupancy lights.
@@ -89,11 +102,15 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 ## 中文操作與技術說明
 
+> 目前原始碼版本為 V4.1.1（2026-10-16）：新增多營運路線與逐站班表、容量分析與理論實測比較、實體坡度及可選閉塞控制、範例分類與更新中心。完整差異見 [V4.1.1 對照](docs/V411_CHANGES.md)。下載與驗證資訊見 [v4.1.1 Release](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.1)。
+
 > [v4.1.0 已於 2026-10-11 正式發布](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0)，包含全面介面翻新、區段占用亮燈與本機 MCP。Windows x64 下載包內含 .NET runtime，可直接解壓縮使用。
 
 這是一套離線 Windows WPF 桌面軟體，用來建立抽象捷運路線的列車運行、雙向派車、資源占用、結構化事件、區間統計與時間－里程運行圖。V2 的正式資料來源為 Schema 8 `InfrastructureGraphV4 + ServiceRoutes + VehicleTypes + ServiceTypes + StopPatterns + Dispatch`；Route 僅保留給 V1 解析模型與表單一次性起稿。
 
-2026-10-11 發布驗證：Release build `0 warnings / 0 errors`、完整 Engine runner `198/198`，完整 WPF runner 通過介面規則、14 個範例載入、工作區往返、播放與 CSV／PNG／PDF。MCP stdio 的 15 個工具及三輪並行推進／重設通過；最終 ZIP 解壓後也通過 MCP 桌面啟動、載入、切頁、縮放、播放／暫停、重設與匯出，重新下載的附件 SHA-256 與本機封裝一致。這些結果不代表原生 DPI、實體滑鼠／滾輪、長期記憶體或完整即時互動效能已重新驗收。
+V4.1.1 最新驗收：Release build 0 warnings／0 errors、完整 Engine 238/238、更新功能98/98、完整 WPF 通過，27份實際範例可載入並建立 runtime。離屏檢查與隔離更新測試不等於原生桌面操作驗收。詳細證據與限制見 [QA_REPORT.md](QA_REPORT.md)。
+
+前版 V4.1.0 於2026-10-11的發布驗證：Release build `0 warnings / 0 errors`、完整 Engine runner `198/198`，完整 WPF runner 通過介面規則、14 個範例載入、工作區往返、播放與 CSV／PNG／PDF。MCP stdio 的 15 個工具及三輪並行推進／重設通過；最終 ZIP 解壓後也通過 MCP 桌面啟動、載入、切頁、縮放、播放／暫停、重設與匯出，重新下載的附件 SHA-256 與本機封裝一致。這些結果不代表原生 DPI、實體滑鼠／滾輪、長期記憶體或完整即時互動效能已重新驗收。
 
 站場建置規則見 [站場建置規則](STATION_CONSTRUCTION_RULES.md)，案例資料界線見 [samples/README.md](samples/README.md)，現行待辦見 [TODO.md](TODO.md)。詳細歷史驗收見 [QA_REPORT.md](QA_REPORT.md)；文件中發布前的紀錄仍保留當時狀態，本次發布結果以 [v4.1.0 Release](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0) 為準。
 
@@ -101,14 +118,14 @@ The [MIT License](LICENSE) covers project-authored code, tests, documentation, s
 
 ## 直接使用
 
-1. 下載 [v4.1.0 Windows x64 ZIP](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.0/MRT-route-simulator-V4.1.0-windows.zip)，完整解壓縮並保留目錄結構。
-2. 雙擊 `啟動模擬器.cmd`，或直接開啟解壓縮目錄下的 `output/bin/MrtRouteSimulator.App/release/MRT路線進出站時間模擬器.exe`。
+1. 下載 [v4.1.1 Windows x64 ZIP](https://github.com/weng-wen-jun/mrt-route-simulator/releases/download/v4.1.1/MRT-route-simulator-V4.1.1-windows.zip)，完整解壓縮並保留目錄結構。
+2. 開啟解壓縮根目錄的 `MRT路線進出站時間模擬器.exe`，保留整份資料夾結構。
 3. 第一次可直接使用六站示範資料，按「計算並建立模擬」。
 4. 從「檔案 → 讀取存檔」載入 [`samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json`](samples/小型/10-小型-三站完整拓樸基準範例.mrtsim.json)，或依 [`samples/README.md`](samples/README.md) 選擇合成路線、七種站場、折返或越行情境；所有範例均為 Schema 8。
 5. 以標題列右側的播放控制播放、暫停或重設（任何分頁都可操作）；左側導覽列可切換到時刻表、區間物理、移動閉塞與列車運行圖等結果頁。
 6. Schema 8 topology 專案使用「檔案 → 存檔」保存可編輯設定，並從結果頁匯出 CSV／PNG／PDF。「檔案 → 匯出完成後固定時刻表」只保留給 legacy Schema 7 相容動態模擬；讀入的 Schema 7 專案會先轉成 Schema 8，因此轉換後此選項停用。
 
-v4.1.0 自攜式下載包已附 .NET 10 runtime，不必另行安裝；從原始碼建置則需要 .NET 10 SDK。桌面模擬不需要帳號、資料庫或執行時網路連線。MCP Host 使用官方 MCP C# SDK 與 .NET Hosting 套件，原始碼首次還原需連線至 nuget.org；正常 MCP 操作透過本機 stdio／named pipe。下載包的第三方授權與聲明位於 `third-party-licenses/`。
+v4.1.1 自攜式下載包已附 .NET 10 runtime，不必另行安裝；從原始碼建置則需要 .NET 10 SDK。桌面模擬不需要帳號、資料庫或執行時網路連線。MCP Host 使用官方 MCP C# SDK 與 .NET Hosting 套件，原始碼首次還原需連線至 nuget.org；正常 MCP 操作透過本機 stdio／named pipe。下載包的第三方授權與聲明位於 `third-party-licenses/`。
 
 ## 介面縮放（本機軟體設定）
 
@@ -132,7 +149,7 @@ v4.1.0 自攜式下載包已附 .NET 10 runtime，不必另行安裝；從原始
 
 大型 28 站範例的 O04／O13 已示範此設定，最低停站時間為 20 秒。可在「檔案 → 讀取存檔」載入範例，再開啟「營運設定 → 停站模式」查看或修改。
 
-## V4.1.0 Track-first topology
+## Track-first topology 與專案格式
 
 - `InfrastructureGraphV4` 的 physical truth 是 `TrackNode`、`TrackEdge`、edge-local `TrackPosition` 與附著其上的 `PlatformDefinitionV4`；車站不再是此新 topology 的實體端點。
 - `LinearInfrastructureBuilder` 會把線性三站 A—B—C 建成 A→B、B→C 與 C→B、B→A 四條獨立 edge，而非兩條全線 edge；快速表單轉 Schema 8 時會補齊兩端實體尾軌與折返資源。
@@ -256,9 +273,9 @@ v4.1.0 的完整 Engine、WPF、MCP stdio 與封裝桌面黑箱驗證已通過�
 
 ## 軟體版本控制
 
-- 目前來源版本為 `V4.1.0`；正式版 [v4.1.0](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.0) 已於 2026-10-11 發布。唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`。
+- 目前來源版本為 `V4.1.1`；下載版見 [v4.1.1](https://github.com/weng-wen-jun/mrt-route-simulator/releases/tag/v4.1.1)。唯一版本來源是根目錄 `Directory.Build.props` 的 `MrtVersion`。
 - 建置時會同步套用到組件、檔案、資訊版本、主視窗標題及測試標題。
-- Bug 修正增加修訂版本；新功能或其他變更增加次版本並把修訂版本歸零；未經使用者明確要求不得升主版本。
+- 預設Bug修正增加修訂版本；新功能增加次版本並把修訂版本歸零。維護者明確指定時以指定版本為準；本輪指定為V4.1.1，未自行升主版本。
 - 完整規則見 `VERSIONING.md`，各版內容見 `CHANGELOG.md`。Git commit、tag 與 GitHub 推送只在使用者明確要求發布時執行。
 
 ## 開發與驗證
@@ -275,17 +292,17 @@ dotnet run --project .\tests\MrtRouteSimulator.Tests\MrtRouteSimulator.Tests.csp
 
 - `src/MrtRouteSimulator.Engine`：V1 解析模型、V2 topology-native `SimulationWorld`、實體設施 traversal、速限與分析服務。
 - `src/MrtRouteSimulator.App`：WPF 桌面介面、圖形與離線匯出。
-- [samples](samples)：14 份可直接執行的 Schema 8 topology 範例，依規模排序，涵蓋小型站場、中型路線、大型合成路線、折返與越行。序號僅供排序，不是版本號；案例資料界線見 [samples/README.md](samples/README.md)。
-- `tests/MrtRouteSimulator.Tests`：目前 Engine runner 為 198/198 通過，包含大型 sample 分階段 gate、指定車次待避、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
+- [samples](samples)：15份維護路線範例，分入小型／中型／大型資料夾並各自編號，另有12份手冊容量案例；均為Schema 8，涵蓋小型站場、中型路線、大型合成路線、折返與越行。序號僅供排序，不是版本號；案例資料界線見 [samples/README.md](samples/README.md)。
+- `tests/MrtRouteSimulator.Tests`：目前 Engine runner 為238/238通過，包含大型 sample 分階段 gate、指定車次待避、完整 topology 情境、directed switch、physical turnback、rear-clear、Schema 8 編輯與結果資料流 regression。
 - `Directory.Build.props`：軟體版本的單一來源。
 - `VERSIONING.md`／`CHANGELOG.md`：進版規則與版本變更紀錄。
 - [TODO.md](TODO.md)：現行改善需求、完成狀態與後續驗收界線。
 
 ## 使用與安全界線
 
-本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.1.0 支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
+本軟體是營運與號誌概念模擬器，不是可部署的鐵路安全系統，未取得 ATP／ATO／ATS、安全完整性等級或任何鐵路安全認證。V4.1.1 支援概念層級的多月台平衡、站內越行與進站精停；相關資源、容量與事件不是安全認證容量。未輸入特定路線資料時，結果只代表使用者輸入與程式假設。
 
-目前預設上下行使用不同軌道；共用單線與聯鎖失效尚未建模。V4 的尾軌、袋狀軌、crossover、passing 與折返皆為實體 topology edge／traversal，但仍是概念性幾何，不是實際軌道平面圖；坡度、曲線阻力、黏著變化、乘客量與真實路線校準仍不在 V4.1.0 已完成範圍內，也不宣稱全線自動超車排程或全域營運最佳化。服務類型與車型維持分離目錄。
+預設上下行使用不同軌道；V4.1.1可建立共用單線，但採保守整線互斥，未提供自動會車最佳化或聯鎖失效模型。尾軌、袋狀軌、crossover、passing與折返皆為實體topology traversal，幾何仍為概念模型。坡度已影響牽引與制動；曲線阻力、黏著變化、旅客擁擠及真實路線校準尚未完成，也不宣稱全線自動超車排程或全域營運最佳化。容量觀測是列車通過量，不能視為實際旅客吞吐量。服務類型與車型維持分離目錄。
 
 大型機場線（28 站大型範例）為抽象規劃，站碼與站心里程用於示範及回歸對照，並非實際線路里程。月台、車輛性能、停站時間、設施幾何、速限與派車均為示範假設，正式坡度與曲線資料尚未建模。未來若取得政府公開且可信的資料，將在確認使用條件後，註明來源、資料日期與更新範圍再逐步更新；目前不代表正式路線、工程設計或時刻表。
 
@@ -311,3 +328,5 @@ PDF 提供站型與配置概念，軌長、速限、車型、停站時間及派�
 ## 程式與範例資料更新
 
 「檔案 → 更新中心」可檢查官方穩定版、更新維護範例資料庫、載入範例及更新前專案副本。啟動檢查預設關閉；安裝程式更新前會先保存副本，退出後由獨立更新器備份並替換。舊安裝缺少更新索引時，請先換用完整可更新套件。操作、套件格式與發行方式見 [更新說明](docs/UPDATES.md)。
+
+公開原始碼與本機資料的保留／忽略規則見 [資料界線](docs/REPOSITORY_LAYOUT.md)。

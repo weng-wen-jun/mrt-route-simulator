@@ -12,9 +12,14 @@ try
 {
     foreach (string path in new[] { "../evil.dll", "/evil.dll", "C:/evil.dll", "a\\evil.dll", "x:stream.dll", "a/../evil.dll", "CON.dll", "foo./bar.dll", "foo /bar.dll", "a//b.dll" })
         Test("unsafe path " + path, () => Throws(() => UpdatePathPolicy.NormalizeRelativePath(path)));
-    foreach (string path in new[] { "samples/a.mrtsim.json", "settings.json", "README.exe/config.json", "mrt-installed-files.json", "foo/bar.dll" })
+    foreach (string path in new[] { "samples/a.mrtsim.json", "settings.json", "README.exe/config.json", "mrt-installed-files.json", "foo/bar.dll", "zh-Hant/settings.json", "zh-Hant/project.mrtsim.json", "zh-Hant/tool.dll", "zh-Hant/nested/a.resources.dll", "ar/a.resources.dll", "ZH-HANT/a.resources.dll" })
         Test("app allowlist " + path, () => Assert(!UpdatePathPolicy.IsAllowedApplicationPath(path)));
     Test("app main and dependencies", () => Assert(UpdatePathPolicy.IsAllowedApplicationPath(UpdateConstants.ApplicationExe) && UpdatePathPolicy.IsAllowedApplicationPath("mcp/tool.dll") && UpdatePathPolicy.IsAllowedApplicationPath("runtimes/win-x64/native/core.dll")));
+    foreach (string culture in new[] { "cs", "de", "es", "fr", "it", "ja", "ko", "pl", "pt-BR", "ru", "tr", "zh-Hans", "zh-Hant" })
+        Test("Windows desktop runtime satellites " + culture, () => Assert(UpdatePathPolicy.IsAllowedApplicationPath(culture + "/PresentationFramework.resources.dll")));
+    Test("dependency licenses update with application", () => Assert(UpdatePathPolicy.IsAllowedApplicationPath("third-party-licenses/LICENSE.txt") && UpdatePathPolicy.IsAllowedApplicationPath("third-party-licenses/NOTICE.md")));
+    foreach (string path in new[] { "third-party-licenses/evil.dll", "third-party-licenses/settings.json", "third-party-licenses/user.mrtsim.json", "third-party-licenses/nested/NOTICE.txt" })
+        Test("dependency license restrictions " + path, () => Assert(!UpdatePathPolicy.IsAllowedApplicationPath(path)));
     Test("stable versions", () => { foreach (string v in new[] { "1.0", "1.0.0-beta", "01.2.3", "1.0.0.1", "v1.0.0" }) Throws(() => UpdatePathPolicy.ParseStableVersion(v)); });
     var valid = Fixture(new Dictionary<string, byte[]> { ["小型/a.mrtsim.json"] = Encoding.UTF8.GetBytes("{\"schemaVersion\":8}"), ["README.md"] = Encoding.UTF8.GetBytes("test") });
     Test("duplicate manifest paths", () => Throws(() => UpdatePathPolicy.ValidateManifest(valid.Offer.Manifest with { Files = [valid.Offer.Manifest.Files[0], valid.Offer.Manifest.Files[0] with { Path = "小型/A.mrtsim.json" }] })));

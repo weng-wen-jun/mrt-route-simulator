@@ -1,0 +1,9 @@
+# Copy to config.toml, then replace cwd with your absolute project path.
+# Build the Release MCP host first; local config.toml is intentionally untracked.
+[mcp_servers.mrt-route-simulator]
+command = "dotnet"
+args = ["src/MrtRouteSimulator.Mcp/bin/Release/net10.0/MrtRouteSimulator.Mcp.dll", "--workspace-root", "."]
+cwd = "C:/path/to/mrt-route-simulator"
+startup_timeout_sec = 20
+tool_timeout_sec = 180
+enabled = true

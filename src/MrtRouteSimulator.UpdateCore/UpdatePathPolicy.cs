@@ -30,13 +30,21 @@ public static partial class UpdatePathPolicy
     {
         try { NormalizeRelativePath(path); } catch (InvalidDataException) { return false; }
         string[] parts = path.Split('/');
-        if (parts.Length > 1 && parts[0] is not ("runtimes" or "mcp" or "updater")) return false;
+        if (parts.Length == 2 && parts[0] == "third-party-licenses")
+            return parts[1].EndsWith(".txt", StringComparison.OrdinalIgnoreCase) || parts[1].EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+        if (parts.Length > 1 && parts[0] is not ("runtimes" or "mcp" or "updater"))
+            return parts.Length == 2 && IsRuntimeCulture(parts[0]) && parts[1].EndsWith(".resources.dll", StringComparison.OrdinalIgnoreCase);
         string name = parts[^1];
         if (parts.Length == 1 && name is "README.md" or "LICENSE.txt") return true;
         return name.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(".pdb", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".deps.json", StringComparison.OrdinalIgnoreCase)
             || name.EndsWith(".runtimeconfig.json", StringComparison.OrdinalIgnoreCase);
     }
+
+    // Cultures shipped by the Windows Desktop runtime. Only satellite assemblies belong here;
+    // arbitrary culture-looking folders must never grant access to projects or user settings.
+    private static bool IsRuntimeCulture(string name) => name is
+        "cs" or "de" or "es" or "fr" or "it" or "ja" or "ko" or "pl" or "pt-BR" or "ru" or "tr" or "zh-Hans" or "zh-Hant";
 
     public static void ValidateManifest(UpdateManifest manifest)
     {

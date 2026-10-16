@@ -1,5 +1,14 @@
 # MRT 路線進出站時間模擬器 - QA 報告
 
+## V4.1.1 正式發布前整合驗收（2026-10-16）
+
+- 整合遠端main既有v4.1.0發布README，依維護者指定將版本收斂為V4.1.1；新增前版差異對照、程式／資料Release說明與公開資料界線。舊驗收段落保留當時狀態，不把歷史長跑改標為本次建置。
+- 發布前完整Release solution為0警告／0錯誤；Engine 238/238、完整WPF PASS WPF visual rules；更新核心67/67、更新器17/17、更新中心14/14，共98項更新專項通過。日誌集中於artifacts/v411-release-verification/。
+- 正式封裝補強：13種.NET Desktop衛星資源目錄僅允許單層resources.dll；專用third-party-licenses目錄僅允許文字授權；自含updater子樹安全掃描後遞迴複製。路徑、reparse、使用者專案／設定檔與未知檔案覆蓋限制保留。
+- Build-Release從乾淨來源建立Windows x64自含App、MCP與updater，固定.NET 10.0.13、排除PDB並收集實際套件授權。正式附件以Release的SHA256SUMS.txt為準；下載包與通道清單／digest須獨立核對後才算發布完成。
+- 遠端main同步範例新目錄，移除本機.codex/config.toml追蹤並提供通用config.example.toml；原本機設定、ignored產物、外部參考、歷史提交及過往工作樹保留。
+- 上述是建置、自動化與封裝驗收界線，不代表原生DPI、實體滑鼠、compositor或鐵路安全認證。
+
 ## 軟體內程式／範例資料更新（2026-10-16）
 
 - 新增「檔案 → 更新中心」：手動版本檢查、可選啟動通知、下載進度與取消、兩通道更新、維護範例載入及最近更新前專案副本載入。程式採完整套件更新；未實作差分 OTA。資料經同一 Engine 驗證後切換版本目錄，不改使用者專案。
